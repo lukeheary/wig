@@ -204,6 +204,7 @@ export default function EventPage() {
     ? event.source.charAt(0).toUpperCase() + event.source.slice(1)
     : "Event Site";
   const isStatusFlagged = event.status !== "active";
+  const isCancelledEvent = event.status === "cancelled";
   const statusLabel = getEventStatusLabel(event.status);
 
   // Check if user can edit this event
@@ -401,60 +402,64 @@ export default function EventPage() {
               ))}
             </div>
 
-            {/* RSVP Buttons - Shared across mobile and desktop */}
-            <div className="flex gap-2 py-4">
-              <Button
-                variant={
-                  event.userRsvp?.status === "interested"
-                    ? "secondary"
-                    : "outline"
-                }
-                className="flex-1 text-base font-medium"
-                size="lg"
-                onClick={() => handleRsvp("interested")}
-                disabled={
-                  rsvpMutation.isPending || deleteRsvpMutation.isPending
-                }
-              >
-                {interestedLabel}
-              </Button>
-              <Button
-                variant={
-                  event.userRsvp?.status === "going" ? "default" : "outline"
-                }
-                className={cn(
-                  "flex-1 text-base font-medium transition-colors",
-                  event.userRsvp?.status === "going" &&
-                    "border-transparent bg-green-500 text-black hover:bg-green-600"
-                )}
-                size="lg"
-                onClick={() => handleRsvp("going")}
-                disabled={
-                  rsvpMutation.isPending || deleteRsvpMutation.isPending
-                }
-              >
-                {event.userRsvp?.status === "going" ? "Going" : goingLabel}
-              </Button>
-            </div>
-            {hasActivePartner && (
-              <div className="mb-4 w-full text-sm text-muted-foreground sm:w-fit">
-                <label
-                  htmlFor="include-partner"
-                  className="flex w-full cursor-pointer items-center justify-between gap-3 rounded-full border border-border px-4 py-2 sm:min-w-[220px]"
-                >
-                  <span className="text-foreground">
-                    Going with {myPartner.partner.firstName}
-                  </span>
-                  <Switch
-                    id="include-partner"
-                    checked={includePartner}
-                    onCheckedChange={setIncludePartner}
+            {!isCancelledEvent && (
+              <>
+                {/* RSVP Buttons - Shared across mobile and desktop */}
+                <div className="flex gap-2 py-4">
+                  <Button
+                    variant={
+                      event.userRsvp?.status === "interested"
+                        ? "secondary"
+                        : "outline"
+                    }
+                    className="flex-1 text-base font-medium"
+                    size="lg"
+                    onClick={() => handleRsvp("interested")}
                     disabled={
                       rsvpMutation.isPending || deleteRsvpMutation.isPending
                     }
-                  />
-                </label>
-              </div>
+                  >
+                    {interestedLabel}
+                  </Button>
+                  <Button
+                    variant={
+                      event.userRsvp?.status === "going" ? "default" : "outline"
+                    }
+                    className={cn(
+                      "flex-1 text-base font-medium transition-colors",
+                      event.userRsvp?.status === "going" &&
+                        "border-transparent bg-green-500 text-black hover:bg-green-600"
+                    )}
+                    size="lg"
+                    onClick={() => handleRsvp("going")}
+                    disabled={
+                      rsvpMutation.isPending || deleteRsvpMutation.isPending
+                    }
+                  >
+                    {event.userRsvp?.status === "going" ? "Going" : goingLabel}
+                  </Button>
+                </div>
+                {hasActivePartner && (
+                  <div className="mb-4 w-full text-sm text-muted-foreground sm:w-fit">
+                    <label
+                      htmlFor="include-partner"
+                      className="flex w-full cursor-pointer items-center justify-between gap-3 rounded-full border border-border px-4 py-2 sm:min-w-[220px]"
+                    >
+                      <span className="text-foreground">
+                        Going with {myPartner.partner.firstName}
+                      </span>
+                      <Switch
+                        id="include-partner"
+                        checked={includePartner}
+                        onCheckedChange={setIncludePartner}
+                        disabled={
+                          rsvpMutation.isPending || deleteRsvpMutation.isPending
+                        }
+                      />
+                    </label>
+                  </div>
+                )}
+              </>
             )}
 
             {/*<Separator />*/}
