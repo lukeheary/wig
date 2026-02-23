@@ -168,7 +168,7 @@ function HomePageContent() {
     trpc.user.getCurrentUser.useQuery();
 
   // Check if there's recent activity to show
-  const { hasActivity: hasRecentActivity } = useHasRecentActivity(3);
+  const { hasActivity: hasRecentActivity } = useHasRecentActivity(3, true);
 
   // Get available cities
   const { data: cities } = trpc.event.getAvailableCities.useQuery();
@@ -279,6 +279,7 @@ function HomePageContent() {
   // Calculate date range based on view mode (or search mode)
   const dateRange = useMemo(() => {
     const today = startOfDay(new Date());
+    const isLastNightWindow = isCurrentWeek && new Date().getHours() < 6;
 
     // When searching, search all future events (1 year ahead)
     if (isSearching) {
@@ -287,9 +288,10 @@ function HomePageContent() {
 
     if (viewMode === "week") {
       if (isCurrentWeek) {
-        // Current week: start from today and go to Sunday
+        // Current week: keep last night's events visible until 6am.
+        const start = isLastNightWindow ? subDays(today, 1) : today;
         const end = endOfWeek(today, { weekStartsOn: 1 });
-        return { startDate: today, endDate: end };
+        return { startDate: start, endDate: end };
       } else {
         // Any other week: show full week from Monday to Sunday
         const start = startOfWeek(currentDate, { weekStartsOn: 1 });
@@ -686,14 +688,26 @@ function HomePageContent() {
           {daysToDisplay.map((date) => {
             const dateKey = format(date, "yyyy-MM-dd");
             const dayEvents = eventsByDay[dateKey] || [];
+            const now = new Date();
+            const isEarlyMorning = now.getHours() < 6;
+            const yesterday = startOfDay(subDays(now, 1));
             const isToday = isSameDay(date, new Date());
+            const isLastNightSection =
+              isCurrentWeek && isEarlyMorning && isSameDay(date, yesterday);
             const currentHour = new Date().getHours();
             const isEvening = currentHour >= 17;
-            const dateHeader = isToday
-              ? isEvening
-                ? "Tonight's Events"
-                : "Today's Events"
-              : format(date, "EEE, MMM d");
+
+            if (isLastNightSection && dayEvents.length === 0) {
+              return null;
+            }
+
+            const dateHeader = isLastNightSection
+              ? "Last Night's Events"
+              : isToday
+                ? isEvening
+                  ? "Tonight's Events"
+                  : "Today's Events"
+                : format(date, "EEE, MMM d");
 
             return (
               <div key={dateKey}>

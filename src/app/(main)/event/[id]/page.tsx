@@ -30,7 +30,7 @@ type RsvpStatus = "going" | "interested" | "not_going";
 function EventPageSkeleton() {
   return (
     <div className="relative isolate -mt-16 min-h-screen bg-background pt-16">
-      <div className="container w-full px-4 pb-8 pt-4">
+      <div className="container w-full px-4 pb-8 md:pt-4">
         <div className="lg:flex lg:items-start lg:gap-10">
           <div className="lg:w-[360px] lg:flex-none">
             <div className="relative aspect-square w-full overflow-hidden rounded-2xl bg-muted lg:aspect-auto lg:min-h-[360px]">

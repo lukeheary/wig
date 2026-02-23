@@ -407,12 +407,26 @@ export function ActivityFeed({
 }
 
 // Hook to check if there are activities (for conditionally showing sections)
-export function useHasRecentActivity(limit: number = 50) {
+export function useHasRecentActivity(
+  limit: number = 50,
+  hidePastEvents: boolean = false
+) {
   const { data: activities, isLoading } = trpc.friends.getFriendFeed.useQuery({
     limit,
   });
+
+  const filteredActivities = hidePastEvents
+    ? activities?.filter((activity: any) => {
+        if (!activity.event?.startAt) return true;
+        const eventDate = startOfDay(new Date(activity.event.startAt));
+        const today = startOfDay(new Date());
+        return eventDate >= today;
+      })
+    : activities;
+
   return {
-    hasActivity: !isLoading && activities && activities.length > 0,
+    hasActivity:
+      !isLoading && !!filteredActivities && filteredActivities.length > 0,
     isLoading,
   };
 }
