@@ -231,7 +231,7 @@ export default function OnboardingPage() {
             />
             {!formData.avatarImageUrl && (
               <p className="mt-2 text-xs text-muted-foreground">
-                Optional: You can always upload a profile picture later
+                You can add a profile picture later in settings
               </p>
             )}
           </div>
@@ -239,7 +239,7 @@ export default function OnboardingPage() {
             {/* Username */}
             <div className="space-y-2">
               <Label htmlFor="username">
-                Instagram Handle <span className="text-destructive">*</span>
+                Username <span className="text-destructive">*</span>
               </Label>
               <Input
                 id="username"
@@ -255,7 +255,7 @@ export default function OnboardingPage() {
                 maxLength={20}
               />
               <p className="text-xs text-muted-foreground">
-                This will be used as your username so your friends can find you
+                3-20 characters, letters/numbers/underscores only
               </p>
             </div>
 
