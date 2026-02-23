@@ -1,7 +1,14 @@
 import { z } from "zod";
 import { router, protectedProcedure } from "../init";
-import { users, userFriends, userActivity, userPartners } from "../../db/schema";
-import { eq, and, or, ne, like, sql, inArray, desc } from "drizzle-orm";
+import {
+  eventActivity,
+  eventRsvps,
+  users,
+  userFriends,
+  userActivity,
+  userPartners,
+} from "../../db/schema";
+import { eq, and, or, ne, sql, inArray, desc } from "drizzle-orm";
 import { TRPCError } from "@trpc/server";
 
 export const friendsRouter = router({
@@ -330,6 +337,8 @@ export const friendsRouter = router({
       })
     )
     .query(async ({ ctx, input }) => {
+      const feedWindow = Math.min(250, input.limit + input.offset + 50);
+
       // 1. Get all accepted friends
       const userFriendships = await ctx.db.query.userFriends.findMany({
         where: and(
@@ -345,26 +354,24 @@ export const friendsRouter = router({
         f.userId === ctx.auth.userId ? f.friendUserId : f.userId
       );
 
-      if (friendIds.length === 0) {
-        return [];
-      }
-
       // 2. Fetch activity for these friends
-      const activities = await ctx.db.query.userActivity.findMany({
-        where: inArray(userActivity.actorUserId, friendIds),
-        orderBy: [desc(userActivity.createdAt)],
-        limit: input.limit,
-        offset: input.offset,
-        with: {
-          actor: true,
-          event: {
-            with: {
-              venue: true,
-            },
-          },
-          place: true,
-        },
-      });
+      const activities =
+        friendIds.length > 0
+          ? await ctx.db.query.userActivity.findMany({
+              where: inArray(userActivity.actorUserId, friendIds),
+              orderBy: [desc(userActivity.createdAt)],
+              limit: feedWindow,
+              with: {
+                actor: true,
+                event: {
+                  with: {
+                    venue: true,
+                  },
+                },
+                place: true,
+              },
+            })
+          : [];
 
       const visibleActivities = activities.filter((activity) => {
         if (activity.entityType !== "event") return true;
@@ -386,62 +393,109 @@ export const friendsRouter = router({
         ),
       ];
 
-      if (actorIdsWithPartnerIncluded.length === 0) {
-        return visibleActivities;
+      let friendFeed = visibleActivities;
+
+      if (actorIdsWithPartnerIncluded.length > 0) {
+        const actorIdSet = new Set(actorIdsWithPartnerIncluded);
+        const partnerRelationships = await ctx.db.query.userPartners.findMany({
+          where: and(
+            eq(userPartners.status, "accepted"),
+            or(
+              inArray(userPartners.requesterId, actorIdsWithPartnerIncluded),
+              inArray(userPartners.recipientId, actorIdsWithPartnerIncluded)
+            )
+          ),
+          with: {
+            requester: true,
+            recipient: true,
+          },
+        });
+
+        const partnerFirstNameByActorId = new Map<string, string>();
+        for (const relationship of partnerRelationships) {
+          if (actorIdSet.has(relationship.requesterId) && relationship.recipient) {
+            partnerFirstNameByActorId.set(
+              relationship.requesterId,
+              relationship.recipient.firstName || "their partner"
+            );
+          }
+
+          if (actorIdSet.has(relationship.recipientId) && relationship.requester) {
+            partnerFirstNameByActorId.set(
+              relationship.recipientId,
+              relationship.requester.firstName || "their partner"
+            );
+          }
+        }
+
+        friendFeed = visibleActivities.map((activity) => {
+          const includePartner =
+            (activity.metadata as { includePartner?: boolean } | null)
+              ?.includePartner === true;
+          const isPartnerEligibleType =
+            activity.type === "rsvp_going" ||
+            activity.type === "rsvp_interested" ||
+            activity.type === "rsvp_not_going";
+          const partnerFirstName = partnerFirstNameByActorId.get(
+            activity.actorUserId
+          );
+
+          if (!includePartner || !isPartnerEligibleType || !partnerFirstName) {
+            return activity;
+          }
+
+          return {
+            ...activity,
+            partnerFirstName,
+          };
+        });
       }
 
-      const actorIdSet = new Set(actorIdsWithPartnerIncluded);
-      const partnerRelationships = await ctx.db.query.userPartners.findMany({
+      // 3. Add event updates for events the current user is following via RSVP
+      const subscribedRsvps = await ctx.db.query.eventRsvps.findMany({
         where: and(
-          eq(userPartners.status, "accepted"),
-          or(
-            inArray(userPartners.requesterId, actorIdsWithPartnerIncluded),
-            inArray(userPartners.recipientId, actorIdsWithPartnerIncluded)
-          )
+          eq(eventRsvps.userId, ctx.auth.userId),
+          inArray(eventRsvps.status, ["going", "interested"])
         ),
-        with: {
-          requester: true,
-          recipient: true,
+        columns: {
+          eventId: true,
         },
       });
 
-      const partnerFirstNameByActorId = new Map<string, string>();
-      for (const relationship of partnerRelationships) {
-        if (actorIdSet.has(relationship.requesterId) && relationship.recipient) {
-          partnerFirstNameByActorId.set(
-            relationship.requesterId,
-            relationship.recipient.firstName || "their partner"
-          );
-        }
+      const subscribedEventIds = [
+        ...new Set(subscribedRsvps.map((rsvp) => rsvp.eventId)),
+      ];
 
-        if (actorIdSet.has(relationship.recipientId) && relationship.requester) {
-          partnerFirstNameByActorId.set(
-            relationship.recipientId,
-            relationship.requester.firstName || "their partner"
-          );
-        }
-      }
+      const eventUpdates =
+        subscribedEventIds.length > 0
+          ? await ctx.db.query.eventActivity.findMany({
+              where: inArray(eventActivity.eventId, subscribedEventIds),
+              orderBy: [desc(eventActivity.createdAt)],
+              limit: feedWindow,
+              with: {
+                actor: true,
+                event: {
+                  with: {
+                    venue: true,
+                  },
+                },
+              },
+            })
+          : [];
 
-      return visibleActivities.map((activity) => {
-        const includePartner =
-          (activity.metadata as { includePartner?: boolean } | null)
-            ?.includePartner === true;
-        const isPartnerEligibleType =
-          activity.type === "rsvp_going" ||
-          activity.type === "rsvp_interested" ||
-          activity.type === "rsvp_not_going";
-        const partnerFirstName = partnerFirstNameByActorId.get(
-          activity.actorUserId
-        );
+      const normalizedEventUpdates = eventUpdates
+        .filter((update) => Boolean(update.event))
+        .map((update) => ({
+          ...update,
+          entityType: "event" as const,
+          entityId: update.eventId,
+        }));
 
-        if (!includePartner || !isPartnerEligibleType || !partnerFirstName) {
-          return activity;
-        }
-
-        return {
-          ...activity,
-          partnerFirstName,
-        };
-      });
+      return [...friendFeed, ...normalizedEventUpdates]
+        .sort(
+          (a, b) =>
+            new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime()
+        )
+        .slice(input.offset, input.offset + input.limit);
     }),
 });

@@ -3,6 +3,7 @@
 import { Bell, Check, X } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { UserAvatar } from "@/components/ui/user-avatar";
+import Link from "next/link";
 import {
   Popover,
   PopoverContent,
@@ -23,6 +24,9 @@ export function NotificationsBell() {
   const { toast } = useToast();
   const { data: pendingRequests, refetch } =
     trpc.friends.getPendingRequests.useQuery();
+  const { data: eventUpdates } = trpc.event.getMyEventActivity.useQuery({
+    limit: 20,
+  });
 
   const acceptMutation = trpc.friends.acceptFriendRequest.useMutation({
     onSuccess: () => {
@@ -57,7 +61,27 @@ export function NotificationsBell() {
     },
   });
 
-  const hasNotifications = (pendingRequests?.length ?? 0) > 0;
+  const pendingCount = pendingRequests?.length ?? 0;
+  const eventUpdatesCount = eventUpdates?.length ?? 0;
+  const notificationCount = pendingCount + eventUpdatesCount;
+  const hasNotifications = notificationCount > 0;
+
+  const getEventUpdateText = (type: string) => {
+    switch (type) {
+      case "cancelled":
+        return "cancelled";
+      case "postponed":
+        return "postponed";
+      case "rescheduled":
+        return "rescheduled";
+      case "restored":
+        return "restored";
+      case "created":
+        return "created";
+      default:
+        return "updated";
+    }
+  };
 
   const NotificationsContent = (
     <div className="space-y-4">
@@ -76,7 +100,45 @@ export function NotificationsBell() {
         </div>
       ) : (
         <div className="max-h-[400px] space-y-3 overflow-y-auto pr-1">
-          {pendingRequests!.map((request) => (
+          {eventUpdatesCount > 0 && (
+            <div className="space-y-3">
+              <p className="text-xs font-medium uppercase tracking-wide text-muted-foreground">
+                Event updates
+              </p>
+              {eventUpdates!.map((update: any) => (
+                <div
+                  key={update.id}
+                  className="rounded-xl border border-border/60 bg-muted/40 p-4 shadow-sm transition-colors hover:bg-muted/60"
+                >
+                  <p className="text-sm leading-snug">
+                    <span className="font-semibold">
+                      {update.actor?.firstName || update.actor?.lastName
+                        ? `${update.actor?.firstName || ""} ${update.actor?.lastName || ""}`.trim()
+                        : "Someone"}
+                    </span>{" "}
+                    {getEventUpdateText(update.type)}{" "}
+                    <Link
+                      href={`/event/${update.eventId}`}
+                      className="font-semibold text-primary hover:underline"
+                    >
+                      {update.event?.title || "an event"}
+                    </Link>
+                  </p>
+                  <p className="mt-1 text-xs text-muted-foreground">
+                    {formatDistanceToNow(new Date(update.createdAt), {
+                      addSuffix: true,
+                    })}
+                  </p>
+                </div>
+              ))}
+            </div>
+          )}
+
+          {eventUpdatesCount > 0 && pendingCount > 0 && (
+            <div className="border-t border-border/60" />
+          )}
+
+          {(pendingRequests ?? []).map((request) => (
             <div
               key={request.id}
               className="flex items-start gap-4 rounded-xl border border-border/60 bg-muted/40 p-4 shadow-sm transition-colors hover:bg-muted/60"
@@ -152,7 +214,7 @@ export function NotificationsBell() {
               <Bell className="h-5 w-5" />
               {hasNotifications && (
                 <span className="absolute -right-1 -top-1 flex h-5 w-5 items-center justify-center rounded-full bg-primary text-[10px] font-semibold text-primary-foreground">
-                  {pendingRequests!.length}
+                  {notificationCount}
                 </span>
               )}
             </Button>
@@ -177,7 +239,7 @@ export function NotificationsBell() {
               <Bell className="h-5 w-5" />
               {hasNotifications && (
                 <span className="absolute -right-1 -top-1 flex h-5 w-5 items-center justify-center rounded-full bg-primary text-[10px] font-semibold text-primary-foreground">
-                  {pendingRequests!.length}
+                  {notificationCount}
                 </span>
               )}
             </Button>

@@ -64,6 +64,15 @@ export const activityEntityTypeEnum = pgEnum("activity_entity_type", [
   "user",
 ]);
 
+export const eventActivityTypeEnum = pgEnum("event_activity_type", [
+  "created",
+  "updated",
+  "cancelled",
+  "postponed",
+  "rescheduled",
+  "restored",
+]);
+
 export const placeTypeEnum = pgEnum("place_type", ["venue", "organizer"]);
 export const placeMemberRoleEnum = pgEnum("place_member_role", [
   "owner",
@@ -130,6 +139,7 @@ export const usersRelations = relations(users, ({ many }) => ({
     relationName: "partnerReceipts",
   }),
   activities: many(userActivity),
+  eventActivities: many(eventActivity),
 }));
 
 // ============================================================================
@@ -536,6 +546,7 @@ export const eventsRelations = relations(events, ({ one, many }) => ({
   }),
   rsvps: many(eventRsvps),
   categoryLinks: many(eventCategories),
+  activities: many(eventActivity),
 }));
 
 // ============================================================================
@@ -712,6 +723,46 @@ export const userActivityRelations = relations(userActivity, ({ one }) => ({
   place: one(places, {
     fields: [userActivity.entityId],
     references: [places.id],
+  }),
+}));
+
+// ============================================================================
+// EVENT ACTIVITY TABLE (Append-only)
+// ============================================================================
+export const eventActivity = pgTable(
+  "event_activity",
+  {
+    id: uuid("id").defaultRandom().primaryKey(),
+    actorUserId: text("actor_user_id")
+      .notNull()
+      .references(() => users.id, { onDelete: "cascade" }),
+    eventId: uuid("event_id")
+      .notNull()
+      .references(() => events.id, { onDelete: "cascade" }),
+    type: eventActivityTypeEnum("type").notNull(),
+    metadata: jsonb("metadata"),
+    createdAt: timestamp("created_at").defaultNow().notNull(),
+  },
+  (table) => ({
+    actorCreatedAtIdx: index("event_activity_actor_created_at_idx").on(
+      table.actorUserId,
+      table.createdAt
+    ),
+    eventCreatedAtIdx: index("event_activity_event_created_at_idx").on(
+      table.eventId,
+      table.createdAt
+    ),
+  })
+);
+
+export const eventActivityRelations = relations(eventActivity, ({ one }) => ({
+  actor: one(users, {
+    fields: [eventActivity.actorUserId],
+    references: [users.id],
+  }),
+  event: one(events, {
+    fields: [eventActivity.eventId],
+    references: [events.id],
   }),
 }));
 

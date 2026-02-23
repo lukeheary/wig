@@ -269,7 +269,7 @@ export default function EventPage() {
                     fill
                     className={cn(
                       "object-cover",
-                      isStatusFlagged && "opacity-75 blur-[1px]"
+                      isStatusFlagged && "opacity-50 blur-[2px]"
                     )}
                     sizes="360px"
                     priority

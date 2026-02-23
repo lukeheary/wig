@@ -39,7 +39,7 @@ export function EventCard({ event }: EventCardProps) {
                 fill
                 className={cn(
                   "object-cover transition-transform duration-500",
-                  hasInactiveStatus && "opacity-75 blur-[1px]"
+                  hasInactiveStatus && "opacity-50 blur-[2px]"
                 )}
               />
             ) : (

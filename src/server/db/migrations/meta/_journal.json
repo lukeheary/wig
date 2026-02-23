@@ -225,6 +225,13 @@
       "when": 1771850000000,
       "tag": "0031_add_event_status",
       "breakpoints": true
+    },
+    {
+      "idx": 32,
+      "version": "7",
+      "when": 1771900000000,
+      "tag": "0032_add_event_activity",
+      "breakpoints": true
     }
   ]
 }

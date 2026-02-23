@@ -5,17 +5,22 @@ import { UserAvatar } from "@/components/ui/user-avatar";
 import {
   Loader2,
   Users,
-  CheckCircle2,
   Check,
   Star,
   Building2,
   CalendarPlus,
   Circle,
   X,
+  BellDot,
+  Clock3,
+  RotateCcw,
 } from "lucide-react";
 import {
   differenceInCalendarDays,
+  format,
   formatDistanceToNow,
+  isToday,
+  isTomorrow,
   startOfDay,
 } from "date-fns";
 import Link from "next/link";
@@ -26,8 +31,17 @@ interface ActivityItemProps {
   activity: any;
 }
 
+const EVENT_UPDATE_TYPES = new Set([
+  "cancelled",
+  "postponed",
+  "rescheduled",
+  "restored",
+  "updated",
+]);
+
 function ActivityItem({ activity }: ActivityItemProps) {
   const { actor, type, entityId, metadata, createdAt, event } = activity;
+  const isEventStatusUpdate = EVENT_UPDATE_TYPES.has(type);
 
   const eventDate = event?.startAt ? new Date(event.startAt) : null;
   const isEventPast = eventDate
@@ -36,6 +50,13 @@ function ActivityItem({ activity }: ActivityItemProps) {
 
   const eventRelativeDate = eventDate
     ? formatRelativeEventDate(eventDate)
+    : null;
+  const cancelledEventDatePhrase = eventDate
+    ? isToday(eventDate)
+      ? "tonight"
+      : isTomorrow(eventDate)
+        ? "tomorrow"
+        : `on ${format(eventDate, "MMMM do")}`
     : null;
 
   const renderIcon = () => {
@@ -52,6 +73,16 @@ function ActivityItem({ activity }: ActivityItemProps) {
         return <Users className="h-4 w-4 text-purple-500" />;
       case "created_event":
         return <CalendarPlus className="h-4 w-4 text-orange-500" />;
+      case "cancelled":
+        return <X className="h-4 w-4 text-red-500" />;
+      case "postponed":
+        return <Clock3 className="h-4 w-4 text-amber-500" />;
+      case "rescheduled":
+        return <BellDot className="h-4 w-4 text-blue-500" />;
+      case "restored":
+        return <RotateCcw className="h-4 w-4 text-emerald-500" />;
+      case "updated":
+        return <BellDot className="h-4 w-4 text-sky-500" />;
       default:
         return <Circle className="h-4 w-4 text-muted-foreground" />;
     }
@@ -245,6 +276,142 @@ function ActivityItem({ activity }: ActivityItemProps) {
             )}
           </>
         );
+      case "cancelled":
+        return (
+          <>
+            <Link href={`/event/${entityId}`} className="font-medium text-primary hover:underline">
+              {entityName}
+            </Link>
+            {activity.event?.venue?.name && (
+              <>
+                {" "}
+                at{" "}
+                {activity.event.venue?.slug ? (
+                  <Link
+                    href={`/venue/${activity.event.venue.slug}`}
+                    className="font-medium text-primary hover:underline"
+                  >
+                    {activity.event.venue?.name}
+                  </Link>
+                ) : (
+                  <span className="font-medium text-foreground">
+                    {activity.event.venue?.name}
+                  </span>
+                )}
+              </>
+            )}
+            {cancelledEventDatePhrase ? ` ${cancelledEventDatePhrase}` : ""}{" "}
+            has been cancelled
+          </>
+        );
+      case "postponed":
+        return (
+          <>
+            <Link href={`/event/${entityId}`} className="font-medium text-primary hover:underline">
+              {entityName}
+            </Link>
+            {activity.event?.venue?.name && (
+              <>
+                {" "}
+                at{" "}
+                {activity.event.venue?.slug ? (
+                  <Link
+                    href={`/venue/${activity.event.venue.slug}`}
+                    className="font-medium text-primary hover:underline"
+                  >
+                    {activity.event.venue?.name}
+                  </Link>
+                ) : (
+                  <span className="font-medium text-foreground">
+                    {activity.event.venue?.name}
+                  </span>
+                )}
+              </>
+            )}{" "}
+            has been postponed
+          </>
+        );
+      case "rescheduled":
+        return (
+          <>
+            <Link href={`/event/${entityId}`} className="font-medium text-primary hover:underline">
+              {entityName}
+            </Link>
+            {activity.event?.venue?.name && (
+              <>
+                {" "}
+                at{" "}
+                {activity.event.venue?.slug ? (
+                  <Link
+                    href={`/venue/${activity.event.venue.slug}`}
+                    className="font-medium text-primary hover:underline"
+                  >
+                    {activity.event.venue?.name}
+                  </Link>
+                ) : (
+                  <span className="font-medium text-foreground">
+                    {activity.event.venue?.name}
+                  </span>
+                )}
+              </>
+            )}{" "}
+            has been rescheduled
+          </>
+        );
+      case "restored":
+        return (
+          <>
+            <Link href={`/event/${entityId}`} className="font-medium text-primary hover:underline">
+              {entityName}
+            </Link>
+            {activity.event?.venue?.name && (
+              <>
+                {" "}
+                at{" "}
+                {activity.event.venue?.slug ? (
+                  <Link
+                    href={`/venue/${activity.event.venue.slug}`}
+                    className="font-medium text-primary hover:underline"
+                  >
+                    {activity.event.venue?.name}
+                  </Link>
+                ) : (
+                  <span className="font-medium text-foreground">
+                    {activity.event.venue?.name}
+                  </span>
+                )}
+              </>
+            )}{" "}
+            has been restored
+          </>
+        );
+      case "updated":
+        return (
+          <>
+            <Link href={`/event/${entityId}`} className="font-medium text-primary hover:underline">
+              {entityName}
+            </Link>
+            {activity.event?.venue?.name && (
+              <>
+                {" "}
+                at{" "}
+                {activity.event.venue?.slug ? (
+                  <Link
+                    href={`/venue/${activity.event.venue.slug}`}
+                    className="font-medium text-primary hover:underline"
+                  >
+                    {activity.event.venue?.name}
+                  </Link>
+                ) : (
+                  <span className="font-medium text-foreground">
+                    {activity.event.venue?.name}
+                  </span>
+                )}
+              </>
+            )}{" "}
+            has been updated
+          </>
+        );
       default:
         return (
           <>
@@ -260,9 +427,21 @@ function ActivityItem({ activity }: ActivityItemProps) {
     <div className="flex gap-4 pb-2 last:pb-0">
       <div className="relative flex flex-col items-center pt-1.5">
         <UserAvatar
-          src={actor.avatarImageUrl}
-          name={actor.firstName}
-          className="h-10 w-10 border-2 border-background ring-2 ring-muted/20"
+          src={
+            isEventStatusUpdate
+              ? activity.event?.venue?.logoImageUrl
+              : actor.avatarImageUrl
+          }
+          name={
+            isEventStatusUpdate
+              ? activity.event?.venue?.name || activity.event?.title
+              : actor.firstName
+          }
+          className={
+            isEventStatusUpdate
+              ? "h-10 w-10 rounded-md border-2 border-background ring-2 ring-muted/20"
+              : "h-10 w-10 rounded-full border-2 border-background ring-2 ring-muted/20"
+          }
         />
         <div className="absolute -right-[6px] -top-[0.5px] rounded-full bg-card p-0.5">
           {renderIcon()}
@@ -271,7 +450,7 @@ function ActivityItem({ activity }: ActivityItemProps) {
       <div className="flex-1">
         <p className="text-base text-muted-foreground">
           {content}
-          {eventRelativeDate && (
+          {!isEventStatusUpdate && eventRelativeDate && (
             <span className="ml-1.5 font-medium text-foreground/80">
               {eventRelativeDate}
             </span>

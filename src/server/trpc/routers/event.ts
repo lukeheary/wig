@@ -7,6 +7,7 @@ import {
 } from "../init";
 import {
   categories,
+  eventActivity,
   eventRsvps,
   eventCategories,
   eventSeries,
@@ -20,10 +21,22 @@ import {
   userPartners,
   users,
 } from "../../db/schema";
-import { and, desc, eq, gte, ilike, inArray, lte, or, sql } from "drizzle-orm";
+import {
+  and,
+  desc,
+  eq,
+  gte,
+  ilike,
+  inArray,
+  lte,
+  ne,
+  or,
+  sql,
+} from "drizzle-orm";
 import { uploadImageFromUrl, BUCKET_NAME } from "@/lib/s3";
 import { TRPCError } from "@trpc/server";
 import { logActivity } from "../../utils/activity-logger";
+import { logEventActivity } from "../../utils/event-activity-logger";
 import {
   filterExistingCategoryKeys,
   mapEventCategoryData,
@@ -33,7 +46,26 @@ import {
   materializeEventSeries,
   normalizeSeriesDaysOfWeek,
 } from "@/server/utils/event-series";
-import { EVENT_STATUS_VALUES } from "@/lib/event-status";
+import { EVENT_STATUS_VALUES, type EventStatus } from "@/lib/event-status";
+
+function resolveEventUpdateActivityType(
+  previousStatus: EventStatus,
+  nextStatus: EventStatus,
+  startAtChanged: boolean
+): "updated" | "cancelled" | "postponed" | "rescheduled" | "restored" {
+  if (previousStatus !== nextStatus) {
+    if (nextStatus === "cancelled") return "cancelled";
+    if (nextStatus === "postponed") return "postponed";
+    if (previousStatus !== "active" && nextStatus === "active") return "restored";
+    return "updated";
+  }
+
+  if (startAtChanged) {
+    return "rescheduled";
+  }
+
+  return "updated";
+}
 
 export const eventRouter = router({
   createEvent: protectedProcedure
@@ -152,6 +184,16 @@ export const eventRouter = router({
       // }
 
       if (!event) return event;
+
+      void logEventActivity({
+        actorUserId: ctx.auth.userId,
+        eventId: event.id,
+        type: "created",
+        metadata: {
+          status: event.status,
+          createdVia: "manual",
+        },
+      });
 
       const created = await ctx.db.query.events.findFirst({
         where: eq(events.id, event.id),
@@ -302,6 +344,19 @@ export const eventRouter = router({
       const generated = await materializeEventSeries(ctx.db, {
         seriesIds: [series.id],
       });
+
+      if (generated.firstCreatedEventId) {
+        void logEventActivity({
+          actorUserId: ctx.auth.userId,
+          eventId: generated.firstCreatedEventId,
+          type: "created",
+          metadata: {
+            recurring: true,
+            seriesId: series.id,
+            status: input.status,
+          },
+        });
+      }
 
       // if (generated.firstCreatedEventId) {
       //   void logActivity({
@@ -470,6 +525,20 @@ export const eventRouter = router({
       );
 
       if (created.length > 0) {
+        await Promise.all(
+          created.map((row) =>
+            logEventActivity({
+              actorUserId: ctx.auth.userId,
+              eventId: row.id,
+              type: "created",
+              metadata: {
+                status: row.status,
+                createdVia: "batch",
+              },
+            })
+          )
+        );
+
         await Promise.all(
           created.map(async (row) => {
             const rowEventKey = toEventKey({
@@ -1250,6 +1319,34 @@ export const eventRouter = router({
         },
       });
 
+      const previousStatus = event.status as EventStatus;
+      const nextStatus = (updatedEvent.status as EventStatus) ?? previousStatus;
+      const startAtChanged =
+        updates.startAt !== undefined &&
+        event.startAt.getTime() !== updates.startAt.getTime();
+      const activityType = resolveEventUpdateActivityType(
+        previousStatus,
+        nextStatus,
+        startAtChanged
+      );
+      const changedFields = Object.keys({
+        ...updates,
+        ...(updates.categories !== undefined ? { categories: true } : {}),
+      });
+
+      void logEventActivity({
+        actorUserId: ctx.auth.userId,
+        eventId,
+        type: activityType,
+        metadata: {
+          previousStatus,
+          nextStatus,
+          previousStartAt: event.startAt,
+          nextStartAt: updatedEvent.startAt,
+          changedFields,
+        },
+      });
+
       return refreshed ? mapEventCategoryData(refreshed) : updatedEvent;
     }),
 
@@ -1394,6 +1491,46 @@ export const eventRouter = router({
         userRsvp: null,
         friendsGoing: [] as never[],
       }));
+    }),
+
+  getMyEventActivity: protectedProcedure
+    .input(
+      z.object({
+        limit: z.number().min(1).max(100).default(25),
+        offset: z.number().min(0).default(0),
+      })
+    )
+    .query(async ({ ctx, input }) => {
+      const subscribedRsvps = await ctx.db.query.eventRsvps.findMany({
+        where: and(
+          eq(eventRsvps.userId, ctx.auth.userId),
+          inArray(eventRsvps.status, ["going", "interested"])
+        ),
+        columns: {
+          eventId: true,
+        },
+      });
+
+      const eventIds = [...new Set(subscribedRsvps.map((rsvp) => rsvp.eventId))];
+      if (eventIds.length === 0) {
+        return [];
+      }
+
+      return await ctx.db.query.eventActivity.findMany({
+        where: inArray(eventActivity.eventId, eventIds),
+        orderBy: [desc(eventActivity.createdAt)],
+        limit: input.limit,
+        offset: input.offset,
+        with: {
+          actor: true,
+          event: {
+            with: {
+              venue: true,
+              organizer: true,
+            },
+          },
+        },
+      });
     }),
 
   getAvailableCities: publicProcedure.query(async ({ ctx }) => {
