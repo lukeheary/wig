@@ -25,11 +25,11 @@ import {
   and,
   desc,
   eq,
+  gt,
   gte,
   ilike,
   inArray,
   lte,
-  ne,
   or,
   sql,
 } from "drizzle-orm";
@@ -1501,6 +1501,13 @@ export const eventRouter = router({
       })
     )
     .query(async ({ ctx, input }) => {
+      const currentUser = await ctx.db.query.users.findFirst({
+        where: eq(users.id, ctx.auth.userId),
+        columns: {
+          eventUpdatesLastSeenAt: true,
+        },
+      });
+
       const subscribedRsvps = await ctx.db.query.eventRsvps.findMany({
         where: and(
           eq(eventRsvps.userId, ctx.auth.userId),
@@ -1516,8 +1523,15 @@ export const eventRouter = router({
         return [];
       }
 
+      const whereConditions = [inArray(eventActivity.eventId, eventIds)];
+      if (currentUser?.eventUpdatesLastSeenAt) {
+        whereConditions.push(
+          gt(eventActivity.createdAt, currentUser.eventUpdatesLastSeenAt)
+        );
+      }
+
       return await ctx.db.query.eventActivity.findMany({
-        where: inArray(eventActivity.eventId, eventIds),
+        where: and(...whereConditions),
         orderBy: [desc(eventActivity.createdAt)],
         limit: input.limit,
         offset: input.offset,
@@ -1532,6 +1546,58 @@ export const eventRouter = router({
         },
       });
     }),
+
+  getMyUnreadEventActivityCount: protectedProcedure.query(async ({ ctx }) => {
+    const currentUser = await ctx.db.query.users.findFirst({
+      where: eq(users.id, ctx.auth.userId),
+      columns: {
+        eventUpdatesLastSeenAt: true,
+      },
+    });
+
+    const subscribedRsvps = await ctx.db.query.eventRsvps.findMany({
+      where: and(
+        eq(eventRsvps.userId, ctx.auth.userId),
+        inArray(eventRsvps.status, ["going", "interested"])
+      ),
+      columns: {
+        eventId: true,
+      },
+    });
+
+    const eventIds = [...new Set(subscribedRsvps.map((rsvp) => rsvp.eventId))];
+    if (eventIds.length === 0) {
+      return { unreadCount: 0 };
+    }
+
+    const whereConditions = [inArray(eventActivity.eventId, eventIds)];
+    if (currentUser?.eventUpdatesLastSeenAt) {
+      whereConditions.push(
+        gt(eventActivity.createdAt, currentUser.eventUpdatesLastSeenAt)
+      );
+    }
+
+    const [result] = await ctx.db
+      .select({
+        unreadCount: sql<number>`count(*)::int`,
+      })
+      .from(eventActivity)
+      .where(and(...whereConditions));
+
+    return { unreadCount: result?.unreadCount ?? 0 };
+  }),
+
+  markMyEventActivitySeen: protectedProcedure.mutation(async ({ ctx }) => {
+    await ctx.db
+      .update(users)
+      .set({
+        eventUpdatesLastSeenAt: new Date(),
+        updatedAt: new Date(),
+      })
+      .where(eq(users.id, ctx.auth.userId));
+
+    return { success: true };
+  }),
 
   getAvailableCities: publicProcedure.query(async ({ ctx }) => {
     // Return all metro areas from the database

@@ -118,6 +118,7 @@ export const users = pgTable(
     dateOfBirth: date("date_of_birth"),
     role: userRoleEnum("role").notNull().default("user"),
     isOnboarding: boolean("is_onboarding").notNull().default(true),
+    eventUpdatesLastSeenAt: timestamp("event_updates_last_seen_at"),
     createdAt: timestamp("created_at").defaultNow().notNull(),
     updatedAt: timestamp("updated_at").defaultNow().notNull(),
   },

@@ -1,5 +1,6 @@
 "use client";
 
+import { useState } from "react";
 import { Bell, Check, X } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { UserAvatar } from "@/components/ui/user-avatar";
@@ -21,12 +22,34 @@ import { useToast } from "@/hooks/use-toast";
 import { formatDistanceToNow } from "date-fns";
 
 export function NotificationsBell() {
+  const [isMobileOpen, setIsMobileOpen] = useState(false);
+  const [isDesktopOpen, setIsDesktopOpen] = useState(false);
   const { toast } = useToast();
+  const utils = trpc.useUtils();
   const { data: pendingRequests, refetch } =
     trpc.friends.getPendingRequests.useQuery();
   const { data: eventUpdates } = trpc.event.getMyEventActivity.useQuery({
     limit: 20,
   });
+  const { data: unreadEventUpdatesCountData } =
+    trpc.event.getMyUnreadEventActivityCount.useQuery();
+
+  const markEventActivitySeenMutation =
+    trpc.event.markMyEventActivitySeen.useMutation({
+      onSuccess: async () => {
+        await Promise.all([
+          utils.event.getMyEventActivity.invalidate(),
+          utils.event.getMyUnreadEventActivityCount.invalidate(),
+        ]);
+      },
+      onError: (error) => {
+        toast({
+          title: "Error",
+          description: error.message,
+          variant: "destructive",
+        });
+      },
+    });
 
   const acceptMutation = trpc.friends.acceptFriendRequest.useMutation({
     onSuccess: () => {
@@ -62,9 +85,30 @@ export function NotificationsBell() {
   });
 
   const pendingCount = pendingRequests?.length ?? 0;
+  const unreadEventUpdatesCount = unreadEventUpdatesCountData?.unreadCount ?? 0;
   const eventUpdatesCount = eventUpdates?.length ?? 0;
-  const notificationCount = pendingCount + eventUpdatesCount;
+  const notificationCount = pendingCount + unreadEventUpdatesCount;
   const hasNotifications = notificationCount > 0;
+
+  const markEventActivitySeenIfNeeded = () => {
+    if (unreadEventUpdatesCount > 0 && !markEventActivitySeenMutation.isPending) {
+      markEventActivitySeenMutation.mutate();
+    }
+  };
+
+  const handleMobileOpenChange = (open: boolean) => {
+    if (!open && isMobileOpen) {
+      markEventActivitySeenIfNeeded();
+    }
+    setIsMobileOpen(open);
+  };
+
+  const handleDesktopOpenChange = (open: boolean) => {
+    if (!open && isDesktopOpen) {
+      markEventActivitySeenIfNeeded();
+    }
+    setIsDesktopOpen(open);
+  };
 
   const getEventUpdateText = (type: string) => {
     switch (type) {
@@ -208,7 +252,7 @@ export function NotificationsBell() {
   return (
     <>
       <div className="md:hidden">
-        <Sheet>
+        <Sheet open={isMobileOpen} onOpenChange={handleMobileOpenChange}>
           <SheetTrigger asChild>
             <Button variant="ghost" size="icon" className="relative">
               <Bell className="h-5 w-5" />
@@ -229,7 +273,7 @@ export function NotificationsBell() {
       </div>
 
       <div className="hidden md:block">
-        <Popover>
+        <Popover open={isDesktopOpen} onOpenChange={handleDesktopOpenChange}>
           <PopoverTrigger asChild>
             <Button
               variant="ghost"
