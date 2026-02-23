@@ -266,7 +266,10 @@ export default function EventPage() {
                     src={event.coverImageUrl}
                     alt={event.title}
                     fill
-                    className="object-cover"
+                    className={cn(
+                      "object-cover",
+                      isStatusFlagged && "opacity-75 blur-[1px]"
+                    )}
                     sizes="360px"
                     priority
                   />
@@ -274,6 +277,13 @@ export default function EventPage() {
               ) : (
                 <div className="absolute inset-0 flex items-center justify-center bg-gradient-to-br from-primary/20 to-primary/5">
                   <Calendar className="h-24 w-24 text-muted-foreground/40" />
+                </div>
+              )}
+              {event.coverImageUrl && isStatusFlagged && (
+                <div className="pointer-events-none absolute inset-0 flex items-center justify-center">
+                  <span className="rounded-md bg-card px-2 py-1 text-base font-semibold uppercase tracking-[0.12em] text-white">
+                    {statusLabel}
+                  </span>
                 </div>
               )}
 
@@ -331,17 +341,7 @@ export default function EventPage() {
 
           {/* Content - Right column on desktop */}
           <div className="pt-6 lg:flex-1 lg:pt-0">
-            {/* Main Content */}
-            {/* Title & Basic Info */}
             <div className="mb-2">
-              {isStatusFlagged && (
-                <Badge
-                  variant="outline"
-                  className={cn("mb-3", getEventStatusBadgeClassName(event.status))}
-                >
-                  {statusLabel}
-                </Badge>
-              )}
               <h1 className="text-3xl font-bold md:text-4xl">{event.title}</h1>
             </div>
 
@@ -355,18 +355,17 @@ export default function EventPage() {
               </Link>
             )}
 
-            <div className="mt-1 flex items-center gap-2 text-lg">
+            <div
+              className={cn(
+                "mt-1 flex items-center gap-2 text-lg",
+                isStatusFlagged && "text-muted-foreground line-through"
+              )}
+            >
               <Calendar className="h-4 w-4" />
               <span>
                 {formattedDate} at {formattedTime}
               </span>
             </div>
-
-            {isStatusFlagged && (
-              <p className="mt-2 text-sm text-muted-foreground">
-                This event is currently marked as {statusLabel.toLowerCase()}.
-              </p>
-            )}
 
             {event.organizer && (
               <Link

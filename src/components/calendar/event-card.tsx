@@ -49,7 +49,7 @@ export function EventCard({ event }: EventCardProps) {
             )}
             {hasInactiveStatus && (
               <div className="absolute inset-0 flex items-center justify-center px-2">
-                <span className="relative z-10 rounded-md bg-card px-1 py-1 text-center text-[11px] font-semibold uppercase tracking-[0.12em] text-white md:text-sm">
+                <span className="relative z-10 rounded-md bg-card px-1 py-1 text-center text-[11px] font-semibold uppercase tracking-[0.12em] text-white md:px-2 md:text-base">
                   {getEventStatusLabel(event.status)}
                 </span>
               </div>
@@ -64,7 +64,12 @@ export function EventCard({ event }: EventCardProps) {
             </h3>
 
             {/* Date */}
-            <div className="text-sm text-primary/70 md:text-sm">
+            <div
+              className={cn(
+                "text-sm text-primary/70 md:text-sm",
+                hasInactiveStatus && "line-through"
+              )}
+            >
               {dayOfWeek}, {month} {day} at {startTime}
             </div>
 

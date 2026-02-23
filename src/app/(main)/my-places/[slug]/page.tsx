@@ -176,10 +176,7 @@ export default function ManagePlacePage() {
                         <img
                           src={event.coverImageUrl}
                           alt={event.title}
-                          className={cn(
-                            "h-12 w-12 shrink-0 rounded-md object-cover sm:h-16 sm:w-16",
-                            event.status !== "active" && "opacity-75 blur-[1px]"
-                          )}
+                          className="h-12 w-12 shrink-0 rounded-md object-cover sm:h-16 sm:w-16"
                         />
                       ) : (
                         <div className="flex h-12 w-12 shrink-0 items-center justify-center rounded-md bg-muted sm:h-16 sm:w-16">
@@ -262,13 +259,19 @@ export default function ManagePlacePage() {
                   Create New Event
                 </Button>
               </Link>
-              <Link href={`/${isVenue ? "venue" : "organizer"}/${place.slug}`} className="block">
+              <Link
+                href={`/${isVenue ? "venue" : "organizer"}/${place.slug}`}
+                className="block"
+              >
                 <Button variant="outline" className="w-full justify-start">
                   <Eye className="mr-2 h-4 w-4" />
                   View Public Page
                 </Button>
               </Link>
-              <Link href={`/${isVenue ? "venue" : "organizer"}/${place.slug}/edit`} className="block">
+              <Link
+                href={`/${isVenue ? "venue" : "organizer"}/${place.slug}/edit`}
+                className="block"
+              >
                 <Button variant="outline" className="w-full justify-start">
                   <Edit className="mr-2 h-4 w-4" />
                   Edit {typeLabel}
