@@ -3,12 +3,12 @@
 import Link from "next/link";
 import Image from "next/image";
 import { Card } from "@/components/ui/card";
-import { Badge } from "@/components/ui/badge";
-import { formatTime } from "@/lib/utils";
+import { cn, formatTime } from "@/lib/utils";
 import { Calendar } from "lucide-react";
 import { format } from "date-fns";
 import { type EventListItem } from "@/types/trpc";
 import { AvatarStack } from "@/components/ui/avatar-stack";
+import { getEventStatusLabel } from "@/lib/event-status";
 
 interface EventCardProps {
   event: EventListItem;
@@ -23,6 +23,7 @@ export function EventCard({ event }: EventCardProps) {
 
   const friendsGoing = event.friendsGoing || [];
   const goingUsers = friendsGoing.map((rsvp) => rsvp.user);
+  const hasInactiveStatus = event.status !== "active";
 
   return (
     <Link href={`/event/${event.id}`} className="group">
@@ -36,11 +37,21 @@ export function EventCard({ event }: EventCardProps) {
                 src={event.coverImageUrl}
                 alt={event.title}
                 fill
-                className="object-cover transition-transform duration-500"
+                className={cn(
+                  "object-cover transition-transform duration-500",
+                  hasInactiveStatus && "opacity-75 blur-[1px]"
+                )}
               />
             ) : (
               <div className="absolute inset-0 flex items-center justify-center bg-gradient-to-br from-primary/30 to-primary/10">
                 <Calendar className="h-12 w-12 text-muted-foreground/20 md:h-24 md:w-24" />
+              </div>
+            )}
+            {hasInactiveStatus && (
+              <div className="absolute inset-0 flex items-center justify-center px-2">
+                <span className="relative z-10 rounded-md bg-card px-1 py-1 text-center text-[11px] font-semibold uppercase tracking-[0.12em] text-white md:text-sm">
+                  {getEventStatusLabel(event.status)}
+                </span>
               </div>
             )}
           </div>

@@ -25,6 +25,7 @@ import {
   Eye,
 } from "lucide-react";
 import { BackButtonHeader } from "@/components/shared/back-button-header";
+import { cn } from "@/lib/utils";
 
 export default function ManagePlacePage() {
   const params = useParams();
@@ -175,7 +176,10 @@ export default function ManagePlacePage() {
                         <img
                           src={event.coverImageUrl}
                           alt={event.title}
-                          className="h-12 w-12 shrink-0 rounded-md object-cover sm:h-16 sm:w-16"
+                          className={cn(
+                            "h-12 w-12 shrink-0 rounded-md object-cover sm:h-16 sm:w-16",
+                            event.status !== "active" && "opacity-75 blur-[1px]"
+                          )}
                         />
                       ) : (
                         <div className="flex h-12 w-12 shrink-0 items-center justify-center rounded-md bg-muted sm:h-16 sm:w-16">

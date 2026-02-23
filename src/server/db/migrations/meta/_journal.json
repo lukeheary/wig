@@ -218,6 +218,13 @@
       "when": 1771800000000,
       "tag": "0030_add_monthly_recurrence_frequency",
       "breakpoints": true
+    },
+    {
+      "idx": 31,
+      "version": "7",
+      "when": 1771850000000,
+      "tag": "0031_add_event_status",
+      "breakpoints": true
     }
   ]
 }

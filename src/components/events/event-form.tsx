@@ -22,6 +22,11 @@ import {
   SelectValue,
 } from "@/components/ui/select";
 import type { VenueHours } from "@/components/venue-hours-editor";
+import {
+  EVENT_STATUS_VALUES,
+  getEventStatusLabel,
+  type EventStatus,
+} from "@/lib/event-status";
 
 interface EventFormProps {
   venueId?: string;
@@ -57,6 +62,7 @@ export function EventForm({
     description: "",
     coverImageUrl: "",
     categories: [] as string[],
+    status: "active" as EventStatus,
     startAt: "",
     endAt: "",
     address: "",
@@ -333,6 +339,7 @@ export function EventForm({
       description: formData.description || undefined,
       coverImageUrl: formData.coverImageUrl || undefined,
       categories: formData.categories,
+      status: formData.status,
       startAt: startDate,
       endAt: endDate || undefined,
       address: selectedVenue?.address || formData.address || undefined,
@@ -563,6 +570,27 @@ export function EventForm({
                 }
                 placeholder="Select categories..."
               />
+            </div>
+
+            <div className="space-y-2">
+              <Label>Status</Label>
+              <Select
+                value={formData.status}
+                onValueChange={(value) =>
+                  setFormData({ ...formData, status: value as EventStatus })
+                }
+              >
+                <SelectTrigger>
+                  <SelectValue />
+                </SelectTrigger>
+                <SelectContent>
+                  {EVENT_STATUS_VALUES.map((status) => (
+                    <SelectItem key={status} value={status}>
+                      {getEventStatusLabel(status)}
+                    </SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
             </div>
 
             <div className="grid gap-4 sm:grid-cols-2">

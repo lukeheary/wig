@@ -24,6 +24,10 @@ import { format } from "date-fns";
 import { cn } from "@/lib/utils";
 import { AvatarStack } from "@/components/ui/avatar-stack";
 import { useEffect, useMemo, useState } from "react";
+import {
+  getEventStatusBadgeClassName,
+  getEventStatusLabel,
+} from "@/lib/event-status";
 
 type RsvpStatus = "going" | "interested" | "not_going";
 
@@ -199,6 +203,8 @@ export default function EventPage() {
   const sourceLabel = event.source
     ? event.source.charAt(0).toUpperCase() + event.source.slice(1)
     : "Event Site";
+  const isStatusFlagged = event.status !== "active";
+  const statusLabel = getEventStatusLabel(event.status);
 
   // Check if user can edit this event
   const canEdit =
@@ -328,6 +334,14 @@ export default function EventPage() {
             {/* Main Content */}
             {/* Title & Basic Info */}
             <div className="mb-2">
+              {isStatusFlagged && (
+                <Badge
+                  variant="outline"
+                  className={cn("mb-3", getEventStatusBadgeClassName(event.status))}
+                >
+                  {statusLabel}
+                </Badge>
+              )}
               <h1 className="text-3xl font-bold md:text-4xl">{event.title}</h1>
             </div>
 
@@ -347,6 +361,12 @@ export default function EventPage() {
                 {formattedDate} at {formattedTime}
               </span>
             </div>
+
+            {isStatusFlagged && (
+              <p className="mt-2 text-sm text-muted-foreground">
+                This event is currently marked as {statusLabel.toLowerCase()}.
+              </p>
+            )}
 
             {event.organizer && (
               <Link

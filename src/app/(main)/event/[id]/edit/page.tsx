@@ -16,6 +16,18 @@ import { VenueSelector, VenueData } from "@/components/events/venue-selector";
 import { CategoryMultiSelect } from "@/components/category-multi-select";
 import { DatePicker } from "@/components/ui/date-picker";
 import { BackButtonHeader } from "@/components/shared/back-button-header";
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from "@/components/ui/select";
+import {
+  EVENT_STATUS_VALUES,
+  getEventStatusLabel,
+  type EventStatus,
+} from "@/lib/event-status";
 
 export default function EditEventPage() {
   const params = useParams();
@@ -39,6 +51,7 @@ export default function EditEventPage() {
     description: "",
     coverImageUrl: "",
     categories: [] as string[],
+    status: "active" as EventStatus,
     startAt: "",
     endAt: "",
     address: "",
@@ -153,6 +166,7 @@ export default function EditEventPage() {
         description: event.description || "",
         coverImageUrl: event.coverImageUrl || "",
         categories: event.categories || [],
+        status: event.status,
         startAt: format(new Date(event.startAt), "yyyy-MM-dd'T'HH:mm"),
         endAt: event.endAt
           ? format(new Date(event.endAt), "yyyy-MM-dd'T'HH:mm")
@@ -245,6 +259,7 @@ export default function EditEventPage() {
         description: formData.description || undefined,
         coverImageUrl: formData.coverImageUrl || undefined,
         categories: formData.categories,
+        status: formData.status,
         startAt: startDate,
         endAt: endDate || undefined,
         address: selectedVenue?.address || formData.address || undefined,
@@ -342,6 +357,27 @@ export default function EditEventPage() {
                 }
                 placeholder="Select categories..."
               />
+            </div>
+
+            <div className="space-y-2">
+              <Label>Status</Label>
+              <Select
+                value={formData.status}
+                onValueChange={(value) =>
+                  setFormData({ ...formData, status: value as EventStatus })
+                }
+              >
+                <SelectTrigger>
+                  <SelectValue />
+                </SelectTrigger>
+                <SelectContent>
+                  {EVENT_STATUS_VALUES.map((status) => (
+                    <SelectItem key={status} value={status}>
+                      {getEventStatusLabel(status)}
+                    </SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
             </div>
 
             {/* Description */}

@@ -323,6 +323,7 @@ export async function materializeEventSeries(
         city: series.city,
         state: series.state,
         visibility: series.visibility,
+        status: series.status,
       }));
 
       const inserted: Array<{ id: string }> = await db

@@ -33,6 +33,7 @@ import {
   materializeEventSeries,
   normalizeSeriesDaysOfWeek,
 } from "@/server/utils/event-series";
+import { EVENT_STATUS_VALUES } from "@/lib/event-status";
 
 export const eventRouter = router({
   createEvent: protectedProcedure
@@ -53,6 +54,7 @@ export const eventRouter = router({
         state: z.string().length(2),
         categories: z.array(z.string()).optional().default([]),
         visibility: z.enum(["public", "private"]).default("public"),
+        status: z.enum(EVENT_STATUS_VALUES).default("active"),
       })
     )
     .mutation(async ({ ctx, input }) => {
@@ -119,6 +121,7 @@ export const eventRouter = router({
           state: input.state,
           startAt: input.startAt,
           visibility: input.visibility,
+          status: input.status,
           createdByUserId: ctx.auth.userId,
           description: input.description ?? null,
           address: input.address ?? null,
@@ -182,6 +185,7 @@ export const eventRouter = router({
         state: z.string().length(2),
         categories: z.array(z.string()).optional().default([]),
         visibility: z.enum(["public", "private"]).default("public"),
+        status: z.enum(EVENT_STATUS_VALUES).default("active"),
         recurrence: z.object({
           frequency: z.enum(["daily", "weekly", "monthly"]),
           interval: z.number().int().min(1).max(12).default(1),
@@ -277,6 +281,7 @@ export const eventRouter = router({
           state: input.state,
           categories: validCategories,
           visibility: input.visibility,
+          status: input.status,
           frequency: input.recurrence.frequency,
           interval: input.recurrence.interval,
           daysOfWeek: normalizedDaysOfWeek,
@@ -340,6 +345,7 @@ export const eventRouter = router({
             venueId: z.string().uuid().optional(),
             categories: z.array(z.string()).optional().default([]),
             visibility: z.enum(["public", "private"]).default("public"),
+            status: z.enum(EVENT_STATUS_VALUES).default("active"),
           })
         ),
       })
@@ -442,6 +448,7 @@ export const eventRouter = router({
             city: event.city,
             state: event.state,
             visibility: event.visibility,
+            status: event.status,
             createdByUserId: ctx.auth.userId,
             venueId: event.venueId ?? input.venueId ?? null,
             organizerId: event.organizerId ?? input.organizerId ?? null,
@@ -1138,6 +1145,7 @@ export const eventRouter = router({
         state: z.string().length(2).optional(),
         categories: z.array(z.string()).optional(),
         visibility: z.enum(["public", "private"]).optional(),
+        status: z.enum(EVENT_STATUS_VALUES).optional(),
         venueId: z.string().uuid().optional(),
         organizerId: z.string().uuid().optional(),
       })
@@ -1206,6 +1214,7 @@ export const eventRouter = router({
       if (updates.state !== undefined) updateData.state = updates.state;
       if (updates.visibility !== undefined)
         updateData.visibility = updates.visibility;
+      if (updates.status !== undefined) updateData.status = updates.status;
       if (updates.venueId !== undefined) updateData.venueId = updates.venueId;
       if (updates.organizerId !== undefined)
         updateData.organizerId = updates.organizerId;

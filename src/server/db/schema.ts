@@ -27,6 +27,13 @@ export const eventVisibilityEnum = pgEnum("event_visibility", [
   "private",
 ]);
 
+export const eventStatusEnum = pgEnum("event_status", [
+  "active",
+  "cancelled",
+  "postponed",
+  "draft",
+]);
+
 export const rsvpStatusEnum = pgEnum("rsvp_status", [
   "going",
   "interested",
@@ -412,6 +419,7 @@ export const eventSeries = pgTable(
     state: varchar("state", { length: 2 }).notNull(),
     categories: jsonb("categories").$type<string[]>().notNull().default([]),
     visibility: eventVisibilityEnum("visibility").notNull().default("public"),
+    status: eventStatusEnum("status").notNull().default("active"),
     frequency: recurrenceFrequencyEnum("frequency").notNull(),
     interval: integer("interval").notNull().default(1),
     daysOfWeek: jsonb("days_of_week").$type<number[]>(),
@@ -479,6 +487,7 @@ export const events = pgTable(
     city: varchar("city", { length: 100 }).notNull(),
     state: varchar("state", { length: 2 }).notNull(),
     visibility: eventVisibilityEnum("visibility").notNull().default("public"),
+    status: eventStatusEnum("status").notNull().default("active"),
     createdAt: timestamp("created_at").defaultNow().notNull(),
     updatedAt: timestamp("updated_at").defaultNow().notNull(),
   },
@@ -493,6 +502,7 @@ export const events = pgTable(
     startAtIdx: index("events_start_at_idx").on(table.startAt),
     locationIdx: index("events_location_idx").on(table.city, table.state),
     visibilityIdx: index("events_visibility_idx").on(table.visibility),
+    statusIdx: index("events_status_idx").on(table.status),
     // Composite index for common query pattern
     startVisibilityIdx: index("events_start_visibility_idx").on(
       table.startAt,
