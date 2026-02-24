@@ -593,6 +593,25 @@ export const eventRouter = router({
       }
 
       const now = new Date();
+      const futureEventsBeforeUpdate = await ctx.db.query.events.findMany({
+        where: and(eq(events.seriesId, input.seriesId), gte(events.startAt, now)),
+        columns: {
+          startAt: true,
+          coverImageUrl: true,
+        },
+      });
+
+      const customCoverImageByStartAt = new Map<string, string>();
+      for (const event of futureEventsBeforeUpdate) {
+        if (!event.coverImageUrl) continue;
+        // Preserve only per-instance overrides, not inherited series-default images.
+        if (event.coverImageUrl !== existingSeries.coverImageUrl) {
+          customCoverImageByStartAt.set(
+            event.startAt.toISOString(),
+            event.coverImageUrl
+          );
+        }
+      }
 
       await ctx.db
         .delete(events)
@@ -613,6 +632,31 @@ export const eventRouter = router({
         orderBy: [asc(events.startAt)],
         columns: { id: true },
       });
+
+      if (customCoverImageByStartAt.size > 0) {
+        const regeneratedEvents = await ctx.db.query.events.findMany({
+          where: and(eq(events.seriesId, input.seriesId), gte(events.startAt, now)),
+          columns: {
+            id: true,
+            startAt: true,
+            coverImageUrl: true,
+          },
+        });
+
+        for (const event of regeneratedEvents) {
+          const preservedCoverImageUrl = customCoverImageByStartAt.get(
+            event.startAt.toISOString()
+          );
+
+          if (!preservedCoverImageUrl) continue;
+          if (event.coverImageUrl === preservedCoverImageUrl) continue;
+
+          await ctx.db
+            .update(events)
+            .set({ coverImageUrl: preservedCoverImageUrl })
+            .where(eq(events.id, event.id));
+        }
+      }
 
       return {
         seriesId: input.seriesId,
