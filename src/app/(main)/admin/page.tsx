@@ -23,13 +23,13 @@ export default function AdminPage() {
       label: "Venues",
       value: venues?.length ?? 0,
       icon: Building,
-      href: "/admin/places",
+      href: "/admin/venues",
     },
     {
       label: "Organizers",
       value: organizers?.length ?? 0,
       icon: Building2,
-      href: "/admin/places?type=organizer",
+      href: "/admin/organizers",
     },
     {
       label: "Metro Areas",
@@ -80,7 +80,7 @@ export default function AdminPage() {
             <CardTitle>Quick Actions</CardTitle>
           </CardHeader>
           <CardContent className="grid gap-2">
-            <Link href="/admin/places?create=venue">
+            <Link href="/admin/venues?create=1">
               <Card className="p-4 hover:bg-accent">
                 <div className="flex items-center gap-3">
                   <Plus className="h-4 w-4" />
@@ -88,7 +88,7 @@ export default function AdminPage() {
                 </div>
               </Card>
             </Link>
-            <Link href="/admin/places?create=organizer">
+            <Link href="/admin/organizers?create=1">
               <Card className="p-4 hover:bg-accent">
                 <div className="flex items-center gap-3">
                   <Plus className="h-4 w-4" />
@@ -96,11 +96,11 @@ export default function AdminPage() {
                 </div>
               </Card>
             </Link>
-            <Link href="/admin/places">
+            <Link href="/admin/venues">
               <Card className="p-4 hover:bg-accent">
                 <div className="flex items-center gap-3">
                   <Building className="h-4 w-4" />
-                  <div className="text-sm font-medium">Manage Places</div>
+                  <div className="text-sm font-medium">Manage Venues</div>
                 </div>
               </Card>
             </Link>

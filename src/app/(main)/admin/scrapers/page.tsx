@@ -575,8 +575,8 @@ export default function AdminScrapersPage() {
           ) : scraperRows.length === 0 ? (
             <div className="rounded-md border border-dashed p-4 text-sm text-muted-foreground">
               No scraper rows found. Configure one from{" "}
-              <Link href="/admin/places" className="font-medium underline">
-                Admin Places
+              <Link href="/admin/venues" className="font-medium underline">
+                Admin Venues
               </Link>
               .
             </div>
