@@ -385,6 +385,9 @@ export const eventRouter = router({
 
       const generated = await materializeEventSeries(ctx.db, {
         seriesIds: [series.id],
+        ...(input.recurrence.untilDate
+          ? { windowEnd: input.recurrence.untilDate }
+          : {}),
       });
 
       if (generated.firstCreatedEventId) {
@@ -565,6 +568,9 @@ export const eventRouter = router({
       const generated = await materializeEventSeries(ctx.db, {
         seriesIds: [input.seriesId],
         now,
+        ...(input.recurrence.untilDate
+          ? { windowEnd: input.recurrence.untilDate }
+          : {}),
       });
 
       const nextEvent = await ctx.db.query.events.findFirst({
