@@ -126,6 +126,7 @@ export const eventRouter = router({
         address: z.string().optional(),
         city: z.string().min(1).max(100),
         state: z.string().length(2),
+        timeZone: z.string().min(1).max(64).optional(),
         categories: z.array(z.string()).optional().default([]),
         visibility: z.enum(["public", "private"]).default("public"),
         status: z.enum(EVENT_STATUS_VALUES).default("active"),
@@ -267,6 +268,7 @@ export const eventRouter = router({
         address: z.string().optional(),
         city: z.string().min(1).max(100),
         state: z.string().length(2),
+        timeZone: z.string().min(1).max(64).optional(),
         categories: z.array(z.string()).optional().default([]),
         visibility: z.enum(["public", "private"]).default("public"),
         status: z.enum(EVENT_STATUS_VALUES).default("active"),
@@ -346,7 +348,8 @@ export const eventRouter = router({
       const normalizedDaysOfWeek = normalizeSeriesDaysOfWeek(
         input.recurrence.frequency,
         input.recurrence.daysOfWeek,
-        input.startAt
+        input.startAt,
+        input.timeZone
       );
 
       const [series] = await ctx.db
@@ -369,6 +372,7 @@ export const eventRouter = router({
           frequency: input.recurrence.frequency,
           interval: input.recurrence.interval,
           daysOfWeek: normalizedDaysOfWeek,
+          timeZone: input.timeZone ?? null,
           untilDate: input.recurrence.untilDate ?? null,
           venueId: input.venueId ?? null,
           organizerId: input.organizerId ?? null,
@@ -480,6 +484,7 @@ export const eventRouter = router({
         address: z.string().optional(),
         city: z.string().min(1).max(100),
         state: z.string().length(2),
+        timeZone: z.string().min(1).max(64).optional(),
         categories: z.array(z.string()).optional().default([]),
         visibility: z.enum(["public", "private"]).default("public"),
         status: z.enum(EVENT_STATUS_VALUES).default("active"),
@@ -529,10 +534,14 @@ export const eventRouter = router({
         ? Math.floor((input.endAt.getTime() - input.startAt.getTime()) / 60000)
         : null;
 
+      const nextSeriesTimeZone =
+        input.timeZone !== undefined ? input.timeZone : existingSeries.timeZone;
+
       const normalizedDaysOfWeek = normalizeSeriesDaysOfWeek(
         input.recurrence.frequency,
         input.recurrence.daysOfWeek,
-        input.startAt
+        input.startAt,
+        nextSeriesTimeZone
       );
 
       const [updatedSeries] = await ctx.db
@@ -562,6 +571,7 @@ export const eventRouter = router({
           frequency: input.recurrence.frequency,
           interval: input.recurrence.interval,
           daysOfWeek: normalizedDaysOfWeek,
+          timeZone: nextSeriesTimeZone,
           untilDate: input.recurrence.untilDate ?? null,
           updatedAt: new Date(),
         })

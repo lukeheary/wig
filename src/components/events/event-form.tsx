@@ -350,6 +350,7 @@ export function EventForm({
     if (isRecurringDefault) {
       createRecurringMutation.mutate({
         ...payload,
+        timeZone: Intl.DateTimeFormat().resolvedOptions().timeZone || undefined,
         recurrence: {
           frequency: recurrenceData.frequency,
           interval: recurrenceData.interval,

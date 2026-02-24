@@ -434,6 +434,7 @@ export const eventSeries = pgTable(
     frequency: recurrenceFrequencyEnum("frequency").notNull(),
     interval: integer("interval").notNull().default(1),
     daysOfWeek: jsonb("days_of_week").$type<number[]>(),
+    timeZone: varchar("time_zone", { length: 64 }),
     untilDate: timestamp("until_date"),
     isActive: boolean("is_active").notNull().default(true),
     lastGeneratedAt: timestamp("last_generated_at"),

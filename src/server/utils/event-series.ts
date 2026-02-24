@@ -4,6 +4,7 @@ import { setEventCategoryKeys } from "@/server/utils/categories";
 
 const MS_PER_DAY = 24 * 60 * 60 * 1000;
 const DEFAULT_LOOKAHEAD_DAYS = 30;
+const timeZoneFormatterCache = new Map<string, Intl.DateTimeFormat>();
 
 type EventSeriesRow = typeof eventSeries.$inferSelect;
 
@@ -21,13 +22,87 @@ interface MaterializeResult {
   firstCreatedEventId: string | null;
 }
 
+interface TimeZoneDateTimeParts {
+  year: number;
+  month: number;
+  day: number;
+  hour: number;
+  minute: number;
+  second: number;
+}
+
+function getTimeZoneDateTimeParts(
+  date: Date,
+  timeZone: string
+): TimeZoneDateTimeParts | null {
+  try {
+    let formatter = timeZoneFormatterCache.get(timeZone);
+    if (!formatter) {
+      formatter = new Intl.DateTimeFormat("en-US", {
+        timeZone,
+        hour12: false,
+        year: "numeric",
+        month: "2-digit",
+        day: "2-digit",
+        hour: "2-digit",
+        minute: "2-digit",
+        second: "2-digit",
+      });
+      timeZoneFormatterCache.set(timeZone, formatter);
+    }
+
+    const parts = formatter.formatToParts(date);
+    const values = Object.fromEntries(
+      parts
+        .filter((part) => part.type !== "literal")
+        .map((part) => [part.type, part.value])
+    );
+
+    const year = Number(values.year);
+    const month = Number(values.month);
+    const day = Number(values.day);
+    const hour = Number(values.hour);
+    const minute = Number(values.minute);
+    const second = Number(values.second);
+
+    if (
+      Number.isNaN(year) ||
+      Number.isNaN(month) ||
+      Number.isNaN(day) ||
+      Number.isNaN(hour) ||
+      Number.isNaN(minute) ||
+      Number.isNaN(second)
+    ) {
+      return null;
+    }
+
+    return { year, month, day, hour, minute, second };
+  } catch {
+    return null;
+  }
+}
+
+function getSeriesStartWeekday(startAt: Date, timeZone: string | null | undefined) {
+  if (!timeZone) {
+    return startAt.getDay();
+  }
+
+  const parts = getTimeZoneDateTimeParts(startAt, timeZone);
+  if (!parts) {
+    return startAt.getDay();
+  }
+
+  return new Date(Date.UTC(parts.year, parts.month - 1, parts.day)).getUTCDay();
+}
+
 export function normalizeSeriesDaysOfWeek(
   frequency: "daily" | "weekly" | "monthly",
   daysOfWeek: number[] | null | undefined,
-  startAt: Date
+  startAt: Date,
+  timeZone?: string | null
 ) {
   if (frequency === "daily") return null;
-  const startWeekday = startAt.getDay();
+  const startWeekday = getSeriesStartWeekday(startAt, timeZone);
 
   const deduped = Array.from(
     new Set((daysOfWeek ?? []).filter((day) => day >= 0 && day <= 6))
@@ -56,48 +131,48 @@ export function normalizeSeriesDaysOfWeek(
   return deduped;
 }
 
-function startOfDay(value: Date) {
+function startOfDayLocal(value: Date) {
   const date = new Date(value);
   date.setHours(0, 0, 0, 0);
   return date;
 }
 
-function startOfWeek(value: Date) {
-  const date = startOfDay(value);
+function startOfWeekLocal(value: Date) {
+  const date = startOfDayLocal(value);
   date.setDate(date.getDate() - date.getDay());
   return date;
 }
 
-function addDays(value: Date, days: number) {
+function addDaysLocal(value: Date, days: number) {
   const date = new Date(value);
   date.setDate(date.getDate() + days);
   return date;
 }
 
-function addMonths(value: Date, months: number) {
+function addMonthsLocal(value: Date, months: number) {
   const date = new Date(value);
   date.setMonth(date.getMonth() + months);
   return date;
 }
 
-function startOfMonth(value: Date) {
-  const date = startOfDay(value);
+function startOfMonthLocal(value: Date) {
+  const date = startOfDayLocal(value);
   date.setDate(1);
   return date;
 }
 
-function getMonthsBetween(start: Date, end: Date) {
+function getMonthsBetweenLocal(start: Date, end: Date) {
   return (
     (end.getFullYear() - start.getFullYear()) * 12 +
     (end.getMonth() - start.getMonth())
   );
 }
 
-function getWeekdayOrdinalInMonth(value: Date) {
+function getWeekdayOrdinalInMonthLocal(value: Date) {
   return Math.floor((value.getDate() - 1) / 7) + 1;
 }
 
-function getNthWeekdayOfMonth(
+function getNthWeekdayOfMonthLocal(
   year: number,
   month: number,
   weekday: number,
@@ -116,7 +191,7 @@ function getNthWeekdayOfMonth(
   return new Date(year, month, dayOfMonth);
 }
 
-function combineDateWithSeriesTime(day: Date, seriesStartAt: Date) {
+function combineDateWithSeriesTimeLocal(day: Date, seriesStartAt: Date) {
   const combined = new Date(day);
   combined.setHours(
     seriesStartAt.getHours(),
@@ -125,6 +200,20 @@ function combineDateWithSeriesTime(day: Date, seriesStartAt: Date) {
     seriesStartAt.getMilliseconds()
   );
   return combined;
+}
+
+function getTimeZoneOffsetMs(date: Date, timeZone: string) {
+  const parts = getTimeZoneDateTimeParts(date, timeZone);
+  if (!parts) return null;
+  const asUtc = Date.UTC(
+    parts.year,
+    parts.month - 1,
+    parts.day,
+    parts.hour,
+    parts.minute,
+    parts.second
+  );
+  return asUtc - date.getTime();
 }
 
 function clampWindow(series: EventSeriesRow, windowStart: Date, windowEnd: Date) {
@@ -140,7 +229,113 @@ function clampWindow(series: EventSeriesRow, windowStart: Date, windowEnd: Date)
   return { effectiveStart, effectiveEnd };
 }
 
-function buildDailyOccurrences(
+function startOfDayUtc(value: Date) {
+  const date = new Date(value);
+  date.setUTCHours(0, 0, 0, 0);
+  return date;
+}
+
+function startOfWeekUtc(value: Date) {
+  const date = startOfDayUtc(value);
+  date.setUTCDate(date.getUTCDate() - date.getUTCDay());
+  return date;
+}
+
+function addDaysUtc(value: Date, days: number) {
+  const date = new Date(value);
+  date.setUTCDate(date.getUTCDate() + days);
+  return date;
+}
+
+function addMonthsUtc(value: Date, months: number) {
+  const date = new Date(value);
+  date.setUTCMonth(date.getUTCMonth() + months);
+  return date;
+}
+
+function startOfMonthUtc(value: Date) {
+  const date = startOfDayUtc(value);
+  date.setUTCDate(1);
+  return date;
+}
+
+function getMonthsBetweenUtc(start: Date, end: Date) {
+  return (
+    (end.getUTCFullYear() - start.getUTCFullYear()) * 12 +
+    (end.getUTCMonth() - start.getUTCMonth())
+  );
+}
+
+function getWeekdayOrdinalInMonthUtc(value: Date) {
+  return Math.floor((value.getUTCDate() - 1) / 7) + 1;
+}
+
+function getNthWeekdayOfMonthUtc(
+  year: number,
+  month: number,
+  weekday: number,
+  ordinal: number
+) {
+  const firstDay = new Date(Date.UTC(year, month, 1));
+  const firstDayWeekday = firstDay.getUTCDay();
+  const offset = (weekday - firstDayWeekday + 7) % 7;
+  const dayOfMonth = 1 + offset + (ordinal - 1) * 7;
+  const daysInMonth = new Date(Date.UTC(year, month + 1, 0)).getUTCDate();
+
+  if (dayOfMonth > daysInMonth) {
+    return null;
+  }
+
+  return new Date(Date.UTC(year, month, dayOfMonth));
+}
+
+function getTimeZoneDayStart(date: Date, timeZone: string) {
+  const parts = getTimeZoneDateTimeParts(date, timeZone);
+  if (!parts) return null;
+  return new Date(Date.UTC(parts.year, parts.month - 1, parts.day));
+}
+
+function combineTimeZoneDayWithSeriesTime(
+  dayStart: Date,
+  seriesStartAt: Date,
+  timeZone: string
+) {
+  const timeParts = getTimeZoneDateTimeParts(seriesStartAt, timeZone);
+  if (!timeParts) {
+    return new Date(seriesStartAt);
+  }
+
+  const year = dayStart.getUTCFullYear();
+  const month = dayStart.getUTCMonth();
+  const day = dayStart.getUTCDate();
+  const millisecond = seriesStartAt.getUTCMilliseconds();
+  const naiveUtcMs = Date.UTC(
+    year,
+    month,
+    day,
+    timeParts.hour,
+    timeParts.minute,
+    timeParts.second,
+    millisecond
+  );
+
+  let candidateUtcMs = naiveUtcMs;
+  for (let i = 0; i < 4; i += 1) {
+    const offsetMs = getTimeZoneOffsetMs(new Date(candidateUtcMs), timeZone);
+    if (offsetMs == null) {
+      break;
+    }
+    const nextCandidateUtcMs = naiveUtcMs - offsetMs;
+    if (nextCandidateUtcMs === candidateUtcMs) {
+      break;
+    }
+    candidateUtcMs = nextCandidateUtcMs;
+  }
+
+  return new Date(candidateUtcMs);
+}
+
+function buildDailyOccurrencesLocal(
   series: EventSeriesRow,
   effectiveStart: Date,
   effectiveEnd: Date
@@ -151,26 +346,27 @@ function buildDailyOccurrences(
 
   if (current < effectiveStart) {
     const diffDays = Math.floor(
-      (startOfDay(effectiveStart).getTime() - startOfDay(current).getTime()) /
+      (startOfDayLocal(effectiveStart).getTime() -
+        startOfDayLocal(current).getTime()) /
         MS_PER_DAY
     );
     const steps = Math.max(0, Math.floor(diffDays / intervalDays));
-    current = addDays(current, steps * intervalDays);
+    current = addDaysLocal(current, steps * intervalDays);
   }
 
   while (current < effectiveStart) {
-    current = addDays(current, intervalDays);
+    current = addDaysLocal(current, intervalDays);
   }
 
   while (current <= effectiveEnd) {
     occurrences.push(new Date(current));
-    current = addDays(current, intervalDays);
+    current = addDaysLocal(current, intervalDays);
   }
 
   return occurrences;
 }
 
-function buildWeeklyOccurrences(
+function buildWeeklyOccurrencesLocal(
   series: EventSeriesRow,
   effectiveStart: Date,
   effectiveEnd: Date
@@ -179,35 +375,39 @@ function buildWeeklyOccurrences(
   const daysOfWeek = normalizeSeriesDaysOfWeek(
     "weekly",
     series.daysOfWeek,
-    series.startAt
+    series.startAt,
+    series.timeZone
   );
   const daySet = new Set(daysOfWeek ?? []);
 
   const occurrences: Date[] = [];
-  let cursor = startOfDay(effectiveStart);
-  const endDay = startOfDay(effectiveEnd);
-  const anchorWeekStart = startOfWeek(series.startAt);
+  let cursor = startOfDayLocal(effectiveStart);
+  const endDay = startOfDayLocal(effectiveEnd);
+  const anchorWeekStart = startOfWeekLocal(series.startAt);
 
   while (cursor <= endDay) {
-    if (cursor >= startOfDay(series.startAt) && daySet.has(cursor.getDay())) {
+    if (
+      cursor >= startOfDayLocal(series.startAt) &&
+      daySet.has(cursor.getDay())
+    ) {
       const weeksSinceAnchor = Math.floor(
-        (startOfWeek(cursor).getTime() - anchorWeekStart.getTime()) /
+        (startOfWeekLocal(cursor).getTime() - anchorWeekStart.getTime()) /
           (7 * MS_PER_DAY)
       );
       if (weeksSinceAnchor >= 0 && weeksSinceAnchor % intervalWeeks === 0) {
-        const occurrence = combineDateWithSeriesTime(cursor, series.startAt);
+        const occurrence = combineDateWithSeriesTimeLocal(cursor, series.startAt);
         if (occurrence >= effectiveStart && occurrence <= effectiveEnd) {
           occurrences.push(occurrence);
         }
       }
     }
-    cursor = addDays(cursor, 1);
+    cursor = addDaysLocal(cursor, 1);
   }
 
   return occurrences;
 }
 
-function buildMonthlyOccurrences(
+function buildMonthlyOccurrencesLocal(
   series: EventSeriesRow,
   effectiveStart: Date,
   effectiveEnd: Date
@@ -216,21 +416,25 @@ function buildMonthlyOccurrences(
   const daysOfWeek = normalizeSeriesDaysOfWeek(
     "monthly",
     series.daysOfWeek,
-    series.startAt
+    series.startAt,
+    series.timeZone
   );
   const weekday = daysOfWeek?.[0] ?? series.startAt.getDay();
-  const weekdayOrdinal = getWeekdayOrdinalInMonth(series.startAt);
+  const weekdayOrdinal = getWeekdayOrdinalInMonthLocal(series.startAt);
 
   const occurrences: Date[] = [];
-  const seriesStartDay = startOfDay(series.startAt);
-  const anchorMonthStart = startOfMonth(series.startAt);
-  let cursorMonthStart = startOfMonth(effectiveStart);
-  const endMonthStart = startOfMonth(effectiveEnd);
+  const seriesStartDay = startOfDayLocal(series.startAt);
+  const anchorMonthStart = startOfMonthLocal(series.startAt);
+  let cursorMonthStart = startOfMonthLocal(effectiveStart);
+  const endMonthStart = startOfMonthLocal(effectiveEnd);
 
   while (cursorMonthStart <= endMonthStart) {
-    const monthsSinceAnchor = getMonthsBetween(anchorMonthStart, cursorMonthStart);
+    const monthsSinceAnchor = getMonthsBetweenLocal(
+      anchorMonthStart,
+      cursorMonthStart
+    );
     if (monthsSinceAnchor >= 0 && monthsSinceAnchor % intervalMonths === 0) {
-      const occurrenceDay = getNthWeekdayOfMonth(
+      const occurrenceDay = getNthWeekdayOfMonthLocal(
         cursorMonthStart.getFullYear(),
         cursorMonthStart.getMonth(),
         weekday,
@@ -238,14 +442,174 @@ function buildMonthlyOccurrences(
       );
 
       if (occurrenceDay && occurrenceDay >= seriesStartDay) {
-        const occurrence = combineDateWithSeriesTime(occurrenceDay, series.startAt);
+        const occurrence = combineDateWithSeriesTimeLocal(
+          occurrenceDay,
+          series.startAt
+        );
         if (occurrence >= effectiveStart && occurrence <= effectiveEnd) {
           occurrences.push(occurrence);
         }
       }
     }
 
-    cursorMonthStart = addMonths(cursorMonthStart, 1);
+    cursorMonthStart = addMonthsLocal(cursorMonthStart, 1);
+  }
+
+  return occurrences;
+}
+
+function buildDailyOccurrencesInTimeZone(
+  series: EventSeriesRow,
+  effectiveStart: Date,
+  effectiveEnd: Date,
+  timeZone: string
+) {
+  const seriesStartDay = getTimeZoneDayStart(series.startAt, timeZone);
+  const effectiveStartDay = getTimeZoneDayStart(effectiveStart, timeZone);
+  const effectiveEndDay = getTimeZoneDayStart(effectiveEnd, timeZone);
+
+  if (!seriesStartDay || !effectiveStartDay || !effectiveEndDay) {
+    return buildDailyOccurrencesLocal(series, effectiveStart, effectiveEnd);
+  }
+
+  const intervalDays = Math.max(1, series.interval);
+  const occurrences: Date[] = [];
+  let currentDay = new Date(seriesStartDay);
+
+  if (currentDay < effectiveStartDay) {
+    const diffDays = Math.floor(
+      (effectiveStartDay.getTime() - currentDay.getTime()) / MS_PER_DAY
+    );
+    const steps = Math.max(0, Math.floor(diffDays / intervalDays));
+    currentDay = addDaysUtc(currentDay, steps * intervalDays);
+  }
+
+  while (currentDay < effectiveStartDay) {
+    currentDay = addDaysUtc(currentDay, intervalDays);
+  }
+
+  while (currentDay <= effectiveEndDay) {
+    const occurrence = combineTimeZoneDayWithSeriesTime(
+      currentDay,
+      series.startAt,
+      timeZone
+    );
+    if (occurrence >= effectiveStart && occurrence <= effectiveEnd) {
+      occurrences.push(occurrence);
+    }
+    currentDay = addDaysUtc(currentDay, intervalDays);
+  }
+
+  return occurrences;
+}
+
+function buildWeeklyOccurrencesInTimeZone(
+  series: EventSeriesRow,
+  effectiveStart: Date,
+  effectiveEnd: Date,
+  timeZone: string
+) {
+  const seriesStartDay = getTimeZoneDayStart(series.startAt, timeZone);
+  const effectiveStartDay = getTimeZoneDayStart(effectiveStart, timeZone);
+  const effectiveEndDay = getTimeZoneDayStart(effectiveEnd, timeZone);
+
+  if (!seriesStartDay || !effectiveStartDay || !effectiveEndDay) {
+    return buildWeeklyOccurrencesLocal(series, effectiveStart, effectiveEnd);
+  }
+
+  const intervalWeeks = Math.max(1, series.interval);
+  const daysOfWeek = normalizeSeriesDaysOfWeek(
+    "weekly",
+    series.daysOfWeek,
+    series.startAt,
+    timeZone
+  );
+  const daySet = new Set(daysOfWeek ?? []);
+
+  const occurrences: Date[] = [];
+  let cursorDay = new Date(effectiveStartDay);
+  const anchorWeekStart = startOfWeekUtc(seriesStartDay);
+
+  while (cursorDay <= effectiveEndDay) {
+    if (cursorDay >= seriesStartDay && daySet.has(cursorDay.getUTCDay())) {
+      const weeksSinceAnchor = Math.floor(
+        (startOfWeekUtc(cursorDay).getTime() - anchorWeekStart.getTime()) /
+          (7 * MS_PER_DAY)
+      );
+
+      if (weeksSinceAnchor >= 0 && weeksSinceAnchor % intervalWeeks === 0) {
+        const occurrence = combineTimeZoneDayWithSeriesTime(
+          cursorDay,
+          series.startAt,
+          timeZone
+        );
+        if (occurrence >= effectiveStart && occurrence <= effectiveEnd) {
+          occurrences.push(occurrence);
+        }
+      }
+    }
+
+    cursorDay = addDaysUtc(cursorDay, 1);
+  }
+
+  return occurrences;
+}
+
+function buildMonthlyOccurrencesInTimeZone(
+  series: EventSeriesRow,
+  effectiveStart: Date,
+  effectiveEnd: Date,
+  timeZone: string
+) {
+  const seriesStartDay = getTimeZoneDayStart(series.startAt, timeZone);
+  const effectiveStartDay = getTimeZoneDayStart(effectiveStart, timeZone);
+  const effectiveEndDay = getTimeZoneDayStart(effectiveEnd, timeZone);
+
+  if (!seriesStartDay || !effectiveStartDay || !effectiveEndDay) {
+    return buildMonthlyOccurrencesLocal(series, effectiveStart, effectiveEnd);
+  }
+
+  const intervalMonths = Math.max(1, series.interval);
+  const daysOfWeek = normalizeSeriesDaysOfWeek(
+    "monthly",
+    series.daysOfWeek,
+    series.startAt,
+    timeZone
+  );
+  const weekday = daysOfWeek?.[0] ?? seriesStartDay.getUTCDay();
+  const weekdayOrdinal = getWeekdayOrdinalInMonthUtc(seriesStartDay);
+
+  const occurrences: Date[] = [];
+  const anchorMonthStart = startOfMonthUtc(seriesStartDay);
+  let cursorMonthStart = startOfMonthUtc(effectiveStartDay);
+  const endMonthStart = startOfMonthUtc(effectiveEndDay);
+
+  while (cursorMonthStart <= endMonthStart) {
+    const monthsSinceAnchor = getMonthsBetweenUtc(
+      anchorMonthStart,
+      cursorMonthStart
+    );
+    if (monthsSinceAnchor >= 0 && monthsSinceAnchor % intervalMonths === 0) {
+      const occurrenceDay = getNthWeekdayOfMonthUtc(
+        cursorMonthStart.getUTCFullYear(),
+        cursorMonthStart.getUTCMonth(),
+        weekday,
+        weekdayOrdinal
+      );
+
+      if (occurrenceDay && occurrenceDay >= seriesStartDay) {
+        const occurrence = combineTimeZoneDayWithSeriesTime(
+          occurrenceDay,
+          series.startAt,
+          timeZone
+        );
+        if (occurrence >= effectiveStart && occurrence <= effectiveEnd) {
+          occurrences.push(occurrence);
+        }
+      }
+    }
+
+    cursorMonthStart = addMonthsUtc(cursorMonthStart, 1);
   }
 
   return occurrences;
@@ -259,8 +623,35 @@ function buildSeriesOccurrences(
   const clampedWindow = clampWindow(series, windowStart, windowEnd);
   if (!clampedWindow) return [];
 
+  if (series.timeZone) {
+    if (series.frequency === "daily") {
+      return buildDailyOccurrencesInTimeZone(
+        series,
+        clampedWindow.effectiveStart,
+        clampedWindow.effectiveEnd,
+        series.timeZone
+      );
+    }
+
+    if (series.frequency === "monthly") {
+      return buildMonthlyOccurrencesInTimeZone(
+        series,
+        clampedWindow.effectiveStart,
+        clampedWindow.effectiveEnd,
+        series.timeZone
+      );
+    }
+
+    return buildWeeklyOccurrencesInTimeZone(
+      series,
+      clampedWindow.effectiveStart,
+      clampedWindow.effectiveEnd,
+      series.timeZone
+    );
+  }
+
   if (series.frequency === "daily") {
-    return buildDailyOccurrences(
+    return buildDailyOccurrencesLocal(
       series,
       clampedWindow.effectiveStart,
       clampedWindow.effectiveEnd
@@ -268,14 +659,14 @@ function buildSeriesOccurrences(
   }
 
   if (series.frequency === "monthly") {
-    return buildMonthlyOccurrences(
+    return buildMonthlyOccurrencesLocal(
       series,
       clampedWindow.effectiveStart,
       clampedWindow.effectiveEnd
     );
   }
 
-  return buildWeeklyOccurrences(
+  return buildWeeklyOccurrencesLocal(
     series,
     clampedWindow.effectiveStart,
     clampedWindow.effectiveEnd
@@ -301,7 +692,7 @@ export async function materializeEventSeries(
   const windowStart = options.windowStart ?? now;
   const windowEnd =
     options.windowEnd ??
-    addDays(windowStart, options.lookaheadDays ?? DEFAULT_LOOKAHEAD_DAYS);
+    addDaysLocal(windowStart, options.lookaheadDays ?? DEFAULT_LOOKAHEAD_DAYS);
 
   const conditions = [eq(eventSeries.isActive, true)];
   if (options.seriesIds && options.seriesIds.length > 0) {
@@ -320,28 +711,30 @@ export async function materializeEventSeries(
 
     if (occurrenceStarts.length > 0) {
       const durationMinutes = getSeriesDurationMinutes(series);
-      const values = occurrenceStarts.map((startAt) => ({
-        seriesId: series.id,
-        venueId: series.venueId,
-        organizerId: series.organizerId,
-        createdByUserId: series.createdByUserId,
-        title: series.title,
-        description: series.description,
-        coverImageUrl: series.coverImageUrl,
-        eventUrl: series.eventUrl,
-        source: series.source,
-        externalId: null,
-        startAt,
-        endAt:
-          durationMinutes == null
-            ? null
-            : new Date(startAt.getTime() + durationMinutes * 60 * 1000),
-        address: series.address,
-        city: series.city,
-        state: series.state,
-        visibility: series.visibility,
-        status: series.status,
-      }));
+      const values = occurrenceStarts.map((startAt) => {
+        return {
+          seriesId: series.id,
+          venueId: series.venueId,
+          organizerId: series.organizerId,
+          createdByUserId: series.createdByUserId,
+          title: series.title,
+          description: series.description,
+          coverImageUrl: series.coverImageUrl,
+          eventUrl: series.eventUrl,
+          source: series.source,
+          externalId: null,
+          startAt,
+          endAt:
+            durationMinutes == null
+              ? null
+              : new Date(startAt.getTime() + durationMinutes * 60 * 1000),
+          address: series.address,
+          city: series.city,
+          state: series.state,
+          visibility: series.visibility,
+          status: series.status,
+        };
+      });
 
       const inserted: Array<{ id: string }> = await db
         .insert(events)

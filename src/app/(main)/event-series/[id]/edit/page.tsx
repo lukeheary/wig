@@ -314,6 +314,7 @@ export default function EditEventSeriesPage() {
       address: formData.address || undefined,
       city: formData.city,
       state: formData.state,
+      timeZone: Intl.DateTimeFormat().resolvedOptions().timeZone || undefined,
       recurrence: {
         frequency: recurrenceData.frequency,
         interval: recurrenceData.interval,
