@@ -383,6 +383,24 @@ export const eventRouter = router({
         });
       }
 
+      let resolvedCoverImageUrl = input.coverImageUrl ?? null;
+      if (resolvedCoverImageUrl) {
+        try {
+          resolvedCoverImageUrl = await uploadImageFromUrl(
+            resolvedCoverImageUrl,
+            `event-series/${series.id}`,
+            "cover-image.png"
+          );
+
+          await ctx.db
+            .update(eventSeries)
+            .set({ coverImageUrl: resolvedCoverImageUrl })
+            .where(eq(eventSeries.id, series.id));
+        } catch {
+          // Keep the existing URL if re-hosting fails.
+        }
+      }
+
       const generated = await materializeEventSeries(ctx.db, {
         seriesIds: [series.id],
         ...(input.recurrence.untilDate
@@ -555,6 +573,23 @@ export const eventRouter = router({
           code: "INTERNAL_SERVER_ERROR",
           message: "Failed to update recurring event series",
         });
+      }
+
+      if (input.coverImageUrl) {
+        try {
+          const seriesCoverImageUrl = await uploadImageFromUrl(
+            input.coverImageUrl,
+            `event-series/${input.seriesId}`,
+            "cover-image.png"
+          );
+
+          await ctx.db
+            .update(eventSeries)
+            .set({ coverImageUrl: seriesCoverImageUrl })
+            .where(eq(eventSeries.id, input.seriesId));
+        } catch {
+          // Keep existing cover image URL if re-hosting fails.
+        }
       }
 
       const now = new Date();
