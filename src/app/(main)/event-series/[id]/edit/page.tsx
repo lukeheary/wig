@@ -568,7 +568,7 @@ export default function EditEventSeriesPage() {
                       const startDate = getDatePart(formData.startAt);
                       const startWeekday = startDate
                         ? new Date(`${startDate}T00:00`).getDay()
-                        : new Date().getDay();
+                        : null;
                       setRecurrenceData((prev) => ({
                         ...prev,
                         frequency: nextFrequency,
@@ -576,10 +576,14 @@ export default function EditEventSeriesPage() {
                           nextFrequency === "daily"
                             ? []
                             : nextFrequency === "monthly"
-                              ? [startWeekday]
-                              : prev.daysOfWeek.length > 0
-                                ? prev.daysOfWeek
-                                : [startWeekday],
+                              ? startWeekday == null
+                                ? []
+                                : [startWeekday]
+                              : startWeekday == null
+                                ? []
+                                : prev.daysOfWeek.length > 0
+                                  ? prev.daysOfWeek
+                                  : [startWeekday],
                       }));
                     }}
                   >
