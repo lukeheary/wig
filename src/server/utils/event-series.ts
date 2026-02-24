@@ -27,16 +27,26 @@ export function normalizeSeriesDaysOfWeek(
   startAt: Date
 ) {
   if (frequency === "daily") return null;
+  const startWeekday = startAt.getDay();
 
   const deduped = Array.from(
     new Set((daysOfWeek ?? []).filter((day) => day >= 0 && day <= 6))
   ).sort((a, b) => a - b);
 
-  if (deduped.length > 0) {
-    return frequency === "monthly" ? [deduped[0]] : deduped;
+  if (frequency === "monthly") {
+    // Monthly recurrence is anchored to the start date's weekday pattern.
+    return [startWeekday];
   }
 
-  return [startAt.getDay()];
+  if (deduped.length > 0) {
+    if (deduped.includes(startWeekday)) {
+      return deduped;
+    }
+    // Safeguard against stale UI payloads: include first event weekday.
+    return [...deduped, startWeekday].sort((a, b) => a - b);
+  }
+
+  return [startWeekday];
 }
 
 function startOfDay(value: Date) {
