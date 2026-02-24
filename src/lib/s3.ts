@@ -16,6 +16,24 @@ export const s3Client = new S3Client({
 
 export const BUCKET_NAME = process.env.AWS_S3_BUCKET!;
 
+const IMAGE_CONTENT_TYPE_TO_EXT: Record<string, string> = {
+  "image/jpeg": "jpg",
+  "image/jpg": "jpg",
+  "image/png": "png",
+  "image/webp": "webp",
+  "image/gif": "gif",
+  "image/avif": "avif",
+};
+
+const IMAGE_EXT_TO_CONTENT_TYPE: Record<string, string> = {
+  jpg: "image/jpeg",
+  jpeg: "image/jpeg",
+  png: "image/png",
+  webp: "image/webp",
+  gif: "image/gif",
+  avif: "image/avif",
+};
+
 /**
  * Generate a unique filename with timestamp and random string
  */
@@ -68,7 +86,11 @@ export async function uploadToS3(
 export async function uploadImageFromUrl(
   imageUrl: string,
   folder: string = "events",
-  fileName?: string
+  fileName?: string,
+  options?: {
+    maxBytes?: number;
+    strictImageMime?: boolean;
+  }
 ): Promise<string> {
   const response = await fetch(imageUrl, {
     signal: AbortSignal.timeout(15000),
@@ -78,18 +100,45 @@ export async function uploadImageFromUrl(
     throw new Error(`Failed to fetch image: ${response.status}`);
   }
 
-  const contentType = response.headers.get("content-type") || "image/jpeg";
+  const rawContentType =
+    response.headers.get("content-type")?.split(";")[0]?.trim().toLowerCase() ||
+    "";
+  const contentLength = Number(response.headers.get("content-length") || "0");
+  const maxBytes = options?.maxBytes;
+
+  if (maxBytes && contentLength > maxBytes) {
+    const maxMb = (maxBytes / 1024 / 1024).toFixed(1).replace(/\.0$/, "");
+    throw new Error(
+      `Image is too large (max ${maxMb}MB)`
+    );
+  }
+
+  let inferredExt: string | null = null;
+  try {
+    const parsedUrl = new URL(imageUrl);
+    const pathname = parsedUrl.pathname.toLowerCase();
+    const extMatch = pathname.match(/\.([a-z0-9]+)$/);
+    const ext = extMatch?.[1] || null;
+    if (ext && IMAGE_EXT_TO_CONTENT_TYPE[ext]) {
+      inferredExt = ext;
+    }
+  } catch {
+    // Ignore URL parsing errors here; fetch above already validated basic URL shape.
+  }
+
+  const hasImageMime = rawContentType.startsWith("image/");
+  if (options?.strictImageMime && !hasImageMime && !inferredExt) {
+    throw new Error("Dropped URL does not appear to be an image");
+  }
+
+  const contentType = hasImageMime
+    ? rawContentType
+    : inferredExt
+      ? IMAGE_EXT_TO_CONTENT_TYPE[inferredExt]
+      : "image/jpeg";
 
   // Determine extension from content type
-  const extMap: Record<string, string> = {
-    "image/jpeg": "jpg",
-    "image/jpg": "jpg",
-    "image/png": "png",
-    "image/webp": "webp",
-    "image/gif": "gif",
-    "image/avif": "avif",
-  };
-  const ext = extMap[contentType] || "jpg";
+  const ext = IMAGE_CONTENT_TYPE_TO_EXT[contentType] || inferredExt || "jpg";
 
   const filename =
     fileName || generateUniqueFilename(`image.${ext}`);
@@ -97,6 +146,12 @@ export async function uploadImageFromUrl(
   const key = `${fullPath}/${filename}`;
 
   const arrayBuffer = await response.arrayBuffer();
+  if (maxBytes && arrayBuffer.byteLength > maxBytes) {
+    const maxMb = (maxBytes / 1024 / 1024).toFixed(1).replace(/\.0$/, "");
+    throw new Error(
+      `Image is too large (max ${maxMb}MB)`
+    );
+  }
   const buffer = Buffer.from(arrayBuffer);
 
   const command = new PutObjectCommand({

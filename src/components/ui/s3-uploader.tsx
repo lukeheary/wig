@@ -39,6 +39,60 @@ export function S3Uploader({
   const [localPreviewUrl, setLocalPreviewUrl] = useState<string | null>(null);
   const fileInputRef = useRef<HTMLInputElement>(null);
 
+  const getDroppedFile = (dataTransfer: DataTransfer) => {
+    if (dataTransfer.files && dataTransfer.files.length > 0) {
+      return dataTransfer.files[0];
+    }
+
+    if (dataTransfer.items && dataTransfer.items.length > 0) {
+      for (const item of Array.from(dataTransfer.items)) {
+        if (item.kind !== "file") continue;
+        const file = item.getAsFile();
+        if (file) return file;
+      }
+    }
+
+    return null;
+  };
+
+  const isHttpUrl = (value: string) => {
+    try {
+      const parsed = new URL(value);
+      return parsed.protocol === "http:" || parsed.protocol === "https:";
+    } catch {
+      return false;
+    }
+  };
+
+  const getDroppedImageUrl = (dataTransfer: DataTransfer) => {
+    const uriList = dataTransfer.getData("text/uri-list");
+    if (uriList) {
+      const firstUri = uriList
+        .split("\n")
+        .map((line) => line.trim())
+        .find((line) => line.length > 0 && !line.startsWith("#"));
+      if (firstUri && isHttpUrl(firstUri)) {
+        return firstUri;
+      }
+    }
+
+    const plainText = dataTransfer.getData("text/plain")?.trim();
+    if (plainText && isHttpUrl(plainText)) {
+      return plainText;
+    }
+
+    const html = dataTransfer.getData("text/html");
+    if (html) {
+      const srcMatch = html.match(/<img[^>]+src=["']([^"']+)["']/i);
+      const src = srcMatch?.[1];
+      if (src && isHttpUrl(src)) {
+        return src;
+      }
+    }
+
+    return null;
+  };
+
   useEffect(() => {
     return () => {
       if (localPreviewUrl) {
@@ -127,6 +181,8 @@ export function S3Uploader({
     if (file) {
       handleFile(file);
     }
+    // Allow selecting the same file again in a later attempt.
+    e.target.value = "";
   };
 
   const handleDrag = (e: React.DragEvent) => {
@@ -144,9 +200,67 @@ export function S3Uploader({
     e.stopPropagation();
     setDragActive(false);
 
-    const file = e.dataTransfer.files?.[0];
+    const file = getDroppedFile(e.dataTransfer);
     if (file) {
       handleFile(file);
+      return;
+    }
+
+    const imageUrl = getDroppedImageUrl(e.dataTransfer);
+    if (imageUrl) {
+      handleUrlUpload(imageUrl);
+      return;
+    }
+
+    toast({
+      title: "No image found",
+      description:
+        "Drop an image file or image URL from a website to upload",
+      variant: "destructive",
+    });
+  };
+
+  const handleUrlUpload = async (imageUrl: string) => {
+    setIsUploading(true);
+
+    try {
+      const response = await fetch("/api/upload-from-url", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          imageUrl,
+          folder,
+          filename: fileName,
+        }),
+      });
+
+      const data = await response.json();
+      if (!response.ok) {
+        throw new Error(data.error || "Upload failed");
+      }
+
+      toast({
+        title: "Upload complete",
+        description: "Image uploaded successfully",
+      });
+
+      onUploadComplete(data.url);
+      setPreviewUrl(`${data.url}?t=${Date.now()}`);
+      setLocalPreviewUrl((prev) => {
+        if (prev) {
+          URL.revokeObjectURL(prev);
+        }
+        return null;
+      });
+    } catch (error) {
+      console.error("Upload-from-url error:", error);
+      toast({
+        title: "Upload failed",
+        description: error instanceof Error ? error.message : "Unknown error",
+        variant: "destructive",
+      });
+    } finally {
+      setIsUploading(false);
     }
   };
 
@@ -206,7 +320,22 @@ export function S3Uploader({
   const displayUrl = previewUrl || localPreviewUrl || currentImageUrl;
   if (displayUrl) {
     return (
-      <div className={cn("relative w-full", className)}>
+      <div
+        className={cn("relative w-full", className)}
+        onDragEnter={handleDrag}
+        onDragLeave={handleDrag}
+        onDragOver={handleDrag}
+        onDrop={handleDrop}
+        onClick={handleClick}
+      >
+        <input
+          ref={fileInputRef}
+          type="file"
+          accept="image/*"
+          className="hidden"
+          onChange={handleChange}
+          disabled={isUploading}
+        />
         <div
           className={cn(
             "relative w-full overflow-hidden rounded-lg border",
@@ -227,6 +356,11 @@ export function S3Uploader({
               }
             }}
           />
+          {dragActive && (
+            <div className="absolute inset-0 flex items-center justify-center bg-background/70 text-sm font-medium">
+              Drop image to replace
+            </div>
+          )}
         </div>
         {onRemoveImage && (
           <Button
