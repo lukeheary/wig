@@ -23,6 +23,7 @@ import {
 } from "../../db/schema";
 import {
   and,
+  asc,
   desc,
   eq,
   gt,
@@ -65,6 +66,47 @@ function resolveEventUpdateActivityType(
   }
 
   return "updated";
+}
+
+async function assertCanManageSeries(
+  ctx: any,
+  series: {
+    id: string;
+    createdByUserId: string;
+    venueId: string | null;
+    organizerId: string | null;
+  }
+) {
+  const user = await ctx.db.query.users.findFirst({
+    where: eq(users.id, ctx.auth.userId),
+  });
+  const isAdmin = user?.role === "admin";
+
+  if (isAdmin || series.createdByUserId === ctx.auth.userId) {
+    return;
+  }
+
+  const manageablePlaceIds = [series.venueId, series.organizerId].filter(
+    (value): value is string => !!value
+  );
+
+  if (manageablePlaceIds.length > 0) {
+    const membership = await ctx.db.query.placeMembers.findFirst({
+      where: and(
+        eq(placeMembers.userId, ctx.auth.userId),
+        inArray(placeMembers.placeId, manageablePlaceIds)
+      ),
+    });
+
+    if (membership) {
+      return;
+    }
+  }
+
+  throw new TRPCError({
+    code: "FORBIDDEN",
+    message: "You do not have permission to edit this recurring event",
+  });
 }
 
 export const eventRouter = router({
@@ -375,6 +417,166 @@ export const eventRouter = router({
         seriesId: series.id,
         createdEvents: generated.createdEvents,
         firstEventId: generated.firstCreatedEventId,
+      };
+    }),
+
+  getEventSeriesById: protectedProcedure
+    .input(z.object({ seriesId: z.string().uuid() }))
+    .query(async ({ ctx, input }) => {
+      const series = await ctx.db.query.eventSeries.findFirst({
+        where: eq(eventSeries.id, input.seriesId),
+        with: {
+          venue: true,
+          organizer: true,
+          createdBy: true,
+        },
+      });
+
+      if (!series) {
+        throw new TRPCError({
+          code: "NOT_FOUND",
+          message: "Recurring event series not found",
+        });
+      }
+
+      await assertCanManageSeries(ctx, series);
+
+      return series;
+    }),
+
+  updateEventSeries: protectedProcedure
+    .input(
+      z.object({
+        seriesId: z.string().uuid(),
+        title: z.string().min(1).max(255),
+        description: z.string().optional(),
+        coverImageUrl: z.string().url().optional(),
+        eventUrl: z.string().url().optional(),
+        source: z.string().max(50).optional(),
+        externalId: z.string().optional(),
+        startAt: z.date(),
+        endAt: z.date().optional(),
+        address: z.string().optional(),
+        city: z.string().min(1).max(100),
+        state: z.string().length(2),
+        categories: z.array(z.string()).optional().default([]),
+        visibility: z.enum(["public", "private"]).default("public"),
+        status: z.enum(EVENT_STATUS_VALUES).default("active"),
+        recurrence: z.object({
+          frequency: z.enum(["daily", "weekly", "monthly"]),
+          interval: z.number().int().min(1).max(12).default(1),
+          daysOfWeek: z.array(z.number().int().min(0).max(6)).optional(),
+          untilDate: z.date().optional(),
+        }),
+      })
+    )
+    .mutation(async ({ ctx, input }) => {
+      const existingSeries = await ctx.db.query.eventSeries.findFirst({
+        where: eq(eventSeries.id, input.seriesId),
+      });
+
+      if (!existingSeries) {
+        throw new TRPCError({
+          code: "NOT_FOUND",
+          message: "Recurring event series not found",
+        });
+      }
+
+      await assertCanManageSeries(ctx, existingSeries);
+
+      if (input.endAt && input.startAt >= input.endAt) {
+        throw new TRPCError({
+          code: "BAD_REQUEST",
+          message: "End time must be after start time",
+        });
+      }
+
+      if (input.recurrence.untilDate && input.recurrence.untilDate < input.startAt) {
+        throw new TRPCError({
+          code: "BAD_REQUEST",
+          message: "Series end date must be after the first event date",
+        });
+      }
+
+      const validCategories = await filterExistingCategoryKeys(
+        ctx.db,
+        input.categories || [],
+        { activeOnly: true }
+      );
+
+      const durationMinutes = input.endAt
+        ? Math.floor((input.endAt.getTime() - input.startAt.getTime()) / 60000)
+        : null;
+
+      const normalizedDaysOfWeek = normalizeSeriesDaysOfWeek(
+        input.recurrence.frequency,
+        input.recurrence.daysOfWeek,
+        input.startAt
+      );
+
+      const [updatedSeries] = await ctx.db
+        .update(eventSeries)
+        .set({
+          title: input.title,
+          description: input.description ?? null,
+          coverImageUrl:
+            input.coverImageUrl !== undefined
+              ? input.coverImageUrl
+              : existingSeries.coverImageUrl,
+          eventUrl:
+            input.eventUrl !== undefined ? input.eventUrl : existingSeries.eventUrl,
+          source: input.source !== undefined ? input.source : existingSeries.source,
+          externalId:
+            input.externalId !== undefined
+              ? input.externalId
+              : existingSeries.externalId,
+          startAt: input.startAt,
+          durationMinutes,
+          address: input.address ?? null,
+          city: input.city,
+          state: input.state,
+          categories: validCategories,
+          visibility: input.visibility,
+          status: input.status,
+          frequency: input.recurrence.frequency,
+          interval: input.recurrence.interval,
+          daysOfWeek: normalizedDaysOfWeek,
+          untilDate: input.recurrence.untilDate ?? null,
+          updatedAt: new Date(),
+        })
+        .where(eq(eventSeries.id, input.seriesId))
+        .returning({ id: eventSeries.id });
+
+      if (!updatedSeries) {
+        throw new TRPCError({
+          code: "INTERNAL_SERVER_ERROR",
+          message: "Failed to update recurring event series",
+        });
+      }
+
+      const now = new Date();
+
+      await ctx.db
+        .delete(events)
+        .where(
+          and(eq(events.seriesId, input.seriesId), gte(events.startAt, now))
+        );
+
+      const generated = await materializeEventSeries(ctx.db, {
+        seriesIds: [input.seriesId],
+        now,
+      });
+
+      const nextEvent = await ctx.db.query.events.findFirst({
+        where: and(eq(events.seriesId, input.seriesId), gte(events.startAt, now)),
+        orderBy: [asc(events.startAt)],
+        columns: { id: true },
+      });
+
+      return {
+        seriesId: input.seriesId,
+        createdEvents: generated.createdEvents,
+        firstEventId: nextEvent?.id ?? generated.firstCreatedEventId,
       };
     }),
 

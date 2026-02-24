@@ -13,6 +13,7 @@ import {
   Building,
   Building2,
   Plus,
+  Repeat,
   Calendar,
   Users,
   Heart,
@@ -74,6 +75,38 @@ export default function ManagePlacePage() {
   const pastEvents = (place as any).pastEvents || [];
   const totalFollowers = (place as any).follows?.length || 0;
   const totalMembers = placeMembers?.length || 0;
+  const recurringSeries = Object.values(
+    upcomingEvents.reduce(
+      (acc: Record<string, { seriesId: string; title: string; events: any[] }>, event: any) => {
+        if (!event.seriesId) return acc;
+        if (!acc[event.seriesId]) {
+          acc[event.seriesId] = {
+            seriesId: event.seriesId,
+            title: event.title,
+            events: [],
+          };
+        }
+        acc[event.seriesId].events.push(event);
+        return acc;
+      },
+      {}
+    )
+  )
+    .map((series) => {
+      const sortedEvents = [...series.events].sort(
+        (a, b) => new Date(a.startAt).getTime() - new Date(b.startAt).getTime()
+      );
+      return {
+        ...series,
+        nextEvent: sortedEvents[0],
+        upcomingOccurrences: sortedEvents.length,
+      };
+    })
+    .sort(
+      (a, b) =>
+        new Date(a.nextEvent.startAt).getTime() -
+        new Date(b.nextEvent.startAt).getTime()
+    );
 
   return (
     <div className="container mx-auto max-w-6xl space-y-6 px-4 py-6">
@@ -231,6 +264,75 @@ export default function ManagePlacePage() {
             </CardContent>
           </Card>
 
+          {/* Recurring Events */}
+          <Card>
+            <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-4">
+              <CardTitle className="text-lg font-semibold">
+                Recurring Events
+              </CardTitle>
+              <Link
+                href={`/event/new?recurring=true&${isVenue ? "venueId" : "organizerId"}=${place.id}`}
+              >
+                <Button variant="outline">
+                  <Plus className="mr-2 h-4 w-4" />
+                  Add Recurring Event
+                </Button>
+              </Link>
+            </CardHeader>
+            <CardContent className="overflow-hidden">
+              {recurringSeries.length > 0 ? (
+                <div className="space-y-2 sm:space-y-3">
+                  {recurringSeries.slice(0, 5).map((series) => (
+                    <div
+                      key={series.seriesId}
+                      className="flex items-center justify-between gap-3 rounded-lg border p-3"
+                    >
+                      <div className="min-w-0 flex-1">
+                        <p className="truncate text-sm font-medium sm:text-base">
+                          {series.title}
+                        </p>
+                        <p className="truncate text-xs text-muted-foreground sm:text-sm">
+                          Next:{" "}
+                          {format(
+                            new Date(series.nextEvent.startAt),
+                            "EEE, MMM d · h:mm a"
+                          )}
+                        </p>
+                        <p className="text-xs text-muted-foreground sm:text-sm">
+                          {series.upcomingOccurrences} upcoming{" "}
+                          {series.upcomingOccurrences === 1
+                            ? "occurrence"
+                            : "occurrences"}
+                        </p>
+                      </div>
+                      <Link href={`/event-series/${series.seriesId}/edit`}>
+                        <Button variant="outline" size="sm">
+                          Edit
+                        </Button>
+                      </Link>
+                    </div>
+                  ))}
+                </div>
+              ) : (
+                <div className="py-8 text-center">
+                  <Repeat className="mx-auto mb-3 h-10 w-10 text-muted-foreground" />
+                  <p className="mb-1 font-medium">No recurring events yet</p>
+                  <p className="mb-4 text-sm text-muted-foreground">
+                    Add a recurring event series for this {typeLabel.toLowerCase()}
+                  </p>
+                  <Link
+                    href={`/event/new?recurring=true&${isVenue ? "venueId" : "organizerId"}=${place.id}`}
+                  >
+                    <Button>
+                      <Plus className="mr-2 h-4 w-4" />
+                      Add Recurring Event
+                    </Button>
+                  </Link>
+                </div>
+              )}
+            </CardContent>
+          </Card>
+
           {/* Team Members */}
           <PlaceMembersManager
             placeId={place.id}
@@ -257,6 +359,15 @@ export default function ManagePlacePage() {
                 <Button variant="outline" className="w-full justify-start">
                   <CalendarPlus className="mr-2 h-4 w-4" />
                   Create New Event
+                </Button>
+              </Link>
+              <Link
+                href={`/event/new?recurring=true&${isVenue ? "venueId" : "organizerId"}=${place.id}`}
+                className="block"
+              >
+                <Button variant="outline" className="w-full justify-start">
+                  <Repeat className="mr-2 h-4 w-4" />
+                  Add Recurring Event
                 </Button>
               </Link>
               <Link
