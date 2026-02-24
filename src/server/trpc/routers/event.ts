@@ -216,6 +216,23 @@ export const eventRouter = router({
         });
       }
 
+      if (event?.coverImageUrl) {
+        try {
+          const eventCoverImageUrl = await uploadImageFromUrl(
+            event.coverImageUrl,
+            `events/${event.id}`,
+            "cover-image.png"
+          );
+
+          await ctx.db
+            .update(events)
+            .set({ coverImageUrl: eventCoverImageUrl })
+            .where(eq(events.id, event.id));
+        } catch {
+          // Keep existing cover image URL if re-hosting fails.
+        }
+      }
+
       // if (event) {
       //   void logActivity({
       //     actorUserId: ctx.auth.userId,

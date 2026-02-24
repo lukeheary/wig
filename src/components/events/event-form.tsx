@@ -80,6 +80,12 @@ export function EventForm({
   const [selectedVenue, setSelectedVenue] = useState<VenueData | null>(null);
   const [isCreatingNewVenue, setIsCreatingNewVenue] = useState(false);
   const lastAutoAppliedKeyRef = useRef<string | null>(null);
+  const deferredUploadFolderRef = useRef(
+    `events/pending/${Date.now()}-${Math.random().toString(36).slice(2, 10)}`
+  );
+  const [deferredCoverImageFile, setDeferredCoverImageFile] =
+    useState<File | null>(null);
+  const [isSubmittingImage, setIsSubmittingImage] = useState(false);
 
   const getDatePart = (value: string) => (value ? value.split("T")[0] : "");
   const getTimePart = (value: string) => (value ? value.split("T")[1] : "");
@@ -332,12 +338,46 @@ export function EventForm({
       return;
     }
 
+    let resolvedCoverImageUrl = formData.coverImageUrl || undefined;
+    if (deferredCoverImageFile) {
+      setIsSubmittingImage(true);
+      try {
+        const uploadFormData = new FormData();
+        uploadFormData.append("file", deferredCoverImageFile);
+        uploadFormData.append("folder", deferredUploadFolderRef.current);
+        uploadFormData.append("filename", "cover-image.png");
+
+        const uploadResponse = await fetch("/api/upload", {
+          method: "POST",
+          body: uploadFormData,
+        });
+
+        const uploadData = await uploadResponse.json();
+        if (!uploadResponse.ok) {
+          throw new Error(uploadData.error || "Upload failed");
+        }
+
+        resolvedCoverImageUrl = uploadData.url;
+      } catch (error) {
+        toast({
+          title: "Image upload failed",
+          description:
+            error instanceof Error ? error.message : "Unknown upload error",
+          variant: "destructive",
+        });
+        setIsSubmittingImage(false);
+        return;
+      } finally {
+        setIsSubmittingImage(false);
+      }
+    }
+
     const payload = {
       venueId: finalVenueId,
       organizerId,
       title: formData.title,
       description: formData.description || undefined,
-      coverImageUrl: formData.coverImageUrl || undefined,
+      coverImageUrl: resolvedCoverImageUrl,
       categories: formData.categories,
       status: formData.status,
       startAt: startDate,
@@ -483,6 +523,7 @@ export function EventForm({
   };
 
   const isSubmitting =
+    isSubmittingImage ||
     createMutation.isPending ||
     createRecurringMutation.isPending ||
     createVenueMutation.isPending;
@@ -522,15 +563,18 @@ export function EventForm({
             <div className="space-y-2">
               <Label htmlFor="image">Event Image</Label>
               <S3Uploader
-                folder="events"
+                folder={deferredUploadFolderRef.current}
                 fileName="cover-image.png"
                 currentImageUrl={formData.coverImageUrl}
+                deferUpload
+                onDeferredFileChange={setDeferredCoverImageFile}
                 onUploadComplete={(url: string) =>
                   setFormData({ ...formData, coverImageUrl: url })
                 }
-                onRemoveImage={() =>
-                  setFormData({ ...formData, coverImageUrl: "" })
-                }
+                onRemoveImage={() => {
+                  setDeferredCoverImageFile(null);
+                  setFormData({ ...formData, coverImageUrl: "" });
+                }}
               />
             </div>
 

@@ -13,6 +13,8 @@ interface S3UploaderProps {
   fileName?: string;
   currentImageUrl?: string;
   onRemoveImage?: () => void;
+  deferUpload?: boolean;
+  onDeferredFileChange?: (file: File | null) => void;
   variant?: "button" | "dropzone";
   className?: string;
   buttonText?: string;
@@ -26,6 +28,8 @@ export function S3Uploader({
   fileName,
   currentImageUrl,
   onRemoveImage,
+  deferUpload = false,
+  onDeferredFileChange,
   variant = "dropzone",
   className,
   buttonText = "Upload Image",
@@ -130,6 +134,13 @@ export function S3Uploader({
       }
       return objectUrl;
     });
+
+    if (deferUpload) {
+      setPreviewUrl(null);
+      onDeferredFileChange?.(file);
+      return;
+    }
+
     setIsUploading(true);
 
     try {
@@ -208,6 +219,14 @@ export function S3Uploader({
 
     const imageUrl = getDroppedImageUrl(e.dataTransfer);
     if (imageUrl) {
+      if (deferUpload) {
+        toast({
+          title: "Image URL not supported here",
+          description: "Please upload an image file before saving",
+          variant: "destructive",
+        });
+        return;
+      }
       handleUrlUpload(imageUrl);
       return;
     }
@@ -277,6 +296,7 @@ export function S3Uploader({
       }
       return null;
     });
+    onDeferredFileChange?.(null);
     if (onRemoveImage) {
       onRemoveImage();
     }
