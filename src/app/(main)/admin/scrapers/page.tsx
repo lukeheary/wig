@@ -375,6 +375,14 @@ export default function AdminScrapersPage() {
   const [defaultVenue, setDefaultVenue] = useState<SelectedVenue | null>(null);
   const [importedCount, setImportedCount] = useState<number | null>(null);
 
+  const resetScrapeSession = () => {
+    setError(null);
+    setResult(null);
+    setEditableEvents([]);
+    setDefaultVenue(null);
+    setImportedCount(null);
+  };
+
   const queryInput = useMemo(
     () => (search.trim().length > 0 ? { search: search.trim() } : undefined),
     [search]
@@ -389,12 +397,14 @@ export default function AdminScrapersPage() {
   useEffect(() => {
     if (scraperRows.length === 0) {
       setSelectedScraperId("");
+      resetScrapeSession();
       return;
     }
 
     const stillExists = scraperRows.some((row) => row.id === selectedScraperId);
     if (!selectedScraperId || !stillExists) {
       setSelectedScraperId(scraperRows[0].id);
+      resetScrapeSession();
     }
   }, [scraperRows, selectedScraperId]);
 
@@ -576,7 +586,10 @@ export default function AdminScrapersPage() {
                 <p className="text-sm font-medium">Select scraper row</p>
                 <Select
                   value={selectedScraperId}
-                  onValueChange={setSelectedScraperId}
+                  onValueChange={(value) => {
+                    setSelectedScraperId(value);
+                    resetScrapeSession();
+                  }}
                 >
                   <SelectTrigger>
                     <SelectValue placeholder="Choose a scraper row" />
