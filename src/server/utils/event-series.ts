@@ -38,15 +38,22 @@ export function normalizeSeriesDaysOfWeek(
     return [startWeekday];
   }
 
-  if (deduped.length > 0) {
-    if (deduped.includes(startWeekday)) {
-      return deduped;
-    }
-    // Safeguard against stale UI payloads: include first event weekday.
-    return [...deduped, startWeekday].sort((a, b) => a - b);
+  if (deduped.length === 0) {
+    return [startWeekday];
   }
 
-  return [startWeekday];
+  if (deduped.includes(startWeekday)) {
+    return deduped;
+  }
+
+  // Safeguard for stale clients that keep one default weekday from "today"
+  // even after choosing a different start date.
+  if (deduped.length === 1) {
+    return [startWeekday];
+  }
+
+  // For explicit multi-day weekly schedules, preserve user selection.
+  return deduped;
 }
 
 function startOfDay(value: Date) {
