@@ -301,13 +301,7 @@ export default function EventPage() {
               {/* Action Icons - Overlay on top right */}
               <div className="absolute right-4 top-4 flex gap-2">
                 {canEdit && (
-                  <Link
-                    href={
-                      event.seriesId
-                        ? `/event-series/${event.seriesId}/edit`
-                        : `/event/${eventId}/edit`
-                    }
-                  >
+                  <Link href={`/event/${eventId}/edit`}>
                     <Button
                       size="icon"
                       variant="secondary"
