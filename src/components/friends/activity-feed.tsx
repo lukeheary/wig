@@ -23,9 +23,11 @@ import {
   isTomorrow,
   startOfDay,
 } from "date-fns";
+import { usePathname, useSearchParams } from "next/navigation";
 import Link from "next/link";
 import { formatRelativeEventDate } from "@/lib/utils";
 import { StickySectionHeader } from "@/components/ui/sticky-section-header";
+import { buildReturnTo, withReturnTo } from "@/lib/navigation";
 
 interface ActivityItemProps {
   activity: any;
@@ -40,8 +42,12 @@ const EVENT_UPDATE_TYPES = new Set([
 ]);
 
 function ActivityItem({ activity }: ActivityItemProps) {
+  const pathname = usePathname();
+  const searchParams = useSearchParams();
   const { actor, type, entityId, metadata, createdAt, event } = activity;
   const isEventStatusUpdate = EVENT_UPDATE_TYPES.has(type);
+  const returnTo = buildReturnTo(pathname, searchParams);
+  const eventHref = withReturnTo(`/event/${entityId}`, returnTo);
 
   const eventDate = event?.startAt ? new Date(event.startAt) : null;
   const isEventPast = eventDate
@@ -122,7 +128,7 @@ function ActivityItem({ activity }: ActivityItemProps) {
                 ? "are going to"
                 : "is going to"}{" "}
             <Link
-              href={`/event/${entityId}`}
+              href={eventHref}
               className="font-medium text-primary hover:underline"
             >
               {entityName}
@@ -159,7 +165,7 @@ function ActivityItem({ activity }: ActivityItemProps) {
                 ? "are interested in"
                 : "is interested in"}{" "}
             <Link
-              href={`/event/${entityId}`}
+              href={eventHref}
               className="font-medium text-primary hover:underline"
             >
               {entityName}
@@ -189,7 +195,7 @@ function ActivityItem({ activity }: ActivityItemProps) {
           <>
             {subjectName} {isPluralSubject ? "are" : "is"} no longer going to{" "}
             <Link
-              href={`/event/${entityId}`}
+              href={eventHref}
               className="font-medium text-primary hover:underline"
             >
               {entityName}
@@ -251,7 +257,7 @@ function ActivityItem({ activity }: ActivityItemProps) {
           <>
             {actorName} created a new event:{" "}
             <Link
-              href={`/event/${entityId}`}
+              href={eventHref}
               className="font-medium text-primary hover:underline"
             >
               {entityName}
@@ -279,7 +285,7 @@ function ActivityItem({ activity }: ActivityItemProps) {
       case "cancelled":
         return (
           <>
-            <Link href={`/event/${entityId}`} className="font-medium text-primary hover:underline">
+            <Link href={eventHref} className="font-medium text-primary hover:underline">
               {entityName}
             </Link>
             {activity.event?.venue?.name && (
@@ -307,7 +313,7 @@ function ActivityItem({ activity }: ActivityItemProps) {
       case "postponed":
         return (
           <>
-            <Link href={`/event/${entityId}`} className="font-medium text-primary hover:underline">
+            <Link href={eventHref} className="font-medium text-primary hover:underline">
               {entityName}
             </Link>
             {activity.event?.venue?.name && (
@@ -334,7 +340,7 @@ function ActivityItem({ activity }: ActivityItemProps) {
       case "rescheduled":
         return (
           <>
-            <Link href={`/event/${entityId}`} className="font-medium text-primary hover:underline">
+            <Link href={eventHref} className="font-medium text-primary hover:underline">
               {entityName}
             </Link>
             {activity.event?.venue?.name && (
@@ -361,7 +367,7 @@ function ActivityItem({ activity }: ActivityItemProps) {
       case "restored":
         return (
           <>
-            <Link href={`/event/${entityId}`} className="font-medium text-primary hover:underline">
+            <Link href={eventHref} className="font-medium text-primary hover:underline">
               {entityName}
             </Link>
             {activity.event?.venue?.name && (
@@ -388,7 +394,7 @@ function ActivityItem({ activity }: ActivityItemProps) {
       case "updated":
         return (
           <>
-            <Link href={`/event/${entityId}`} className="font-medium text-primary hover:underline">
+            <Link href={eventHref} className="font-medium text-primary hover:underline">
               {entityName}
             </Link>
             {activity.event?.venue?.name && (

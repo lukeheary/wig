@@ -1,7 +1,7 @@
 "use client";
 
 import Link from "next/link";
-import { useRouter } from "next/navigation";
+import { usePathname, useSearchParams } from "next/navigation";
 import { format } from "date-fns";
 import { trpc } from "@/lib/trpc";
 import { Button } from "@/components/ui/button";
@@ -24,6 +24,7 @@ import {
   Eye,
 } from "lucide-react";
 import { BackButtonHeader } from "@/components/shared/back-button-header";
+import { buildReturnTo, withReturnTo } from "@/lib/navigation";
 
 type PlaceType = "venue" | "organizer";
 
@@ -49,7 +50,9 @@ export function PlaceManagementPage({
   notFoundLabel,
   forceCanManageMembers,
 }: PlaceManagementPageProps) {
-  const router = useRouter();
+  const pathname = usePathname();
+  const searchParams = useSearchParams();
+  const returnTo = buildReturnTo(pathname, searchParams);
   const isValidPlaceId = !placeId || UUID_REGEX.test(placeId);
 
   const { data: placeById, isLoading: isLoadingById } = trpc.place.getPlaceById.useQuery(
@@ -113,6 +116,16 @@ export function PlaceManagementPage({
 
   const isVenue = place.type === "venue";
   const typeLabel = isVenue ? "Venue" : "Organizer";
+  const placeHref = `/${isVenue ? "venue" : "organizer"}/${place.slug}`;
+  const createEventHref = withReturnTo(
+    `/event/new?${isVenue ? "venueId" : "organizerId"}=${place.id}`,
+    returnTo
+  );
+  const createRecurringEventHref = withReturnTo(
+    `/event/new?recurring=true&${isVenue ? "venueId" : "organizerId"}=${place.id}`,
+    returnTo
+  );
+  const editPlaceHref = withReturnTo(`${placeHref}/edit`, returnTo);
   const upcomingEvents = place.events || [];
   const pastEvents = (place as any).pastEvents || [];
   const totalFollowers = (place as any).follows?.length || 0;
@@ -153,8 +166,7 @@ export function PlaceManagementPage({
   return (
     <div className="container mx-auto max-w-6xl space-y-6 px-4 py-6">
       <BackButtonHeader
-        backHref={backHref}
-        onBack={backHref ? undefined : () => router.back()}
+        backHref={backHref ?? notFoundHref}
         className="items-center"
       >
         <h1 className="text-2xl font-bold tracking-tight">{place.name}</h1>
@@ -215,7 +227,7 @@ export function PlaceManagementPage({
           <Card>
             <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-4">
               <CardTitle className="text-lg font-semibold">Upcoming Events</CardTitle>
-              <Link href={`/event/new?${isVenue ? "venueId" : "organizerId"}=${place.id}`}>
+              <Link href={createEventHref}>
                 <Button variant="outline">
                   <Plus className="mr-2 h-4 w-4" />
                   Add Event
@@ -228,7 +240,7 @@ export function PlaceManagementPage({
                   {upcomingEvents.slice(0, 5).map((event: any) => (
                     <Link
                       key={event.id}
-                      href={`/event/${event.id}`}
+                      href={withReturnTo(`/event/${event.id}`, returnTo)}
                       className="flex items-center gap-3 overflow-hidden rounded-lg border p-2 transition-colors hover:bg-muted/50 sm:gap-4 sm:p-3"
                     >
                       {event.coverImageUrl ? (
@@ -258,7 +270,7 @@ export function PlaceManagementPage({
                   ))}
                   {upcomingEvents.length > 5 && (
                     <Link
-                      href={`/${isVenue ? "venue" : "organizer"}/${place.slug}`}
+                      href={placeHref}
                       className="block text-center text-sm text-muted-foreground hover:text-primary"
                     >
                       View all {upcomingEvents.length} events
@@ -272,7 +284,7 @@ export function PlaceManagementPage({
                   <p className="mb-4 text-sm text-muted-foreground">
                     Create your first event to get started
                   </p>
-                  <Link href={`/event/new?${isVenue ? "venueId" : "organizerId"}=${place.id}`}>
+                  <Link href={createEventHref}>
                     <Button>
                       <Plus className="mr-2 h-4 w-4" />
                       Create Event
@@ -287,7 +299,7 @@ export function PlaceManagementPage({
             <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-4">
               <CardTitle className="text-lg font-semibold">Recurring Events</CardTitle>
               <Link
-                href={`/event/new?recurring=true&${isVenue ? "venueId" : "organizerId"}=${place.id}`}
+                href={createRecurringEventHref}
               >
                 <Button variant="outline">
                   <Plus className="mr-2 h-4 w-4" />
@@ -313,7 +325,12 @@ export function PlaceManagementPage({
                           {series.upcomingOccurrences === 1 ? "occurrence" : "occurrences"}
                         </p>
                       </div>
-                      <Link href={`/event-series/${series.seriesId}/edit`}>
+                      <Link
+                        href={withReturnTo(
+                          `/event-series/${series.seriesId}/edit`,
+                          returnTo
+                        )}
+                      >
                         <Button variant="outline" size="sm">
                           Edit
                         </Button>
@@ -329,7 +346,7 @@ export function PlaceManagementPage({
                     Add a recurring event series for this {typeLabel.toLowerCase()}
                   </p>
                   <Link
-                    href={`/event/new?recurring=true&${isVenue ? "venueId" : "organizerId"}=${place.id}`}
+                    href={createRecurringEventHref}
                   >
                     <Button>
                       <Plus className="mr-2 h-4 w-4" />
@@ -356,7 +373,7 @@ export function PlaceManagementPage({
             </CardHeader>
             <CardContent className="space-y-2">
               <Link
-                href={`/event/new?${isVenue ? "venueId" : "organizerId"}=${place.id}`}
+                href={createEventHref}
                 className="block"
               >
                 <Button variant="outline" className="w-full justify-start">
@@ -365,7 +382,7 @@ export function PlaceManagementPage({
                 </Button>
               </Link>
               <Link
-                href={`/event/new?recurring=true&${isVenue ? "venueId" : "organizerId"}=${place.id}`}
+                href={createRecurringEventHref}
                 className="block"
               >
                 <Button variant="outline" className="w-full justify-start">
@@ -373,16 +390,13 @@ export function PlaceManagementPage({
                   Add Recurring Event
                 </Button>
               </Link>
-              <Link href={`/${isVenue ? "venue" : "organizer"}/${place.slug}`} className="block">
+              <Link href={placeHref} className="block">
                 <Button variant="outline" className="w-full justify-start">
                   <Eye className="mr-2 h-4 w-4" />
                   View Public Page
                 </Button>
               </Link>
-              <Link
-                href={`/${isVenue ? "venue" : "organizer"}/${place.slug}/edit`}
-                className="block"
-              >
+              <Link href={editPlaceHref} className="block">
                 <Button variant="outline" className="w-full justify-start">
                   <Edit className="mr-2 h-4 w-4" />
                   Edit {typeLabel}

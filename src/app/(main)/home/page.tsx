@@ -73,6 +73,7 @@ import { getDistanceMiles, type Coordinates } from "@/lib/geo";
 import { resolveMetroArea } from "@/lib/metro-areas";
 import { StickySearchBar } from "@/components/ui/sticky-search-bar";
 import { StickySectionHeader } from "@/components/ui/sticky-section-header";
+import { withReturnTo } from "@/lib/navigation";
 
 type ViewMode = "week" | "month";
 
@@ -787,9 +788,13 @@ function HomePageContent() {
                             <HoverCardTrigger asChild>
                               <div
                                 className="cursor-pointer truncate rounded bg-primary/10 p-1 text-xs text-primary hover:bg-primary/20"
-                                onClick={() =>
-                                  (window.location.href = `/event/${event.id}`)
-                                }
+                                onClick={() => {
+                                  const returnTo = `${window.location.pathname}${window.location.search}`;
+                                  window.location.href = withReturnTo(
+                                    `/event/${event.id}`,
+                                    returnTo
+                                  );
+                                }}
                               >
                                 {event.title}
                               </div>

@@ -1,7 +1,7 @@
 "use client";
 
 import { useEffect, useState } from "react";
-import { useParams, useRouter } from "next/navigation";
+import { useParams, useRouter, useSearchParams } from "next/navigation";
 import { format } from "date-fns";
 import { Loader2, Repeat } from "lucide-react";
 import { trpc } from "@/lib/trpc";
@@ -27,6 +27,7 @@ import {
   getEventStatusLabel,
   type EventStatus,
 } from "@/lib/event-status";
+import { resolveBackHref } from "@/lib/navigation";
 
 const WEEKDAY_LABELS = ["Sun", "Mon", "Tue", "Wed", "Thu", "Fri", "Sat"];
 const FULL_WEEKDAY_LABELS = [
@@ -42,10 +43,13 @@ const ORDINAL_LABELS = ["First", "Second", "Third", "Fourth", "Fifth"];
 
 export default function EditEventSeriesPage() {
   const params = useParams();
+  const searchParams = useSearchParams();
   const seriesId = params.id as string;
   const router = useRouter();
   const { toast } = useToast();
   const utils = trpc.useUtils();
+  const returnTo = searchParams.get("returnTo");
+  const backHref = resolveBackHref({ returnTo, fallbackHref: "/home" });
 
   const { data: series, isLoading } = trpc.event.getEventSeriesById.useQuery({
     seriesId,
@@ -64,7 +68,7 @@ export default function EditEventSeriesPage() {
             ? `Rebuilt ${data.createdEvents} upcoming occurrences`
             : "Changes saved",
       });
-      router.back();
+      router.push(backHref);
     },
     onError: (error) => {
       toast({
@@ -356,7 +360,8 @@ export default function EditEventSeriesPage() {
   return (
     <div className="container mx-auto max-w-2xl space-y-6 py-4">
       <BackButtonHeader
-        onBack={() => router.back()}
+        backFallbackHref="/home"
+        returnTo={returnTo}
         title="Edit Recurring Event"
       />
 
@@ -692,7 +697,7 @@ export default function EditEventSeriesPage() {
               <Button
                 type="button"
                 variant="outline"
-                onClick={() => router.back()}
+                onClick={() => router.push(backHref)}
               >
                 Cancel
               </Button>

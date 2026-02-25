@@ -1,6 +1,7 @@
 "use client";
 
 import { useState } from "react";
+import { usePathname, useSearchParams } from "next/navigation";
 import { Bell, Check, X } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { UserAvatar } from "@/components/ui/user-avatar";
@@ -20,8 +21,11 @@ import {
 import { trpc } from "@/lib/trpc";
 import { useToast } from "@/hooks/use-toast";
 import { formatDistanceToNow } from "date-fns";
+import { buildReturnTo, withReturnTo } from "@/lib/navigation";
 
 export function NotificationsBell() {
+  const pathname = usePathname();
+  const searchParams = useSearchParams();
   const [isMobileOpen, setIsMobileOpen] = useState(false);
   const [isDesktopOpen, setIsDesktopOpen] = useState(false);
   const { toast } = useToast();
@@ -89,6 +93,7 @@ export function NotificationsBell() {
   const eventUpdatesCount = eventUpdates?.length ?? 0;
   const notificationCount = pendingCount + unreadEventUpdatesCount;
   const hasNotifications = notificationCount > 0;
+  const returnTo = buildReturnTo(pathname, searchParams);
 
   const markEventActivitySeenIfNeeded = () => {
     if (unreadEventUpdatesCount > 0 && !markEventActivitySeenMutation.isPending) {
@@ -162,7 +167,7 @@ export function NotificationsBell() {
                     </span>{" "}
                     {getEventUpdateText(update.type)}{" "}
                     <Link
-                      href={`/event/${update.eventId}`}
+                      href={withReturnTo(`/event/${update.eventId}`, returnTo)}
                       className="font-semibold text-primary hover:underline"
                     >
                       {update.event?.title || "an event"}

@@ -1,6 +1,6 @@
 "use client";
 
-import { useParams, useRouter } from "next/navigation";
+import { useParams, useSearchParams } from "next/navigation";
 import Link from "next/link";
 import Image from "next/image";
 import { trpc } from "@/lib/trpc";
@@ -11,7 +11,6 @@ import { Switch } from "@/components/ui/switch";
 import {
   Calendar,
   MapPin,
-  ArrowLeft,
   Share,
   Edit,
   Users,
@@ -28,6 +27,10 @@ import {
   getEventStatusBadgeClassName,
   getEventStatusLabel,
 } from "@/lib/event-status";
+import { SharedBackButton } from "@/components/shared/back-button";
+import {
+  withReturnTo,
+} from "@/lib/navigation";
 
 type RsvpStatus = "going" | "interested" | "not_going";
 
@@ -69,11 +72,13 @@ function EventPageSkeleton() {
 
 export default function EventPage() {
   const params = useParams();
-  const router = useRouter();
+  const searchParams = useSearchParams();
   const eventId = params.id as string;
   const { toast } = useToast();
   const utils = trpc.useUtils();
   const [isImageModalOpen, setIsImageModalOpen] = useState(false);
+  const returnTo = searchParams.get("returnTo");
+  const editHref = withReturnTo(`/event/${eventId}/edit`, returnTo);
 
   // Fetch event data
   const { data: event, isLoading } = trpc.event.getEventById.useQuery({
@@ -179,7 +184,7 @@ export default function EventPage() {
         <p className="mb-4 text-muted-foreground">
           The event you&apos;re looking for doesn&apos;t exist
         </p>
-        <Link href="/">
+        <Link href="/home">
           <Button>Back to Calendar</Button>
         </Link>
       </div>
@@ -289,27 +294,27 @@ export default function EventPage() {
               )}
 
               {/* Back Button - Overlay on top left */}
-              <Button
-                size="icon"
+              <SharedBackButton
+                fallbackHref="/home"
+                returnTo={returnTo}
                 variant="secondary"
+                size="icon"
                 className="absolute left-4 top-4 h-10 w-10"
-                onClick={() => router.back()}
-              >
-                <ArrowLeft className="h-4 w-4" />
-              </Button>
+                iconClassName="h-4 w-4"
+              />
 
               {/* Action Icons - Overlay on top right */}
               <div className="absolute right-4 top-4 flex gap-2">
                 {canEdit && (
-                  <Link href={`/event/${eventId}/edit`}>
+                  <Link href={editHref}>
                     <Button
                       size="icon"
                       variant="secondary"
                       className="h-10 w-10"
-                    >
-                      <Edit className="h-4 w-4" />
-                    </Button>
-                  </Link>
+                  >
+                    <Edit className="h-4 w-4" />
+                  </Button>
+                </Link>
                 )}
                 {/*<Button size="icon" variant="secondary" className="h-10 w-10">*/}
                 {/*  <Heart className="h-4 w-4" />*/}

@@ -5,6 +5,7 @@ import { useRouter, useSearchParams } from "next/navigation";
 import { Loader2 } from "lucide-react";
 import { EventForm } from "@/components/events/event-form";
 import { BackButtonHeader } from "@/components/shared/back-button-header";
+import { resolveBackHref, withReturnTo } from "@/lib/navigation";
 
 function NewEventPageContent() {
   const router = useRouter();
@@ -13,11 +14,14 @@ function NewEventPageContent() {
   const venueId = searchParams.get("venueId") || undefined;
   const organizerId = searchParams.get("organizerId") || undefined;
   const isRecurring = searchParams.get("recurring") === "true";
+  const returnTo = searchParams.get("returnTo");
+  const cancelHref = resolveBackHref({ returnTo, fallbackHref: "/home" });
 
   return (
     <div className="container mx-auto max-w-2xl space-y-6 py-4">
       <BackButtonHeader
-        backHref="/home"
+        backFallbackHref="/home"
+        returnTo={returnTo}
         title={isRecurring ? "Create Recurring Event" : "Create Event"}
       />
 
@@ -27,12 +31,12 @@ function NewEventPageContent() {
         isRecurringDefault={isRecurring}
         onSuccess={(eventId) => {
           if (eventId) {
-            router.push(`/event/${eventId}`);
+            router.push(withReturnTo(`/event/${eventId}`, returnTo));
             return;
           }
-          router.push("/home");
+          router.push(cancelHref);
         }}
-        onCancel={() => router.back()}
+        onCancel={() => router.push(cancelHref)}
       />
     </div>
   );

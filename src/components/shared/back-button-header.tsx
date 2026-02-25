@@ -1,14 +1,16 @@
 import * as React from "react";
-import Link from "next/link";
 import { ArrowLeft } from "lucide-react";
 
 import { Button } from "@/components/ui/button";
+import { SharedBackButton } from "@/components/shared/back-button";
 import { cn } from "@/lib/utils";
 
 type BackButtonHeaderProps = {
   title?: string;
   subtitle?: string;
   backHref?: string;
+  backFallbackHref?: string;
+  returnTo?: string | null;
   onBack?: () => void;
   backLabel?: string;
   className?: string;
@@ -21,6 +23,8 @@ export function BackButtonHeader({
   title,
   subtitle,
   backHref,
+  backFallbackHref,
+  returnTo,
   onBack,
   backLabel = "Back",
   className,
@@ -28,18 +32,12 @@ export function BackButtonHeader({
   subtitleClassName,
   children,
 }: BackButtonHeaderProps) {
-  const showBack = Boolean(backHref || onBack);
+  const showBack = Boolean(backHref || backFallbackHref || onBack);
 
   return (
     <div className={cn("flex items-center gap-4", className)}>
       {showBack ? (
-        backHref ? (
-          <Button asChild variant="ghost" size="icon" aria-label={backLabel}>
-            <Link href={backHref}>
-              <ArrowLeft className="h-5 w-5" />
-            </Link>
-          </Button>
-        ) : (
+        onBack ? (
           <Button
             variant="ghost"
             size="icon"
@@ -49,6 +47,13 @@ export function BackButtonHeader({
           >
             <ArrowLeft className="h-5 w-5" />
           </Button>
+        ) : (
+          <SharedBackButton
+            href={backHref}
+            fallbackHref={backFallbackHref}
+            returnTo={returnTo}
+            backLabel={backLabel}
+          />
         )
       ) : null}
 

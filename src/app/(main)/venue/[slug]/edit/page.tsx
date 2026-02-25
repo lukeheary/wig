@@ -1,6 +1,6 @@
 "use client";
 
-import { useParams, useRouter } from "next/navigation";
+import { useParams, useRouter, useSearchParams } from "next/navigation";
 import { trpc } from "@/lib/trpc";
 import { Button } from "@/components/ui/button";
 import { Building, Loader2 } from "lucide-react";
@@ -11,12 +11,19 @@ import {
 } from "@/components/places/place-edit-form";
 import Link from "next/link";
 import { BackButtonHeader } from "@/components/shared/back-button-header";
+import { resolveBackHref } from "@/lib/navigation";
 
 export default function EditPlacePage() {
   const params = useParams();
+  const searchParams = useSearchParams();
   const slug = params.slug as string;
   const router = useRouter();
   const { toast } = useToast();
+  const returnTo = searchParams.get("returnTo");
+  const backHref = resolveBackHref({
+    returnTo,
+    fallbackHref: `/venue/${slug}`,
+  });
 
   // Fetch place data
   const { data: place, isLoading: placeLoading } =
@@ -156,7 +163,7 @@ export default function EditPlacePage() {
   return (
     <div className="container mx-auto max-w-2xl space-y-4 py-8">
       <BackButtonHeader
-        onBack={() => router.back()}
+        backHref={backHref}
         title={`Edit ${typeLabel}`}
       />
 
@@ -166,7 +173,7 @@ export default function EditPlacePage() {
         placeId={place.id}
         mode="edit"
         onSubmit={handleSubmit}
-        onCancel={() => router.push(`/venue/${slug}`)}
+        onCancel={() => router.push(backHref)}
         isSubmitting={updateMutation.isPending}
       />
     </div>

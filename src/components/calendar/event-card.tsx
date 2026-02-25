@@ -1,6 +1,7 @@
 "use client";
 
 import Link from "next/link";
+import { usePathname, useSearchParams } from "next/navigation";
 import Image from "next/image";
 import { Card } from "@/components/ui/card";
 import { cn, formatTime } from "@/lib/utils";
@@ -9,12 +10,17 @@ import { format } from "date-fns";
 import { type EventListItem } from "@/types/trpc";
 import { AvatarStack } from "@/components/ui/avatar-stack";
 import { getEventStatusLabel } from "@/lib/event-status";
+import { buildReturnTo, withReturnTo } from "@/lib/navigation";
 
 interface EventCardProps {
   event: EventListItem;
 }
 
 export function EventCard({ event }: EventCardProps) {
+  const pathname = usePathname();
+  const searchParams = useSearchParams();
+  const returnTo = buildReturnTo(pathname, searchParams);
+  const eventHref = withReturnTo(`/event/${event.id}`, returnTo);
   const eventDate = new Date(event.startAt);
   const dayOfWeek = format(eventDate, "EEE");
   const month = format(eventDate, "MMM");
@@ -26,7 +32,7 @@ export function EventCard({ event }: EventCardProps) {
   const hasInactiveStatus = event.status !== "active";
 
   return (
-    <Link href={`/event/${event.id}`} className="group">
+    <Link href={eventHref} className="group">
       <Card className="relative h-full cursor-pointer overflow-hidden !border-none bg-card p-2 transition-all duration-300 md:flex-col">
         {/* Container - horizontal on mobile, vertical on desktop */}
         <div className="flex md:block">

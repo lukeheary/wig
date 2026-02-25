@@ -1,7 +1,7 @@
 "use client";
 
 import { useState, useEffect } from "react";
-import { useParams, useRouter } from "next/navigation";
+import { useParams, useRouter, useSearchParams } from "next/navigation";
 import { trpc } from "@/lib/trpc";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -28,13 +28,18 @@ import {
   getEventStatusLabel,
   type EventStatus,
 } from "@/lib/event-status";
+import { resolveBackHref, withReturnTo } from "@/lib/navigation";
 
 export default function EditEventPage() {
   const params = useParams();
+  const searchParams = useSearchParams();
   const eventId = params.id as string;
   const router = useRouter();
   const { toast } = useToast();
   const utils = trpc.useUtils();
+  const returnTo = searchParams.get("returnTo");
+  const eventDetailHref = withReturnTo(`/event/${eventId}`, returnTo);
+  const afterDeleteHref = resolveBackHref({ returnTo, fallbackHref: "/home" });
 
   // Fetch event data
   const { data: event, isLoading: eventLoading } =
@@ -125,7 +130,7 @@ export default function EditEventPage() {
         title: "Success",
         description: "Event updated successfully",
       });
-      router.push(`/event/${eventId}`);
+      router.push(eventDetailHref);
     },
     onError: (error) => {
       toast({
@@ -147,7 +152,7 @@ export default function EditEventPage() {
         title: "Event deleted",
         description: "The event has been removed from the platform",
       });
-      router.push("/home");
+      router.push(afterDeleteHref);
     },
     onError: (error) => {
       toast({
@@ -302,7 +307,7 @@ export default function EditEventPage() {
 
   return (
     <div className="container mx-auto max-w-2xl space-y-4 py-8">
-      <BackButtonHeader backHref={`/event/${eventId}`} title="Edit Event" />
+      <BackButtonHeader backHref={eventDetailHref} title="Edit Event" />
 
       {/* Venue Details */}
       <VenueSelector
@@ -457,7 +462,7 @@ export default function EditEventPage() {
               <Button
                 type="button"
                 variant="outline"
-                onClick={() => router.push(`/event/${eventId}`)}
+                onClick={() => router.push(eventDetailHref)}
                 disabled={updateMutation.isPending || deleteMutation.isPending}
               >
                 Cancel
