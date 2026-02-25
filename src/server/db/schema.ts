@@ -19,8 +19,7 @@ import {
 // ENUMS
 // ============================================================================
 
-// Place categories are normalized via categories + place_categories tables.
-// Event categories remain jsonb string arrays for now.
+// Categories are normalized via categories + *_categories tables.
 
 export const eventVisibilityEnum = pgEnum("event_visibility", [
   "public",
@@ -215,6 +214,7 @@ export const categories = pgTable(
 export const categoriesRelations = relations(categories, ({ many }) => ({
   placeCategories: many(placeCategories),
   eventCategories: many(eventCategories),
+  eventSeriesCategories: many(eventSeriesCategories),
 }));
 
 // ============================================================================
@@ -428,7 +428,6 @@ export const eventSeries = pgTable(
     address: text("address"),
     city: varchar("city", { length: 100 }).notNull(),
     state: varchar("state", { length: 2 }).notNull(),
-    categories: jsonb("categories").$type<string[]>().notNull().default([]),
     visibility: eventVisibilityEnum("visibility").notNull().default("public"),
     status: eventStatusEnum("status").notNull().default("active"),
     frequency: recurrenceFrequencyEnum("frequency").notNull(),
@@ -465,6 +464,7 @@ export const eventSeriesRelations = relations(eventSeries, ({ one, many }) => ({
     fields: [eventSeries.createdByUserId],
     references: [users.id],
   }),
+  categoryLinks: many(eventSeriesCategories),
   events: many(events),
 }));
 
@@ -585,6 +585,46 @@ export const eventCategoriesRelations = relations(
     }),
     category: one(categories, {
       fields: [eventCategories.categoryId],
+      references: [categories.id],
+    }),
+  })
+);
+
+// ============================================================================
+// EVENT SERIES CATEGORIES TABLE (many-to-many between event series and categories)
+// ============================================================================
+export const eventSeriesCategories = pgTable(
+  "event_series_categories",
+  {
+    id: uuid("id").defaultRandom().primaryKey(),
+    seriesId: uuid("series_id")
+      .notNull()
+      .references(() => eventSeries.id, { onDelete: "cascade" }),
+    categoryId: uuid("category_id")
+      .notNull()
+      .references(() => categories.id, { onDelete: "cascade" }),
+    createdAt: timestamp("created_at").defaultNow().notNull(),
+  },
+  (table) => ({
+    seriesCategoryIdx: uniqueIndex(
+      "event_series_categories_series_category_idx"
+    ).on(table.seriesId, table.categoryId),
+    seriesIdx: index("event_series_categories_series_idx").on(table.seriesId),
+    categoryIdx: index("event_series_categories_category_idx").on(
+      table.categoryId
+    ),
+  })
+);
+
+export const eventSeriesCategoriesRelations = relations(
+  eventSeriesCategories,
+  ({ one }) => ({
+    series: one(eventSeries, {
+      fields: [eventSeriesCategories.seriesId],
+      references: [eventSeries.id],
+    }),
+    category: one(categories, {
+      fields: [eventSeriesCategories.categoryId],
       references: [categories.id],
     }),
   })

@@ -3,14 +3,13 @@ import { router, adminProcedure } from "../init";
 import {
   categories,
   cities,
-  eventSeries,
   metroAreas,
   places,
   placeMembers,
   scrapers,
   users,
 } from "../../db/schema";
-import { eq, and, or, ilike, desc, ne, sql } from "drizzle-orm";
+import { eq, and, or, ilike, desc, ne } from "drizzle-orm";
 import { TRPCError } from "@trpc/server";
 import {
   listCategoryOptions,
@@ -473,62 +472,17 @@ export const adminRouter = router({
         }
       }
 
-      const didRenameKey = Boolean(nextKey && nextKey !== existing.key);
-      const [updated] = await ctx.db.transaction(async (tx) => {
-        const [updatedCategory] = await tx
-          .update(categories)
-          .set({
-            key: nextKey ?? undefined,
-            label: input.label?.trim(),
-            sortOrder: input.sortOrder,
-            isActive: input.isActive,
-            updatedAt: new Date(),
-          })
-          .where(eq(categories.id, input.id))
-          .returning();
-
-        // Recurring series store category keys directly in JSON.
-        // If a key is renamed, rewrite existing series to the new key.
-        if (didRenameKey && nextKey) {
-          const affectedSeries = await tx
-            .select({
-              id: eventSeries.id,
-              categories: eventSeries.categories,
-            })
-            .from(eventSeries)
-            .where(sql`${eventSeries.categories} ? ${existing.key}`);
-
-          for (const series of affectedSeries) {
-            const currentKeys = Array.isArray(series.categories)
-              ? series.categories.filter(
-                  (value): value is string => typeof value === "string"
-                )
-              : [];
-
-            const nextKeys = Array.from(
-              new Set(
-                currentKeys.map((key) => (key === existing.key ? nextKey : key))
-              )
-            );
-
-            const changed =
-              nextKeys.length !== currentKeys.length ||
-              nextKeys.some((key, index) => key !== currentKeys[index]);
-
-            if (!changed) continue;
-
-            await tx
-              .update(eventSeries)
-              .set({
-                categories: nextKeys,
-                updatedAt: new Date(),
-              })
-              .where(eq(eventSeries.id, series.id));
-          }
-        }
-
-        return [updatedCategory];
-      });
+      const [updated] = await ctx.db
+        .update(categories)
+        .set({
+          key: nextKey ?? undefined,
+          label: input.label?.trim(),
+          sortOrder: input.sortOrder,
+          isActive: input.isActive,
+          updatedAt: new Date(),
+        })
+        .where(eq(categories.id, input.id))
+        .returning();
 
       return updated;
     }),

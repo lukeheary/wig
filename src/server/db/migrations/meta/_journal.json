@@ -246,6 +246,13 @@
       "when": 1772000000000,
       "tag": "0034_add_event_series_time_zone",
       "breakpoints": true
+    },
+    {
+      "idx": 35,
+      "version": "7",
+      "when": 1772050000000,
+      "tag": "0035_add_event_series_categories",
+      "breakpoints": true
     }
   ]
 }
