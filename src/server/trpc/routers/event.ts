@@ -41,7 +41,9 @@ import { logEventActivity } from "../../utils/event-activity-logger";
 import {
   filterExistingCategoryKeys,
   mapEventCategoryData,
+  mapEventSeriesCategoryData,
   setEventCategoryKeys,
+  setEventSeriesCategoryKeys,
 } from "@/server/utils/categories";
 import {
   materializeEventSeries,
@@ -403,6 +405,10 @@ export const eventRouter = router({
         });
       }
 
+      await setEventSeriesCategoryKeys(ctx.db, series.id, validCategories, {
+        activeOnly: true,
+      });
+
       let resolvedCoverImageUrl = input.coverImageUrl ?? null;
       if (resolvedCoverImageUrl) {
         try {
@@ -470,6 +476,11 @@ export const eventRouter = router({
           venue: true,
           organizer: true,
           createdBy: true,
+          categoryLinks: {
+            with: {
+              category: true,
+            },
+          },
         },
       });
 
@@ -482,7 +493,7 @@ export const eventRouter = router({
 
       await assertCanManageSeries(ctx, series);
 
-      return series;
+      return mapEventSeriesCategoryData(series);
     }),
 
   updateEventSeries: protectedProcedure
@@ -599,6 +610,10 @@ export const eventRouter = router({
           message: "Failed to update recurring event series",
         });
       }
+
+      await setEventSeriesCategoryKeys(ctx.db, input.seriesId, validCategories, {
+        activeOnly: true,
+      });
 
       if (input.coverImageUrl) {
         try {
