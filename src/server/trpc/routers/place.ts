@@ -64,6 +64,63 @@ export const placeRouter = router({
       return results.map(mapPlaceCategoryData);
     }),
 
+  suggestEventTitles: protectedProcedure
+    .input(
+      z.object({
+        venueId: z.string().uuid(),
+        query: z.string().trim().optional().default(""),
+        limit: z.number().min(1).max(20).default(8),
+      })
+    )
+    .query(async ({ ctx, input }) => {
+      const user = await ctx.db.query.users.findFirst({
+        where: eq(users.id, ctx.auth.userId),
+      });
+      const isAdmin = user?.role === "admin";
+
+      if (!isAdmin) {
+        const isMember = await ctx.db.query.placeMembers.findFirst({
+          where: and(
+            eq(placeMembers.userId, ctx.auth.userId),
+            eq(placeMembers.placeId, input.venueId)
+          ),
+        });
+
+        if (!isMember) {
+          return [];
+        }
+      }
+
+      const titleQuery = input.query.trim();
+      const titleCondition = titleQuery
+        ? ilike(events.title, `%${titleQuery}%`)
+        : undefined;
+
+      const eventRows = await ctx.db.query.events.findMany({
+        where: titleCondition
+          ? and(eq(events.venueId, input.venueId), titleCondition)
+          : eq(events.venueId, input.venueId),
+        columns: {
+          title: true,
+        },
+        orderBy: [desc(events.startAt)],
+        limit: 100,
+      });
+
+      const seen = new Set<string>();
+      const suggestions: string[] = [];
+
+      for (const row of eventRows) {
+        const normalized = row.title.trim().toLowerCase();
+        if (!normalized || seen.has(normalized)) continue;
+        seen.add(normalized);
+        suggestions.push(row.title.trim());
+        if (suggestions.length >= input.limit) break;
+      }
+
+      return suggestions;
+    }),
+
   createPlace: protectedProcedure
     .input(
       z.object({

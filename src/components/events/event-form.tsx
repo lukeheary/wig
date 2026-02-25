@@ -86,6 +86,7 @@ export function EventForm({
   const [deferredCoverImageFile, setDeferredCoverImageFile] =
     useState<File | null>(null);
   const [isSubmittingImage, setIsSubmittingImage] = useState(false);
+  const [showTitleSuggestions, setShowTitleSuggestions] = useState(false);
 
   const getDatePart = (value: string) => (value ? value.split("T")[0] : "");
   const getTimePart = (value: string) => (value ? value.split("T")[1] : "");
@@ -151,6 +152,22 @@ export function EventForm({
       { id: venueId as string },
       { enabled: !!venueId }
     );
+
+  const titleQuery = formData.title.trim();
+  const { data: titleSuggestions = [], isFetching: isFetchingTitleSuggestions } =
+    trpc.place.suggestEventTitles.useQuery(
+      {
+        venueId: selectedVenue?.id || "",
+        query: titleQuery,
+        limit: 8,
+      },
+      {
+        enabled: Boolean(selectedVenue?.id && titleQuery.length > 0),
+      }
+    );
+  const visibleTitleSuggestions = titleSuggestions.filter(
+    (suggestion) => suggestion.toLowerCase() !== titleQuery.toLowerCase()
+  );
 
   useEffect(() => {
     if (venue) {
@@ -413,6 +430,7 @@ export function EventForm({
 
   const handleVenueSelect = (nextVenue: VenueData | null) => {
     setSelectedVenue(nextVenue);
+    setShowTitleSuggestions(false);
     if (nextVenue?.categories && nextVenue.categories.length > 0) {
       setFormData((prev) => ({
         ...prev,
@@ -582,15 +600,54 @@ export function EventForm({
               <Label htmlFor="title">
                 Event Title <span className="text-destructive">*</span>
               </Label>
-              <Input
-                id="title"
-                value={formData.title}
-                onChange={(e) =>
-                  setFormData({ ...formData, title: e.target.value })
-                }
-                placeholder="Summer Music Festival"
-                required
-              />
+              <div className="relative">
+                <Input
+                  id="title"
+                  value={formData.title}
+                  onFocus={() => setShowTitleSuggestions(true)}
+                  onBlur={() => {
+                    setTimeout(() => setShowTitleSuggestions(false), 120);
+                  }}
+                  onChange={(e) =>
+                    setFormData({ ...formData, title: e.target.value })
+                  }
+                  placeholder="Summer Music Festival"
+                  autoComplete="off"
+                  required
+                />
+                {showTitleSuggestions && selectedVenue?.id && titleQuery.length > 0 && (
+                  <div className="absolute z-20 mt-1 max-h-64 w-full overflow-auto rounded-md border bg-popover p-1 shadow-md">
+                    {isFetchingTitleSuggestions ? (
+                      <div className="flex items-center gap-2 px-2 py-2 text-xs text-muted-foreground">
+                        <Loader2 className="h-3.5 w-3.5 animate-spin" />
+                        Looking up previous event names...
+                      </div>
+                    ) : visibleTitleSuggestions.length > 0 ? (
+                      visibleTitleSuggestions.map((suggestion) => (
+                        <button
+                          key={suggestion}
+                          type="button"
+                          className="w-full rounded-sm px-2 py-1.5 text-left text-sm hover:bg-accent hover:text-accent-foreground"
+                          onMouseDown={(e) => e.preventDefault()}
+                          onClick={() => {
+                            setFormData((prev) => ({
+                              ...prev,
+                              title: suggestion,
+                            }));
+                            setShowTitleSuggestions(false);
+                          }}
+                        >
+                          {suggestion}
+                        </button>
+                      ))
+                    ) : (
+                      <div className="px-2 py-2 text-xs text-muted-foreground">
+                        No previous event names match this search.
+                      </div>
+                    )}
+                  </div>
+                )}
+              </div>
             </div>
 
             <div className="space-y-2">

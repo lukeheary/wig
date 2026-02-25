@@ -666,6 +666,10 @@ function mapPoshApiEvent(
     null;
   const coverImageUrl = cleanPoshImageUrl(imageCandidate);
 
+  const eventUrlFromObject = new Set<string>();
+  collectEventUrlsFromObject(raw, eventUrlFromObject, new WeakSet<object>(), 0);
+  const discoveredEventUrl = Array.from(eventUrlFromObject)[0] ?? null;
+
   const eventUrl =
     normalizePoshEventUrl(
       pickStringFromPaths(raw, [
@@ -673,11 +677,34 @@ function mapPoshApiEvent(
         "event_url",
         "eventUrl",
         "canonical_url",
+        "canonicalUrl",
+        "share_url",
+        "shareUrl",
+        "ticket_url",
+        "ticketUrl",
+        "link",
+        "href",
+        ["event", "url"],
+        ["event", "event_url"],
+        ["links", "canonical"],
+        ["links", "self"],
       ])
-    ) || null;
+    ) ||
+    normalizePoshEventUrl(discoveredEventUrl) ||
+    null;
 
   const slug =
-    pickStringFromPaths(raw, ["slug", "event_slug", "eventSlug"]) || null;
+    pickStringFromPaths(raw, [
+      "slug",
+      "event_slug",
+      "eventSlug",
+      "url_slug",
+      "urlSlug",
+      ["event", "slug"],
+      ["event", "eventSlug"],
+    ]) ||
+    (eventUrl ? extractSlugFromUrl(eventUrl, "e") : null) ||
+    null;
 
   const externalIdRaw =
     pickStringFromPaths(raw, ["id", "event_id", "uuid"]) ||
