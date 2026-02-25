@@ -1,12 +1,17 @@
 import { and, eq, inArray } from "drizzle-orm";
 import { eventSeries, events } from "@/server/db/schema";
-import { setEventCategoryKeys } from "@/server/utils/categories";
+import {
+  mapEventSeriesCategoryData,
+  setEventCategoryKeys,
+} from "@/server/utils/categories";
 
 const MS_PER_DAY = 24 * 60 * 60 * 1000;
 const DEFAULT_LOOKAHEAD_DAYS = 30;
 const timeZoneFormatterCache = new Map<string, Intl.DateTimeFormat>();
 
-type EventSeriesRow = typeof eventSeries.$inferSelect;
+type EventSeriesRow = typeof eventSeries.$inferSelect & {
+  categoryLinks?: any[];
+};
 
 interface MaterializeOptions {
   seriesIds?: string[];
@@ -680,8 +685,7 @@ function getSeriesDurationMinutes(series: EventSeriesRow) {
 }
 
 function getSeriesCategoryKeys(series: EventSeriesRow) {
-  if (!Array.isArray(series.categories)) return [];
-  return series.categories.filter((value): value is string => typeof value === "string");
+  return mapEventSeriesCategoryData(series).categories;
 }
 
 export async function materializeEventSeries(
@@ -701,6 +705,13 @@ export async function materializeEventSeries(
 
   const activeSeries = await db.query.eventSeries.findMany({
     where: and(...conditions),
+    with: {
+      categoryLinks: {
+        with: {
+          category: true,
+        },
+      },
+    },
   });
 
   let createdEvents = 0;

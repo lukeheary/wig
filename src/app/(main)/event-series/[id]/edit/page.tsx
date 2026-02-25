@@ -114,8 +114,9 @@ export default function EditEventSeriesPage() {
         ? new Date(startAt.getTime() + series.durationMinutes * 60 * 1000)
         : null;
 
-    const categories = Array.isArray(series.categories)
-      ? series.categories.filter(
+    const { categories: rawCategories } = series as { categories?: unknown };
+    const categories = Array.isArray(rawCategories)
+      ? rawCategories.filter(
           (value): value is string => typeof value === "string"
         )
       : [];

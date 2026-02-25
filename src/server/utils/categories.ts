@@ -2,6 +2,7 @@ import { and, asc, eq, inArray } from "drizzle-orm";
 import {
   categories,
   eventCategories,
+  eventSeriesCategories,
   placeCategories,
 } from "@/server/db/schema";
 
@@ -156,6 +157,40 @@ export async function setEventCategoryKeys(
   return validKeys;
 }
 
+export async function setEventSeriesCategoryKeys(
+  db: any,
+  seriesId: string,
+  categoryKeys: string[],
+  options: { activeOnly?: boolean } = {}
+) {
+  const validKeys = await filterExistingCategoryKeys(db, categoryKeys, options);
+
+  await db
+    .delete(eventSeriesCategories)
+    .where(eq(eventSeriesCategories.seriesId, seriesId));
+
+  if (validKeys.length > 0) {
+    const categoryRows = await db
+      .select({ id: categories.id })
+      .from(categories)
+      .where(inArray(categories.key, validKeys));
+
+    if (categoryRows.length > 0) {
+      await db
+        .insert(eventSeriesCategories)
+        .values(
+          categoryRows.map((row: { id: string }) => ({
+            seriesId,
+            categoryId: row.id,
+          }))
+        )
+        .onConflictDoNothing();
+    }
+  }
+
+  return validKeys;
+}
+
 export function mapEventCategoryData<T extends { categoryLinks?: any[] }>(event: T) {
   const categoryDetails = (event.categoryLinks ?? [])
     .map((link) => link?.category)
@@ -171,6 +206,28 @@ export function mapEventCategoryData<T extends { categoryLinks?: any[] }>(event:
 
   return {
     ...event,
+    categories: categoryDetails.map((category) => category.key),
+    categoryLabels,
+  };
+}
+
+export function mapEventSeriesCategoryData<T extends { categoryLinks?: any[] }>(
+  series: T
+) {
+  const categoryDetails = (series.categoryLinks ?? [])
+    .map((link) => link?.category)
+    .filter(Boolean)
+    .sort((a, b) => {
+      if (a.sortOrder !== b.sortOrder) return a.sortOrder - b.sortOrder;
+      return a.label.localeCompare(b.label);
+    });
+
+  const categoryLabels = Object.fromEntries(
+    categoryDetails.map((category) => [category.key, category.label])
+  );
+
+  return {
+    ...series,
     categories: categoryDetails.map((category) => category.key),
     categoryLabels,
   };
