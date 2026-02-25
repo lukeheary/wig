@@ -1,4 +1,5 @@
 import { NextRequest, NextResponse } from "next/server";
+import { inferCategoriesFromTicketmaster } from "@/server/utils/inferCategories";
 
 const TICKETMASTER_BASE_URL = "https://app.ticketmaster.com/discovery/v2";
 
@@ -79,9 +80,7 @@ function buildTicketmasterUrl(
 
 function pickBestImage(images?: Array<{ url?: string; width?: number }>) {
   if (!images || images.length === 0) return null;
-  const sorted = [...images].sort(
-    (a, b) => (b.width ?? 0) - (a.width ?? 0)
-  );
+  const sorted = [...images].sort((a, b) => (b.width ?? 0) - (a.width ?? 0));
   return sorted[0]?.url ?? null;
 }
 
@@ -105,32 +104,11 @@ function buildDateTime(value?: {
 }
 
 function mapCategories(event: TicketmasterEvent) {
-  const categories = new Set<string>();
-  const classifications = event.classifications ?? [];
-
-  classifications.forEach((classification) => {
-    const segment = classification.segment?.name?.toLowerCase();
-    const genre = classification.genre?.name?.toLowerCase();
-
-    if (segment?.includes("music")) categories.add("concerts");
-    if (segment?.includes("comedy") || genre?.includes("comedy")) {
-      categories.add("comedy");
-    }
-    if (
-      segment?.includes("arts") ||
-      segment?.includes("theatre") ||
-      segment?.includes("theater")
-    ) {
-      categories.add("theater");
-    }
-    if (segment?.includes("nightlife") || genre?.includes("dance")) {
-      categories.add("clubs");
-    }
-  });
-
-  if (categories.size === 0) categories.add("concerts");
-
-  return Array.from(categories);
+  return inferCategoriesFromTicketmaster(
+    event.classifications ?? [],
+    event.name ?? "",
+    event.info ?? event.pleaseNote ?? null
+  );
 }
 
 export async function POST(request: NextRequest) {
@@ -202,10 +180,10 @@ export async function POST(request: NextRequest) {
 
     const normalizedName = normalizedVenueName.toLowerCase();
     const matchedVenue =
-      venues.find(
-        (venue) => venue.name?.toLowerCase() === normalizedName
+      venues.find((venue) => venue.name?.toLowerCase() === normalizedName) ||
+      venues.find((venue) =>
+        venue.name?.toLowerCase().includes(normalizedName)
       ) ||
-      venues.find((venue) => venue.name?.toLowerCase().includes(normalizedName)) ||
       venues[0];
 
     if (!matchedVenue?.id) {

@@ -1,9 +1,11 @@
 import { NextRequest, NextResponse } from "next/server";
 import * as cheerio from "cheerio";
+import { inferCategoriesFromText } from "@/server/utils/inferCategories";
 
 const POSH_EVENT_URL_REGEX = /https?:\/\/posh\.vip\/e\/[A-Za-z0-9_-]+/g;
 const POSH_EVENT_PATH_REGEX = /["'](\/e\/[A-Za-z0-9_-]+)(?:[?#][^"']*)?["']/g;
 const POSH_GROUP_API_BASE = "https://posh.vip/api/web/v2/util/group_url/";
+const timeZoneFormatterCache = new Map<string, Intl.DateTimeFormat>();
 
 interface PoshJsonLd {
   "@type": string;
@@ -340,25 +342,105 @@ function toUtcIsoFromZonedParts(
   timeZone: string
 ): string | null {
   try {
-    const utcDate = new Date(
-      Date.UTC(
-        parts.year,
-        parts.month - 1,
-        parts.day,
-        parts.hour,
-        parts.minute,
-        parts.second
-      )
+    const naiveUtcMs = Date.UTC(
+      parts.year,
+      parts.month - 1,
+      parts.day,
+      parts.hour,
+      parts.minute,
+      parts.second
     );
-    if (Number.isNaN(utcDate.getTime())) return null;
-    const tzDate = new Date(utcDate.toLocaleString("en-US", { timeZone }));
-    if (Number.isNaN(tzDate.getTime())) return null;
-    const offsetMs = utcDate.getTime() - tzDate.getTime();
-    const corrected = new Date(utcDate.getTime() + offsetMs);
-    return Number.isNaN(corrected.getTime()) ? null : corrected.toISOString();
+    if (Number.isNaN(naiveUtcMs)) return null;
+
+    let candidateUtcMs = naiveUtcMs;
+    for (let i = 0; i < 4; i += 1) {
+      const offsetMs = getTimeZoneOffsetMs(new Date(candidateUtcMs), timeZone);
+      if (offsetMs == null) break;
+
+      const nextCandidateUtcMs = naiveUtcMs - offsetMs;
+      if (nextCandidateUtcMs === candidateUtcMs) break;
+      candidateUtcMs = nextCandidateUtcMs;
+    }
+
+    const resolved = new Date(candidateUtcMs);
+    return Number.isNaN(resolved.getTime()) ? null : resolved.toISOString();
   } catch {
     return null;
   }
+}
+
+function getTimeZoneDateTimeParts(
+  date: Date,
+  timeZone: string
+): {
+  year: number;
+  month: number;
+  day: number;
+  hour: number;
+  minute: number;
+  second: number;
+} | null {
+  try {
+    let formatter = timeZoneFormatterCache.get(timeZone);
+    if (!formatter) {
+      formatter = new Intl.DateTimeFormat("en-US", {
+        timeZone,
+        hour12: false,
+        year: "numeric",
+        month: "2-digit",
+        day: "2-digit",
+        hour: "2-digit",
+        minute: "2-digit",
+        second: "2-digit",
+      });
+      timeZoneFormatterCache.set(timeZone, formatter);
+    }
+
+    const parts = formatter.formatToParts(date);
+    const values = Object.fromEntries(
+      parts
+        .filter((part) => part.type !== "literal")
+        .map((part) => [part.type, part.value])
+    );
+
+    const year = Number(values.year);
+    const month = Number(values.month);
+    const day = Number(values.day);
+    const hour = Number(values.hour);
+    const minute = Number(values.minute);
+    const second = Number(values.second);
+
+    if (
+      Number.isNaN(year) ||
+      Number.isNaN(month) ||
+      Number.isNaN(day) ||
+      Number.isNaN(hour) ||
+      Number.isNaN(minute) ||
+      Number.isNaN(second)
+    ) {
+      return null;
+    }
+
+    return { year, month, day, hour, minute, second };
+  } catch {
+    return null;
+  }
+}
+
+function getTimeZoneOffsetMs(date: Date, timeZone: string): number | null {
+  const parts = getTimeZoneDateTimeParts(date, timeZone);
+  if (!parts) return null;
+
+  const asUtc = Date.UTC(
+    parts.year,
+    parts.month - 1,
+    parts.day,
+    parts.hour,
+    parts.minute,
+    parts.second
+  );
+
+  return asUtc - date.getTime();
 }
 
 function normalizeTimeZone(raw: string): string {
@@ -808,7 +890,7 @@ function mapPoshApiEvent(
     address,
     city,
     state,
-    categories: ["nightlife"],
+    categories: inferCategoriesFromText(title, description || null),
     visibility: "public" as const,
     source: "posh" as const,
     eventStatus,
@@ -996,23 +1078,27 @@ function extractEventFromJsonLd(jsonLd: PoshJsonLd, eventUrl: string) {
 
   const fullAddress = jsonLd.location?.address?.streetAddress || "";
   const { address, city, state } = parseAddress(fullAddress);
+  const timeZone = timeZoneFromState(state);
 
   // Extract external ID from the event URL slug
   const urlSlug = eventUrl.replace(/\/$/, "").split("/").pop();
 
+  const title = jsonLd.name || "Untitled Event";
+  const description = jsonLd.description || null;
+
   return {
-    title: jsonLd.name || "Untitled Event",
-    description: jsonLd.description || null,
+    title,
+    description,
     coverImageUrl,
     eventUrl,
     externalId: urlSlug ? `posh-${urlSlug}` : null,
-    startAt: jsonLd.startDate || null,
-    endAt: jsonLd.endDate || null,
+    startAt: parseDateValueWithTimeZone(jsonLd.startDate, timeZone, true),
+    endAt: parseDateValueWithTimeZone(jsonLd.endDate, timeZone, true),
     venueName: jsonLd.location?.name || "",
     address,
     city,
     state,
-    categories: ["nightlife"],
+    categories: inferCategoriesFromText(title, description),
     visibility: "public" as const,
     source: "posh" as const,
     eventStatus: "EventScheduled",

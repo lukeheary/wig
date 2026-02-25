@@ -128,14 +128,12 @@ async function main() {
   // CATEGORIES
   // ---------------------------------------------------------------------------
   const defaultCategories = [
-    { key: "bars", label: "Bars", sortOrder: 10 },
-    { key: "clubs", label: "Clubs", sortOrder: 20 },
-    { key: "comedy", label: "Comedy", sortOrder: 30 },
-    { key: "concerts", label: "Concerts", sortOrder: 40 },
-    { key: "lgbt", label: "LGBT", sortOrder: 50 },
-    { key: "social", label: "Social", sortOrder: 60 },
-    { key: "theater", label: "Theater", sortOrder: 70 },
-    { key: "nightlife", label: "Nightlife", sortOrder: 80 },
+    { key: "clubs", label: "Clubs", sortOrder: 10 },
+    { key: "bars", label: "Bars", sortOrder: 20 },
+    { key: "concerts", label: "Concerts", sortOrder: 30 },
+    { key: "social", label: "Social", sortOrder: 40 },
+    { key: "lgbtq", label: "LGBTQ+", sortOrder: 50 },
+    { key: "comedy", label: "Comedy", sortOrder: 60 },
   ];
 
   await db.insert(categories).values(defaultCategories).onConflictDoNothing();
@@ -183,7 +181,7 @@ async function main() {
       state: "MA",
       website: null,
       instagram: null,
-      categoryKeys: ["bars", "lgbt"],
+      categoryKeys: ["bars", "lgbtq"],
       hours: {
         monday: { open: "17:00", close: "01:00", closed: true },
         tuesday: { open: "17:00", close: "01:00", closed: false },
@@ -231,7 +229,7 @@ async function main() {
       state: "NY",
       website: null,
       instagram: null,
-      categoryKeys: ["clubs", "lgbt"],
+      categoryKeys: ["clubs", "lgbtq"],
       hours: {
         monday: { open: "20:00", close: "04:00", closed: true },
         tuesday: { open: "20:00", close: "04:00", closed: true },
@@ -461,7 +459,7 @@ async function main() {
       address: "14 Massachusetts Ave, Cambridge, MA 02139",
       city: "Cambridge",
       state: "MA",
-      categoryKeys: ["bars", "lgbt"],
+      categoryKeys: ["bars", "lgbtq"],
       visibility: "public" as const,
     },
 
@@ -529,7 +527,7 @@ async function main() {
       address: "14 Massachusetts Ave, Cambridge, MA 02139",
       city: "Cambridge",
       state: "MA",
-      categoryKeys: ["clubs", "lgbt"],
+      categoryKeys: ["clubs", "lgbtq"],
       visibility: "public" as const,
     },
     {
@@ -595,7 +593,7 @@ async function main() {
       address: "14 Massachusetts Ave, Cambridge, MA 02139",
       city: "Cambridge",
       state: "MA",
-      categoryKeys: ["bars", "lgbt"],
+      categoryKeys: ["bars", "lgbtq"],
       visibility: "public" as const,
     },
     {
@@ -627,7 +625,7 @@ async function main() {
       address: "98 Meserole Ave, Brooklyn, NY 11222",
       city: "Brooklyn",
       state: "NY",
-      categoryKeys: ["clubs", "lgbt"],
+      categoryKeys: ["clubs", "lgbtq"],
       visibility: "public" as const,
     },
 
@@ -663,7 +661,7 @@ async function main() {
       address: "98 Meserole Ave, Brooklyn, NY 11222",
       city: "Brooklyn",
       state: "NY",
-      categoryKeys: ["clubs", "lgbt"],
+      categoryKeys: ["clubs", "lgbtq"],
       visibility: "public" as const,
     },
 

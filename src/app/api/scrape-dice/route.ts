@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from "next/server";
 import * as cheerio from "cheerio";
+import { inferCategoriesFromText } from "@/server/utils/inferCategories";
 
 function parseAddress(address: string): { city: string; state: string } {
   const parts = address.split(",").map((s) => s.trim());
@@ -111,7 +112,10 @@ export async function POST(request: NextRequest) {
         address: venueData.address,
         city,
         state,
-        categories: ["concerts"],
+        categories: inferCategoriesFromText(
+          event.name || "Untitled Event",
+          event.description || null
+        ),
         visibility: "public" as const,
         source: "dice" as const,
         eventStatus: event.eventStatus,

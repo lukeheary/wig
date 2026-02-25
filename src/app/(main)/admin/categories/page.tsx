@@ -7,7 +7,7 @@ import { Card, CardContent } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
 import { Button } from "@/components/ui/button";
 import { useToast } from "@/hooks/use-toast";
-import { Loader2, Plus } from "lucide-react";
+import { Loader2, Plus, Trash2 } from "lucide-react";
 
 type CategoryDraft = {
   key: string;
@@ -68,6 +68,23 @@ export default function AdminCategoriesPage() {
         sortOrder: (categories?.length || 0) * 10 + 10,
         isActive: true,
       });
+    },
+    onError: (error) => {
+      toast({
+        title: "Error",
+        description: error.message,
+        variant: "destructive",
+      });
+    },
+  });
+
+  const deleteCategory = trpc.admin.deleteCategory.useMutation({
+    onSuccess: (deleted) => {
+      toast({ title: "Category deleted" });
+      utils.admin.listCategories.setData(undefined, (prev) =>
+        prev?.filter((category) => category.id !== deleted.id)
+      );
+      utils.category.listActive.invalidate();
     },
     onError: (error) => {
       toast({
@@ -330,7 +347,7 @@ export default function AdminCategoriesPage() {
 
             return (
               <Card key={category.id}>
-                <CardContent className="grid gap-3 p-4 md:grid-cols-[1fr_1fr_120px_120px_auto]">
+                <CardContent className="grid gap-3 p-4 md:grid-cols-[1fr_1fr_120px_120px_auto_auto]">
                   <Input
                     value={draft.key}
                     onChange={(e) =>
@@ -390,6 +407,17 @@ export default function AdminCategoriesPage() {
                     }
                   >
                     Save
+                  </Button>
+                  <Button
+                    variant="destructive"
+                    size="icon"
+                    onClick={() => {
+                      if (!confirm(`Delete "${category.label}"? This cannot be undone.`)) return;
+                      deleteCategory.mutate({ id: category.id });
+                    }}
+                    disabled={deleteCategory.isPending}
+                  >
+                    <Trash2 className="h-4 w-4" />
                   </Button>
                 </CardContent>
               </Card>

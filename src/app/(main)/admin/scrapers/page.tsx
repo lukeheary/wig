@@ -16,6 +16,7 @@ import {
   Play,
   Search,
   X,
+  RefreshCw,
 } from "lucide-react";
 import { trpc } from "@/lib/trpc";
 import { useToast } from "@/hooks/use-toast";
@@ -23,6 +24,8 @@ import { BackButtonHeader } from "@/components/shared/back-button-header";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Badge } from "@/components/ui/badge";
+import { Switch } from "@/components/ui/switch";
+import { Label } from "@/components/ui/label";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import {
   Select,
@@ -243,20 +246,41 @@ function VenueDropdown({
   );
 }
 
+interface CategoryOption {
+  id: string;
+  key: string;
+  label: string;
+}
+
 function EventCard({
   event,
   onUpdate,
   showVenueSelector,
   selectedVenue,
   onSelectVenue,
+  categoryOptions,
 }: {
   event: EditableScrapedEvent;
   onUpdate: (patch: Partial<EditableScrapedEvent>) => void;
   showVenueSelector: boolean;
   selectedVenue: SelectedVenue | null;
   onSelectVenue: (venue: SelectedVenue | null) => void;
+  categoryOptions: CategoryOption[];
 }) {
   const [showFullDesc, setShowFullDesc] = useState(false);
+  const [catPickerOpen, setCatPickerOpen] = useState(false);
+
+  const selectedKeys = new Set(event.categories);
+  const availableToAdd = categoryOptions.filter(
+    (c) => !selectedKeys.has(c.key)
+  );
+
+  const toggleCategory = (key: string) => {
+    const next = selectedKeys.has(key)
+      ? event.categories.filter((k) => k !== key)
+      : [...event.categories, key];
+    onUpdate({ categories: next });
+  };
 
   return (
     <Card>
@@ -301,11 +325,15 @@ function EventCard({
 
             <div className="grid gap-2 sm:grid-cols-2">
               <div className="space-y-1">
-                <p className="text-xs font-medium text-muted-foreground">Start</p>
+                <p className="text-xs font-medium text-muted-foreground">
+                  Start
+                </p>
                 <Input
                   type="datetime-local"
                   value={event.editableStartAt}
-                  onChange={(e) => onUpdate({ editableStartAt: e.target.value })}
+                  onChange={(e) =>
+                    onUpdate({ editableStartAt: e.target.value })
+                  }
                 />
               </div>
               <div className="space-y-1">
@@ -338,12 +366,53 @@ function EventCard({
               </div>
             )}
 
-            <div className="flex flex-wrap gap-1.5">
-              {event.categories.map((cat) => (
-                <Badge key={cat} variant="secondary" className="text-xs">
-                  {cat}
-                </Badge>
-              ))}
+            <div className="flex flex-wrap items-center gap-1.5">
+              {event.categories.map((key) => {
+                const label =
+                  categoryOptions.find((c) => c.key === key)?.label ?? key;
+                return (
+                  <Badge
+                    key={key}
+                    variant="secondary"
+                    className="cursor-pointer gap-1 pr-1 text-xs hover:bg-destructive/20"
+                    onClick={() => toggleCategory(key)}
+                  >
+                    {label}
+                    <X className="h-3 w-3" />
+                  </Badge>
+                );
+              })}
+              <Popover open={catPickerOpen} onOpenChange={setCatPickerOpen}>
+                <PopoverTrigger asChild>
+                  <Badge
+                    variant="outline"
+                    className="cursor-pointer gap-1 text-xs hover:bg-accent"
+                  >
+                    + Add
+                  </Badge>
+                </PopoverTrigger>
+                <PopoverContent className="w-40 p-1" align="start">
+                  {availableToAdd.length === 0 ? (
+                    <p className="px-2 py-1.5 text-xs text-muted-foreground">
+                      All added
+                    </p>
+                  ) : (
+                    availableToAdd.map((c) => (
+                      <button
+                        key={c.key}
+                        type="button"
+                        className="w-full rounded-sm px-2 py-1.5 text-left text-sm hover:bg-accent"
+                        onClick={() => {
+                          toggleCategory(c.key);
+                          setCatPickerOpen(false);
+                        }}
+                      >
+                        {c.label}
+                      </button>
+                    ))
+                  )}
+                </PopoverContent>
+              </Popover>
               <Badge variant="outline" className="text-xs">
                 {event.source}
               </Badge>
@@ -371,9 +440,12 @@ export default function AdminScrapersPage() {
   const [isScraping, setIsScraping] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [result, setResult] = useState<ScrapeResult | null>(null);
-  const [editableEvents, setEditableEvents] = useState<EditableScrapedEvent[]>([]);
+  const [editableEvents, setEditableEvents] = useState<EditableScrapedEvent[]>(
+    []
+  );
   const [defaultVenue, setDefaultVenue] = useState<SelectedVenue | null>(null);
   const [importedCount, setImportedCount] = useState<number | null>(null);
+  const [overrideExisting, setOverrideExisting] = useState(false);
 
   const resetScrapeSession = () => {
     setError(null);
@@ -381,6 +453,7 @@ export default function AdminScrapersPage() {
     setEditableEvents([]);
     setDefaultVenue(null);
     setImportedCount(null);
+    setOverrideExisting(false);
   };
 
   const queryInput = useMemo(
@@ -388,9 +461,10 @@ export default function AdminScrapersPage() {
     [search]
   );
 
-  const { data: scraperRows = [], isLoading } = trpc.admin.listScrapers.useQuery(
-    queryInput
-  );
+  const { data: scraperRows = [], isLoading } =
+    trpc.admin.listScrapers.useQuery(queryInput);
+
+  const { data: categoryOptions = [] } = trpc.category.listActive.useQuery();
 
   const batchCreate = trpc.event.batchCreateEvents.useMutation();
 
@@ -496,10 +570,14 @@ export default function AdminScrapersPage() {
     const events = editableEvents.map((event) => {
       const startAt = new Date(event.editableStartAt || event.startAt);
       if (Number.isNaN(startAt.getTime())) {
-        throw new Error(`Event "${event.title}" has an invalid start date/time.`);
+        throw new Error(
+          `Event "${event.title}" has an invalid start date/time.`
+        );
       }
 
-      const endAt = event.editableEndAt ? new Date(event.editableEndAt) : undefined;
+      const endAt = event.editableEndAt
+        ? new Date(event.editableEndAt)
+        : undefined;
       if (endAt && Number.isNaN(endAt.getTime())) {
         throw new Error(`Event "${event.title}" has an invalid end date/time.`);
       }
@@ -518,25 +596,28 @@ export default function AdminScrapersPage() {
         state: event.state,
         venueId:
           selectedRow.place.type === "organizer"
-            ? event.venueId ?? defaultVenue?.id ?? undefined
+            ? (event.venueId ?? defaultVenue?.id ?? undefined)
             : undefined,
-        // Scrapers no longer auto-assign categories.
-        categories: [],
+        categories: event.categories,
         visibility: event.visibility as "public" | "private",
       };
     });
 
     try {
       const data = await batchCreate.mutateAsync({
-        venueId: selectedRow.place.type === "venue" ? selectedRow.placeId : undefined,
+        venueId:
+          selectedRow.place.type === "venue" ? selectedRow.placeId : undefined,
         organizerId:
-          selectedRow.place.type === "organizer" ? selectedRow.placeId : undefined,
+          selectedRow.place.type === "organizer"
+            ? selectedRow.placeId
+            : undefined,
+        overrideExisting,
         events,
       });
       setImportedCount(data.created);
       toast({
-        title: "Events imported",
-        description: `${data.created} events added to WIG (${selectedRow.place.name})`,
+        title: overrideExisting ? "Events updated" : "Events imported",
+        description: `${data.created} events ${overrideExisting ? "updated in" : "added to"} WIG (${selectedRow.place.name})`,
       });
     } catch (err) {
       toast({
@@ -549,11 +630,7 @@ export default function AdminScrapersPage() {
 
   return (
     <div className="space-y-6">
-      <BackButtonHeader
-        backHref="/admin"
-        title="Scrapers"
-        subtitle="Run any configured scraper from one page"
-      />
+      <BackButtonHeader backHref="/admin" title="Scrapers" />
 
       <Card>
         <CardContent className="space-y-3 p-4">
@@ -608,7 +685,9 @@ export default function AdminScrapersPage() {
                 <div className="space-y-3 rounded-md border p-3 text-sm">
                   <div className="flex flex-wrap items-center gap-2">
                     <Building className="h-4 w-4 text-muted-foreground" />
-                    <span className="font-medium">{selectedRow.place.name}</span>
+                    <span className="font-medium">
+                      {selectedRow.place.name}
+                    </span>
                     <Badge variant="secondary">
                       {SCRAPER_LABELS[selectedRow.scraper]}
                     </Badge>
@@ -636,7 +715,9 @@ export default function AdminScrapersPage() {
 
       {error && (
         <Card className="border-destructive">
-          <CardContent className="p-4 text-sm text-destructive">{error}</CardContent>
+          <CardContent className="p-4 text-sm text-destructive">
+            {error}
+          </CardContent>
         </Card>
       )}
 
@@ -696,7 +777,8 @@ export default function AdminScrapersPage() {
                 <div className="space-y-1 text-xs">
                   {result.errors.map((issue, idx) => (
                     <p key={`${issue.url}-${idx}`}>
-                      <span className="font-mono">{issue.url}</span>: {issue.error}
+                      <span className="font-mono">{issue.url}</span>:{" "}
+                      {issue.error}
                     </p>
                   ))}
                 </div>
@@ -723,14 +805,32 @@ export default function AdminScrapersPage() {
                   />
                 </div>
               )}
-              <div className="flex items-center justify-between border-t pt-4">
+              <div className="flex items-center gap-3 border-t pt-4">
+                <Switch
+                  id="override-existing"
+                  checked={overrideExisting}
+                  onCheckedChange={setOverrideExisting}
+                  disabled={batchCreate.isPending || importedCount !== null}
+                />
+                <Label
+                  htmlFor="override-existing"
+                  className="flex flex-col gap-0.5"
+                >
+                  <span className="text-sm font-medium">Override existing</span>
+                  <span className="text-xs text-muted-foreground">
+                    Update events that already exist instead of skipping them
+                  </span>
+                </Label>
+              </div>
+              <div className="flex items-center justify-between">
                 <p className="text-sm text-muted-foreground">
                   {editableEvents.length} events to import
                 </p>
                 {importedCount !== null ? (
                   <div className="flex items-center gap-2 text-sm font-medium text-green-600">
                     <CheckCircle2 className="h-4 w-4" />
-                    {importedCount} events imported
+                    {importedCount} events{" "}
+                    {overrideExisting ? "updated" : "imported"}
                   </div>
                 ) : (
                   <Button
@@ -740,10 +840,12 @@ export default function AdminScrapersPage() {
                   >
                     {batchCreate.isPending ? (
                       <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+                    ) : overrideExisting ? (
+                      <RefreshCw className="mr-2 h-4 w-4" />
                     ) : (
                       <Download className="mr-2 h-4 w-4" />
                     )}
-                    Add All to WIG
+                    {overrideExisting ? "Update All in WIG" : "Add All to WIG"}
                   </Button>
                 )}
               </div>
@@ -757,6 +859,7 @@ export default function AdminScrapersPage() {
                 event={event}
                 showVenueSelector={selectedRow.place.type === "organizer"}
                 selectedVenue={event.linkedVenue ?? null}
+                categoryOptions={categoryOptions}
                 onSelectVenue={(venue) => {
                   setEditableEvents((prev) => {
                     const next = [...prev];

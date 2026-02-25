@@ -487,6 +487,25 @@ export const adminRouter = router({
       return updated;
     }),
 
+  deleteCategory: adminProcedure
+    .input(z.object({ id: z.string().uuid() }))
+    .mutation(async ({ ctx, input }) => {
+      const existing = await ctx.db.query.categories.findFirst({
+        where: eq(categories.id, input.id),
+      });
+
+      if (!existing) {
+        throw new TRPCError({
+          code: "NOT_FOUND",
+          message: "Category not found",
+        });
+      }
+
+      await ctx.db.delete(categories).where(eq(categories.id, input.id));
+
+      return { id: input.id };
+    }),
+
   // ============================================================================
   // USER SEARCH
   // ============================================================================

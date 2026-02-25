@@ -697,6 +697,7 @@ export const eventRouter = router({
       z.object({
         venueId: z.string().uuid().optional(),
         organizerId: z.string().uuid().optional(),
+        overrideExisting: z.boolean().default(false),
         events: z.array(
           z.object({
             title: z.string().min(1).max(255),
@@ -724,66 +725,6 @@ export const eventRouter = router({
         return { created: 0 };
       }
 
-      const eventsWithExternal = input.events.filter(
-        (event) => event.source && event.externalId
-      );
-
-      const existingKeys = new Set<string>();
-
-      if (eventsWithExternal.length > 0) {
-        const bySource = new Map<string, Set<string>>();
-
-        eventsWithExternal.forEach((event) => {
-          if (!event.source || !event.externalId) return;
-          const set = bySource.get(event.source) ?? new Set<string>();
-          set.add(event.externalId);
-          bySource.set(event.source, set);
-        });
-
-        for (const [source, ids] of bySource.entries()) {
-          const rows = await ctx.db.query.events.findMany({
-            where: and(
-              eq(events.source, source),
-              inArray(events.externalId, Array.from(ids))
-            ),
-            columns: {
-              source: true,
-              externalId: true,
-            },
-          });
-
-          rows.forEach((row) => {
-            if (row.source && row.externalId) {
-              existingKeys.add(`${row.source}::${row.externalId}`);
-            }
-          });
-        }
-      }
-
-      const seenKeys = new Set<string>();
-      const dedupedEvents = input.events.filter((event) => {
-        if (event.source && event.externalId) {
-          const key = `${event.source}::${event.externalId}`;
-          if (existingKeys.has(key)) return false;
-          if (seenKeys.has(key)) return false;
-          seenKeys.add(key);
-        }
-        return true;
-      });
-
-      if (dedupedEvents.length === 0) {
-        return { created: 0 };
-      }
-
-      const allCategoryKeys = Array.from(
-        new Set(dedupedEvents.flatMap((event) => event.categories || []))
-      );
-      const validBatchCategoryKeys = new Set(
-        await filterExistingCategoryKeys(ctx.db, allCategoryKeys, {
-          activeOnly: true,
-        })
-      );
-
       const toEventKey = (event: {
         source?: string | null;
         externalId?: string | null;
@@ -795,6 +736,70 @@ export const eventRouter = router({
         event.source && event.externalId
           ? `${event.source}::${event.externalId}`
           : `${event.title}::${event.startAt.toISOString()}::${event.city}::${event.state}`;
+
+      let dedupedEvents = input.events;
+
+      if (!input.overrideExisting) {
+        const eventsWithExternal = input.events.filter(
+          (event) => event.source && event.externalId
+        );
+
+        const existingKeys = new Set<string>();
+
+        if (eventsWithExternal.length > 0) {
+          const bySource = new Map<string, Set<string>>();
+
+          eventsWithExternal.forEach((event) => {
+            if (!event.source || !event.externalId) return;
+            const set = bySource.get(event.source) ?? new Set<string>();
+            set.add(event.externalId);
+            bySource.set(event.source, set);
+          });
+
+          for (const [source, ids] of bySource.entries()) {
+            const rows = await ctx.db.query.events.findMany({
+              where: and(
+                eq(events.source, source),
+                inArray(events.externalId, Array.from(ids))
+              ),
+              columns: {
+                source: true,
+                externalId: true,
+              },
+            });
+
+            rows.forEach((row) => {
+              if (row.source && row.externalId) {
+                existingKeys.add(`${row.source}::${row.externalId}`);
+              }
+            });
+          }
+        }
+
+        const seenKeys = new Set<string>();
+        dedupedEvents = input.events.filter((event) => {
+          if (event.source && event.externalId) {
+            const key = `${event.source}::${event.externalId}`;
+            if (existingKeys.has(key)) return false;
+            if (seenKeys.has(key)) return false;
+            seenKeys.add(key);
+          }
+          return true;
+        });
+
+        if (dedupedEvents.length === 0) {
+          return { created: 0 };
+        }
+      }
+
+      const allCategoryKeys = Array.from(
+        new Set(dedupedEvents.flatMap((event) => event.categories || []))
+      );
+      const validBatchCategoryKeys = new Set(
+        await filterExistingCategoryKeys(ctx.db, allCategoryKeys, {
+          activeOnly: true,
+        })
+      );
 
       const values = dedupedEvents.map((event) => {
         const categoryKeys = (event.categories || []).filter((key) =>
@@ -825,22 +830,44 @@ export const eventRouter = router({
         };
       });
 
-      // Insert events first to get IDs
-      const created = await ctx.db
+      // Insert (or upsert) events
+      const insertQuery = ctx.db
         .insert(events)
-        .values(values.map((value) => value.data) as any)
-        .onConflictDoNothing({
-          target: [events.source, events.externalId],
-        })
-        .returning();
+        .values(values.map((value) => value.data) as any);
+
+      const upserted = await (input.overrideExisting
+        ? insertQuery.onConflictDoUpdate({
+            target: [events.source, events.externalId],
+            set: {
+              title: sql`excluded.title`,
+              description: sql`excluded.description`,
+              coverImageUrl: sql`excluded.cover_image_url`,
+              eventUrl: sql`excluded.event_url`,
+              startAt: sql`excluded.start_at`,
+              endAt: sql`excluded.end_at`,
+              address: sql`excluded.address`,
+              city: sql`excluded.city`,
+              state: sql`excluded.state`,
+              updatedAt: sql`now()`,
+            },
+          })
+        : insertQuery.onConflictDoNothing({
+            target: [events.source, events.externalId],
+          })
+      ).returning();
 
       const categoryKeysByEventKey = new Map(
         values.map((value) => [value.eventKey, value.categoryKeys])
       );
 
-      if (created.length > 0) {
+      // Log activity and set categories for newly created events
+      const newlyCreated = input.overrideExisting
+        ? [] // don't re-log activity for updated rows
+        : upserted;
+
+      if (newlyCreated.length > 0) {
         await Promise.all(
-          created.map((row) =>
+          newlyCreated.map((row) =>
             logEventActivity({
               actorUserId: ctx.auth.userId,
               eventId: row.id,
@@ -852,9 +879,12 @@ export const eventRouter = router({
             })
           )
         );
+      }
 
+      // Set categories for all upserted rows (both new and overridden)
+      if (upserted.length > 0) {
         await Promise.all(
-          created.map(async (row) => {
+          upserted.map(async (row) => {
             const rowEventKey = toEventKey({
               source: row.source,
               externalId: row.externalId,
@@ -875,7 +905,7 @@ export const eventRouter = router({
       // Re-upload external cover images to S3 at events/{id}/coverImage.png
       const s3BucketHost = `${BUCKET_NAME}.s3`;
       await Promise.allSettled(
-        created.map(async (row) => {
+        upserted.map(async (row) => {
           if (!row.coverImageUrl || row.coverImageUrl.includes(s3BucketHost)) {
             return;
           }
@@ -895,7 +925,7 @@ export const eventRouter = router({
         })
       );
 
-      return { created: created.length };
+      return { created: upserted.length };
     }),
 
   listEventsByRange: protectedProcedure
