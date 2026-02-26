@@ -38,6 +38,7 @@ import {
   CalendarIcon,
   ChevronLeft,
   ChevronRight,
+  X,
   MapPin,
   Clock,
 } from "lucide-react";
@@ -118,6 +119,7 @@ function EventSkeletonGrid({ count = 8 }: { count?: number }) {
 function HomePageContent() {
   const { toast } = useToast();
   const [activeFilter, setActiveFilter] = useState<EventFilterTab>("all");
+  const [selectedCategories, setSelectedCategories] = useState<string[]>([]);
   const [isSticky, setIsSticky] = useState(false);
   const stickySentinelRef = useRef<HTMLDivElement>(null);
   const searchInputRef = useRef<HTMLInputElement>(null);
@@ -259,6 +261,14 @@ function HomePageContent() {
     searchInputRef.current?.blur();
   };
 
+  const toggleCategory = useCallback((categoryKey: string) => {
+    setSelectedCategories((prev) =>
+      prev.includes(categoryKey)
+        ? prev.filter((key) => key !== categoryKey)
+        : [...prev, categoryKey]
+    );
+  }, []);
+
   // Scroll to search and focus callback for navbar search button
   const scrollToSearchAndFocus = useCallback(() => {
     // Jump to top instantly
@@ -380,12 +390,32 @@ function HomePageContent() {
     return nextEvents;
   }, [recentEvents, referenceCoords, cityDistanceMap]);
 
+  const filteredEvents = useMemo(() => {
+    if (selectedCategories.length === 0) return sortedEvents;
+
+    return sortedEvents.filter((event) =>
+      event.categories?.some((category) =>
+        selectedCategories.includes(category)
+      )
+    );
+  }, [sortedEvents, selectedCategories]);
+
+  const filteredRecentEvents = useMemo(() => {
+    if (selectedCategories.length === 0) return sortedRecentEvents;
+
+    return sortedRecentEvents.filter((event) =>
+      event.categories?.some((category) =>
+        selectedCategories.includes(category)
+      )
+    );
+  }, [sortedRecentEvents, selectedCategories]);
+
   const eventsByDay = useMemo(() => {
-    if (!sortedEvents.length) return {};
+    if (!filteredEvents.length) return {};
 
     const grouped: Record<string, typeof events> = {};
 
-    sortedEvents.forEach((event) => {
+    filteredEvents.forEach((event) => {
       const dateKey = format(new Date(event.startAt), "yyyy-MM-dd");
       if (!grouped[dateKey]) {
         grouped[dateKey] = [];
@@ -394,7 +424,7 @@ function HomePageContent() {
     });
 
     return grouped;
-  }, [sortedEvents]);
+  }, [filteredEvents]);
 
   const handlePrevious = async () => {
     if (viewMode === "week") {
@@ -513,100 +543,131 @@ function HomePageContent() {
         <div ref={stickySentinelRef} className="h-px w-full" />
 
         {/* Search and Filters */}
-        <StickySearchBar>
-          {/* Search Input */}
-          <div className="flex w-full flex-row">
-            <Suspense fallback={null}>
-              <SearchInput
-                ref={searchInputRef}
-                placeholder="Search events..."
-                value={searchQuery}
-                onChange={setSearchQuery}
-                onFocus={() => setIsSearchMode(true)}
-                showBack={isSearchMode}
-                onBack={handleExitSearch}
-                className="w-full"
+        <StickySearchBar innerClassName="w-full flex-col items-stretch sm:flex-col sm:items-stretch">
+          <div className="flex w-full flex-col gap-2 sm:flex-row sm:items-center">
+            {/* Search Input */}
+            <div className="flex w-full flex-row">
+              <Suspense fallback={null}>
+                <SearchInput
+                  ref={searchInputRef}
+                  placeholder="Search events..."
+                  value={searchQuery}
+                  onChange={setSearchQuery}
+                  onFocus={() => setIsSearchMode(true)}
+                  showBack={isSearchMode}
+                  onBack={handleExitSearch}
+                  className="w-full"
+                />
+              </Suspense>
+              <div
+                className={cn(
+                  "shrink-0 overflow-hidden transition-all duration-200 ease-out md:hidden",
+                  isSearchMode ? "ml-0 w-0 opacity-0" : "ml-2 opacity-100"
+                )}
+              >
+                <div className="flex h-12 items-center overflow-hidden rounded-full border border-input bg-background shadow-sm">
+                  <Button
+                    variant="ghost"
+                    size="icon"
+                    className="h-full w-10 rounded-none border-r bg-muted px-0"
+                    onClick={handlePrevious}
+                    disabled={isCurrentWeek}
+                  >
+                    <ChevronLeft className="h-4 w-4" />
+                  </Button>
+                  <Button
+                    variant="ghost"
+                    size="icon"
+                    className="h-full w-10 rounded-none bg-muted px-0 focus:bg-muted/80"
+                    onClick={handleNext}
+                  >
+                    <ChevronRight className="h-4 w-4" />
+                  </Button>
+                </div>
+              </div>
+            </div>
+
+            <div className="flex w-full gap-2 sm:w-fit">
+              {/* City Filter */}
+              <ResponsiveSelect
+                value={effectiveCity ?? "all"}
+                onValueChange={setSelectedCity}
+                options={[
+                  { value: "all", label: "All Cities" },
+                  ...(cities?.map((city) => ({
+                    value: city.city,
+                    label: `${city.city}, ${city.state}`,
+                  })) || []),
+                ]}
+                placeholder="Select city"
+                title="Select City"
+                className="flex-1 shrink-0 sm:w-[200px]"
               />
-            </Suspense>
-            <div
-              className={cn(
-                "shrink-0 overflow-hidden transition-all duration-200 ease-out md:hidden",
-                isSearchMode ? "ml-0 w-0 opacity-0" : "ml-2 opacity-100"
-              )}
-            >
-              <div className="flex h-12 items-center overflow-hidden rounded-full border border-input bg-background shadow-sm">
-                <Button
-                  variant="ghost"
-                  size="icon"
-                  className="h-full w-10 rounded-none border-r bg-muted px-0"
-                  onClick={handlePrevious}
-                  disabled={isCurrentWeek}
-                >
-                  <ChevronLeft className="h-4 w-4" />
-                </Button>
-                <Button
-                  variant="ghost"
-                  size="icon"
-                  className="h-full w-10 rounded-none bg-muted px-0 focus:bg-muted/80"
-                  onClick={handleNext}
-                >
-                  <ChevronRight className="h-4 w-4" />
-                </Button>
+
+              <EventFilterSelect
+                value={activeFilter}
+                onValueChange={setActiveFilter}
+                className="w-[160px] shrink-0"
+              />
+
+              {/* Navigation Controls - fixed width wrapper for smooth transition */}
+              <div
+                className={cn(
+                  "hidden shrink-0 overflow-hidden transition-all duration-200 ease-out md:block",
+                  isSearchMode ? "w-0 opacity-0" : "w-[82px] opacity-100"
+                )}
+              >
+                <div className="flex h-12 items-center overflow-hidden rounded-full border border-input bg-background shadow-sm">
+                  <Button
+                    variant="ghost"
+                    size="icon"
+                    className="h-full w-10 shrink-0 rounded-none border-r bg-muted px-0 hover:bg-muted/60"
+                    onClick={handlePrevious}
+                    disabled={isCurrentWeek}
+                  >
+                    <ChevronLeft className="h-4 w-4" />
+                  </Button>
+                  <Button
+                    variant="ghost"
+                    size="icon"
+                    className="h-full w-10 shrink-0 rounded-none bg-muted px-0 hover:bg-muted/80"
+                    onClick={handleNext}
+                  >
+                    <ChevronRight className="h-4 w-4" />
+                  </Button>
+                </div>
               </div>
             </div>
           </div>
 
-          <div className="flex w-full gap-2 sm:w-fit">
-            {/* City Filter */}
-            <ResponsiveSelect
-              value={effectiveCity ?? "all"}
-              onValueChange={setSelectedCity}
-              options={[
-                { value: "all", label: "All Cities" },
-                ...(cities?.map((city) => ({
-                  value: city.city,
-                  label: `${city.city}, ${city.state}`,
-                })) || []),
-              ]}
-              placeholder="Select city"
-              title="Select City"
-              className="flex-1 shrink-0 sm:w-[200px]"
-            />
-
-            <EventFilterSelect
-              value={activeFilter}
-              onValueChange={setActiveFilter}
-              className="w-[160px] shrink-0"
-            />
-
-            {/* Navigation Controls - fixed width wrapper for smooth transition */}
-            <div
-              className={cn(
-                "hidden shrink-0 overflow-hidden transition-all duration-200 ease-out md:block",
-                isSearchMode ? "w-0 opacity-0" : "w-[82px] opacity-100"
-              )}
-            >
-              <div className="flex h-12 items-center overflow-hidden rounded-full border border-input bg-background shadow-sm">
-                <Button
-                  variant="ghost"
-                  size="icon"
-                  className="h-full w-10 shrink-0 rounded-none border-r bg-muted px-0 hover:bg-muted/60"
-                  onClick={handlePrevious}
-                  disabled={isCurrentWeek}
-                >
-                  <ChevronLeft className="h-4 w-4" />
-                </Button>
-                <Button
-                  variant="ghost"
-                  size="icon"
-                  className="h-full w-10 shrink-0 rounded-none bg-muted px-0 hover:bg-muted/80"
-                  onClick={handleNext}
-                >
-                  <ChevronRight className="h-4 w-4" />
-                </Button>
+          {(activeCategories?.length ?? 0) > 0 && (
+            <div className="-mx-4 overflow-x-auto md:-mx-8">
+              <div className="flex gap-2 px-4 md:px-8">
+                {(activeCategories || []).map((category) => {
+                  const isSelected = selectedCategories.includes(category.key);
+                  return (
+                    <button
+                      key={category.id}
+                      type="button"
+                      aria-pressed={isSelected}
+                      onClick={() => toggleCategory(category.key)}
+                      className={cn(
+                        "inline-flex items-center gap-1 rounded-md border px-2.5 py-1.5 text-xs font-medium transition-colors",
+                        isSelected
+                          ? "border-primary bg-primary text-primary-foreground"
+                          : "border-input bg-muted hover:bg-muted"
+                      )}
+                    >
+                      {category.label}
+                      {isSelected && (
+                        <X className="h-3 w-3" aria-hidden="true" />
+                      )}
+                    </button>
+                  );
+                })}
               </div>
             </div>
-          </div>
+          )}
         </StickySearchBar>
 
         {/* Initial / Transition Loading State */}
@@ -624,13 +685,13 @@ function HomePageContent() {
               <div className="flex justify-center py-12">
                 <Loader2 className="h-8 w-8 animate-spin text-muted-foreground" />
               </div>
-            ) : !recentEvents || recentEvents.length === 0 ? (
+            ) : filteredRecentEvents.length === 0 ? (
               <div className="py-12 text-center text-muted-foreground">
                 No recent events to show
               </div>
             ) : (
               <EventCardGrid
-                events={sortedRecentEvents}
+                events={filteredRecentEvents}
                 columns={{ mobile: 1, tablet: 3, desktop: 4 }}
                 gap="md"
               />
@@ -641,7 +702,7 @@ function HomePageContent() {
         {/* Search Results - flat list, no date headers */}
         {isSearching && events && !showSkeletons && (
           <div className="space-y-4">
-            {events.length === 0 ? (
+            {filteredEvents.length === 0 ? (
               <div className="py-12 text-center">
                 <CalendarIcon className="mx-auto mb-4 h-12 w-12 text-muted-foreground" />
                 <h3 className="mb-2 text-lg font-semibold">No events found</h3>
@@ -651,7 +712,7 @@ function HomePageContent() {
               </div>
             ) : (
               <EventCardGrid
-                events={sortedEvents}
+                events={filteredEvents}
                 columns={{ mobile: 1, tablet: 3, desktop: 4 }}
                 gap="md"
               />
