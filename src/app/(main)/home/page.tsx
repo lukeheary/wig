@@ -38,7 +38,6 @@ import {
   CalendarIcon,
   ChevronLeft,
   ChevronRight,
-  X,
   MapPin,
   Clock,
 } from "lucide-react";
@@ -641,8 +640,8 @@ function HomePageContent() {
           </div>
 
           {(activeCategories?.length ?? 0) > 0 && (
-            <div className="-mx-4 overflow-x-auto pt-2 md:-mx-8 [scrollbar-width:none] [&::-webkit-scrollbar]:hidden">
-              <div className="flex gap-2 px-4 md:px-8">
+            <div className="-mx-4 overflow-x-auto pt-1 [scrollbar-width:none] md:-mx-8 [&::-webkit-scrollbar]:hidden">
+              <div className="flex gap-1.5 px-4 md:px-8">
                 {(activeCategories || []).map((category) => {
                   const isSelected = selectedCategories.includes(category.key);
                   return (
@@ -652,16 +651,13 @@ function HomePageContent() {
                       aria-pressed={isSelected}
                       onClick={() => toggleCategory(category.key)}
                       className={cn(
-                        "inline-flex items-center gap-1 rounded-md border px-3 py-2 text-xs font-medium transition-colors",
+                        "shrink-0 rounded-full px-3 py-1 text-xs font-medium transition-colors",
                         isSelected
-                          ? "border-primary bg-primary text-primary-foreground"
-                          : "border-input bg-muted hover:bg-muted"
+                          ? "bg-foreground text-background"
+                          : "bg-muted/50 text-muted-foreground hover:text-foreground"
                       )}
                     >
                       {category.label}
-                      {isSelected && (
-                        <X className="h-3 w-3" aria-hidden="true" />
-                      )}
                     </button>
                   );
                 })}
