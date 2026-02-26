@@ -120,6 +120,8 @@ export function PlaceEditForm({
   });
 
   const [placeSearch, setPlaceSearch] = useState(initialData?.name || "");
+  const [googlePlaceName, setGooglePlaceName] = useState(initialData?.name || "");
+  const [nameOverride, setNameOverride] = useState("");
   const [isSlugSynced, setIsSlugSynced] = useState(
     (initialData?.slug || "") === (initialData?.instagram || "")
   );
@@ -133,6 +135,8 @@ export function PlaceEditForm({
         ...initialData,
       });
       setPlaceSearch(initialData.name || "");
+      setGooglePlaceName(initialData.name || "");
+      setNameOverride("");
       setIsSlugSynced(
         (initialData.slug || "") === (initialData.instagram || "")
       );
@@ -225,7 +229,7 @@ export function PlaceEditForm({
       setFormData((prev) => ({
         ...prev,
         slug: slug.length >= 3 ? slug : `${prev.type}-${slug}`,
-        name: place.name,
+        name: nameOverride.trim() || place.name,
         address: place.address,
         city: place.city,
         state: place.state,
@@ -236,9 +240,10 @@ export function PlaceEditForm({
           ? (slug.length >= 3 ? slug : `${prev.type}-${slug}`).replace(/-/g, "")
           : prev.instagram,
       }));
+      setGooglePlaceName(place.name);
       setPlaceSearch(place.name);
     },
-    [isSlugSynced]
+    [isSlugSynced, nameOverride]
   );
 
   const handleCitySelect = useCallback(
@@ -268,6 +273,18 @@ export function PlaceEditForm({
     onSubmit(formData);
   };
 
+  const handleNameOverrideChange = useCallback(
+    (value: string) => {
+      setNameOverride(value);
+      const trimmed = value.trim();
+      setFormData((prev) => ({
+        ...prev,
+        name: trimmed || googlePlaceName,
+      }));
+    },
+    [googlePlaceName]
+  );
+
   const isVenue = placeType === "venue";
   const typeLabel = isVenue ? "Venue" : "Organizer";
 
@@ -295,6 +312,21 @@ export function PlaceEditForm({
           <p className="mt-1 text-xs text-muted-foreground">
             Start typing the {typeLabel.toLowerCase()} name to auto-fill details
           </p>
+          <div className="mt-3">
+            <Label htmlFor="place-name-override">Name Override (Optional)</Label>
+            <Input
+              id="place-name-override"
+              placeholder="House of Blues"
+              value={nameOverride}
+              onChange={(e) => handleNameOverrideChange(e.target.value)}
+            />
+            <p className="mt-1 text-xs text-muted-foreground">
+              Saved display name:{" "}
+              <span className="font-medium text-foreground">
+                {formData.name || "Not set"}
+              </span>
+            </p>
+          </div>
         </div>
       )}
 
@@ -316,15 +348,17 @@ export function PlaceEditForm({
       />
 
       {/* Name */}
-      <div>
-        <Label htmlFor="place-name">Name *</Label>
-        <Input
-          id="place-name"
-          placeholder={isVenue ? "Big Night Live" : "After Brunch"}
-          value={formData.name}
-          onChange={(e) => setFormData({ ...formData, name: e.target.value })}
-        />
-      </div>
+      {!isVenue && (
+        <div>
+          <Label htmlFor="place-name">Name *</Label>
+          <Input
+            id="place-name"
+            placeholder="After Brunch"
+            value={formData.name}
+            onChange={(e) => setFormData({ ...formData, name: e.target.value })}
+          />
+        </div>
+      )}
 
       {/* Profile Image */}
       <div>
