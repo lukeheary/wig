@@ -197,22 +197,7 @@ function PlacesPageContent() {
         </Suspense>
 
         {/* Filters */}
-        <div className="flex shrink-0 gap-2">
-          {/* Type Filter */}
-          <ResponsiveSelect
-            value={filterType}
-            onValueChange={(value) => setFilterType(value as FilterType)}
-            options={[
-              { value: "all", label: "All" },
-              { value: "venues", label: "Venues" },
-              { value: "organizers", label: "Organizers" },
-              { value: "following", label: "Following" },
-            ]}
-            placeholder="Filter"
-            title="Filter Places"
-            className="w-40 sm:w-[170px]"
-          />
-
+        <div className="flex w-full gap-2 sm:w-fit">
           {/* City Filter */}
           <ResponsiveSelect
             value={effectiveCity ?? "all"}
@@ -226,7 +211,22 @@ function PlacesPageContent() {
             ]}
             placeholder="Select city"
             title="Select City"
-            className="w-48 grow"
+            className="min-w-0 flex-1 sm:w-[180px] sm:flex-none"
+          />
+
+          {/* Type Filter */}
+          <ResponsiveSelect
+            value={filterType}
+            onValueChange={(value) => setFilterType(value as FilterType)}
+            options={[
+              { value: "all", label: "All" },
+              { value: "venues", label: "Venues" },
+              { value: "organizers", label: "Organizers" },
+              { value: "following", label: "Following" },
+            ]}
+            placeholder="Filter"
+            title="Filter Places"
+            className="min-w-0 flex-1 sm:w-[180px] sm:flex-none"
           />
         </div>
       </StickySearchBar>

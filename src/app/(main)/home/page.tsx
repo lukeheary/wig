@@ -394,8 +394,8 @@ function HomePageContent() {
     if (selectedCategories.length === 0) return sortedEvents;
 
     return sortedEvents.filter((event) =>
-      event.categories?.some((category) =>
-        selectedCategories.includes(category)
+      selectedCategories.every((category) =>
+        event.categories?.includes(category)
       )
     );
   }, [sortedEvents, selectedCategories]);
@@ -404,8 +404,8 @@ function HomePageContent() {
     if (selectedCategories.length === 0) return sortedRecentEvents;
 
     return sortedRecentEvents.filter((event) =>
-      event.categories?.some((category) =>
-        selectedCategories.includes(category)
+      selectedCategories.every((category) =>
+        event.categories?.includes(category)
       )
     );
   }, [sortedRecentEvents, selectedCategories]);
@@ -601,13 +601,13 @@ function HomePageContent() {
                 ]}
                 placeholder="Select city"
                 title="Select City"
-                className="flex-1 shrink-0 sm:w-[200px]"
+                className="min-w-0 flex-1 sm:w-[180px] sm:flex-none"
               />
 
               <EventFilterSelect
                 value={activeFilter}
                 onValueChange={setActiveFilter}
-                className="w-[160px] shrink-0"
+                className="min-w-0 flex-1 sm:w-[180px] sm:flex-none"
               />
 
               {/* Navigation Controls - fixed width wrapper for smooth transition */}
@@ -641,7 +641,7 @@ function HomePageContent() {
           </div>
 
           {(activeCategories?.length ?? 0) > 0 && (
-            <div className="-mx-4 overflow-x-auto md:-mx-8">
+            <div className="-mx-4 overflow-x-auto pt-2 md:-mx-8 [scrollbar-width:none] [&::-webkit-scrollbar]:hidden">
               <div className="flex gap-2 px-4 md:px-8">
                 {(activeCategories || []).map((category) => {
                   const isSelected = selectedCategories.includes(category.key);
@@ -652,7 +652,7 @@ function HomePageContent() {
                       aria-pressed={isSelected}
                       onClick={() => toggleCategory(category.key)}
                       className={cn(
-                        "inline-flex items-center gap-1 rounded-md border px-2.5 py-1.5 text-xs font-medium transition-colors",
+                        "inline-flex items-center gap-1 rounded-md border px-3 py-2 text-xs font-medium transition-colors",
                         isSelected
                           ? "border-primary bg-primary text-primary-foreground"
                           : "border-input bg-muted hover:bg-muted"
