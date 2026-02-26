@@ -651,10 +651,10 @@ function HomePageContent() {
                       aria-pressed={isSelected}
                       onClick={() => toggleCategory(category.key)}
                       className={cn(
-                        "shrink-0 rounded-full px-3 py-1 text-xs font-medium transition-colors",
+                        "shrink-0 rounded-full px-3.5 py-1.5 text-xs font-medium transition-colors",
                         isSelected
                           ? "bg-foreground text-background"
-                          : "bg-muted/50 text-muted-foreground hover:text-foreground"
+                          : "bg-muted/50 text-muted-foreground md:hover:text-foreground"
                       )}
                     >
                       {category.label}
