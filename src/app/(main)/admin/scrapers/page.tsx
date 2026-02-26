@@ -55,6 +55,7 @@ interface ScraperRow {
     name: string;
     city: string | null;
     state: string | null;
+    website: string | null;
   };
 }
 
@@ -88,6 +89,7 @@ interface SelectedVenue {
   name: string;
   city: string | null;
   state: string | null;
+  website: string | null;
 }
 
 interface ScrapeResult {
@@ -113,6 +115,42 @@ const SCRAPER_LABELS: Record<ScraperType, string> = {
   clubcafe: "Club Cafe",
   ticketmaster: "Ticketmaster",
 };
+
+const SCRAPER_WEBSITES: Record<ScraperType, string> = {
+  dice: "https://dice.fm",
+  posh: "https://posh.vip",
+  clubcafe: "https://www.clubcafe.com",
+  ticketmaster: "https://www.ticketmaster.com",
+};
+
+function normalizeHttpUrl(value: string | null | undefined): string | null {
+  const trimmed = value?.trim();
+  if (!trimmed) return null;
+
+  try {
+    const parsed = new URL(trimmed);
+    if (parsed.protocol !== "http:" && parsed.protocol !== "https:") {
+      return null;
+    }
+    return parsed.toString();
+  } catch {
+    return null;
+  }
+}
+
+function findFirstHttpUrl(value: string): string | null {
+  const candidates = value
+    .split(/[\n,\s]+/)
+    .map((item) => item.trim())
+    .filter(Boolean);
+
+  for (const candidate of candidates) {
+    const parsed = normalizeHttpUrl(candidate);
+    if (parsed) return parsed;
+  }
+
+  return null;
+}
 
 function formatDateTimeLabel(value: string | null) {
   if (!value) return "Unknown time";
@@ -217,6 +255,7 @@ function VenueDropdown({
                     name: venue.name,
                     city: venue.city,
                     state: venue.state,
+                    website: venue.website ?? null,
                   });
                   setOpen(false);
                   setSearch("");
@@ -567,6 +606,15 @@ export default function AdminScrapersPage() {
   const handleImport = async () => {
     if (!result || !selectedRow || editableEvents.length === 0) return;
 
+    const scraperWebsiteUrl =
+      findFirstHttpUrl(selectedRow.searchString) ??
+      SCRAPER_WEBSITES[selectedRow.scraper];
+    const organizerWebsiteUrl =
+      selectedRow.place.type === "organizer"
+        ? normalizeHttpUrl(selectedRow.place.website) ??
+          normalizeHttpUrl(result.organizer?.url)
+        : null;
+
     const events = editableEvents.map((event) => {
       const startAt = new Date(event.editableStartAt || event.startAt);
       if (Number.isNaN(startAt.getTime())) {
@@ -582,11 +630,27 @@ export default function AdminScrapersPage() {
         throw new Error(`Event "${event.title}" has an invalid end date/time.`);
       }
 
+      const venueId =
+        selectedRow.place.type === "organizer"
+          ? (event.venueId ?? defaultVenue?.id ?? undefined)
+          : undefined;
+      const venueWebsiteUrl =
+        selectedRow.place.type === "venue"
+          ? normalizeHttpUrl(selectedRow.place.website)
+          : normalizeHttpUrl(event.linkedVenue?.website) ??
+            normalizeHttpUrl(defaultVenue?.website);
+      const resolvedEventUrl =
+        normalizeHttpUrl(event.eventUrl) ??
+        normalizeHttpUrl(scraperWebsiteUrl) ??
+        venueWebsiteUrl ??
+        organizerWebsiteUrl ??
+        undefined;
+
       return {
         title: event.title,
         description: event.description ?? undefined,
         coverImageUrl: event.coverImageUrl ?? undefined,
-        eventUrl: event.eventUrl ?? undefined,
+        eventUrl: resolvedEventUrl,
         source: event.source ?? undefined,
         externalId: event.externalId ?? undefined,
         startAt,
@@ -594,10 +658,7 @@ export default function AdminScrapersPage() {
         address: event.address,
         city: event.city,
         state: event.state,
-        venueId:
-          selectedRow.place.type === "organizer"
-            ? (event.venueId ?? defaultVenue?.id ?? undefined)
-            : undefined,
+        venueId,
         categories: event.categories,
         visibility: event.visibility as "public" | "private",
       };

@@ -40,6 +40,7 @@ import {
   ChevronRight,
   MapPin,
   Clock,
+  X,
 } from "lucide-react";
 import { useToast } from "@/hooks/use-toast";
 import { SearchInput } from "@/components/ui/search-input";
@@ -400,7 +401,8 @@ function HomePageContent() {
   }, [sortedEvents]);
 
   const visibleCategories = useMemo(
-    () => (activeCategories ?? []).filter((c) => availableCategoryKeys.has(c.key)),
+    () =>
+      (activeCategories ?? []).filter((c) => availableCategoryKeys.has(c.key)),
     [activeCategories, availableCategoryKeys]
   );
 
@@ -666,13 +668,14 @@ function HomePageContent() {
                       aria-pressed={isSelected}
                       onClick={() => toggleCategory(category.key)}
                       className={cn(
-                        "shrink-0 rounded-full px-3.5 py-1.5 text-xs font-medium transition-colors",
+                        "inline-flex shrink-0 items-center gap-1 rounded-full px-3.5 py-1.5 text-xs font-medium transition-colors",
                         isSelected
                           ? "bg-foreground text-background"
                           : "bg-muted/50 text-muted-foreground md:hover:text-foreground"
                       )}
                     >
                       {category.label}
+                      {isSelected && <X className="h-3 w-3" />}
                     </button>
                   );
                 })}
