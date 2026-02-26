@@ -389,6 +389,21 @@ function HomePageContent() {
     return nextEvents;
   }, [recentEvents, referenceCoords, cityDistanceMap]);
 
+  // Only show categories that appear in the current event set
+  const availableCategoryKeys = useMemo(() => {
+    if (!sortedEvents.length) return new Set<string>();
+    const keys = new Set<string>();
+    sortedEvents.forEach((event) =>
+      event.categories?.forEach((key) => keys.add(key))
+    );
+    return keys;
+  }, [sortedEvents]);
+
+  const visibleCategories = useMemo(
+    () => (activeCategories ?? []).filter((c) => availableCategoryKeys.has(c.key)),
+    [activeCategories, availableCategoryKeys]
+  );
+
   const filteredEvents = useMemo(() => {
     if (selectedCategories.length === 0) return sortedEvents;
 
@@ -639,10 +654,10 @@ function HomePageContent() {
             </div>
           </div>
 
-          {(activeCategories?.length ?? 0) > 0 && (
+          {visibleCategories.length > 0 && (
             <div className="-mx-4 overflow-x-auto pt-1 [scrollbar-width:none] md:-mx-8 [&::-webkit-scrollbar]:hidden">
               <div className="flex gap-1.5 px-4 md:px-8">
-                {(activeCategories || []).map((category) => {
+                {visibleCategories.map((category) => {
                   const isSelected = selectedCategories.includes(category.key);
                   return (
                     <button
