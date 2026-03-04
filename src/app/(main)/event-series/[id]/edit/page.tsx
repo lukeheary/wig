@@ -79,6 +79,32 @@ export default function EditEventSeriesPage() {
     },
   });
 
+  const deleteSeriesMutation = trpc.event.deleteEventSeries.useMutation({
+    onSuccess: async (data) => {
+      await Promise.all([
+        utils.event.getEventSeriesById.invalidate({ seriesId }),
+        utils.place.getPlaceBySlug.invalidate(),
+      ]);
+      toast({
+        title: "Recurring series deleted",
+        description:
+          data.deletedEvents > 0
+            ? `Deleted series and ${data.deletedEvents} occurrence${
+                data.deletedEvents === 1 ? "" : "s"
+              }`
+            : "Deleted series",
+      });
+      router.push(backHref);
+    },
+    onError: (error) => {
+      toast({
+        title: "Error",
+        description: error.message,
+        variant: "destructive",
+      });
+    },
+  });
+
   const [formData, setFormData] = useState({
     title: "",
     description: "",
@@ -336,6 +362,14 @@ export default function EditEventSeriesPage() {
     });
   };
 
+  const handleDeleteSeries = () => {
+    const confirmed = window.confirm(
+      "Delete this recurring series? This will permanently delete the series and all events generated from it."
+    );
+    if (!confirmed) return;
+    deleteSeriesMutation.mutate({ seriesId });
+  };
+
   if (isLoading) {
     return (
       <div className="flex justify-center py-12">
@@ -356,7 +390,9 @@ export default function EditEventSeriesPage() {
     );
   }
 
-  const isSubmitting = updateSeriesMutation.isPending;
+  const isSaving = updateSeriesMutation.isPending;
+  const isDeleting = deleteSeriesMutation.isPending;
+  const isSubmitting = isSaving || isDeleting;
 
   return (
     <div className="container mx-auto max-w-2xl space-y-6 py-4">
@@ -695,15 +731,29 @@ export default function EditEventSeriesPage() {
             </div>
 
             <div className="flex justify-between gap-2">
-              <Button
-                type="button"
-                variant="outline"
-                onClick={() => router.push(backHref)}
-              >
-                Cancel
-              </Button>
+              <div className="flex gap-2">
+                <Button
+                  type="button"
+                  variant="outline"
+                  onClick={() => router.push(backHref)}
+                  disabled={isSubmitting}
+                >
+                  Cancel
+                </Button>
+                <Button
+                  type="button"
+                  variant="destructive"
+                  onClick={handleDeleteSeries}
+                  disabled={isSubmitting}
+                >
+                  {isDeleting && (
+                    <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+                  )}
+                  Delete Series
+                </Button>
+              </div>
               <Button type="submit" disabled={isSubmitting}>
-                {isSubmitting && (
+                {isSaving && (
                   <Loader2 className="mr-2 h-4 w-4 animate-spin" />
                 )}
                 Save Recurring Event

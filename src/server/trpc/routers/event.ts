@@ -705,6 +705,45 @@ export const eventRouter = router({
       };
     }),
 
+  deleteEventSeries: protectedProcedure
+    .input(z.object({ seriesId: z.string().uuid() }))
+    .mutation(async ({ ctx, input }) => {
+      const existingSeries = await ctx.db.query.eventSeries.findFirst({
+        where: eq(eventSeries.id, input.seriesId),
+      });
+
+      if (!existingSeries) {
+        throw new TRPCError({
+          code: "NOT_FOUND",
+          message: "Recurring event series not found",
+        });
+      }
+
+      await assertCanManageSeries(ctx, existingSeries);
+
+      const deletedEvents = await ctx.db
+        .delete(events)
+        .where(eq(events.seriesId, input.seriesId))
+        .returning({ id: events.id });
+
+      const [deletedSeries] = await ctx.db
+        .delete(eventSeries)
+        .where(eq(eventSeries.id, input.seriesId))
+        .returning({ id: eventSeries.id });
+
+      if (!deletedSeries) {
+        throw new TRPCError({
+          code: "INTERNAL_SERVER_ERROR",
+          message: "Failed to delete recurring event series",
+        });
+      }
+
+      return {
+        success: true,
+        deletedEvents: deletedEvents.length,
+      };
+    }),
+
   batchCreateEvents: adminProcedure
     .input(
       z.object({
