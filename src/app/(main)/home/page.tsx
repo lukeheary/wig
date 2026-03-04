@@ -75,6 +75,7 @@ import { resolveMetroArea } from "@/lib/metro-areas";
 import { StickySearchBar } from "@/components/ui/sticky-search-bar";
 import { StickySectionHeader } from "@/components/ui/sticky-section-header";
 import { withReturnTo } from "@/lib/navigation";
+import { WebHaptics } from "web-haptics";
 
 type ViewMode = "week" | "month";
 
@@ -118,6 +119,7 @@ function EventSkeletonGrid({ count = 8 }: { count?: number }) {
 
 function HomePageContent() {
   const { toast } = useToast();
+  const haptics = useMemo(() => new WebHaptics(), []);
   const [activeFilter, setActiveFilter] = useState<EventFilterTab>("all");
   const [selectedCategories, setSelectedCategories] = useState<string[]>([]);
   const [isSticky, setIsSticky] = useState(false);
@@ -260,6 +262,8 @@ function HomePageContent() {
     setSearchQuery("");
     searchInputRef.current?.blur();
   };
+
+  useEffect(() => () => haptics.destroy(), [haptics]);
 
   const toggleCategory = useCallback((categoryKey: string) => {
     setSelectedCategories((prev) =>
@@ -443,9 +447,18 @@ function HomePageContent() {
   }, [filteredEvents]);
 
   const handlePrevious = async () => {
+    if (isCurrentWeek) {
+      void haptics.trigger([
+        { duration: 40, intensity: 0.8 },
+        { delay: 100, duration: 40, intensity: 0.6 },
+      ]);
+      return;
+    }
+
+    void haptics.trigger([{ duration: 15 }], { intensity: 0.4 });
+
     if (viewMode === "week") {
       const today = startOfDay(new Date());
-      if (isCurrentWeek) return;
 
       const prevWeekStart = addDays(currentDate, -7);
       // If going back takes us into the current week (or before it), jump to today
@@ -472,6 +485,8 @@ function HomePageContent() {
   };
 
   const handleNext = async () => {
+    void haptics.trigger([{ duration: 15 }], { intensity: 0.4 });
+
     if (viewMode === "week") {
       const today = startOfDay(new Date());
       let nextDate: Date;
@@ -585,9 +600,13 @@ function HomePageContent() {
                   <Button
                     variant="ghost"
                     size="icon"
-                    className="h-full w-10 rounded-none border-r bg-muted px-0"
+                    className={cn(
+                      "h-full w-10 rounded-none border-r bg-muted px-0",
+                      isCurrentWeek &&
+                        "cursor-not-allowed opacity-50 hover:bg-muted"
+                    )}
                     onClick={handlePrevious}
-                    disabled={isCurrentWeek}
+                    aria-disabled={isCurrentWeek}
                   >
                     <ChevronLeft className="h-4 w-4" />
                   </Button>
@@ -637,9 +656,13 @@ function HomePageContent() {
                   <Button
                     variant="ghost"
                     size="icon"
-                    className="h-full w-10 shrink-0 rounded-none border-r bg-muted px-0 hover:bg-muted/60"
+                    className={cn(
+                      "h-full w-10 shrink-0 rounded-none border-r bg-muted px-0 hover:bg-muted/60",
+                      isCurrentWeek &&
+                        "cursor-not-allowed opacity-50 hover:bg-muted"
+                    )}
                     onClick={handlePrevious}
-                    disabled={isCurrentWeek}
+                    aria-disabled={isCurrentWeek}
                   >
                     <ChevronLeft className="h-4 w-4" />
                   </Button>
@@ -666,7 +689,10 @@ function HomePageContent() {
                       key={category.id}
                       type="button"
                       aria-pressed={isSelected}
-                      onClick={() => toggleCategory(category.key)}
+                      onClick={() => {
+                        void haptics.trigger([{ duration: 40 }]);
+                        toggleCategory(category.key);
+                      }}
                       className={cn(
                         "inline-flex shrink-0 items-center gap-1 rounded-full px-3.5 py-1.5 text-xs font-medium transition-colors",
                         isSelected
