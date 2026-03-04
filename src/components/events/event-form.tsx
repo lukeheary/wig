@@ -87,6 +87,8 @@ export function EventForm({
     useState<File | null>(null);
   const [isSubmittingImage, setIsSubmittingImage] = useState(false);
   const [showTitleSuggestions, setShowTitleSuggestions] = useState(false);
+  const submitLockRef = useRef(false);
+  const [isSubmitLocked, setIsSubmitLocked] = useState(false);
 
   const getDatePart = (value: string) => (value ? value.split("T")[0] : "");
   const getTimePart = (value: string) => (value ? value.split("T")[1] : "");
@@ -274,158 +276,172 @@ export function EventForm({
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
 
-    if (!formData.title || !formData.startAt) {
-      toast({
-        title: "Validation Error",
-        description: "Please fill in all required fields",
-        variant: "destructive",
-      });
+    if (submitLockRef.current) {
       return;
     }
 
-    const startDate = new Date(formData.startAt);
-    const endDate = formData.endAt ? new Date(formData.endAt) : null;
+    submitLockRef.current = true;
+    setIsSubmitLocked(true);
 
-    if (endDate && endDate <= startDate) {
-      toast({
-        title: "Validation Error",
-        description: "End time must be after start time",
-        variant: "destructive",
-      });
-      return;
-    }
-
-    if (isRecurringDefault) {
-      if (
-        recurrenceData.frequency === "weekly" &&
-        recurrenceData.daysOfWeek.length === 0
-      ) {
+    try {
+      if (!formData.title || !formData.startAt) {
         toast({
           title: "Validation Error",
-          description: "Select at least one weekday for a weekly recurrence",
+          description: "Please fill in all required fields",
           variant: "destructive",
         });
         return;
       }
 
-      if (recurrenceData.untilDate) {
-        const untilDate = new Date(`${recurrenceData.untilDate}T23:59:59`);
-        if (untilDate < startDate) {
+      const startDate = new Date(formData.startAt);
+      const endDate = formData.endAt ? new Date(formData.endAt) : null;
+
+      if (endDate && endDate <= startDate) {
+        toast({
+          title: "Validation Error",
+          description: "End time must be after start time",
+          variant: "destructive",
+        });
+        return;
+      }
+
+      if (isRecurringDefault) {
+        if (
+          recurrenceData.frequency === "weekly" &&
+          recurrenceData.daysOfWeek.length === 0
+        ) {
           toast({
             title: "Validation Error",
-            description: "Series end date must be on or after the start date",
+            description: "Select at least one weekday for a weekly recurrence",
+            variant: "destructive",
+          });
+          return;
+        }
+
+        if (recurrenceData.untilDate) {
+          const untilDate = new Date(`${recurrenceData.untilDate}T23:59:59`);
+          if (untilDate < startDate) {
+            toast({
+              title: "Validation Error",
+              description: "Series end date must be on or after the start date",
+              variant: "destructive",
+            });
+            return;
+          }
+        }
+      }
+
+      let finalVenueId = venueId || selectedVenue?.id;
+
+      if (isCreatingNewVenue && selectedVenue) {
+        try {
+          const newVenue = await createVenueMutation.mutateAsync({
+            type: "venue",
+            name: selectedVenue.name,
+            address: selectedVenue.address || undefined,
+            city: selectedVenue.city,
+            state: selectedVenue.state,
+            latitude: selectedVenue.latitude,
+            longitude: selectedVenue.longitude,
+            instagram: selectedVenue.instagram || undefined,
+          });
+          finalVenueId = newVenue.id;
+        } catch (error: any) {
+          toast({
+            title: "Venue Creation Error",
+            description: error.message,
             variant: "destructive",
           });
           return;
         }
       }
-    }
 
-    let finalVenueId = venueId || selectedVenue?.id;
-
-    if (isCreatingNewVenue && selectedVenue) {
-      try {
-        const newVenue = await createVenueMutation.mutateAsync({
-          type: "venue",
-          name: selectedVenue.name,
-          address: selectedVenue.address || undefined,
-          city: selectedVenue.city,
-          state: selectedVenue.state,
-          latitude: selectedVenue.latitude,
-          longitude: selectedVenue.longitude,
-          instagram: selectedVenue.instagram || undefined,
-        });
-        finalVenueId = newVenue.id;
-      } catch (error: any) {
+      if (!finalVenueId && !isCreatingNewVenue) {
         toast({
-          title: "Venue Creation Error",
-          description: error.message,
+          title: "Validation Error",
+          description: "Please select a venue",
           variant: "destructive",
         });
         return;
       }
-    }
 
-    if (!finalVenueId && !isCreatingNewVenue) {
-      toast({
-        title: "Validation Error",
-        description: "Please select a venue",
-        variant: "destructive",
-      });
-      return;
-    }
+      let resolvedCoverImageUrl = formData.coverImageUrl || undefined;
+      if (deferredCoverImageFile) {
+        setIsSubmittingImage(true);
+        try {
+          const uploadFormData = new FormData();
+          uploadFormData.append("file", deferredCoverImageFile);
+          uploadFormData.append("folder", deferredUploadFolderRef.current);
+          uploadFormData.append("filename", "cover-image.png");
 
-    let resolvedCoverImageUrl = formData.coverImageUrl || undefined;
-    if (deferredCoverImageFile) {
-      setIsSubmittingImage(true);
-      try {
-        const uploadFormData = new FormData();
-        uploadFormData.append("file", deferredCoverImageFile);
-        uploadFormData.append("folder", deferredUploadFolderRef.current);
-        uploadFormData.append("filename", "cover-image.png");
+          const uploadResponse = await fetch("/api/upload", {
+            method: "POST",
+            body: uploadFormData,
+          });
 
-        const uploadResponse = await fetch("/api/upload", {
-          method: "POST",
-          body: uploadFormData,
-        });
+          const uploadData = await uploadResponse.json();
+          if (!uploadResponse.ok) {
+            throw new Error(uploadData.error || "Upload failed");
+          }
 
-        const uploadData = await uploadResponse.json();
-        if (!uploadResponse.ok) {
-          throw new Error(uploadData.error || "Upload failed");
+          resolvedCoverImageUrl = uploadData.url;
+        } catch (error) {
+          toast({
+            title: "Image upload failed",
+            description:
+              error instanceof Error ? error.message : "Unknown upload error",
+            variant: "destructive",
+          });
+          setIsSubmittingImage(false);
+          return;
+        } finally {
+          setIsSubmittingImage(false);
         }
-
-        resolvedCoverImageUrl = uploadData.url;
-      } catch (error) {
-        toast({
-          title: "Image upload failed",
-          description:
-            error instanceof Error ? error.message : "Unknown upload error",
-          variant: "destructive",
-        });
-        setIsSubmittingImage(false);
-        return;
-      } finally {
-        setIsSubmittingImage(false);
       }
+
+      const payload = {
+        venueId: finalVenueId,
+        organizerId,
+        title: formData.title,
+        description: formData.description || undefined,
+        coverImageUrl: resolvedCoverImageUrl,
+        categories: formData.categories,
+        status: formData.status,
+        startAt: startDate,
+        endAt: endDate || undefined,
+        address: selectedVenue?.address || formData.address || undefined,
+        city: selectedVenue?.city || formData.city,
+        state: selectedVenue?.state || formData.state,
+      };
+
+      if (isRecurringDefault) {
+        await createRecurringMutation.mutateAsync({
+          ...payload,
+          timeZone: Intl.DateTimeFormat().resolvedOptions().timeZone || undefined,
+          recurrence: {
+            frequency: recurrenceData.frequency,
+            interval: recurrenceData.interval,
+            daysOfWeek:
+              recurrenceData.frequency === "daily"
+                ? undefined
+                : recurrenceData.frequency === "monthly"
+                  ? recurrenceData.daysOfWeek.slice(0, 1)
+                  : recurrenceData.daysOfWeek,
+            untilDate: recurrenceData.untilDate
+              ? new Date(`${recurrenceData.untilDate}T23:59:59`)
+              : undefined,
+          },
+        });
+        return;
+      }
+
+      await createMutation.mutateAsync(payload);
+    } catch {
+      // Mutation-specific toasts are handled in each mutation's onError callback.
+    } finally {
+      submitLockRef.current = false;
+      setIsSubmitLocked(false);
     }
-
-    const payload = {
-      venueId: finalVenueId,
-      organizerId,
-      title: formData.title,
-      description: formData.description || undefined,
-      coverImageUrl: resolvedCoverImageUrl,
-      categories: formData.categories,
-      status: formData.status,
-      startAt: startDate,
-      endAt: endDate || undefined,
-      address: selectedVenue?.address || formData.address || undefined,
-      city: selectedVenue?.city || formData.city,
-      state: selectedVenue?.state || formData.state,
-    };
-
-    if (isRecurringDefault) {
-      createRecurringMutation.mutate({
-        ...payload,
-        timeZone: Intl.DateTimeFormat().resolvedOptions().timeZone || undefined,
-        recurrence: {
-          frequency: recurrenceData.frequency,
-          interval: recurrenceData.interval,
-          daysOfWeek:
-            recurrenceData.frequency === "daily"
-              ? undefined
-              : recurrenceData.frequency === "monthly"
-                ? recurrenceData.daysOfWeek.slice(0, 1)
-                : recurrenceData.daysOfWeek,
-          untilDate: recurrenceData.untilDate
-            ? new Date(`${recurrenceData.untilDate}T23:59:59`)
-            : undefined,
-        },
-      });
-      return;
-    }
-
-    createMutation.mutate(payload);
   };
 
   const handleVenueSelect = (nextVenue: VenueData | null) => {
@@ -541,6 +557,7 @@ export function EventForm({
   };
 
   const isSubmitting =
+    isSubmitLocked ||
     isSubmittingImage ||
     createMutation.isPending ||
     createRecurringMutation.isPending ||

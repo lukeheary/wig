@@ -142,15 +142,25 @@ export default function EditEventPage() {
   });
 
   const deleteMutation = trpc.event.deleteEvent.useMutation({
-    onSuccess: async () => {
+    onSuccess: async (data) => {
       await Promise.all([
         utils.event.getEventById.invalidate({ eventId }),
         utils.event.listEventsByRange.invalidate(),
         utils.event.getRecentlyAddedEvents.invalidate(),
       ]);
+
+      const deletedFutureCount = Math.max(0, data.deletedEvents - 1);
+      const description = data.deletedRecurring
+        ? deletedFutureCount > 0
+          ? `Deleted this event and ${deletedFutureCount} upcoming occurrence${
+              deletedFutureCount === 1 ? "" : "s"
+            }.`
+          : "Deleted this recurring event occurrence."
+        : "The event has been removed from the platform";
+
       toast({
         title: "Event deleted",
-        description: "The event has been removed from the platform",
+        description,
       });
       router.push(afterDeleteHref);
     },
@@ -279,7 +289,9 @@ export default function EditEventPage() {
 
   const handleDelete = () => {
     const confirmed = window.confirm(
-      "Delete this event? It will be hidden across the platform."
+      event?.seriesId
+        ? "Delete this recurring event? This will remove this occurrence and all future occurrences in the series."
+        : "Delete this event? It will be hidden across the platform."
     );
     if (!confirmed) return;
     deleteMutation.mutate({ eventId });

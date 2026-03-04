@@ -28,9 +28,8 @@ import {
   getEventStatusLabel,
 } from "@/lib/event-status";
 import { SharedBackButton } from "@/components/shared/back-button";
-import {
-  withReturnTo,
-} from "@/lib/navigation";
+import { withReturnTo } from "@/lib/navigation";
+import { HapticPreset, useHaptics } from "@/hooks/use-haptics";
 
 type RsvpStatus = "going" | "interested" | "not_going";
 
@@ -109,6 +108,7 @@ export default function EventPage() {
   const { data: currentUser } = trpc.user.getCurrentUser.useQuery();
   const { data: myPartner } = trpc.partners.getMyPartner.useQuery();
   const [includePartner, setIncludePartner] = useState(true);
+  const { triggerHaptic } = useHaptics();
 
   // RSVP mutation
   const rsvpMutation = trpc.event.setRsvpStatus.useMutation({
@@ -162,8 +162,10 @@ export default function EventPage() {
   const handleRsvp = (status: RsvpStatus) => {
     // If clicking the same status button again, remove the RSVP
     if (event?.userRsvp?.status === status) {
+      void triggerHaptic(HapticPreset.Soft);
       deleteRsvpMutation.mutate({ eventId });
     } else {
+      void triggerHaptic(HapticPreset.Success);
       rsvpMutation.mutate({
         eventId,
         status,
@@ -261,7 +263,7 @@ export default function EventPage() {
       )}
 
       {/* Desktop two-column layout */}
-      <div className="container mx-auto w-full px-4 pb-8 md:pt-4">
+      <div className="container mx-auto w-full px-4 pb-8">
         <div className="lg:flex lg:items-start lg:gap-10">
           {/* Cover Image - Left column on desktop */}
           <div className="lg:w-[360px] lg:flex-none">
@@ -311,10 +313,10 @@ export default function EventPage() {
                       size="icon"
                       variant="secondary"
                       className="h-10 w-10"
-                  >
-                    <Edit className="h-4 w-4" />
-                  </Button>
-                </Link>
+                    >
+                      <Edit className="h-4 w-4" />
+                    </Button>
+                  </Link>
                 )}
                 {/*<Button size="icon" variant="secondary" className="h-10 w-10">*/}
                 {/*  <Heart className="h-4 w-4" />*/}

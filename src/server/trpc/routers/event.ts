@@ -1734,6 +1734,42 @@ export const eventRouter = router({
         });
       }
 
+      if (event.seriesId) {
+        const now = new Date();
+        const deletedRecurringEvents = await ctx.db
+          .delete(events)
+          .where(
+            and(
+              eq(events.seriesId, event.seriesId),
+              or(gte(events.startAt, now), eq(events.id, input.eventId))
+            )
+          )
+          .returning({ id: events.id });
+
+        if (deletedRecurringEvents.length === 0) {
+          throw new TRPCError({
+            code: "INTERNAL_SERVER_ERROR",
+            message: "Failed to delete recurring events",
+          });
+        }
+
+        const seriesCutoff = new Date(now.getTime() - 1);
+        await ctx.db
+          .update(eventSeries)
+          .set({
+            isActive: false,
+            untilDate: seriesCutoff,
+            updatedAt: new Date(),
+          })
+          .where(eq(eventSeries.id, event.seriesId));
+
+        return {
+          success: true,
+          deletedEvents: deletedRecurringEvents.length,
+          deletedRecurring: true,
+        };
+      }
+
       const [deletedEvent] = await ctx.db
         .delete(events)
         .where(eq(events.id, input.eventId))
@@ -1746,7 +1782,7 @@ export const eventRouter = router({
         });
       }
 
-      return { success: true };
+      return { success: true, deletedEvents: 1, deletedRecurring: false };
     }),
 
   listPublicEventsPreview: publicProcedure

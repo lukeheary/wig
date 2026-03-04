@@ -75,7 +75,7 @@ import { resolveMetroArea } from "@/lib/metro-areas";
 import { StickySearchBar } from "@/components/ui/sticky-search-bar";
 import { StickySectionHeader } from "@/components/ui/sticky-section-header";
 import { withReturnTo } from "@/lib/navigation";
-import { WebHaptics } from "web-haptics";
+import { HapticPreset, useHaptics } from "@/hooks/use-haptics";
 
 type ViewMode = "week" | "month";
 
@@ -119,7 +119,7 @@ function EventSkeletonGrid({ count = 8 }: { count?: number }) {
 
 function HomePageContent() {
   const { toast } = useToast();
-  const haptics = useMemo(() => new WebHaptics(), []);
+  const { triggerHaptic } = useHaptics();
   const [activeFilter, setActiveFilter] = useState<EventFilterTab>("all");
   const [selectedCategories, setSelectedCategories] = useState<string[]>([]);
   const [isSticky, setIsSticky] = useState(false);
@@ -262,8 +262,6 @@ function HomePageContent() {
     setSearchQuery("");
     searchInputRef.current?.blur();
   };
-
-  useEffect(() => () => haptics.destroy(), [haptics]);
 
   const toggleCategory = useCallback((categoryKey: string) => {
     setSelectedCategories((prev) =>
@@ -448,14 +446,11 @@ function HomePageContent() {
 
   const handlePrevious = async () => {
     if (isCurrentWeek) {
-      void haptics.trigger([
-        { duration: 40, intensity: 0.8 },
-        { delay: 100, duration: 40, intensity: 0.6 },
-      ]);
+      void triggerHaptic(HapticPreset.Warning);
       return;
     }
 
-    void haptics.trigger([{ duration: 15 }], { intensity: 0.4 });
+    void triggerHaptic(HapticPreset.Light);
 
     if (viewMode === "week") {
       const today = startOfDay(new Date());
@@ -485,7 +480,7 @@ function HomePageContent() {
   };
 
   const handleNext = async () => {
-    void haptics.trigger([{ duration: 15 }], { intensity: 0.4 });
+    void triggerHaptic(HapticPreset.Light);
 
     if (viewMode === "week") {
       const today = startOfDay(new Date());
@@ -690,7 +685,7 @@ function HomePageContent() {
                       type="button"
                       aria-pressed={isSelected}
                       onClick={() => {
-                        void haptics.trigger([{ duration: 40 }]);
+                        void triggerHaptic(HapticPreset.Soft);
                         toggleCategory(category.key);
                       }}
                       className={cn(
