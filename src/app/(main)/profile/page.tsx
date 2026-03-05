@@ -159,10 +159,10 @@ export default function ProfilePage() {
   const updateProfileMutation = trpc.user.updateProfile.useMutation({
     onSuccess: (data) => {
       console.log("Profile updated successfully:", data);
-      toast({
-        title: "Profile updated",
-        description: "Your profile has been updated successfully",
-      });
+      // toast({
+      //   title: "Profile updated",
+      //   description: "Your profile has been updated successfully",
+      // });
       // Invalidate all user-related queries to refresh data
       utils.user.getCurrentUser.invalidate();
       utils.user.isAdmin.invalidate();

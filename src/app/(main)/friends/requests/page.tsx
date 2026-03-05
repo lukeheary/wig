@@ -37,9 +37,9 @@ function RequestsPageContent() {
 
   const rejectMutation = trpc.friends.rejectFriendRequest.useMutation({
     onSuccess: () => {
-      toast({
-        title: "Friend request rejected",
-      });
+      // toast({
+      //   title: "Friend request rejected",
+      // });
       utils.friends.listFriends.invalidate();
     },
     onError: (error) => {
@@ -74,46 +74,45 @@ function RequestsPageContent() {
                 </p>
               </div>
             ) : (
-                <UserList
-                  items={receivedRequests}
-                  getUser={(req) => ({
-                    id: req.friend?.id || "",
-                    firstName: req.friend?.firstName || null,
-                    lastName: req.friend?.lastName || null,
-                    username: req.friend?.username || null,
-                    avatarImageUrl: req.friend?.avatarImageUrl || null,
-                  })}
-                  renderAction={(request) => (
-                    <div className="flex gap-2">
-
-                      <Button
-                        size="sm"
-                        variant="outline"
-                        onClick={() =>
-                          rejectMutation.mutate({
-                            friendRequestId: request.id,
-                          })
-                        }
-                        disabled={rejectMutation.isPending}
-                      >
-                        <X className="mr-1 h-4 w-4" />
-                        Reject
-                      </Button>
-                      <Button
-                        size="sm"
-                        onClick={() =>
-                          acceptMutation.mutate({
-                            friendRequestId: request.id,
-                          })
-                        }
-                        disabled={acceptMutation.isPending}
-                      >
-                        <Check className="mr-1 h-4 w-4" />
-                        Accept
-                      </Button>
-                    </div>
-                  )}
-                />
+              <UserList
+                items={receivedRequests}
+                getUser={(req) => ({
+                  id: req.friend?.id || "",
+                  firstName: req.friend?.firstName || null,
+                  lastName: req.friend?.lastName || null,
+                  username: req.friend?.username || null,
+                  avatarImageUrl: req.friend?.avatarImageUrl || null,
+                })}
+                renderAction={(request) => (
+                  <div className="flex gap-2">
+                    <Button
+                      size="sm"
+                      variant="outline"
+                      onClick={() =>
+                        rejectMutation.mutate({
+                          friendRequestId: request.id,
+                        })
+                      }
+                      disabled={rejectMutation.isPending}
+                    >
+                      <X className="mr-1 h-4 w-4" />
+                      Reject
+                    </Button>
+                    <Button
+                      size="sm"
+                      onClick={() =>
+                        acceptMutation.mutate({
+                          friendRequestId: request.id,
+                        })
+                      }
+                      disabled={acceptMutation.isPending}
+                    >
+                      <Check className="mr-1 h-4 w-4" />
+                      Accept
+                    </Button>
+                  </div>
+                )}
+              />
             )}
           </div>
 
@@ -121,19 +120,17 @@ function RequestsPageContent() {
           {sentRequests.length > 0 && (
             <div className="space-y-3">
               <h2 className="text-lg font-semibold">Sent Requests</h2>
-                <UserList
-                  items={sentRequests}
-                  getUser={(req) => ({
-                    id: req.friend?.id || "",
-                    firstName: req.friend?.firstName || null,
-                    lastName: req.friend?.lastName || null,
-                    username: req.friend?.username || null,
-                    avatarImageUrl: req.friend?.avatarImageUrl || null,
-                  })}
-                  renderAction={() => (
-                    <Badge variant="outline">Pending</Badge>
-                  )}
-                />
+              <UserList
+                items={sentRequests}
+                getUser={(req) => ({
+                  id: req.friend?.id || "",
+                  firstName: req.friend?.firstName || null,
+                  lastName: req.friend?.lastName || null,
+                  username: req.friend?.username || null,
+                  avatarImageUrl: req.friend?.avatarImageUrl || null,
+                })}
+                renderAction={() => <Badge variant="outline">Pending</Badge>}
+              />
             </div>
           )}
         </>

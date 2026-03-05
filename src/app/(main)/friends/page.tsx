@@ -90,10 +90,10 @@ function FriendsPageContent() {
   // Mutations
   const sendRequestMutation = trpc.friends.sendFriendRequest.useMutation({
     onSuccess: () => {
-      toast({
-        title: "Friend request sent",
-        description: "Your friend request has been sent",
-      });
+      // toast({
+      //   title: "Friend request sent",
+      //   description: "Your friend request has been sent",
+      // });
       utils.friends.searchUsers.invalidate();
       utils.friends.getRecentUsers.invalidate();
       utils.friends.listFriends.invalidate();
@@ -109,10 +109,10 @@ function FriendsPageContent() {
 
   const acceptMutation = trpc.friends.acceptFriendRequest.useMutation({
     onSuccess: () => {
-      toast({
-        title: "Friend request accepted",
-        description: "You are now friends",
-      });
+      // toast({
+      //   title: "Friend request accepted",
+      //   description: "You are now friends",
+      // });
       utils.friends.listFriends.invalidate();
     },
     onError: (error) => {
@@ -126,7 +126,7 @@ function FriendsPageContent() {
 
   const rejectMutation = trpc.friends.rejectFriendRequest.useMutation({
     onSuccess: () => {
-      toast({ title: "Friend request rejected" });
+      // toast({ title: "Friend request rejected" });
       utils.friends.listFriends.invalidate();
     },
     onError: (error) => {

@@ -57,6 +57,7 @@
     "svix": "^1.46.0",
     "tailwind-merge": "^2.5.5",
     "tailwindcss-animate": "^1.0.7",
+    "torph": "^0.0.5",
     "web-haptics": "^0.0.6",
     "ws": "^8.19.0",
     "zod": "^3.24.1"

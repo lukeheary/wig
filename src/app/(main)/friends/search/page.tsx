@@ -38,10 +38,10 @@ function SearchPageContent() {
 
   const sendRequestMutation = trpc.friends.sendFriendRequest.useMutation({
     onSuccess: () => {
-      toast({
-        title: "Friend request sent",
-        description: "Your friend request has been sent",
-      });
+      // toast({
+      //   title: "Friend request sent",
+      //   description: "Your friend request has been sent",
+      // });
       utils.friends.searchUsers.invalidate();
       utils.friends.getRecentUsers.invalidate();
       utils.friends.listFriends.invalidate();
@@ -114,9 +114,9 @@ function SearchPageContent() {
                   className="flex items-center justify-between rounded-lg border p-4"
                 >
                   <div className="flex items-center gap-3">
-                    <UserAvatar 
-                      src={user.avatarImageUrl} 
-                      name={user.firstName} 
+                    <UserAvatar
+                      src={user.avatarImageUrl}
+                      name={user.firstName}
                     />
                     <div>
                       <p className="font-medium">
@@ -166,9 +166,9 @@ function SearchPageContent() {
                     className="flex items-center justify-between rounded-lg border p-4"
                   >
                     <div className="flex items-center gap-3">
-                      <UserAvatar 
-                        src={user.avatarImageUrl} 
-                        name={user.firstName} 
+                      <UserAvatar
+                        src={user.avatarImageUrl}
+                        name={user.firstName}
                       />
                       <div>
                         <p className="font-medium">

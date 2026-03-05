@@ -45,8 +45,25 @@ export async function POST(req: Request) {
   const eventType = evt.type;
 
   if (eventType === "user.created" || eventType === "user.updated") {
-    const { id, email_addresses, username, first_name, last_name, image_url } =
-      evt.data;
+    const {
+      id,
+      email_addresses,
+      primary_email_address_id,
+      username,
+      first_name,
+      last_name,
+      image_url,
+    } = evt.data;
+
+    const primaryEmailAddress =
+      email_addresses.find((email) => email.id === primary_email_address_id) ??
+      email_addresses[0];
+    const email = primaryEmailAddress?.email_address?.toLowerCase().trim();
+
+    if (!email) {
+      console.warn(`Skipping ${eventType} for user ${id}: missing email`);
+      return new Response("", { status: 200 });
+    }
     
     // Check if the user has a real image (Clerk default and OAuth proxy images should be ignored)
     // @ts-ignore - has_image might not be in the typings but is in the payload
@@ -59,6 +76,17 @@ export async function POST(req: Request) {
     const existingUser = await db.query.users.findFirst({
       where: eq(users.id, id),
     });
+    const existingUserByEmail = await db.query.users.findFirst({
+      where: eq(users.email, email),
+    });
+
+    // Prevent duplicate profiles when Clerk emits duplicate create flows with different IDs.
+    if (existingUserByEmail && existingUserByEmail.id !== id) {
+      console.warn(
+        `Skipping ${eventType} for Clerk user ${id}: email ${email} already belongs to user ${existingUserByEmail.id}`
+      );
+      return new Response("", { status: 200 });
+    }
 
     const finalUsername = existingUser
       ? existingUser.username
@@ -68,7 +96,7 @@ export async function POST(req: Request) {
       .insert(users)
       .values({
         id,
-        email: email_addresses[0].email_address,
+        email,
         username: finalUsername,
         firstName: first_name,
         lastName: last_name,
@@ -77,7 +105,7 @@ export async function POST(req: Request) {
       .onConflictDoUpdate({
         target: users.id,
         set: {
-          email: email_addresses[0].email_address,
+          email,
           // Only update username if Clerk provides one, otherwise keep existing
           ...(username ? { username } : {}),
           firstName: first_name,

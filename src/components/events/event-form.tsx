@@ -156,17 +156,19 @@ export function EventForm({
     );
 
   const titleQuery = formData.title.trim();
-  const { data: titleSuggestions = [], isFetching: isFetchingTitleSuggestions } =
-    trpc.place.suggestEventTitles.useQuery(
-      {
-        venueId: selectedVenue?.id || "",
-        query: titleQuery,
-        limit: 8,
-      },
-      {
-        enabled: Boolean(selectedVenue?.id && titleQuery.length > 0),
-      }
-    );
+  const {
+    data: titleSuggestions = [],
+    isFetching: isFetchingTitleSuggestions,
+  } = trpc.place.suggestEventTitles.useQuery(
+    {
+      venueId: selectedVenue?.id || "",
+      query: titleQuery,
+      limit: 8,
+    },
+    {
+      enabled: Boolean(selectedVenue?.id && titleQuery.length > 0),
+    }
+  );
   const visibleTitleSuggestions = titleSuggestions.filter(
     (suggestion) => suggestion.toLowerCase() !== titleQuery.toLowerCase()
   );
@@ -216,18 +218,21 @@ export function EventForm({
   ]);
 
   const monthlyPatternLabel = (() => {
-    if (!isRecurringDefault || recurrenceData.frequency !== "monthly") return null;
+    if (!isRecurringDefault || recurrenceData.frequency !== "monthly")
+      return null;
     const startDate = getDatePart(formData.startAt);
     if (!startDate) return null;
     const date = new Date(`${startDate}T00:00`);
     const weekday = date.getDay();
     const ordinal = Math.floor((date.getDate() - 1) / 7);
-    const ordinalLabel = ORDINAL_LABELS[Math.min(ordinal, ORDINAL_LABELS.length - 1)];
+    const ordinalLabel =
+      ORDINAL_LABELS[Math.min(ordinal, ORDINAL_LABELS.length - 1)];
     return `${ordinalLabel} ${FULL_WEEKDAY_LABELS[weekday]}`;
   })();
 
   const weeklyPatternLabel = (() => {
-    if (!isRecurringDefault || recurrenceData.frequency !== "weekly") return null;
+    if (!isRecurringDefault || recurrenceData.frequency !== "weekly")
+      return null;
     if (recurrenceData.daysOfWeek.length === 0) return null;
     return recurrenceData.daysOfWeek
       .map((day) => FULL_WEEKDAY_LABELS[day] ?? WEEKDAY_LABELS[day])
@@ -238,10 +243,10 @@ export function EventForm({
 
   const createMutation = trpc.event.createEvent.useMutation({
     onSuccess: (data) => {
-      toast({
-        title: "Success",
-        description: "Event created successfully",
-      });
+      // toast({
+      //   title: "Success",
+      //   description: "Event created successfully",
+      // });
       onSuccess?.(data.id);
     },
     onError: (error) => {
@@ -255,13 +260,13 @@ export function EventForm({
 
   const createRecurringMutation = trpc.event.createRecurringEvent.useMutation({
     onSuccess: (data) => {
-      toast({
-        title: "Success",
-        description:
-          data.createdEvents > 0
-            ? `Recurring series created with ${data.createdEvents} upcoming events`
-            : "Recurring series created",
-      });
+      // toast({
+      //   title: "Success",
+      //   description:
+      //     data.createdEvents > 0
+      //       ? `Recurring series created with ${data.createdEvents} upcoming events`
+      //       : "Recurring series created",
+      // });
       onSuccess?.(data.firstEventId ?? undefined);
     },
     onError: (error) => {
@@ -417,7 +422,8 @@ export function EventForm({
       if (isRecurringDefault) {
         await createRecurringMutation.mutateAsync({
           ...payload,
-          timeZone: Intl.DateTimeFormat().resolvedOptions().timeZone || undefined,
+          timeZone:
+            Intl.DateTimeFormat().resolvedOptions().timeZone || undefined,
           recurrence: {
             frequency: recurrenceData.frequency,
             interval: recurrenceData.interval,
@@ -632,38 +638,40 @@ export function EventForm({
                   autoComplete="off"
                   required
                 />
-                {showTitleSuggestions && selectedVenue?.id && titleQuery.length > 0 && (
-                  <div className="absolute z-20 mt-1 max-h-64 w-full overflow-auto rounded-md border bg-popover p-1 shadow-md">
-                    {isFetchingTitleSuggestions ? (
-                      <div className="flex items-center gap-2 px-2 py-2 text-xs text-muted-foreground">
-                        <Loader2 className="h-3.5 w-3.5 animate-spin" />
-                        Looking up previous event names...
-                      </div>
-                    ) : visibleTitleSuggestions.length > 0 ? (
-                      visibleTitleSuggestions.map((suggestion) => (
-                        <button
-                          key={suggestion}
-                          type="button"
-                          className="w-full rounded-sm px-2 py-1.5 text-left text-sm hover:bg-accent hover:text-accent-foreground"
-                          onMouseDown={(e) => e.preventDefault()}
-                          onClick={() => {
-                            setFormData((prev) => ({
-                              ...prev,
-                              title: suggestion,
-                            }));
-                            setShowTitleSuggestions(false);
-                          }}
-                        >
-                          {suggestion}
-                        </button>
-                      ))
-                    ) : (
-                      <div className="px-2 py-2 text-xs text-muted-foreground">
-                        No previous event names match this search.
-                      </div>
-                    )}
-                  </div>
-                )}
+                {showTitleSuggestions &&
+                  selectedVenue?.id &&
+                  titleQuery.length > 0 && (
+                    <div className="absolute z-20 mt-1 max-h-64 w-full overflow-auto rounded-md border bg-popover p-1 shadow-md">
+                      {isFetchingTitleSuggestions ? (
+                        <div className="flex items-center gap-2 px-2 py-2 text-xs text-muted-foreground">
+                          <Loader2 className="h-3.5 w-3.5 animate-spin" />
+                          Looking up previous event names...
+                        </div>
+                      ) : visibleTitleSuggestions.length > 0 ? (
+                        visibleTitleSuggestions.map((suggestion) => (
+                          <button
+                            key={suggestion}
+                            type="button"
+                            className="w-full rounded-sm px-2 py-1.5 text-left text-sm hover:bg-accent hover:text-accent-foreground"
+                            onMouseDown={(e) => e.preventDefault()}
+                            onClick={() => {
+                              setFormData((prev) => ({
+                                ...prev,
+                                title: suggestion,
+                              }));
+                              setShowTitleSuggestions(false);
+                            }}
+                          >
+                            {suggestion}
+                          </button>
+                        ))
+                      ) : (
+                        <div className="px-2 py-2 text-xs text-muted-foreground">
+                          No previous event names match this search.
+                        </div>
+                      )}
+                    </div>
+                  )}
               </div>
             </div>
 

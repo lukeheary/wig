@@ -78,10 +78,10 @@ export default function PlacePage() {
   // Unfollow mutation
   const unfollowMutation = trpc.place.unfollowPlace.useMutation({
     onSuccess: () => {
-      toast({
-        title: "Success",
-        description: `You unfollowed this ${place?.type === "venue" ? "venue" : "organizer"}`,
-      });
+      // toast({
+      //   title: "Success",
+      //   description: `You unfollowed this ${place?.type === "venue" ? "venue" : "organizer"}`,
+      // });
       utils.place.isFollowingPlace.invalidate();
       utils.place.getPlaceBySlug.invalidate();
     },
@@ -360,7 +360,9 @@ export default function PlacePage() {
       </div>
 
       <div className="pt-8">
-        <StickySectionHeader><span className="text-xl font-semibold">Upcoming Events</span></StickySectionHeader>
+        <StickySectionHeader>
+          <span className="text-xl font-semibold">Upcoming Events</span>
+        </StickySectionHeader>
         <div className="container mx-auto">
           {place.events && place.events.length > 0 ? (
             <EventCardGrid
@@ -381,7 +383,9 @@ export default function PlacePage() {
       {/* Previous Events */}
       {place.pastEvents && (place.pastEvents as any[]).length > 0 && (
         <div className="pt-8">
-          <StickySectionHeader><span className="text-xl font-semibold">Past Events</span></StickySectionHeader>
+          <StickySectionHeader>
+            <span className="text-xl font-semibold">Past Events</span>
+          </StickySectionHeader>
           <div className="container mx-auto">
             <EventCardGrid
               events={place.pastEvents as any}

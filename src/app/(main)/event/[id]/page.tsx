@@ -12,6 +12,7 @@ import {
   Calendar,
   MapPin,
   Share,
+  Check,
   Edit,
   Users,
   ExternalLink,
@@ -76,6 +77,7 @@ export default function EventPage() {
   const { toast } = useToast();
   const utils = trpc.useUtils();
   const [isImageModalOpen, setIsImageModalOpen] = useState(false);
+  const [isShareCopied, setIsShareCopied] = useState(false);
   const returnTo = searchParams.get("returnTo");
   const editHref = withReturnTo(`/event/${eventId}/edit`, returnTo);
 
@@ -153,6 +155,16 @@ export default function EventPage() {
     setIncludePartner(true);
   }, [eventId, myPartner?.partner?.id, myPartner?.status]);
 
+  useEffect(() => {
+    if (!isShareCopied) return;
+
+    const timeoutId = window.setTimeout(() => {
+      setIsShareCopied(false);
+    }, 1200);
+
+    return () => window.clearTimeout(timeoutId);
+  }, [isShareCopied]);
+
   const hasActivePartner = myPartner?.status === "accepted";
   const goingLabel =
     hasActivePartner && includePartner ? "We're Going" : "I'm Going";
@@ -171,6 +183,19 @@ export default function EventPage() {
         status,
         includePartner: hasActivePartner && includePartner,
       });
+    }
+  };
+
+  const handleShare = async () => {
+    try {
+      if (!navigator.clipboard?.writeText) return;
+
+      const eventUrl = `${window.location.origin}/event/${eventId}`;
+      await navigator.clipboard.writeText(eventUrl);
+      void triggerHaptic(HapticPreset.Light);
+      setIsShareCopied(true);
+    } catch (error) {
+      console.error("Failed to copy event link:", error);
     }
   };
 
@@ -321,8 +346,18 @@ export default function EventPage() {
                 {/*<Button size="icon" variant="secondary" className="h-10 w-10">*/}
                 {/*  <Heart className="h-4 w-4" />*/}
                 {/*</Button>*/}
-                <Button size="icon" variant="secondary" className="h-10 w-10">
-                  <Share className="h-4 w-4" />
+                <Button
+                  size="icon"
+                  variant="secondary"
+                  className="h-10 w-10"
+                  onClick={() => void handleShare()}
+                  aria-label={isShareCopied ? "Link copied" : "Copy event link"}
+                >
+                  {isShareCopied ? (
+                    <Check className="h-4 w-4" />
+                  ) : (
+                    <Share className="h-4 w-4" />
+                  )}
                 </Button>
               </div>
 

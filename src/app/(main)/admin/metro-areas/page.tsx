@@ -42,7 +42,7 @@ export default function AdminMetroAreasPage() {
 
   const createMutation = trpc.admin.createMetroArea.useMutation({
     onSuccess: () => {
-      toast({ title: "Success", description: "Metro area created" });
+      // toast({ title: "Success", description: "Metro area created" });
       setViewMode("list");
       setForm(emptyForm);
       setCitySearch("");
@@ -60,7 +60,7 @@ export default function AdminMetroAreasPage() {
 
   const updateMutation = trpc.admin.updateMetroArea.useMutation({
     onSuccess: () => {
-      toast({ title: "Success", description: "Metro area updated" });
+      // toast({ title: "Success", description: "Metro area updated" });
       setViewMode("list");
       setEditingId(null);
       setForm(emptyForm);

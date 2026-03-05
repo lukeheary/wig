@@ -54,12 +54,13 @@ export default function AdminCategoriesPage() {
 
   const { data: categories, isLoading } = trpc.admin.listCategories.useQuery();
   const categoryById = useMemo(
-    () => new Map((categories || []).map((category) => [category.id, category])),
+    () =>
+      new Map((categories || []).map((category) => [category.id, category])),
     [categories]
   );
   const createCategory = trpc.admin.createCategory.useMutation({
     onSuccess: () => {
-      toast({ title: "Category created" });
+      // toast({ title: "Category created" });
       utils.admin.listCategories.invalidate();
       utils.category.listActive.invalidate();
       setNewCategory({
@@ -102,9 +103,9 @@ export default function AdminCategoriesPage() {
         variables.label === undefined &&
         variables.sortOrder === undefined;
 
-      if (!isToggleOnly) {
-        toast({ title: "Category updated" });
-      }
+      // if (!isToggleOnly) {
+      //   toast({ title: "Category updated" });
+      // }
 
       utils.admin.listCategories.setData(undefined, (prev) =>
         prev?.map((category) =>
@@ -390,9 +391,7 @@ export default function AdminCategoriesPage() {
                     <Toggle
                       checked={draft.isActive}
                       disabled={updateCategory.isPending}
-                      onChange={(next) =>
-                        handleToggleActive(category.id, next)
-                      }
+                      onChange={(next) => handleToggleActive(category.id, next)}
                     />
                     <span className="text-sm text-muted-foreground">
                       {draft.isActive ? "Active" : "Inactive"}
@@ -412,7 +411,12 @@ export default function AdminCategoriesPage() {
                     variant="destructive"
                     size="icon"
                     onClick={() => {
-                      if (!confirm(`Delete "${category.label}"? This cannot be undone.`)) return;
+                      if (
+                        !confirm(
+                          `Delete "${category.label}"? This cannot be undone.`
+                        )
+                      )
+                        return;
                       deleteCategory.mutate({ id: category.id });
                     }}
                     disabled={deleteCategory.isPending}

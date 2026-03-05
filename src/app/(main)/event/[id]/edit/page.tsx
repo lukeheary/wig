@@ -126,10 +126,10 @@ export default function EditEventPage() {
 
   const updateMutation = trpc.event.updateEvent.useMutation({
     onSuccess: () => {
-      toast({
-        title: "Success",
-        description: "Event updated successfully",
-      });
+      // toast({
+      //   title: "Success",
+      //   description: "Event updated successfully",
+      // });
       router.push(eventDetailHref);
     },
     onError: (error) => {

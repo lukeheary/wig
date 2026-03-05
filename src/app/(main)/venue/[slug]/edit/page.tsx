@@ -38,10 +38,10 @@ export default function EditPlacePage() {
 
   const updateMutation = trpc.place.updatePlace.useMutation({
     onSuccess: (_, variables) => {
-      toast({
-        title: "Success",
-        description: "Place updated successfully",
-      });
+      // toast({
+      //   title: "Success",
+      //   description: "Place updated successfully",
+      // });
       // Navigate to the new slug if it changed
       router.push(`/venue/${variables.slug || slug}`);
     },
@@ -162,10 +162,7 @@ export default function EditPlacePage() {
 
   return (
     <div className="container mx-auto max-w-2xl space-y-4 py-8">
-      <BackButtonHeader
-        backHref={backHref}
-        title={`Edit ${typeLabel}`}
-      />
+      <BackButtonHeader backHref={backHref} title={`Edit ${typeLabel}`} />
 
       <PlaceEditForm
         initialData={initialData}

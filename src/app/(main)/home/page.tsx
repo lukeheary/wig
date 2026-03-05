@@ -685,7 +685,7 @@ function HomePageContent() {
                       type="button"
                       aria-pressed={isSelected}
                       onClick={() => {
-                        void triggerHaptic(HapticPreset.Soft);
+                        void triggerHaptic(HapticPreset.Selection);
                         toggleCategory(category.key);
                       }}
                       className={cn(
