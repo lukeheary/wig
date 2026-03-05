@@ -222,6 +222,11 @@ export default function EventPage() {
   // Get users who are going for avatar stack
   const goingUsers =
     attendees?.filter((a) => a.status === "going").map((a) => a.user) || [];
+  const eventImageUrl =
+    event.coverImageUrl ||
+    event.venue?.logoImageUrl ||
+    event.organizer?.logoImageUrl ||
+    null;
 
   const eventDate = new Date(event.startAt);
   const formattedDate = format(eventDate, "EEE, MMM d");
@@ -245,10 +250,10 @@ export default function EventPage() {
 
   return (
     <div className="relative isolate -mt-16 min-h-screen bg-background pt-16">
-      {event.coverImageUrl && (
+      {eventImageUrl && (
         <div className="pointer-events-none absolute inset-0 -z-10 overflow-hidden">
           <Image
-            src={event.coverImageUrl}
+            src={eventImageUrl}
             alt=""
             fill
             className="scale-110 object-cover opacity-20 blur-2xl"
@@ -259,7 +264,7 @@ export default function EventPage() {
         </div>
       )}
       {/* Image Modal */}
-      {isImageModalOpen && event.coverImageUrl && (
+      {isImageModalOpen && eventImageUrl && (
         <div
           className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 p-4 backdrop-blur-xl"
           onClick={() => setIsImageModalOpen(false)}
@@ -277,7 +282,7 @@ export default function EventPage() {
             onClick={(e) => e.stopPropagation()}
           >
             <Image
-              src={event.coverImageUrl}
+              src={eventImageUrl}
               alt={event.title}
               width={1200}
               height={800}
@@ -293,10 +298,10 @@ export default function EventPage() {
           {/* Cover Image - Left column on desktop */}
           <div className="lg:w-[360px] lg:flex-none">
             <div className="relative aspect-square w-full overflow-hidden rounded-2xl bg-muted lg:aspect-auto lg:min-h-[360px]">
-              {event.coverImageUrl ? (
+              {eventImageUrl ? (
                 <div className="h-full w-full">
                   <Image
-                    src={event.coverImageUrl}
+                    src={eventImageUrl}
                     alt={event.title}
                     fill
                     className={cn(
@@ -312,7 +317,7 @@ export default function EventPage() {
                   <Calendar className="h-24 w-24 text-muted-foreground/40" />
                 </div>
               )}
-              {event.coverImageUrl && isStatusFlagged && (
+              {eventImageUrl && isStatusFlagged && (
                 <div className="pointer-events-none absolute inset-0 flex items-center justify-center">
                   <span className="rounded-md bg-card px-2 py-1 text-base font-semibold uppercase tracking-[0.12em] text-white">
                     {statusLabel}
@@ -369,7 +374,7 @@ export default function EventPage() {
               )}
 
               {/* Expand Button - bottom left */}
-              {event.coverImageUrl && (
+              {eventImageUrl && (
                 <Button
                   size="icon"
                   variant="secondary"

@@ -875,112 +875,120 @@ function HomePageContent() {
                         {format(date, "d")}
                       </div>
                       <div className="space-y-1">
-                        {dayEvents.slice(0, 3).map((event) => (
-                          <HoverCard
-                            key={event.id}
-                            openDelay={200}
-                            closeDelay={100}
-                          >
-                            <HoverCardTrigger asChild>
-                              <div
-                                className="cursor-pointer truncate rounded bg-primary/10 p-1 text-xs text-primary hover:bg-primary/20"
-                                onClick={() => {
-                                  const returnTo = `${window.location.pathname}${window.location.search}`;
-                                  window.location.href = withReturnTo(
-                                    `/event/${event.id}`,
-                                    returnTo
-                                  );
-                                }}
-                              >
-                                {event.title}
-                              </div>
-                            </HoverCardTrigger>
-                            <HoverCardContent
-                              className="w-80"
-                              side="right"
-                              align="start"
+                        {dayEvents.slice(0, 3).map((event) => {
+                          const eventImageUrl =
+                            event.coverImageUrl ||
+                            event.venue?.logoImageUrl ||
+                            event.organizer?.logoImageUrl ||
+                            null;
+
+                          return (
+                            <HoverCard
+                              key={event.id}
+                              openDelay={200}
+                              closeDelay={100}
                             >
-                              <div className="space-y-3">
-                                {/* Event Image */}
-                                {event.coverImageUrl && (
-                                  <div className="relative h-32 w-full overflow-hidden rounded-md">
-                                    <Image
-                                      src={event.coverImageUrl}
-                                      alt={event.title}
-                                      fill
-                                      className="object-cover"
-                                    />
-                                  </div>
-                                )}
-
-                                {/* Title */}
-                                <div>
-                                  <h4 className="mb-1 text-base font-semibold leading-tight">
-                                    {event.title}
-                                  </h4>
-                                  <div className="flex flex-wrap gap-1">
-                                    {event.categories
-                                      ?.slice(0, 2)
-                                      .map((cat) => (
-                                        <span
-                                          key={cat}
-                                          className="rounded-full bg-primary/10 px-2 py-0.5 text-xs capitalize text-primary"
-                                        >
-                                          {categoryLabelMap[cat] || cat}
-                                        </span>
-                                      ))}
-                                  </div>
+                              <HoverCardTrigger asChild>
+                                <div
+                                  className="cursor-pointer truncate rounded bg-primary/10 p-1 text-xs text-primary hover:bg-primary/20"
+                                  onClick={() => {
+                                    const returnTo = `${window.location.pathname}${window.location.search}`;
+                                    window.location.href = withReturnTo(
+                                      `/event/${event.id}`,
+                                      returnTo
+                                    );
+                                  }}
+                                >
+                                  {event.title}
                                 </div>
+                              </HoverCardTrigger>
+                              <HoverCardContent
+                                className="w-80"
+                                side="right"
+                                align="start"
+                              >
+                                <div className="space-y-3">
+                                  {/* Event Image */}
+                                  {eventImageUrl && (
+                                    <div className="relative h-32 w-full overflow-hidden rounded-md">
+                                      <Image
+                                        src={eventImageUrl}
+                                        alt={event.title}
+                                        fill
+                                        className="object-cover"
+                                      />
+                                    </div>
+                                  )}
 
-                                {/* Date & Time */}
-                                <div className="flex items-start gap-2 text-sm">
-                                  <Clock className="mt-0.5 h-4 w-4 flex-shrink-0 text-muted-foreground" />
+                                  {/* Title */}
                                   <div>
-                                    <div className="font-medium">
-                                      {format(
-                                        new Date(event.startAt),
-                                        "EEEE, MMMM d"
-                                      )}
-                                    </div>
-                                    <div className="text-muted-foreground">
-                                      {formatTime(event.startAt)}
-                                      {event.endAt &&
-                                        ` - ${formatTime(event.endAt)}`}
+                                    <h4 className="mb-1 text-base font-semibold leading-tight">
+                                      {event.title}
+                                    </h4>
+                                    <div className="flex flex-wrap gap-1">
+                                      {event.categories
+                                        ?.slice(0, 2)
+                                        .map((cat) => (
+                                          <span
+                                            key={cat}
+                                            className="rounded-full bg-primary/10 px-2 py-0.5 text-xs capitalize text-primary"
+                                          >
+                                            {categoryLabelMap[cat] || cat}
+                                          </span>
+                                        ))}
                                     </div>
                                   </div>
-                                </div>
 
-                                {/* Location */}
-                                {(event.venue?.name || event.city) && (
+                                  {/* Date & Time */}
                                   <div className="flex items-start gap-2 text-sm">
-                                    <MapPin className="mt-0.5 h-4 w-4 flex-shrink-0 text-muted-foreground" />
+                                    <Clock className="mt-0.5 h-4 w-4 flex-shrink-0 text-muted-foreground" />
                                     <div>
-                                      {event.venue?.name && (
-                                        <div className="font-medium">
-                                          {event.venue.name}
-                                        </div>
-                                      )}
+                                      <div className="font-medium">
+                                        {format(
+                                          new Date(event.startAt),
+                                          "EEEE, MMMM d"
+                                        )}
+                                      </div>
                                       <div className="text-muted-foreground">
-                                        {event.city}, {event.state}
+                                        {formatTime(event.startAt)}
+                                        {event.endAt &&
+                                          ` - ${formatTime(event.endAt)}`}
                                       </div>
                                     </div>
                                   </div>
-                                )}
 
-                                {event.organizer && (
-                                  <div className="border-t pt-2 text-xs text-muted-foreground">
-                                    Hosted by {event.organizer.name}
+                                  {/* Location */}
+                                  {(event.venue?.name || event.city) && (
+                                    <div className="flex items-start gap-2 text-sm">
+                                      <MapPin className="mt-0.5 h-4 w-4 flex-shrink-0 text-muted-foreground" />
+                                      <div>
+                                        {event.venue?.name && (
+                                          <div className="font-medium">
+                                            {event.venue.name}
+                                          </div>
+                                        )}
+                                        <div className="text-muted-foreground">
+                                          {event.city}, {event.state}
+                                        </div>
+                                      </div>
+                                    </div>
+                                  )}
+
+                                  {event.organizer && (
+                                    <div className="border-t pt-2 text-xs text-muted-foreground">
+                                      Hosted by {event.organizer.name}
+                                    </div>
+                                  )}
+
+                                  {/* Click to view */}
+                                  <div className="pt-1 text-center text-xs text-muted-foreground">
+                                    Click to view full details
                                   </div>
-                                )}
-
-                                {/* Click to view */}
-                                <div className="pt-1 text-center text-xs text-muted-foreground">
-                                  Click to view full details
                                 </div>
-                              </div>
-                            </HoverCardContent>
-                          </HoverCard>
-                        ))}
+                              </HoverCardContent>
+                            </HoverCard>
+                          );
+                        })}
                         {dayEvents.length > 3 && (
                           <div className="text-xs text-muted-foreground">
                             +{dayEvents.length - 3} more

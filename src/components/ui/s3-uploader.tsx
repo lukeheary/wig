@@ -165,10 +165,10 @@ export function S3Uploader({
 
       const data = await response.json();
 
-      toast({
-        title: "Upload complete",
-        description: "Image uploaded successfully",
-      });
+      // toast({
+      //   title: "Upload complete",
+      //   description: "Image uploaded successfully",
+      // });
 
       // Store clean URL without cache-busting parameter
       onUploadComplete(data.url);
@@ -233,8 +233,7 @@ export function S3Uploader({
 
     toast({
       title: "No image found",
-      description:
-        "Drop an image file or image URL from a website to upload",
+      description: "Drop an image file or image URL from a website to upload",
       variant: "destructive",
     });
   };
@@ -258,10 +257,10 @@ export function S3Uploader({
         throw new Error(data.error || "Upload failed");
       }
 
-      toast({
-        title: "Upload complete",
-        description: "Image uploaded successfully",
-      });
+      // toast({
+      //   title: "Upload complete",
+      //   description: "Image uploaded successfully",
+      // });
 
       onUploadComplete(data.url);
       setPreviewUrl(`${data.url}?t=${Date.now()}`);

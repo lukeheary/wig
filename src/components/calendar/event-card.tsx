@@ -30,6 +30,11 @@ export function EventCard({ event }: EventCardProps) {
   const friendsGoing = event.friendsGoing || [];
   const goingUsers = friendsGoing.map((rsvp) => rsvp.user);
   const hasInactiveStatus = event.status !== "active";
+  const eventImageUrl =
+    event.coverImageUrl ||
+    event.venue?.logoImageUrl ||
+    event.organizer?.logoImageUrl ||
+    null;
 
   return (
     <Link href={eventHref} className="group">
@@ -38,9 +43,9 @@ export function EventCard({ event }: EventCardProps) {
         <div className="flex md:block">
           {/* Square Image - smaller on mobile, full width on desktop */}
           <div className="relative h-24 w-24 flex-shrink-0 overflow-hidden rounded-2xl bg-muted md:aspect-square md:h-auto md:w-full lg:max-w-[274px]">
-            {event.coverImageUrl ? (
+            {eventImageUrl ? (
               <Image
-                src={event.coverImageUrl}
+                src={eventImageUrl}
                 alt={event.title}
                 fill
                 className={cn(
