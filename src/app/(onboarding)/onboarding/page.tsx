@@ -46,8 +46,11 @@ export default function OnboardingPage() {
   const [isRedirecting, setIsRedirecting] = useState(false);
 
   // Check if user has already completed onboarding
-  const { data: user, isLoading: isLoadingUser } =
-    trpc.user.getCurrentUser.useQuery();
+  const { data: user } = trpc.user.getCurrentUser.useQuery(undefined, {
+    enabled: isLoaded && !!clerkUser,
+    retry: false,
+    refetchOnWindowFocus: false,
+  });
 
   // Redirect to home if user has already completed onboarding
   useEffect(() => {
@@ -185,9 +188,8 @@ export default function OnboardingPage() {
     []
   );
 
-  console.log("user", user);
-  // Show loader while checking user status
-  if (isLoadingUser) {
+  // Wait only for Clerk to hydrate the auth state.
+  if (!isLoaded) {
     return (
       <div className="flex min-h-screen items-center justify-center">
         <Loader2 className="h-8 w-8 animate-spin text-muted-foreground" />
@@ -225,7 +227,7 @@ export default function OnboardingPage() {
               onRemoveImage={() =>
                 setFormData({ ...formData, avatarImageUrl: "" })
               }
-              folder={`users/${user?.id}`}
+              folder={`users/${clerkUser?.id ?? user?.id ?? "pending-user"}`}
               fileName="avatar-image.png"
               className="w-full max-w-[200px]"
             />

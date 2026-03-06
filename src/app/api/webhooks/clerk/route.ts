@@ -3,7 +3,7 @@ import { headers } from "next/headers";
 import { WebhookEvent, clerkClient } from "@clerk/nextjs/server";
 import { db } from "@/server/db";
 import { users } from "@/server/db/schema";
-import { eq } from "drizzle-orm";
+import { eq, sql } from "drizzle-orm";
 
 export async function POST(req: Request) {
   const WEBHOOK_SECRET = process.env.CLERK_WEBHOOK_SECRET;
@@ -64,73 +64,64 @@ export async function POST(req: Request) {
       console.warn(`Skipping ${eventType} for user ${id}: missing email`);
       return new Response("", { status: 200 });
     }
-    
+
     // Check if the user has a real image (Clerk default and OAuth proxy images should be ignored)
     // @ts-ignore - has_image might not be in the typings but is in the payload
     const hasRealImage = evt.data.has_image === true;
-    const isClerkProxyImage = image_url?.includes("img.clerk.com") || image_url?.includes("oauth_google") || image_url?.includes("oauth_");
+    const isClerkProxyImage =
+      image_url?.includes("img.clerk.com") ||
+      image_url?.includes("oauth_google") ||
+      image_url?.includes("oauth_");
     const finalImageUrl = hasRealImage && !isClerkProxyImage ? image_url : null;
 
-    // For new users, use a temporary username that will be updated during onboarding
-    // For existing users being updated, preserve their current username
-    const existingUser = await db.query.users.findFirst({
-      where: eq(users.id, id),
-    });
-    const existingUserByEmail = await db.query.users.findFirst({
-      where: eq(users.email, email),
+    const insertedUserId = await db.transaction(async (tx) => {
+      // Serialize insert attempts for the same email so duplicate webhook deliveries
+      // cannot create multiple rows when they arrive concurrently.
+      await tx.execute(sql`SELECT pg_advisory_xact_lock(hashtext(${email}))`);
+
+      const [existingUserById, existingUserByEmail] = await Promise.all([
+        tx.query.users.findFirst({ where: eq(users.id, id) }),
+        tx.query.users.findFirst({ where: eq(users.email, email) }),
+      ]);
+
+      // Ignore all extra events once the first row exists.
+      if (existingUserById || existingUserByEmail) {
+        console.log(
+          `Skipping ${eventType} for Clerk user ${id}: user already exists for email ${email}`
+        );
+        return null;
+      }
+
+      const finalUsername = username || `user_${id.slice(-8)}`;
+      const [createdUser] = await tx
+        .insert(users)
+        .values({
+          id,
+          email,
+          username: finalUsername,
+          firstName: first_name,
+          lastName: last_name,
+          avatarImageUrl: finalImageUrl,
+        })
+        .onConflictDoNothing()
+        .returning({ id: users.id });
+
+      return createdUser?.id ?? null;
     });
 
-    // Prevent duplicate profiles when Clerk emits duplicate create flows with different IDs.
-    if (existingUserByEmail && existingUserByEmail.id !== id) {
-      console.warn(
-        `Skipping ${eventType} for Clerk user ${id}: email ${email} already belongs to user ${existingUserByEmail.id}`
-      );
+    if (!insertedUserId) {
       return new Response("", { status: 200 });
     }
 
-    const finalUsername = existingUser
-      ? existingUser.username
-      : username || `user_${id.slice(-8)}`;
+    // Set onboarding metadata only when we insert the very first row.
+    const clerk = await clerkClient();
+    await clerk.users.updateUserMetadata(id, {
+      publicMetadata: {
+        isOnboarding: true,
+      },
+    });
 
-    await db
-      .insert(users)
-      .values({
-        id,
-        email,
-        username: finalUsername,
-        firstName: first_name,
-        lastName: last_name,
-        avatarImageUrl: finalImageUrl,
-      })
-      .onConflictDoUpdate({
-        target: users.id,
-        set: {
-          email,
-          // Only update username if Clerk provides one, otherwise keep existing
-          ...(username ? { username } : {}),
-          firstName: first_name,
-          lastName: last_name,
-          // Only overwrite avatarImageUrl if the new one is a real image and the current one is either 
-          // missing or a Clerk default (S3/User-uploaded images should be preserved)
-          ...(finalImageUrl && (!existingUser?.avatarImageUrl || existingUser.avatarImageUrl.includes("clerk.com/default-user-image")) 
-            ? { avatarImageUrl: finalImageUrl } 
-            : {}),
-          updatedAt: new Date(),
-        },
-      });
-
-    // For new users, set isOnboarding: true in Clerk's public metadata
-    // This allows middleware to redirect them to onboarding
-    if (!existingUser) {
-      const clerk = await clerkClient();
-      await clerk.users.updateUserMetadata(id, {
-        publicMetadata: {
-          isOnboarding: true,
-        },
-      });
-    }
-
-    console.log(`✅ User ${id} synced to database`);
+    console.log(`Created user ${id} in database`);
   }
 
   if (eventType === "user.deleted") {

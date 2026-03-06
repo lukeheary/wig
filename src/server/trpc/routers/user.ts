@@ -71,11 +71,12 @@ export const userRouter = router({
     )
     .mutation(async ({ ctx, input }) => {
       const userId = ctx.auth.userId;
+      const normalizedUsername = input.username.toLowerCase();
 
       // Check if username is already taken by another user
       const existingUser = await ctx.db.query.users.findFirst({
         where: and(
-          eq(users.username, input.username.toLowerCase()),
+          eq(users.username, normalizedUsername),
           ne(users.id, userId)
         ),
       });
@@ -87,9 +88,59 @@ export const userRouter = router({
         });
       }
 
+      // Ensure a DB row exists for this Clerk user before onboarding updates.
+      const userRecord = await ctx.db.query.users.findFirst({
+        where: eq(users.id, userId),
+      });
+
+      if (!userRecord) {
+        const clerk = await clerkClient();
+        const clerkUser = await clerk.users.getUser(userId);
+        const primaryEmail =
+          clerkUser.emailAddresses.find(
+            (email) => email.id === clerkUser.primaryEmailAddressId
+          )?.emailAddress ?? clerkUser.emailAddresses[0]?.emailAddress;
+
+        if (!primaryEmail) {
+          throw new TRPCError({
+            code: "INTERNAL_SERVER_ERROR",
+            message: "Unable to resolve user email from Clerk",
+          });
+        }
+
+        const normalizedEmail = primaryEmail.toLowerCase().trim();
+        const existingUserByEmail = await ctx.db.query.users.findFirst({
+          where: eq(users.email, normalizedEmail),
+        });
+
+        if (existingUserByEmail && existingUserByEmail.id !== userId) {
+          throw new TRPCError({
+            code: "CONFLICT",
+            message: "An account with this email already exists",
+          });
+        }
+
+        await ctx.db
+          .insert(users)
+          .values({
+            id: userId,
+            email: normalizedEmail,
+            username: normalizedUsername,
+            firstName: clerkUser.firstName,
+            lastName: clerkUser.lastName,
+            avatarImageUrl: input.avatarImageUrl ?? null,
+            city: input.city,
+            state: input.state,
+            gender: input.gender,
+            dateOfBirth: input.dateOfBirth,
+            isOnboarding: false,
+          })
+          .onConflictDoNothing();
+      }
+
       // Build update object
       const updateData: Record<string, any> = {
-        username: input.username.toLowerCase(),
+        username: normalizedUsername,
         updatedAt: new Date(),
         isOnboarding: false, // Mark onboarding as complete
       };
