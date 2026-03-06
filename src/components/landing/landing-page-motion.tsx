@@ -26,31 +26,31 @@ export function AnimatedLandingWord({
 }: {
   wordClassName: string;
 }) {
-  const [isVisible, setIsVisible] = useState(false);
-
-  useEffect(() => {
-    const timeoutId = window.setTimeout(() => {
-      setIsVisible(true);
-    }, 1000);
-
-    return () => {
-      window.clearTimeout(timeoutId);
-    };
-  }, []);
-
   return (
-    <h1
-      className={`relative z-10 transition-opacity ease-out ${
-        isVisible ? "opacity-100" : "opacity-0"
-      }`}
-      style={{ transitionDuration: "6000ms" }}
-    >
-      <span
-        className={`${wordClassName} text-[150px] font-black tracking-wide text-white/20 md:text-[180px]`}
+    <>
+      <h1
+        className="relative z-10 opacity-0"
+        style={{
+          animation: "landing-word-fade 1200ms ease-out 1000ms forwards",
+        }}
       >
-        WIG
-      </span>
-    </h1>
+        <span
+          className={`${wordClassName} text-[150px] font-black tracking-wide text-white/20 md:text-[180px]`}
+        >
+          WIG
+        </span>
+      </h1>
+      <style jsx>{`
+        @keyframes landing-word-fade {
+          from {
+            opacity: 0;
+          }
+          to {
+            opacity: 1;
+          }
+        }
+      `}</style>
+    </>
   );
 }
 

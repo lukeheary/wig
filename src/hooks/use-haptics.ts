@@ -38,7 +38,7 @@ const HAPTIC_PATTERNS: Record<HapticPreset, HapticPattern> = {
   [HapticPreset.Warning]: {
     steps: [
       { duration: 40, intensity: 0.8 },
-      { delay: 100, duration: 40, intensity: 0.6 },
+      { delay: 60, duration: 40, intensity: 0.6 },
     ],
   },
   [HapticPreset.Error]: {
