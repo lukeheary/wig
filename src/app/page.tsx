@@ -106,7 +106,7 @@ export default async function LandingPage() {
         <main className="flex-1 bg-background">
           {/* Hero Section - Centered */}
           <section className="bg-card">
-            <div className="container mx-auto px-4 pb-2 pt-20 md:pb-10 md:pt-20">
+            <div className="container mx-auto px-4 pb-2 pt-12 md:pb-10 md:pt-20">
               <div className="mx-auto max-w-4xl text-center">
                 <h1 className="text-[200px] font-bold leading-[0.95] tracking-tight text-white/10">
                   {/*<span className={truculenta.className}>*/}
@@ -136,7 +136,7 @@ export default async function LandingPage() {
                 {/*  in seconds.*/}
                 {/*</p>*/}
 
-                <div className="mx-auto mt-6 flex max-w-[240px] flex-wrap items-center justify-center gap-3">
+                <div className="mx-auto mt-8 flex max-w-[180px] flex-wrap items-center justify-center gap-3">
                   <Link href="/sign-up" className={"flex-1"}>
                     <Button size="lg" className={"w-full"}>
                       Get Started
