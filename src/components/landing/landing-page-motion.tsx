@@ -3,7 +3,6 @@
 import { useEffect, useRef, useState } from "react";
 import { AvatarStack } from "@/components/ui/avatar-stack";
 import { Card } from "@/components/ui/card";
-import { truculenta } from "@/lib/fonts";
 
 type LandingAvatar = {
   id: string;
@@ -22,7 +21,11 @@ type LandingEvent = {
   avatars: LandingAvatar[];
 };
 
-export function AnimatedLandingWord() {
+export function AnimatedLandingWord({
+  wordClassName,
+}: {
+  wordClassName: string;
+}) {
   const [isVisible, setIsVisible] = useState(false);
 
   useEffect(() => {
@@ -43,7 +46,7 @@ export function AnimatedLandingWord() {
       style={{ transitionDuration: "4000ms" }}
     >
       <span
-        className={`${truculenta.className} text-[150px] font-black tracking-wide text-white/20 md:text-[180px]`}
+        className={`${wordClassName} text-[150px] font-black tracking-wide text-white/20 md:text-[180px]`}
       >
         WIG
       </span>
