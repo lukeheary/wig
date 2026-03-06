@@ -2,12 +2,14 @@ import { auth } from "@clerk/nextjs/server";
 import { redirect } from "next/navigation";
 import Link from "next/link";
 import { Button } from "@/components/ui/button";
-import { AvatarStack } from "@/components/ui/avatar-stack";
-import { Card } from "@/components/ui/card";
 import { truculenta } from "@/lib/fonts";
 import { WigLogo } from "@/components/ui/wig-logo";
 import { LandingPageRedirect } from "@/components/landing-page-redirect";
 import { LandingEventsPreview } from "@/components/landing/landing-events-preview";
+import {
+  AnimatedLandingEvents,
+  AnimatedLandingWord,
+} from "@/components/landing/landing-page-motion";
 
 export default async function LandingPage() {
   const { userId } = await auth();
@@ -108,14 +110,8 @@ export default async function LandingPage() {
           <section className="bg-card">
             <div className="relative mx-auto max-w-4xl pt-8 text-center">
               {/* The Moon Container */}
-              <div className="relative mx-auto mb-[-60px] flex h-[300px] w-[300px] items-center justify-center rounded-full bg-gradient-to-b from-white/[0.08] to-background shadow-[0_0_50px_-12px_rgba(255,255,255,0.1)] md:h-[400px] md:w-[400px]">
-                <h1 className="relative z-10">
-                  <span
-                    className={`${truculenta.className} text-[150px] font-black tracking-wide text-white/20 md:text-[180px]`}
-                  >
-                    WIG
-                  </span>
-                </h1>
+              <div className="relative mx-auto mb-[-60px] flex h-[300px] w-[300px] items-center justify-center rounded-full bg-gradient-to-b from-white/[0.08] to-background shadow-[0_0_50px_-12px_rgba(255,255,255,0.1)] md:mb-[-100px] md:h-[400px] md:w-[400px]">
+                <AnimatedLandingWord />
               </div>
 
               {/* Hero Text */}
@@ -206,48 +202,7 @@ export default async function LandingPage() {
 
               {/* Mock date header - like /home */}
               {/* Event Cards Grid - Responsive: rows on mobile, grid on desktop */}
-              <div className="grid grid-cols-1 gap-4 md:grid-cols-3 lg:grid-cols-4">
-                {fakeEvents.map((event) => (
-                  <Card
-                    key={event.id}
-                    className="overflow-hidden !border-none bg-card p-2"
-                  >
-                    {/* Container - horizontal on mobile, vertical on desktop */}
-                    <div className="relative flex md:block">
-                      {/* Image - small square on mobile, full width on desktop */}
-                      <div className="relative h-24 w-24 flex-shrink-0 overflow-hidden rounded-2xl bg-muted md:aspect-square md:h-auto md:w-full">
-                        <img
-                          src={event.image}
-                          alt={event.title}
-                          className="h-full w-full object-cover"
-                        />
-                      </div>
-
-                      {/* Event Info - right on mobile, below on desktop */}
-                      <div className="flex-1 space-y-1 py-1 pl-3 pr-1 md:px-1 md:py-3">
-                        <h3 className="line-clamp-2 text-base font-bold leading-tight">
-                          {event.title}
-                        </h3>
-                        <div className="text-sm text-primary/70">
-                          {event.date} at {event.time}
-                        </div>
-                        <div className="text-sm text-primary/70">
-                          {event.venue}
-                        </div>
-                      </div>
-
-                      {/* Avatar stack - bottom right of card */}
-                      <div className="absolute bottom-2 right-2">
-                        <AvatarStack
-                          users={event.avatars}
-                          maxDisplay={3}
-                          size="sm"
-                        />
-                      </div>
-                    </div>
-                  </Card>
-                ))}
-              </div>
+              <AnimatedLandingEvents events={fakeEvents} />
             </div>
           </section>
 
