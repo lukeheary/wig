@@ -21,39 +21,6 @@ type LandingEvent = {
   avatars: LandingAvatar[];
 };
 
-export function AnimatedLandingWord({
-  wordClassName,
-}: {
-  wordClassName: string;
-}) {
-  return (
-    <>
-      <h1
-        className="relative z-10 opacity-0"
-        style={{
-          animation: "landing-word-fade 3000ms ease-out 400ms forwards",
-        }}
-      >
-        <span
-          className={`${wordClassName} text-[150px] font-black tracking-wide text-white/20 md:text-[180px]`}
-        >
-          WIG
-        </span>
-      </h1>
-      <style jsx>{`
-        @keyframes landing-word-fade {
-          from {
-            opacity: 0;
-          }
-          to {
-            opacity: 1;
-          }
-        }
-      `}</style>
-    </>
-  );
-}
-
 export function AnimatedLandingEvents({ events }: { events: LandingEvent[] }) {
   const sectionRef = useRef<HTMLDivElement | null>(null);
   const [hasScrolled, setHasScrolled] = useState(false);

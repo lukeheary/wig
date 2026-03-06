@@ -6,10 +6,7 @@ import { truculenta } from "@/lib/fonts";
 import { WigLogo } from "@/components/ui/wig-logo";
 import { LandingPageRedirect } from "@/components/landing-page-redirect";
 import { LandingEventsPreview } from "@/components/landing/landing-events-preview";
-import {
-  AnimatedLandingEvents,
-  AnimatedLandingWord,
-} from "@/components/landing/landing-page-motion";
+import { AnimatedLandingEvents } from "@/components/landing/landing-page-motion";
 
 export default async function LandingPage() {
   const { userId } = await auth();
@@ -111,7 +108,11 @@ export default async function LandingPage() {
             <div className="relative mx-auto max-w-4xl pt-8 text-center">
               {/* The Moon Container */}
               <div className="relative mx-auto mb-[-60px] flex h-[300px] w-[300px] items-center justify-center rounded-full bg-gradient-to-b from-white/[0.08] to-background shadow-[0_0_50px_-12px_rgba(255,255,255,0.1)] md:mb-[-100px] md:h-[400px] md:w-[400px]">
-                <AnimatedLandingWord wordClassName={truculenta.className} />
+                <h1
+                  className={`relative z-10 text-[150px] font-black tracking-wide text-white/20 md:text-[180px]`}
+                >
+                  <span className={truculenta.className}>WIG</span>
+                </h1>
               </div>
 
               {/* Hero Text */}
