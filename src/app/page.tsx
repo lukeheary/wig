@@ -89,7 +89,7 @@ export default async function LandingPage() {
       <LandingPageRedirect />
       <div className="flex min-h-screen flex-col overflow-x-hidden">
         {/* Navigation */}
-        <header className="sticky top-0 z-50 bg-background">
+        <header className="sticky top-0 z-50 hidden bg-card md:flex">
           <div className="container mx-auto flex h-14 items-center justify-between px-4 md:h-16">
             <WigLogo asLink={false} />
             <div className="flex items-center gap-2">
@@ -103,41 +103,119 @@ export default async function LandingPage() {
           </div>
         </header>
 
-        <main className="flex-1">
+        <main className="flex-1 bg-background">
           {/* Hero Section - Centered */}
-          <section className="container mx-auto px-4 pt-28">
-            <div className="mx-auto max-w-4xl text-center">
-              <h1 className="text-5xl font-bold leading-[0.95] tracking-tight md:text-6xl lg:text-8xl">
-                <span className={truculenta.className}>
-                  See who is going,
-                  <br />
-                  decide where to go.
-                </span>
-              </h1>
-              <p className="mx-auto mt-4 max-w-xl text-lg text-muted-foreground md:text-xl">
-                Find what&apos;s happening, see who&apos;s in, and make plans in
-                seconds.
-              </p>
+          <section className="bg-card">
+            <div className="container mx-auto px-4 pb-10 pt-28 md:pb-10 md:pt-20">
+              <div className="mx-auto max-w-4xl text-center">
+                <h1 className="text-[200px] font-bold leading-[0.95] tracking-tight text-white/10">
+                  {/*<span className={truculenta.className}>*/}
+                  {/*  See who is going,*/}
+                  {/*  <br />*/}
+                  {/*  decide where to go.*/}
+                  {/*</span>*/}
+                  <span
+                    className={`${truculenta.className} font-black tracking-wide`}
+                  >
+                    WIG
+                  </span>
+                </h1>
+                <h2
+                  className={
+                    "text-4xl font-bold leading-[0.95] tracking-tight md:text-6xl"
+                  }
+                >
+                  <span className={truculenta.className}>
+                    See who is going,
+                    <br />
+                    decide where to go.
+                  </span>
+                </h2>
+                {/*<p className="mx-auto mt-4 max-w-xl text-lg text-muted-foreground md:text-xl">*/}
+                {/*  Find what&apos;s happening, see who&apos;s in, and make plans*/}
+                {/*  in seconds.*/}
+                {/*</p>*/}
 
-              <div className="mt-6 flex flex-wrap items-center justify-center gap-3">
-                <Link href="/sign-up">
-                  <Button size="lg">Get Started</Button>
-                </Link>
-                {/*<Link href="/sign-in">*/}
-                {/*  <Button size="lg" variant="outline">*/}
-                {/*    Sign In*/}
-                {/*  </Button>*/}
-                {/*</Link>*/}
+                <div className="mx-auto mt-6 flex max-w-xs flex-wrap items-center justify-center gap-3">
+                  <Link href="/sign-up" className={"flex-1"}>
+                    <Button size="lg" className={"w-full"}>
+                      Get Started
+                    </Button>
+                  </Link>
+                  <Link href="/sign-in" className={"flex-1"}>
+                    <Button size="lg" variant="outline" className={"w-full"}>
+                      Sign In
+                    </Button>
+                  </Link>
+                </div>
               </div>
             </div>
           </section>
 
+          {/* Skyline transition from the sky into the page background */}
+          {/* Skyline transition from the sky into the page background */}
+          <div className="w-full overflow-hidden bg-card">
+            {/* Mobile: Fewer, chunkier buildings with more character */}
+            <svg
+              className="block h-auto w-full sm:hidden"
+              viewBox="0 0 390 180"
+              xmlns="http://www.w3.org/2000/svg"
+              preserveAspectRatio="none"
+            >
+              {/* Back layer: Distant, simpler blocks */}
+              <path
+                d="M0 180 V140 H40 V120 H80 V145 H130 V110 H170 V150 H220 V130 H270 V155 H320 V125 H390 V180 Z"
+                fill="hsla(240, 10%, 22%, 0.72)"
+              />
+
+              {/* Front layer: Larger, more defined skyscraper shapes */}
+              <path
+                d="M0 180 V150 H30 V90 H70 V110 H100 V155 H150 V60 H180 V75 H200 V160 H260 V100 H310 V150 H340 V130 H390 V180 Z"
+                fill="hsl(var(--background))"
+              />
+              <path
+                d="M0 150 H30 V90 H70 V110 H100 V155 H150 V60 H180 V75 H200 V160 H260 V100 H310 V150 H340 V130 H390"
+                fill="none"
+                stroke="hsla(0,0%,95%,0.34)"
+                strokeWidth="1.5"
+                strokeLinejoin="round"
+              />
+            </svg>
+
+            {/* Desktop: Detailed, varied silhouette with "stepped" architecture */}
+            <svg
+              className="hidden h-auto w-full sm:block"
+              viewBox="0 0 1200 200"
+              xmlns="http://www.w3.org/2000/svg"
+              preserveAspectRatio="none"
+            >
+              {/* Back layer: Subtle mid-height variety */}
+              <path
+                d="M0 200 V160 H60 V130 H110 V165 H180 V140 H250 V170 H320 V110 H390 V160 H480 V120 H550 V170 H650 V140 H750 V175 H850 V130 H950 V165 H1050 V110 H1200 V200 Z"
+                fill="hsla(240, 10%, 22%, 0.72)"
+              />
+
+              {/* Front layer: Iconic skyscraper shapes (Spire, Stepped, Wide) */}
+              <path
+                d="M0 200 V170 H40 V100 H60 V80 H80 V100 H100 V175 H160 V140 H220 V180 H280 V60 H300 V40 H320 V60 H340 V185 H400 V130 H460 V175 H520 V50 H580 V180 H640 V110 H680 V90 H720 V110 H760 V185 H840 V150 H920 V180 H980 V30 H1010 V15 H1040 V30 H1080 V185 H1140 V140 H1200 V200 Z"
+                fill="hsl(var(--background))"
+              />
+              <path
+                d="M0 170 H40 V100 H60 V80 H80 V100 H100 V175 H160 V140 H220 V180 H280 V60 H300 V40 H320 V60 H340 V185 H400 V130 H460 V175 H520 V50 H580 V180 H640 V110 H680 V90 H720 V110 H760 V185 H840 V150 H920 V180 H980 V30 H1010 V15 H1040 V30 H1080 V185 H1140 V140 H1200"
+                fill="none"
+                stroke="hsla(0,0%,95%,0.25)"
+                strokeWidth="1.2"
+                strokeLinejoin="round"
+              />
+            </svg>
+          </div>
+
           {/* Mock Events Preview - Same width as /home */}
-          <section className="container mx-auto px-4 pt-12">
+          <section className="container mx-auto px-4 pt-4 md:pt-20">
             <div className="relative">
               {/* Subtle glow effects */}
-              <div className="pointer-events-none absolute -left-20 top-10 h-60 w-60 rounded-full bg-[#7cc3ff]/20 blur-3xl" />
-              <div className="pointer-events-none absolute -right-20 top-20 h-48 w-48 rounded-full bg-orange-400/15 blur-3xl" />
+              {/*<div className="pointer-events-none absolute -left-20 top-10 h-60 w-60 rounded-full bg-[#7cc3ff]/20 blur-3xl" />*/}
+              {/*<div className="pointer-events-none absolute -right-20 top-20 h-48 w-48 rounded-full bg-orange-400/15 blur-3xl" />*/}
 
               {/* Mock date header - like /home */}
               {/* Event Cards Grid - Responsive: rows on mobile, grid on desktop */}
