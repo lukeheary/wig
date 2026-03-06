@@ -31,7 +31,7 @@ export function AnimatedLandingWord({
       <h1
         className="relative z-10 opacity-0"
         style={{
-          animation: "landing-word-fade 1200ms ease-out 1000ms forwards",
+          animation: "landing-word-fade 3000ms ease-out 400ms forwards",
         }}
       >
         <span
