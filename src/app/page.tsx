@@ -111,7 +111,7 @@ export default async function LandingPage() {
             <div className="relative mx-auto max-w-4xl pt-8 text-center">
               {/* The Moon Container */}
               <div className="relative mx-auto mb-[-60px] flex h-[300px] w-[300px] items-center justify-center rounded-full bg-gradient-to-b from-white/[0.08] to-background shadow-[0_0_50px_-12px_rgba(255,255,255,0.1)] md:mb-[-100px] md:h-[400px] md:w-[400px]">
-                <AnimatedLandingWord />
+                <AnimatedLandingWord wordClassName={truculenta.className} />
               </div>
 
               {/* Hero Text */}
