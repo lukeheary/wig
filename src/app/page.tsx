@@ -106,9 +106,9 @@ export default async function LandingPage() {
         <main className="flex-1 bg-background">
           {/* Hero Section - Centered */}
           <section className="bg-card">
-            <div className="relative mx-auto max-w-4xl text-center">
+            <div className="relative mx-auto max-w-4xl pt-8 text-center">
               {/* The Moon Container */}
-              <div className="relative mx-auto mb-[-70px] flex h-[300px] w-[300px] items-center justify-center rounded-full bg-gradient-to-b from-white/[0.10] to-background shadow-[0_0_50px_-12px_rgba(255,255,255,0.1)] md:h-[400px] md:w-[400px]">
+              <div className="relative mx-auto mb-[-60px] flex h-[300px] w-[300px] items-center justify-center rounded-full bg-gradient-to-b from-white/[0.08] to-background shadow-[0_0_50px_-12px_rgba(255,255,255,0.1)] md:h-[400px] md:w-[400px]">
                 <h1 className="relative z-10">
                   <span
                     className={`${truculenta.className} text-[150px] font-black tracking-wide text-white/20 md:text-[180px]`}
@@ -127,7 +127,7 @@ export default async function LandingPage() {
                 </span>
               </h2>
 
-              <div className="mx-auto mt-8 flex flex-wrap items-center justify-center gap-3">
+              <div className="mx-auto mt-6 flex flex-wrap items-center justify-center gap-3">
                 <Link href="/sign-up" className="flex-1 md:max-w-[180px]">
                   <Button size="lg" className="md:w-full">
                     Get Started
