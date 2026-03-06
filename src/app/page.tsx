@@ -106,48 +106,33 @@ export default async function LandingPage() {
         <main className="flex-1 bg-background">
           {/* Hero Section - Centered */}
           <section className="bg-card">
-            <div className="container mx-auto px-4 pb-2 pt-12 md:pb-10 md:pt-20">
-              <div className="mx-auto max-w-4xl text-center">
-                <h1 className="text-[200px] font-bold leading-[0.95] tracking-tight text-white/10">
-                  {/*<span className={truculenta.className}>*/}
-                  {/*  See who is going,*/}
-                  {/*  <br />*/}
-                  {/*  decide where to go.*/}
-                  {/*</span>*/}
+            <div className="relative mx-auto max-w-4xl pt-10 text-center">
+              {/* The Moon Container */}
+              <div className="relative mx-auto mb-[-40px] flex h-[300px] w-[300px] items-center justify-center rounded-full bg-gradient-to-b from-white/[0.10] to-background shadow-[0_0_50px_-12px_rgba(255,255,255,0.1)] md:h-[400px] md:w-[400px]">
+                <h1 className="relative z-10">
                   <span
-                    className={`${truculenta.className} font-black tracking-wide`}
+                    className={`${truculenta.className} text-[150px] font-black tracking-wide text-white/20 md:text-[180px]`}
                   >
                     WIG
                   </span>
                 </h1>
-                <h2
-                  className={
-                    "text-5xl font-bold leading-[0.95] tracking-tight md:text-6xl"
-                  }
-                >
-                  <span className={truculenta.className}>
-                    See who is going,
-                    <br />
-                    decide where to go.
-                  </span>
-                </h2>
-                {/*<p className="mx-auto mt-4 max-w-xl text-lg text-muted-foreground md:text-xl">*/}
-                {/*  Find what&apos;s happening, see who&apos;s in, and make plans*/}
-                {/*  in seconds.*/}
-                {/*</p>*/}
+              </div>
 
-                <div className="mx-auto mt-8 flex max-w-[180px] flex-wrap items-center justify-center gap-3">
-                  <Link href="/sign-up" className={"flex-1"}>
-                    <Button size="lg" className={"w-full"}>
-                      Get Started
-                    </Button>
-                  </Link>
-                  {/*<Link href="/sign-in" className={"flex-1"}>*/}
-                  {/*  <Button size="lg" variant="outline" className={"w-full"}>*/}
-                  {/*    Sign In*/}
-                  {/*  </Button>*/}
-                  {/*</Link>*/}
-                </div>
+              {/* Hero Text */}
+              <h2 className="relative z-20 text-5xl font-bold leading-[0.95] tracking-tight md:text-6xl">
+                <span className={truculenta.className}>
+                  See who is going,
+                  <br />
+                  decide where to go.
+                </span>
+              </h2>
+
+              <div className="mx-auto mt-8 flex flex-wrap items-center justify-center gap-3">
+                <Link href="/sign-up" className="flex-1 md:max-w-[180px]">
+                  <Button size="lg" className="md:w-full">
+                    Get Started
+                  </Button>
+                </Link>
               </div>
             </div>
           </section>
