@@ -106,9 +106,9 @@ export default async function LandingPage() {
         <main className="flex-1 bg-background">
           {/* Hero Section - Centered */}
           <section className="bg-card">
-            <div className="relative mx-auto max-w-4xl pt-10 text-center">
+            <div className="relative mx-auto max-w-4xl text-center">
               {/* The Moon Container */}
-              <div className="relative mx-auto mb-[-40px] flex h-[300px] w-[300px] items-center justify-center rounded-full bg-gradient-to-b from-white/[0.10] to-background shadow-[0_0_50px_-12px_rgba(255,255,255,0.1)] md:h-[400px] md:w-[400px]">
+              <div className="relative mx-auto mb-[-70px] flex h-[300px] w-[300px] items-center justify-center rounded-full bg-gradient-to-b from-white/[0.10] to-background shadow-[0_0_50px_-12px_rgba(255,255,255,0.1)] md:h-[400px] md:w-[400px]">
                 <h1 className="relative z-10">
                   <span
                     className={`${truculenta.className} text-[150px] font-black tracking-wide text-white/20 md:text-[180px]`}
