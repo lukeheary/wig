@@ -31,7 +31,7 @@ export function AnimatedLandingWord({
   useEffect(() => {
     const timeoutId = window.setTimeout(() => {
       setIsVisible(true);
-    }, 500);
+    }, 1000);
 
     return () => {
       window.clearTimeout(timeoutId);
@@ -43,7 +43,7 @@ export function AnimatedLandingWord({
       className={`relative z-10 transition-opacity ease-out ${
         isVisible ? "opacity-100" : "opacity-0"
       }`}
-      style={{ transitionDuration: "4000ms" }}
+      style={{ transitionDuration: "6000ms" }}
     >
       <span
         className={`${wordClassName} text-[150px] font-black tracking-wide text-white/20 md:text-[180px]`}
@@ -61,9 +61,7 @@ export function AnimatedLandingEvents({ events }: { events: LandingEvent[] }) {
 
   useEffect(() => {
     const handleScroll = () => {
-      if (window.scrollY > 0) {
-        setHasScrolled(true);
-      }
+      setHasScrolled(window.scrollY > 0);
     };
 
     window.addEventListener("scroll", handleScroll, { passive: true });
