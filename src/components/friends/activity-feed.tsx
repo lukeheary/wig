@@ -41,7 +41,7 @@ const EVENT_UPDATE_TYPES = new Set([
   "updated",
 ]);
 
-function ActivityItem({ activity }: ActivityItemProps) {
+export function ActivityItem({ activity }: ActivityItemProps) {
   const pathname = usePathname();
   const searchParams = useSearchParams();
   const { actor, type, entityId, metadata, createdAt, event } = activity;

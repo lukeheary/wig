@@ -1,6 +1,6 @@
 "use client";
 
-import { useParams, useSearchParams } from "next/navigation";
+import { useParams, usePathname, useRouter, useSearchParams } from "next/navigation";
 import Link from "next/link";
 import Image from "next/image";
 import { trpc } from "@/lib/trpc";
@@ -29,8 +29,9 @@ import {
   getEventStatusLabel,
 } from "@/lib/event-status";
 import { SharedBackButton } from "@/components/shared/back-button";
-import { withReturnTo } from "@/lib/navigation";
+import { buildReturnTo, withReturnTo } from "@/lib/navigation";
 import { HapticPreset, useHaptics } from "@/hooks/use-haptics";
+import { useAuth } from "@clerk/nextjs";
 
 type RsvpStatus = "going" | "interested" | "not_going";
 
@@ -72,7 +73,10 @@ function EventPageSkeleton() {
 
 export default function EventPage() {
   const params = useParams();
+  const pathname = usePathname();
+  const router = useRouter();
   const searchParams = useSearchParams();
+  const { isSignedIn } = useAuth();
   const eventId = params.id as string;
   const { toast } = useToast();
   const utils = trpc.useUtils();
@@ -80,6 +84,10 @@ export default function EventPage() {
   const [isShareCopied, setIsShareCopied] = useState(false);
   const returnTo = searchParams.get("returnTo");
   const editHref = withReturnTo(`/event/${eventId}/edit`, returnTo);
+  const signInHref = withReturnTo(
+    "/sign-in",
+    buildReturnTo(pathname, searchParams)
+  );
 
   // Fetch event data
   const { data: event, isLoading } = trpc.event.getEventById.useQuery({
@@ -103,12 +111,18 @@ export default function EventPage() {
   );
 
   // Check if user is admin
-  const { data: adminCheck } = trpc.user.isAdmin.useQuery();
+  const { data: adminCheck } = trpc.user.isAdmin.useQuery(undefined, {
+    enabled: Boolean(isSignedIn),
+  });
   const isAdmin = adminCheck?.isAdmin ?? false;
 
   // Get current user
-  const { data: currentUser } = trpc.user.getCurrentUser.useQuery();
-  const { data: myPartner } = trpc.partners.getMyPartner.useQuery();
+  const { data: currentUser } = trpc.user.getCurrentUser.useQuery(undefined, {
+    enabled: Boolean(isSignedIn),
+  });
+  const { data: myPartner } = trpc.partners.getMyPartner.useQuery(undefined, {
+    enabled: Boolean(isSignedIn),
+  });
   const [includePartner, setIncludePartner] = useState(true);
   const { triggerHaptic } = useHaptics();
 
@@ -169,9 +183,14 @@ export default function EventPage() {
   const goingLabel =
     hasActivePartner && includePartner ? "We're Going" : "I'm Going";
   const interestedLabel =
-    hasActivePartner && includePartner ? "We're Interested" : "Interested";
+    hasActivePartner && includePartner ? "We're Interested" : "I'm Interested";
 
   const handleRsvp = (status: RsvpStatus) => {
+    if (!isSignedIn) {
+      router.push(signInHref);
+      return;
+    }
+
     // If clicking the same status button again, remove the RSVP
     if (event?.userRsvp?.status === status) {
       void triggerHaptic(HapticPreset.Soft);
@@ -211,7 +230,7 @@ export default function EventPage() {
         <p className="mb-4 text-muted-foreground">
           The event you&apos;re looking for doesn&apos;t exist
         </p>
-        <Link href="/home">
+        <Link href={isSignedIn ? "/home" : "/"}>
           <Button>Back to Calendar</Button>
         </Link>
       </div>
@@ -327,7 +346,7 @@ export default function EventPage() {
 
               {/* Back Button - Overlay on top left */}
               <SharedBackButton
-                fallbackHref="/home"
+                fallbackHref={isSignedIn ? "/home" : "/"}
                 returnTo={returnTo}
                 variant="secondary"
                 size="icon"

@@ -1314,6 +1314,13 @@ export const eventRouter = router({
         });
       }
 
+      if (event.visibility !== "public" && !ctx.auth.userId) {
+        throw new TRPCError({
+          code: "NOT_FOUND",
+          message: "Event not found",
+        });
+      }
+
       // Get user's RSVP if authenticated
       let userRsvp = null;
       if (ctx.auth.userId) {
@@ -1565,6 +1572,27 @@ export const eventRouter = router({
       })
     )
     .query(async ({ ctx, input }) => {
+      const event = await ctx.db.query.events.findFirst({
+        where: eq(events.id, input.eventId),
+        columns: {
+          visibility: true,
+        },
+      });
+
+      if (!event) {
+        throw new TRPCError({
+          code: "NOT_FOUND",
+          message: "Event not found",
+        });
+      }
+
+      if (event.visibility !== "public" && !ctx.auth.userId) {
+        throw new TRPCError({
+          code: "NOT_FOUND",
+          message: "Event not found",
+        });
+      }
+
       const conditions = [eq(eventRsvps.eventId, input.eventId)];
 
       if (input.statusFilter) {

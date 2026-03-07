@@ -31,7 +31,7 @@ import {
   SheetTitle,
   SheetTrigger,
 } from "@/components/ui/sheet";
-import { useClerk } from "@clerk/nextjs";
+import { useAuth, useClerk } from "@clerk/nextjs";
 import { NotificationsBell } from "@/components/notifications-bell";
 import { WigLogo } from "@/components/ui/wig-logo";
 import {
@@ -39,20 +39,31 @@ import {
   useNavbarSearch,
 } from "@/contexts/nav-search-context";
 import { cn } from "@/lib/utils";
+import { buildReturnTo, withReturnTo } from "@/lib/navigation";
 import * as VisuallyHidden from "@radix-ui/react-visually-hidden";
 
 function MainLayoutContent({ children }: { children: React.ReactNode }) {
   const router = useRouter();
   const pathname = usePathname();
   const { signOut } = useClerk();
+  const { isSignedIn } = useAuth();
   const [hasMounted, setHasMounted] = useState(false);
   const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
-  const { data: adminCheck } = trpc.user.isAdmin.useQuery();
+  const signInHref = withReturnTo("/sign-in", buildReturnTo(pathname, null));
+  const { data: adminCheck } = trpc.user.isAdmin.useQuery(undefined, {
+    enabled: Boolean(isSignedIn),
+  });
   const isAdmin = adminCheck?.isAdmin ?? false;
 
-  const { data: user } = trpc.user.getCurrentUser.useQuery();
-  const { data: hasVenues } = trpc.user.hasVenues.useQuery();
-  const { data: hasOrganizers } = trpc.user.hasOrganizers.useQuery();
+  const { data: user } = trpc.user.getCurrentUser.useQuery(undefined, {
+    enabled: Boolean(isSignedIn),
+  });
+  const { data: hasVenues } = trpc.user.hasVenues.useQuery(undefined, {
+    enabled: Boolean(isSignedIn),
+  });
+  const { data: hasOrganizers } = trpc.user.hasOrganizers.useQuery(undefined, {
+    enabled: Boolean(isSignedIn),
+  });
 
   // Redirect to onboarding if user hasn't completed it
   useEffect(() => {
@@ -111,7 +122,7 @@ function MainLayoutContent({ children }: { children: React.ReactNode }) {
         <div className="container mx-auto flex h-14 items-center md:h-16">
           {/* Left Side - Logo */}
           <div className="flex items-center">
-            <WigLogo />
+            <WigLogo href={isSignedIn ? "/home" : "/"} />
           </div>
 
           {/* Center - Desktop Navigation */}
@@ -179,7 +190,7 @@ function MainLayoutContent({ children }: { children: React.ReactNode }) {
                 <Search className="h-6 w-6" />
               </Button>
             </div>
-            {hasMounted ? (
+            {hasMounted && isSignedIn ? (
               <>
                 <NotificationsBell />
                 <DropdownMenu>
@@ -240,7 +251,9 @@ function MainLayoutContent({ children }: { children: React.ReactNode }) {
                 </DropdownMenu>
               </>
             ) : (
-              <div className="h-10 w-20" aria-hidden="true" />
+              <Link href={signInHref}>
+                <Button variant="ghost">Sign In</Button>
+              </Link>
             )}
           </div>
 
@@ -265,10 +278,10 @@ function MainLayoutContent({ children }: { children: React.ReactNode }) {
               </Button>
             </div>
 
-            {hasMounted && <NotificationsBell />}
+            {hasMounted && isSignedIn && <NotificationsBell />}
 
             {/* Mobile Menu */}
-            {hasMounted ? (
+            {hasMounted && isSignedIn ? (
               <Sheet open={mobileMenuOpen} onOpenChange={setMobileMenuOpen}>
                 <SheetTrigger asChild>
                   <Button variant="ghost" size="icon">
@@ -382,7 +395,9 @@ function MainLayoutContent({ children }: { children: React.ReactNode }) {
                 </SheetContent>
               </Sheet>
             ) : (
-              <div className="h-10 w-10" aria-hidden="true" />
+              <Link href={signInHref}>
+                <Button variant="ghost">Sign In</Button>
+              </Link>
             )}
           </div>
         </div>

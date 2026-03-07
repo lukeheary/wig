@@ -6,7 +6,7 @@ import { truculenta } from "@/lib/fonts";
 import { WigLogo } from "@/components/ui/wig-logo";
 import { LandingPageRedirect } from "@/components/landing-page-redirect";
 import { LandingEventsPreview } from "@/components/landing/landing-events-preview";
-import { AnimatedLandingEvents } from "@/components/landing/landing-page-motion";
+import { LandingRecentActivity } from "@/components/landing/landing-recent-activity";
 
 export default async function LandingPage() {
   const { userId } = await auth();
@@ -15,73 +15,10 @@ export default async function LandingPage() {
     redirect("/home");
   }
 
-  const fakeAvatarsByEvent = {
-    rooftop: [
-      { id: "roo-1", firstName: "Sage", lastName: null, avatarImageUrl: null },
-      { id: "roo-2", firstName: "Owen", lastName: null, avatarImageUrl: null },
-      { id: "roo-3", firstName: "Liv", lastName: null, avatarImageUrl: null },
-      { id: "roo-4", firstName: "Ava", lastName: null, avatarImageUrl: null },
-      { id: "roo-5", firstName: "Eli", lastName: null, avatarImageUrl: null },
-    ],
-    midnight: [
-      { id: "mid-1", firstName: "Lena", lastName: null, avatarImageUrl: null },
-      { id: "mid-2", firstName: "Jon", lastName: null, avatarImageUrl: null },
-      { id: "mid-3", firstName: "Ari", lastName: null, avatarImageUrl: null },
-      { id: "mid-4", firstName: "Maya", lastName: null, avatarImageUrl: null },
-      { id: "mid-5", firstName: "Kai", lastName: null, avatarImageUrl: null },
-      { id: "mid-6", firstName: "Jeff", lastName: null, avatarImageUrl: null },
-    ],
-    neon: [
-      { id: "neo-1", firstName: "Brad", lastName: null, avatarImageUrl: null },
-      { id: "neo-2", firstName: "Ivy", lastName: null, avatarImageUrl: null },
-      { id: "neo-3", firstName: "Jack", lastName: null, avatarImageUrl: null },
-      { id: "neo-4", firstName: "Tess", lastName: null, avatarImageUrl: null },
-    ],
-    vinyl: [
-      { id: "vin-1", firstName: "Zoe", lastName: null, avatarImageUrl: null },
-      { id: "vin-2", firstName: "Max", lastName: null, avatarImageUrl: null },
-      { id: "vin-3", firstName: "Nina", lastName: null, avatarImageUrl: null },
-    ],
-  };
-
-  const fakeEvents = [
-    {
-      id: "ev-1",
-      title: "Rooftop Reverie",
-      date: "Sat, Feb 8",
-      time: "6:00 PM",
-      venue: "Solstice Terrace",
-      image: "/landing/rooftop-reverie.png",
-      avatars: fakeAvatarsByEvent.rooftop,
-    },
-    {
-      id: "ev-2",
-      title: "Midnight Frequencies",
-      date: "Sat, Feb 8",
-      time: "10:00 PM",
-      venue: "Skyline Hall",
-      image: "/landing/midnight-frequencies.png",
-      avatars: fakeAvatarsByEvent.midnight,
-    },
-    {
-      id: "ev-3",
-      title: "Neon Afterhours",
-      date: "Sun, Feb 9",
-      time: "2:00 AM",
-      venue: "District 9",
-      image: "/landing/neon-afterhours.png",
-      avatars: fakeAvatarsByEvent.neon,
-    },
-    {
-      id: "ev-4",
-      title: "Brunch & Bass",
-      date: "Sun, Feb 9",
-      time: "1:00 PM",
-      venue: "The Record Room",
-      image: "/landing/brunch-and-bass.png",
-      avatars: fakeAvatarsByEvent.vinyl,
-    },
-  ];
+  /*
+  const fakeAvatarsByEvent = { ... };
+  const fakeEvents = [ ... ];
+  */
 
   return (
     <>
@@ -194,65 +131,19 @@ export default async function LandingPage() {
             </svg>
           </div>
 
-          {/* Mock Events Preview - Same width as /home */}
-          <section className="container mx-auto px-4 md:pt-20">
-            <div className="relative">
-              {/* Subtle glow effects */}
-              {/*<div className="pointer-events-none absolute -left-20 top-10 h-60 w-60 rounded-full bg-[#7cc3ff]/20 blur-3xl" />*/}
-              {/*<div className="pointer-events-none absolute -right-20 top-20 h-48 w-48 rounded-full bg-orange-400/15 blur-3xl" />*/}
+          {/* Fake hero events are parked for now in favor of a live recent-activity demo. */}
+          {/* <AnimatedLandingEvents events={fakeEvents} /> */}
 
-              {/* Mock date header - like /home */}
-              {/* Event Cards Grid - Responsive: rows on mobile, grid on desktop */}
-              <AnimatedLandingEvents events={fakeEvents} />
-            </div>
+          <section className="container mx-auto px-4 pb-6 md:py-8">
+            <LandingRecentActivity />
           </section>
 
-          {/* Features Section */}
-          <section className="container mx-auto px-4 py-20 md:py-28">
-            <div className="grid gap-6 md:grid-cols-3">
-              <div className="rounded-2xl border bg-background/70 p-6 backdrop-blur">
-                <div className="text-sm font-semibold uppercase tracking-[0.2em] text-muted-foreground">
-                  Discover
-                </div>
-                <h3 className="mt-3 text-2xl font-semibold">
-                  Events that fit your vibe
-                </h3>
-                <p className="mt-2 text-muted-foreground">
-                  Personalized discovery that puts your city&apos;s best nights
-                  in one feed.
-                </p>
-              </div>
-              <div className="rounded-2xl border bg-background/70 p-6 backdrop-blur">
-                <div className="text-sm font-semibold uppercase tracking-[0.2em] text-muted-foreground">
-                  Connect
-                </div>
-                <h3 className="mt-3 text-2xl font-semibold">
-                  See who&apos;s in
-                </h3>
-                <p className="mt-2 text-muted-foreground">
-                  Know what your friends are planning so you can actually meet
-                  up.
-                </p>
-              </div>
-              <div className="rounded-2xl border bg-background/70 p-6 backdrop-blur">
-                <div className="text-sm font-semibold uppercase tracking-[0.2em] text-muted-foreground">
-                  Go
-                </div>
-                <h3 className="mt-3 text-2xl font-semibold">Plan in seconds</h3>
-                <p className="mt-2 text-muted-foreground">
-                  RSVP, share, and coordinate without the group chat chaos.
-                </p>
-              </div>
-            </div>
-          </section>
-
-          {/* Live Events Preview */}
           <section className="container mx-auto px-4 pb-10 md:pb-16">
             <LandingEventsPreview />
           </section>
 
           {/* Final CTA */}
-          <section className="pb-16 pt-4 md:pt-12">
+          <section className="pb-12">
             <div className="container mx-auto flex flex-col items-center gap-2 px-4 text-center">
               <h2 className="text-4xl font-semibold md:text-4xl">
                 <span className={truculenta.className}>See who is going.</span>
