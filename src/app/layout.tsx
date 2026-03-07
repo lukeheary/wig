@@ -14,8 +14,14 @@ const inter = Inter({ subsets: ["latin"] });
 const lato = Lato({ subsets: ["latin"], weight: ["400", "700"] });
 const urbanist = Urbanist({ subsets: ["latin"], weight: ["400", "700"] });
 const lexend = Lexend({ subsets: ["latin"], weight: ["400", "700"] });
+const metadataBaseUrl =
+  process.env.NEXT_PUBLIC_APP_URL ||
+  (process.env.VERCEL_URL
+    ? `https://${process.env.VERCEL_URL}`
+    : "http://localhost:3000");
 
 export const metadata: Metadata = {
+  metadataBase: new URL(metadataBaseUrl),
   title: "WIG",
   description: "Discover local events and connect with your community",
 };
