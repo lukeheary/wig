@@ -34,7 +34,7 @@ import {
   or,
   sql,
 } from "drizzle-orm";
-import { uploadImageFromUrl, BUCKET_NAME } from "@/lib/s3";
+import { uploadImageFromUrl, deleteFromS3, BUCKET_NAME } from "@/lib/s3";
 import { TRPCError } from "@trpc/server";
 import { logActivity } from "../../utils/activity-logger";
 import { logEventActivity } from "../../utils/event-activity-logger";
@@ -59,7 +59,8 @@ function resolveEventUpdateActivityType(
   if (previousStatus !== nextStatus) {
     if (nextStatus === "cancelled") return "cancelled";
     if (nextStatus === "postponed") return "postponed";
-    if (previousStatus !== "active" && nextStatus === "active") return "restored";
+    if (previousStatus !== "active" && nextStatus === "active")
+      return "restored";
     return "updated";
   }
 
@@ -68,6 +69,27 @@ function resolveEventUpdateActivityType(
   }
 
   return "updated";
+}
+
+function isPendingEventUploadUrl(url: string): boolean {
+  try {
+    const parsed = new URL(url);
+    return (
+      parsed.host.includes(`${BUCKET_NAME}.s3`) &&
+      parsed.pathname.includes("/events/pending/")
+    );
+  } catch {
+    return false;
+  }
+}
+
+async function cleanupPendingEventUpload(url: string): Promise<void> {
+  if (!isPendingEventUploadUrl(url)) return;
+  try {
+    await deleteFromS3(url);
+  } catch {
+    // Ignore cleanup failures; the promoted image is already persisted.
+  }
 }
 
 async function assertCanManageSeries(
@@ -220,8 +242,9 @@ export const eventRouter = router({
 
       if (event?.coverImageUrl) {
         try {
+          const originalCoverImageUrl = event.coverImageUrl;
           const eventCoverImageUrl = await uploadImageFromUrl(
-            event.coverImageUrl,
+            originalCoverImageUrl,
             `events/${event.id}`,
             "cover-image.png"
           );
@@ -230,6 +253,8 @@ export const eventRouter = router({
             .update(events)
             .set({ coverImageUrl: eventCoverImageUrl })
             .where(eq(events.id, event.id));
+
+          await cleanupPendingEventUpload(originalCoverImageUrl);
         } catch {
           // Keep existing cover image URL if re-hosting fails.
         }
@@ -412,8 +437,9 @@ export const eventRouter = router({
       let resolvedCoverImageUrl = input.coverImageUrl ?? null;
       if (resolvedCoverImageUrl) {
         try {
+          const originalCoverImageUrl = resolvedCoverImageUrl;
           resolvedCoverImageUrl = await uploadImageFromUrl(
-            resolvedCoverImageUrl,
+            originalCoverImageUrl,
             `event-series/${series.id}`,
             "cover-image.png"
           );
@@ -422,6 +448,8 @@ export const eventRouter = router({
             .update(eventSeries)
             .set({ coverImageUrl: resolvedCoverImageUrl })
             .where(eq(eventSeries.id, series.id));
+
+          await cleanupPendingEventUpload(originalCoverImageUrl);
         } catch {
           // Keep the existing URL if re-hosting fails.
         }
@@ -544,7 +572,10 @@ export const eventRouter = router({
         });
       }
 
-      if (input.recurrence.untilDate && input.recurrence.untilDate < input.startAt) {
+      if (
+        input.recurrence.untilDate &&
+        input.recurrence.untilDate < input.startAt
+      ) {
         throw new TRPCError({
           code: "BAD_REQUEST",
           message: "Series end date must be after the first event date",
@@ -581,8 +612,11 @@ export const eventRouter = router({
               ? input.coverImageUrl
               : existingSeries.coverImageUrl,
           eventUrl:
-            input.eventUrl !== undefined ? input.eventUrl : existingSeries.eventUrl,
-          source: input.source !== undefined ? input.source : existingSeries.source,
+            input.eventUrl !== undefined
+              ? input.eventUrl
+              : existingSeries.eventUrl,
+          source:
+            input.source !== undefined ? input.source : existingSeries.source,
           externalId:
             input.externalId !== undefined
               ? input.externalId
@@ -611,14 +645,20 @@ export const eventRouter = router({
         });
       }
 
-      await setEventSeriesCategoryKeys(ctx.db, input.seriesId, validCategories, {
-        activeOnly: true,
-      });
+      await setEventSeriesCategoryKeys(
+        ctx.db,
+        input.seriesId,
+        validCategories,
+        {
+          activeOnly: true,
+        }
+      );
 
       if (input.coverImageUrl) {
         try {
+          const originalCoverImageUrl = input.coverImageUrl;
           const seriesCoverImageUrl = await uploadImageFromUrl(
-            input.coverImageUrl,
+            originalCoverImageUrl,
             `event-series/${input.seriesId}`,
             "cover-image.png"
           );
@@ -627,6 +667,8 @@ export const eventRouter = router({
             .update(eventSeries)
             .set({ coverImageUrl: seriesCoverImageUrl })
             .where(eq(eventSeries.id, input.seriesId));
+
+          await cleanupPendingEventUpload(originalCoverImageUrl);
         } catch {
           // Keep existing cover image URL if re-hosting fails.
         }
@@ -634,7 +676,10 @@ export const eventRouter = router({
 
       const now = new Date();
       const futureEventsBeforeUpdate = await ctx.db.query.events.findMany({
-        where: and(eq(events.seriesId, input.seriesId), gte(events.startAt, now)),
+        where: and(
+          eq(events.seriesId, input.seriesId),
+          gte(events.startAt, now)
+        ),
         columns: {
           startAt: true,
           coverImageUrl: true,
@@ -668,14 +713,20 @@ export const eventRouter = router({
       });
 
       const nextEvent = await ctx.db.query.events.findFirst({
-        where: and(eq(events.seriesId, input.seriesId), gte(events.startAt, now)),
+        where: and(
+          eq(events.seriesId, input.seriesId),
+          gte(events.startAt, now)
+        ),
         orderBy: [asc(events.startAt)],
         columns: { id: true },
       });
 
       if (customCoverImageByStartAt.size > 0) {
         const regeneratedEvents = await ctx.db.query.events.findMany({
-          where: and(eq(events.seriesId, input.seriesId), gte(events.startAt, now)),
+          where: and(
+            eq(events.seriesId, input.seriesId),
+            gte(events.startAt, now)
+          ),
           columns: {
             id: true,
             startAt: true,
@@ -887,25 +938,26 @@ export const eventRouter = router({
         .insert(events)
         .values(values.map((value) => value.data) as any);
 
-      const upserted = await (input.overrideExisting
-        ? insertQuery.onConflictDoUpdate({
-            target: [events.source, events.externalId],
-            set: {
-              title: sql`excluded.title`,
-              description: sql`excluded.description`,
-              coverImageUrl: sql`excluded.cover_image_url`,
-              eventUrl: sql`excluded.event_url`,
-              startAt: sql`excluded.start_at`,
-              endAt: sql`excluded.end_at`,
-              address: sql`excluded.address`,
-              city: sql`excluded.city`,
-              state: sql`excluded.state`,
-              updatedAt: sql`now()`,
-            },
-          })
-        : insertQuery.onConflictDoNothing({
-            target: [events.source, events.externalId],
-          })
+      const upserted = await (
+        input.overrideExisting
+          ? insertQuery.onConflictDoUpdate({
+              target: [events.source, events.externalId],
+              set: {
+                title: sql`excluded.title`,
+                description: sql`excluded.description`,
+                coverImageUrl: sql`excluded.cover_image_url`,
+                eventUrl: sql`excluded.event_url`,
+                startAt: sql`excluded.start_at`,
+                endAt: sql`excluded.end_at`,
+                address: sql`excluded.address`,
+                city: sql`excluded.city`,
+                state: sql`excluded.state`,
+                updatedAt: sql`now()`,
+              },
+            })
+          : insertQuery.onConflictDoNothing({
+              target: [events.source, events.externalId],
+            })
       ).returning();
 
       const categoryKeysByEventKey = new Map(
@@ -954,7 +1006,7 @@ export const eventRouter = router({
         );
       }
 
-      // Re-upload external cover images to S3 at events/{id}/coverImage.png
+      // Re-upload external cover images to S3 at events/{id}/cover-image.png
       const s3BucketHost = `${BUCKET_NAME}.s3`;
       await Promise.allSettled(
         upserted.map(async (row) => {
@@ -965,7 +1017,7 @@ export const eventRouter = router({
             const s3Url = await uploadImageFromUrl(
               row.coverImageUrl,
               `events/${row.id}`,
-              "coverImage.png"
+              "cover-image.png"
             );
             await ctx.db
               .update(events)
@@ -1978,7 +2030,9 @@ export const eventRouter = router({
         },
       });
 
-      const eventIds = [...new Set(subscribedRsvps.map((rsvp) => rsvp.eventId))];
+      const eventIds = [
+        ...new Set(subscribedRsvps.map((rsvp) => rsvp.eventId)),
+      ];
       if (eventIds.length === 0) {
         return [];
       }
