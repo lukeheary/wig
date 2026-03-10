@@ -88,6 +88,12 @@ export default function EventPage() {
     "/sign-in",
     buildReturnTo(pathname, searchParams)
   );
+  const signUpHref = withReturnTo(
+    "/sign-up",
+    buildReturnTo(pathname, searchParams)
+  );
+  const cameFromLanding = returnTo === "/" || returnTo?.startsWith("/?");
+  const unauthedRsvpHref = cameFromLanding ? signUpHref : signInHref;
 
   // Fetch event data
   const { data: event, isLoading } = trpc.event.getEventById.useQuery({
@@ -187,7 +193,7 @@ export default function EventPage() {
 
   const handleRsvp = (status: RsvpStatus) => {
     if (!isSignedIn) {
-      router.push(signInHref);
+      router.push(unauthedRsvpHref);
       return;
     }
 

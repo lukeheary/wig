@@ -74,10 +74,26 @@ function resolveEventUpdateActivityType(
 function isPendingEventUploadUrl(url: string): boolean {
   try {
     const parsed = new URL(url);
-    return (
-      parsed.host.includes(`${BUCKET_NAME}.s3`) &&
-      parsed.pathname.includes("/events/pending/")
-    );
+    return parsed.host.includes(`${BUCKET_NAME}.s3`) &&
+      parsed.pathname.includes("/events/pending/");
+  } catch {
+    return false;
+  }
+}
+
+function isBucketUrl(url: string): boolean {
+  try {
+    return new URL(url).host.includes(`${BUCKET_NAME}.s3`);
+  } catch {
+    return false;
+  }
+}
+
+function isLegacyEventCoverImageUrl(url: string, eventId: string): boolean {
+  try {
+    const parsed = new URL(url);
+    return parsed.host.includes(`${BUCKET_NAME}.s3`) &&
+      parsed.pathname.endsWith(`/events/${eventId}/coverImage.png`);
   } catch {
     return false;
   }
@@ -1006,13 +1022,21 @@ export const eventRouter = router({
         );
       }
 
-      // Re-upload external cover images to S3 at events/{id}/cover-image.png
-      const s3BucketHost = `${BUCKET_NAME}.s3`;
+      // Re-upload external cover images, and migrate legacy S3 keys, to events/{id}/cover-image.png
       await Promise.allSettled(
         upserted.map(async (row) => {
-          if (!row.coverImageUrl || row.coverImageUrl.includes(s3BucketHost)) {
+          if (!row.coverImageUrl) {
             return;
           }
+
+          const isLegacyS3Key = isLegacyEventCoverImageUrl(
+            row.coverImageUrl,
+            row.id
+          );
+          if (isBucketUrl(row.coverImageUrl) && !isLegacyS3Key) {
+            return;
+          }
+
           try {
             const s3Url = await uploadImageFromUrl(
               row.coverImageUrl,
@@ -1023,6 +1047,10 @@ export const eventRouter = router({
               .update(events)
               .set({ coverImageUrl: s3Url })
               .where(eq(events.id, row.id));
+
+            if (isLegacyS3Key) {
+              await deleteFromS3(row.coverImageUrl);
+            }
           } catch {
             // Keep the original external URL if upload fails
           }

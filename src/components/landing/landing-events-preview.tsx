@@ -3,6 +3,75 @@
 import { trpc } from "@/lib/trpc";
 import { EventCardGrid } from "@/components/events/event-card-grid";
 import { Loader2, CalendarIcon } from "lucide-react";
+import { type EventListItem } from "@/types/trpc";
+
+const MOCK_EVENT_ATTENDEES = [
+  {
+    id: "landing-user-1",
+    firstName: "Maya",
+    lastName: null,
+    avatarImageUrl: null,
+  },
+  {
+    id: "landing-user-2",
+    firstName: "Theo",
+    lastName: null,
+    avatarImageUrl: null,
+  },
+  {
+    id: "landing-user-3",
+    firstName: "Ari",
+    lastName: null,
+    avatarImageUrl: null,
+  },
+  {
+    id: "landing-user-4",
+    firstName: "Lena",
+    lastName: null,
+    avatarImageUrl: null,
+  },
+  {
+    id: "landing-user-5",
+    firstName: "Parker",
+    lastName: null,
+    avatarImageUrl: null,
+  },
+  {
+    id: "landing-user-6",
+    firstName: "Zoe",
+    lastName: null,
+    avatarImageUrl: null,
+  },
+  {
+    id: "landing-user-7",
+    firstName: "Kai",
+    lastName: null,
+    avatarImageUrl: null,
+  },
+  {
+    id: "landing-user-8",
+    firstName: "Sofia",
+    lastName: null,
+    avatarImageUrl: null,
+  },
+];
+
+function withMockFriendsGoing(events: EventListItem[]): EventListItem[] {
+  return events.map((event, index) => {
+    const attendeeCount = ((event.title.length + index) % 4) + 1;
+    const startIndex = index % MOCK_EVENT_ATTENDEES.length;
+    const friendsGoing = Array.from({ length: attendeeCount }, (_, offset) => ({
+      user: MOCK_EVENT_ATTENDEES[
+        (startIndex + offset) % MOCK_EVENT_ATTENDEES.length
+      ],
+    })) as EventListItem["friendsGoing"];
+
+    return {
+      ...event,
+      friendsGoing,
+    };
+  });
+}
 
 export function LandingEventsPreview() {
   const limit = 8;
@@ -51,7 +120,7 @@ export function LandingEventsPreview() {
         </div>
       ) : (
         <EventCardGrid
-          events={events}
+          events={withMockFriendsGoing(events)}
           columns={{ mobile: 1, tablet: 3, desktop: 4 }}
           gap="md"
         />
