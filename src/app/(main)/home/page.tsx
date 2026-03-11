@@ -78,7 +78,6 @@ import { withReturnTo } from "@/lib/navigation";
 import { HapticPreset, useHaptics } from "@/hooks/use-haptics";
 import { useAuth } from "@clerk/nextjs";
 import { sendGoogleAnalyticsEvent } from "@/lib/google-analytics";
-import { type EventListItem } from "@/types/trpc";
 
 type ViewMode = "week" | "month";
 
@@ -116,46 +115,6 @@ function EventSkeletonGrid({ count = 8 }: { count?: number }) {
           </div>
         </div>
       ))}
-    </div>
-  );
-}
-
-function UpcomingEventsList({ events }: { events: EventListItem[] }) {
-  return (
-    <div className="overflow-hidden rounded-2xl border bg-card">
-      {events.map((event, index) => {
-        const eventDate = new Date(event.startAt);
-        const locationLabel = event.venue?.name
-          ? `${event.venue.name} · ${event.city}, ${event.state}`
-          : `${event.city}, ${event.state}`;
-
-        return (
-          <Link
-            key={event.id}
-            href={withReturnTo(`/event/${event.id}`, "/home")}
-            className={cn(
-              "block px-4 py-3 transition-colors hover:bg-muted/40",
-              index > 0 && "border-t"
-            )}
-          >
-            <div className="flex items-start justify-between gap-4">
-              <div className="min-w-0 flex-1">
-                <div className="truncate font-medium">{event.title}</div>
-                <div className="mt-1 flex flex-wrap items-center gap-x-3 gap-y-1 text-sm text-muted-foreground">
-                  <span className="inline-flex items-center gap-1">
-                    <Clock className="h-3.5 w-3.5" />
-                    {format(eventDate, "EEE, MMM d")} at {formatTime(event.startAt)}
-                  </span>
-                  <span className="inline-flex items-center gap-1">
-                    <MapPin className="h-3.5 w-3.5" />
-                    {locationLabel}
-                  </span>
-                </div>
-              </div>
-            </div>
-          </Link>
-        );
-      })}
     </div>
   );
 }
@@ -796,7 +755,11 @@ function HomePageContent() {
                 No upcoming events to show
               </div>
             ) : (
-              <UpcomingEventsList events={filteredUpcomingSearchEvents} />
+              <EventCardGrid
+                events={filteredUpcomingSearchEvents}
+                columns={{ mobile: 1, tablet: 3, desktop: 4 }}
+                gap="md"
+              />
             )}
           </div>
         )}

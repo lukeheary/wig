@@ -1192,8 +1192,25 @@ export const eventRouter = router({
       }
 
       // Add search filter
-      if (input.search) {
-        conditions.push(ilike(events.title, `%${input.search}%`));
+      if (input.search?.trim()) {
+        const searchTerm = `%${input.search.trim()}%`;
+        const matchingVenueRows = await ctx.db
+          .select({ id: places.id })
+          .from(places)
+          .where(and(eq(places.type, "venue"), ilike(places.name, searchTerm)));
+
+        const searchConditions = [ilike(events.title, searchTerm)];
+
+        if (matchingVenueRows.length > 0) {
+          searchConditions.push(
+            inArray(
+              events.venueId,
+              matchingVenueRows.map((row) => row.id)
+            )
+          );
+        }
+
+        conditions.push(or(...searchConditions)!);
       }
 
       // Filter by followed places (venues and organizers)
@@ -2006,8 +2023,25 @@ export const eventRouter = router({
         }
       }
 
-      if (input.search) {
-        conditions.push(ilike(events.title, `%${input.search}%`));
+      if (input.search?.trim()) {
+        const searchTerm = `%${input.search.trim()}%`;
+        const matchingVenueRows = await ctx.db
+          .select({ id: places.id })
+          .from(places)
+          .where(and(eq(places.type, "venue"), ilike(places.name, searchTerm)));
+
+        const searchConditions = [ilike(events.title, searchTerm)];
+
+        if (matchingVenueRows.length > 0) {
+          searchConditions.push(
+            inArray(
+              events.venueId,
+              matchingVenueRows.map((row) => row.id)
+            )
+          );
+        }
+
+        conditions.push(or(...searchConditions)!);
       }
 
       const eventList = await ctx.db.query.events.findMany({
