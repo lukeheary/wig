@@ -23,6 +23,7 @@ import { VenueHours } from "@/components/venue-hours-editor";
 import pluralize from "pluralize";
 import { cn } from "@/lib/utils";
 import { StickySectionHeader } from "@/components/ui/sticky-section-header";
+import { CategoryPillList } from "@/components/categories/category-pill";
 import { PlaceActionMenu } from "@/components/places/place-action-menu";
 import { PlacePageSkeleton } from "@/components/places/place-page-skeleton";
 
@@ -205,18 +206,11 @@ export default function PlacePage() {
                   {place.name}
                 </h1>
                 <p className="text-muted-foreground">@{place.slug}</p>
-                {place.categories && place.categories.length > 0 && (
-                  <div className="flex flex-wrap gap-2 pt-2">
-                    {place.categories.map((cat) => (
-                      <span
-                        key={cat}
-                        className="inline-flex shrink-0 items-center rounded-full bg-muted/50 px-3.5 py-1.5 text-xs font-medium capitalize text-muted-foreground"
-                      >
-                        {(place as any).categoryLabels?.[cat] || cat}
-                      </span>
-                    ))}
-                  </div>
-                )}
+                <CategoryPillList
+                  categories={place.categories || []}
+                  categoryLabelMap={(place as any).categoryLabels}
+                  className="pt-2"
+                />
               </div>
             </div>
 
@@ -281,28 +275,32 @@ export default function PlacePage() {
               <VenueHoursDisplay hours={(place as any).hours as VenueHours} />
             )}
 
-            {place.instagram && (
-              <a
-                href={`https://instagram.com/${place.instagram}`}
-                target="_blank"
-                rel="noopener noreferrer"
-                className="flex w-fit items-center gap-2 text-muted-foreground hover:underline"
-              >
-                <Instagram className="h-4 w-4" />
-                <span>@{place.instagram}</span>
-              </a>
-            )}
+            {(place.instagram || place.website) && (
+              <div className="flex flex-wrap items-center gap-x-4 gap-y-2">
+                {place.instagram && (
+                  <a
+                    href={`https://instagram.com/${place.instagram}`}
+                    target="_blank"
+                    rel="noopener noreferrer"
+                    className="flex w-fit items-center gap-2 text-muted-foreground hover:underline"
+                  >
+                    <Instagram className="h-4 w-4" />
+                    <span>@{place.instagram}</span>
+                  </a>
+                )}
 
-            {place.website && (
-              <a
-                href={place.website}
-                target="_blank"
-                rel="noopener noreferrer"
-                className="flex w-fit items-center gap-2 text-muted-foreground hover:underline"
-              >
-                <Globe className="h-4 w-4" />
-                <span>{displayWebsite}</span>
-              </a>
+                {place.website && (
+                  <a
+                    href={place.website}
+                    target="_blank"
+                    rel="noopener noreferrer"
+                    className="flex w-fit items-center gap-2 text-muted-foreground hover:underline"
+                  >
+                    <Globe className="h-4 w-4" />
+                    <span>{displayWebsite}</span>
+                  </a>
+                )}
+              </div>
             )}
           </div>
 

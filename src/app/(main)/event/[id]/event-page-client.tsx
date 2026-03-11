@@ -10,13 +10,12 @@ import Link from "next/link";
 import Image from "next/image";
 import { trpc } from "@/lib/trpc";
 import { Button } from "@/components/ui/button";
-import { Badge } from "@/components/ui/badge";
 import { UserAvatar } from "@/components/ui/user-avatar";
 import { Switch } from "@/components/ui/switch";
 import {
   Calendar,
   MapPin,
-  Share,
+  Link as LinkIcon,
   Check,
   Edit,
   Users,
@@ -38,6 +37,7 @@ import { buildReturnTo, withReturnTo } from "@/lib/navigation";
 import { HapticPreset, useHaptics } from "@/hooks/use-haptics";
 import { useAuth } from "@clerk/nextjs";
 import { sendGoogleAnalyticsEvent } from "@/lib/google-analytics";
+import { CategoryPillList } from "@/components/categories/category-pill";
 
 type RsvpStatus = "going" | "interested" | "not_going";
 
@@ -403,7 +403,7 @@ export default function EventPage() {
                   {isShareCopied ? (
                     <Check className="h-4 w-4" />
                   ) : (
-                    <Share className="h-4 w-4" />
+                    <LinkIcon className="h-4 w-4" />
                   )}
                 </Button>
               </div>
@@ -435,14 +435,22 @@ export default function EventPage() {
               <h1 className="text-3xl font-bold md:text-4xl">{event.title}</h1>
             </div>
 
-            {event.venue?.name && (
-              <Link
-                className="mt-1 flex w-fit items-center gap-2 text-lg transition-colors hover:underline"
-                href={`/venue/${event.venue?.slug}`}
-              >
-                <MapPin className="h-4 w-4" />
-                <span className="">{event.venue.name}</span>
-              </Link>
+            {(event.venue?.name || (event.categories?.length ?? 0) > 0) && (
+              <div className="mt-1 flex flex-wrap items-center gap-2">
+                {event.venue?.name && (
+                  <Link
+                    className="flex w-fit items-center gap-2 text-lg transition-colors hover:underline"
+                    href={`/venue/${event.venue?.slug}`}
+                  >
+                    <MapPin className="h-4 w-4" />
+                    <span>{event.venue.name}</span>
+                  </Link>
+                )}
+                <CategoryPillList
+                  categories={event.categories || []}
+                  categoryLabelMap={categoryLabelMap}
+                />
+              </div>
             )}
 
             <div
@@ -478,18 +486,6 @@ export default function EventPage() {
                 <span>View on {sourceLabel}</span>
               </a>
             )}
-
-            <div className="mt-2 flex flex-wrap gap-2">
-              {event.categories?.map((category) => (
-                <Badge
-                  key={category}
-                  variant="secondary"
-                  className="capitalize"
-                >
-                  {categoryLabelMap[category] || category}
-                </Badge>
-              ))}
-            </div>
 
             {!isCancelledEvent && (
               <>
