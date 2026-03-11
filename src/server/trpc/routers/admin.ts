@@ -4,9 +4,11 @@ import {
   categories,
   cities,
   metroAreas,
+  notifications,
   places,
   placeMembers,
   scrapers,
+  supportTicketActivity,
   supportTickets,
   users,
 } from "../../db/schema";
@@ -80,6 +82,7 @@ export const adminRouter = router({
           username: users.username,
           firstName: users.firstName,
           lastName: users.lastName,
+          avatarImageUrl: users.avatarImageUrl,
         })
         .from(supportTickets)
         .innerJoin(users, eq(supportTickets.userId, users.id))
@@ -95,6 +98,21 @@ export const adminRouter = router({
       })
     )
     .mutation(async ({ ctx, input }) => {
+      const existingTicket = await ctx.db.query.supportTickets.findFirst({
+        where: eq(supportTickets.id, input.ticketId),
+      });
+
+      if (!existingTicket) {
+        throw new TRPCError({
+          code: "NOT_FOUND",
+          message: "Support ticket not found",
+        });
+      }
+
+      if (existingTicket.status === input.status) {
+        return existingTicket;
+      }
+
       const [updatedTicket] = await ctx.db
         .update(supportTickets)
         .set({
@@ -110,6 +128,40 @@ export const adminRouter = router({
           message: "Support ticket not found",
         });
       }
+
+      const statusLabels = {
+        open: "Open",
+        "in-review": "In Review",
+        closed: "Closed",
+        planned: "Planned",
+        resolved: "Resolved",
+      } as const;
+
+      await ctx.db.insert(supportTicketActivity).values({
+        ticketId: existingTicket.id,
+        actorUserId: ctx.auth.userId,
+        type: "status_changed",
+        metadata: {
+          fromStatus: existingTicket.status,
+          toStatus: input.status,
+        },
+      });
+
+      await ctx.db.insert(notifications).values({
+        userId: existingTicket.userId,
+        actorUserId: ctx.auth.userId,
+        type: "support_ticket_status_changed",
+        entityType: "support_ticket",
+        entityId: existingTicket.id,
+        title: "Ticket status updated",
+        body: `Your ticket "${existingTicket.subject}" is now ${statusLabels[input.status]}.`,
+        actionUrl: "/help-feedback",
+        metadata: {
+          ticketId: existingTicket.id,
+          fromStatus: existingTicket.status,
+          toStatus: input.status,
+        },
+      });
 
       return updatedTicket;
     }),

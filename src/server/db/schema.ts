@@ -72,6 +72,16 @@ export const eventActivityTypeEnum = pgEnum("event_activity_type", [
   "restored",
 ]);
 
+export const notificationTypeEnum = pgEnum("notification_type", [
+  "event_update",
+  "support_ticket_status_changed",
+]);
+
+export const notificationEntityTypeEnum = pgEnum("notification_entity_type", [
+  "event",
+  "support_ticket",
+]);
+
 export const placeTypeEnum = pgEnum("place_type", ["venue", "organizer"]);
 export const placeMemberRoleEnum = pgEnum("place_member_role", [
   "owner",
@@ -106,6 +116,11 @@ export const supportTicketStatusEnum = pgEnum("support_ticket_status", [
   "resolved",
 ]);
 
+export const supportTicketActivityTypeEnum = pgEnum(
+  "support_ticket_activity_type",
+  ["created", "status_changed"]
+);
+
 export const scraperTypeEnum = pgEnum("scraper_type", [
   "dice",
   "posh",
@@ -132,7 +147,6 @@ export const users = pgTable(
     dateOfBirth: date("date_of_birth"),
     role: userRoleEnum("role").notNull().default("user"),
     isOnboarding: boolean("is_onboarding").notNull().default(true),
-    eventUpdatesLastSeenAt: timestamp("event_updates_last_seen_at"),
     createdAt: timestamp("created_at").defaultNow().notNull(),
     updatedAt: timestamp("updated_at").defaultNow().notNull(),
   },
@@ -155,7 +169,10 @@ export const usersRelations = relations(users, ({ many }) => ({
   }),
   activities: many(userActivity),
   eventActivities: many(eventActivity),
+  notifications: many(notifications, { relationName: "notificationRecipient" }),
+  notificationActors: many(notifications, { relationName: "notificationActor" }),
   supportTickets: many(supportTickets),
+  supportTicketActivities: many(supportTicketActivity),
 }));
 
 // ============================================================================
@@ -825,6 +842,59 @@ export const eventActivityRelations = relations(eventActivity, ({ one }) => ({
 }));
 
 // ============================================================================
+// NOTIFICATIONS TABLE
+// ============================================================================
+export const notifications = pgTable(
+  "notifications",
+  {
+    id: uuid("id").defaultRandom().primaryKey(),
+    userId: text("user_id")
+      .notNull()
+      .references(() => users.id, { onDelete: "cascade" }),
+    actorUserId: text("actor_user_id").references(() => users.id, {
+      onDelete: "set null",
+    }),
+    type: notificationTypeEnum("type").notNull(),
+    entityType: notificationEntityTypeEnum("entity_type").notNull(),
+    entityId: text("entity_id").notNull(),
+    title: varchar("title", { length: 255 }).notNull(),
+    body: text("body"),
+    actionUrl: text("action_url"),
+    metadata: jsonb("metadata"),
+    readAt: timestamp("read_at"),
+    createdAt: timestamp("created_at").defaultNow().notNull(),
+  },
+  (table) => ({
+    userReadCreatedAtIdx: index("notifications_user_read_created_at_idx").on(
+      table.userId,
+      table.readAt,
+      table.createdAt
+    ),
+    userCreatedAtIdx: index("notifications_user_created_at_idx").on(
+      table.userId,
+      table.createdAt
+    ),
+    entityIdx: index("notifications_entity_idx").on(
+      table.entityType,
+      table.entityId
+    ),
+  })
+);
+
+export const notificationsRelations = relations(notifications, ({ one }) => ({
+  user: one(users, {
+    fields: [notifications.userId],
+    references: [users.id],
+    relationName: "notificationRecipient",
+  }),
+  actor: one(users, {
+    fields: [notifications.actorUserId],
+    references: [users.id],
+    relationName: "notificationActor",
+  }),
+}));
+
+// ============================================================================
 // SUPPORT REQUESTS TABLE
 // ============================================================================
 export const supportTickets = pgTable(
@@ -853,9 +923,53 @@ export const supportTickets = pgTable(
 
 export const supportTicketsRelations = relations(
   supportTickets,
-  ({ one }) => ({
+  ({ one, many }) => ({
     user: one(users, {
       fields: [supportTickets.userId],
+      references: [users.id],
+    }),
+    activities: many(supportTicketActivity),
+  })
+);
+
+// ============================================================================
+// SUPPORT TICKET ACTIVITY TABLE
+// ============================================================================
+export const supportTicketActivity = pgTable(
+  "support_ticket_activity",
+  {
+    id: uuid("id").defaultRandom().primaryKey(),
+    ticketId: uuid("ticket_id")
+      .notNull()
+      .references(() => supportTickets.id, { onDelete: "cascade" }),
+    actorUserId: text("actor_user_id").references(() => users.id, {
+      onDelete: "set null",
+    }),
+    type: supportTicketActivityTypeEnum("type").notNull(),
+    metadata: jsonb("metadata"),
+    createdAt: timestamp("created_at").defaultNow().notNull(),
+  },
+  (table) => ({
+    ticketCreatedAtIdx: index("support_ticket_activity_ticket_created_at_idx").on(
+      table.ticketId,
+      table.createdAt
+    ),
+    actorCreatedAtIdx: index("support_ticket_activity_actor_created_at_idx").on(
+      table.actorUserId,
+      table.createdAt
+    ),
+  })
+);
+
+export const supportTicketActivityRelations = relations(
+  supportTicketActivity,
+  ({ one }) => ({
+    ticket: one(supportTickets, {
+      fields: [supportTicketActivity.ticketId],
+      references: [supportTickets.id],
+    }),
+    actor: one(users, {
+      fields: [supportTicketActivity.actorUserId],
       references: [users.id],
     }),
   })

@@ -7,6 +7,7 @@ import { partnersRouter } from "./routers/partners";
 import { userRouter } from "./routers/user";
 import { categoryRouter } from "./routers/category";
 import { supportRouter } from "./routers/support";
+import { notificationsRouter } from "./routers/notifications";
 
 export const appRouter = router({
   place: placeRouter,
@@ -17,6 +18,7 @@ export const appRouter = router({
   user: userRouter,
   category: categoryRouter,
   support: supportRouter,
+  notifications: notificationsRouter,
 });
 
 export type AppRouter = typeof appRouter;

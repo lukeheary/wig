@@ -7,6 +7,7 @@ import { BackButtonHeader } from "@/components/shared/back-button-header";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
 import { Badge } from "@/components/ui/badge";
+import { UserAvatar } from "@/components/ui/user-avatar";
 import { trpc } from "@/lib/trpc";
 import { useToast } from "@/hooks/use-toast";
 import {
@@ -55,7 +56,7 @@ export default function AdminTicketsPage() {
   const { toast } = useToast();
   const utils = trpc.useUtils();
   const [statusFilter, setStatusFilter] =
-    useState<(typeof statusOptions)[number]["value"]>("all");
+    useState<(typeof statusOptions)[number]["value"]>("open");
   const [search, setSearch] = useState("");
 
   const {
@@ -137,65 +138,90 @@ export default function AdminTicketsPage() {
                 ticket.userEmail;
 
               return (
-                <div key={ticket.id} className="rounded-2xl border p-4">
-                  <div className="flex flex-col gap-4 lg:flex-row lg:items-start lg:justify-between">
-                    <div className="min-w-0 space-y-2">
-                      <div className="flex flex-wrap items-center gap-2">
-                        <Badge variant="outline">
-                          {typeLabels[ticket.type]}
-                        </Badge>
-                        <Badge variant={statusVariants[ticket.status]}>
-                          {statusLabels[ticket.status]}
-                        </Badge>
-                      </div>
-
-                      <div>
-                        <h2 className="text-base font-semibold">
-                          {ticket.subject}
-                        </h2>
-                        <p className="text-sm text-muted-foreground">
-                          {displayName} · {ticket.userEmail}
-                        </p>
-                        <p className="text-xs text-muted-foreground">
+                <div
+                  key={ticket.id}
+                  className="rounded-2xl border border-border/70 bg-muted/20 p-5"
+                >
+                  <div className="flex flex-col gap-5 xl:flex-row xl:items-start xl:justify-between">
+                    <div className="min-w-0 flex-1 space-y-4">
+                      <div className="flex flex-wrap items-center gap-x-4 gap-y-2 text-xs text-muted-foreground">
+                        <p>
                           Submitted{" "}
                           {formatDistanceToNow(new Date(ticket.createdAt), {
                             addSuffix: true,
                           })}
                         </p>
+                        <Badge variant="outline" className="font-medium">
+                          {typeLabels[ticket.type]}
+                        </Badge>
                       </div>
 
-                      <p className="whitespace-pre-wrap text-sm text-muted-foreground">
-                        {ticket.message}
-                      </p>
+                      <div className="space-y-3">
+                        <h2 className="text-lg font-semibold leading-tight">
+                          {ticket.subject}
+                        </h2>
+                        <div className="rounded-2xl border border-border/70 bg-background/50 px-4 py-4">
+                          <div className="flex items-center gap-3">
+                            <UserAvatar
+                              src={ticket.avatarImageUrl}
+                              name={displayName}
+                              className="h-11 w-11 shrink-0"
+                            />
+                            <div className="min-w-0 flex-1">
+                              <div className="flex flex-wrap items-center gap-x-2 gap-y-1">
+                                <p className="truncate text-sm font-semibold">
+                                  {displayName}
+                                </p>
+                                <p className="truncate text-sm text-muted-foreground">
+                                  @{ticket.username}
+                                </p>
+                              </div>
+                              <p className="truncate text-sm text-muted-foreground">
+                                {ticket.userEmail}
+                              </p>
+                            </div>
+                          </div>
+                          <div className="mt-4 border-t border-border/60 pt-4">
+                            <p className="whitespace-pre-wrap text-sm leading-6 text-foreground/90">
+                              {ticket.message}
+                            </p>
+                          </div>
+                        </div>
+                      </div>
                     </div>
 
-                    <div className="w-full max-w-xs shrink-0">
-                      <Select
-                        value={ticket.status}
-                        onValueChange={(value) =>
-                          updateTicketStatus.mutate({
-                            ticketId: ticket.id,
-                            status: value as TicketStatus,
-                          })
-                        }
-                        disabled={updateTicketStatus.isPending}
-                      >
-                        <SelectTrigger>
-                          <SelectValue />
-                        </SelectTrigger>
-                        <SelectContent>
-                          {statusOptions
-                            .filter((option) => option.value !== "all")
-                            .map((option) => (
-                              <SelectItem
-                                key={option.value}
-                                value={option.value}
-                              >
-                                {option.label}
-                              </SelectItem>
-                            ))}
-                        </SelectContent>
-                      </Select>
+                    <div className="w-full xl:max-w-xs">
+                      <div className="rounded-2xl border border-border/70 bg-background/50 p-4">
+                        <p className="mb-2 text-xs font-medium uppercase tracking-wide text-muted-foreground">
+                          Status
+                        </p>
+                        <Select
+                          value={ticket.status}
+                          onValueChange={(value) =>
+                            updateTicketStatus.mutate({
+                              ticketId: ticket.id,
+                              status: value as TicketStatus,
+                            })
+                          }
+                          disabled={updateTicketStatus.isPending}
+                        >
+                          <SelectTrigger>
+                            <SelectValue />
+                          </SelectTrigger>
+                          <SelectContent>
+                            {statusOptions
+                              .filter((option) => option.value !== "all")
+                              .map((option) => (
+                                <SelectItem
+                                  key={option.value}
+                                  value={option.value}
+                                >
+                                  {option.label}
+                                </SelectItem>
+                              ))}
+                          </SelectContent>
+                        </Select>
+                      </div>
                     </div>
                   </div>
                 </div>

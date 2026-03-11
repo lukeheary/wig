@@ -35,18 +35,18 @@ export function NotificationsBell() {
   const utils = trpc.useUtils();
   const { data: pendingRequests, refetch } =
     trpc.friends.getPendingRequests.useQuery();
-  const { data: eventUpdates } = trpc.event.getMyEventActivity.useQuery({
-    limit: 20,
-  });
-  const { data: unreadEventUpdatesCountData } =
-    trpc.event.getMyUnreadEventActivityCount.useQuery();
+  const { data: recentNotifications } =
+    trpc.notifications.listRecent.useQuery();
+  const { data: unreadNotificationsCountData } =
+    trpc.notifications.getUnreadCount.useQuery();
 
-  const markEventActivitySeenMutation =
-    trpc.event.markMyEventActivitySeen.useMutation({
+  const markNotificationsReadMutation =
+    trpc.notifications.markAllRead.useMutation({
       onSuccess: async () => {
         await Promise.all([
-          utils.event.getMyEventActivity.invalidate(),
-          utils.event.getMyUnreadEventActivityCount.invalidate(),
+          utils.notifications.listRecent.invalidate(),
+          utils.notifications.listUnread.invalidate(),
+          utils.notifications.getUnreadCount.invalidate(),
         ]);
       },
       onError: (error) => {
@@ -92,47 +92,41 @@ export function NotificationsBell() {
   });
 
   const pendingCount = pendingRequests?.length ?? 0;
-  const unreadEventUpdatesCount = unreadEventUpdatesCountData?.unreadCount ?? 0;
-  const eventUpdatesCount = eventUpdates?.length ?? 0;
-  const notificationCount = pendingCount + unreadEventUpdatesCount;
+  const unreadNotificationsCount =
+    unreadNotificationsCountData?.unreadCount ?? 0;
+  const eventNotifications =
+    recentNotifications?.filter(
+      (notification) => notification.type === "event_update"
+    ) ?? [];
+  const supportTicketNotifications =
+    recentNotifications?.filter(
+      (notification) => notification.type === "support_ticket_status_changed"
+    ) ?? [];
+  const notificationCount = pendingCount + unreadNotificationsCount;
   const hasNotifications = notificationCount > 0;
   const returnTo = buildReturnTo(pathname, searchParams);
 
-  const markEventActivitySeenIfNeeded = () => {
-    if (unreadEventUpdatesCount > 0 && !markEventActivitySeenMutation.isPending) {
-      markEventActivitySeenMutation.mutate();
+  const markNotificationsReadIfNeeded = () => {
+    if (
+      unreadNotificationsCount > 0 &&
+      !markNotificationsReadMutation.isPending
+    ) {
+      markNotificationsReadMutation.mutate();
     }
   };
 
   const handleMobileOpenChange = (open: boolean) => {
     if (!open && isMobileOpen) {
-      markEventActivitySeenIfNeeded();
+      markNotificationsReadIfNeeded();
     }
     setIsMobileOpen(open);
   };
 
   const handleDesktopOpenChange = (open: boolean) => {
     if (!open && isDesktopOpen) {
-      markEventActivitySeenIfNeeded();
+      markNotificationsReadIfNeeded();
     }
     setIsDesktopOpen(open);
-  };
-
-  const getEventUpdateText = (type: string) => {
-    switch (type) {
-      case "cancelled":
-        return "cancelled";
-      case "postponed":
-        return "postponed";
-      case "rescheduled":
-        return "rescheduled";
-      case "restored":
-        return "restored";
-      case "created":
-        return "created";
-      default:
-        return "updated";
-    }
   };
 
   const NotificationsContent = (
@@ -152,32 +146,34 @@ export function NotificationsBell() {
         </div>
       ) : (
         <div className="max-h-[400px] space-y-3 overflow-y-auto pr-1">
-          {eventUpdatesCount > 0 && (
+          {eventNotifications.length > 0 && (
             <div className="space-y-3">
               <p className="text-xs font-medium uppercase tracking-wide text-muted-foreground">
                 Event updates
               </p>
-              {eventUpdates!.map((update: any) => (
+              {eventNotifications.map((notification) => (
                 <div
-                  key={update.id}
+                  key={notification.id}
                   className="rounded-xl border border-border/60 bg-muted/40 p-4 shadow-sm transition-colors hover:bg-muted/60"
                 >
                   <p className="text-sm leading-snug">
-                    <span className="font-semibold">
-                      {update.actor?.firstName || update.actor?.lastName
-                        ? `${update.actor?.firstName || ""} ${update.actor?.lastName || ""}`.trim()
-                        : "Someone"}
-                    </span>{" "}
-                    {getEventUpdateText(update.type)}{" "}
                     <Link
-                      href={withReturnTo(`/event/${update.eventId}`, returnTo)}
-                      className="font-semibold text-primary hover:underline"
+                      href={withReturnTo(
+                        notification.actionUrl || "/home",
+                        returnTo
+                      )}
+                      className="hover:underline"
                     >
-                      {update.event?.title || "an event"}
+                      <span className="font-semibold">{notification.title}</span>
                     </Link>
                   </p>
+                  {notification.body && (
+                    <p className="mt-1 text-sm text-muted-foreground">
+                      {notification.body}
+                    </p>
+                  )}
                   <p className="mt-1 text-xs text-muted-foreground">
-                    {formatDistanceToNow(new Date(update.createdAt), {
+                    {formatDistanceToNow(new Date(notification.createdAt), {
                       addSuffix: true,
                     })}
                   </p>
@@ -186,7 +182,50 @@ export function NotificationsBell() {
             </div>
           )}
 
-          {eventUpdatesCount > 0 && pendingCount > 0 && (
+          {eventNotifications.length > 0 &&
+            supportTicketNotifications.length > 0 && (
+              <div className="border-t border-border/60" />
+            )}
+
+          {supportTicketNotifications.length > 0 && (
+            <div className="space-y-3">
+              <p className="text-xs font-medium uppercase tracking-wide text-muted-foreground">
+                Support tickets
+              </p>
+              {supportTicketNotifications.map((notification) => (
+                <div
+                  key={notification.id}
+                  className="rounded-xl border border-border/60 bg-muted/40 p-4 shadow-sm transition-colors hover:bg-muted/60"
+                >
+                  <p className="text-sm leading-snug">
+                    <Link
+                      href={withReturnTo(
+                        notification.actionUrl || "/help-feedback",
+                        returnTo
+                      )}
+                      className="hover:underline"
+                    >
+                      <span className="font-semibold">{notification.title}</span>
+                    </Link>
+                  </p>
+                  {notification.body && (
+                    <p className="mt-1 text-sm text-muted-foreground">
+                      {notification.body}
+                    </p>
+                  )}
+                  <p className="mt-1 text-xs text-muted-foreground">
+                    {formatDistanceToNow(new Date(notification.createdAt), {
+                      addSuffix: true,
+                    })}
+                  </p>
+                </div>
+              ))}
+            </div>
+          )}
+
+          {(eventNotifications.length > 0 ||
+            supportTicketNotifications.length > 0) &&
+            pendingCount > 0 && (
             <div className="border-t border-border/60" />
           )}
 

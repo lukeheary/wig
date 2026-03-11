@@ -1,7 +1,7 @@
 import { desc, eq } from "drizzle-orm";
 import { z } from "zod";
 import { protectedProcedure, router } from "../init";
-import { supportTickets } from "@/server/db/schema";
+import { supportTicketActivity, supportTickets } from "@/server/db/schema";
 
 const supportTicketTypeSchema = z.enum([
   "help",
@@ -36,6 +36,18 @@ export const supportRouter = router({
           message: input.message,
         })
         .returning();
+
+      if (supportTicket) {
+        await ctx.db.insert(supportTicketActivity).values({
+          ticketId: supportTicket.id,
+          actorUserId: ctx.auth.userId,
+          type: "created",
+          metadata: {
+            type: supportTicket.type,
+            status: supportTicket.status,
+          },
+        });
+      }
 
       return supportTicket;
     }),
