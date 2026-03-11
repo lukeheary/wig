@@ -25,13 +25,13 @@ export function PlacePageSkeleton() {
 
         <div className="mt-4 space-y-4">
           <div className="space-y-2">
-            <div className="h-4 w-full rounded-full bg-muted" />
-            <div className="h-4 w-[88%] rounded-full bg-muted" />
+            <div className="h-4 w-[80%] rounded-full bg-muted" />
+            <div className="h-4 w-[65%] rounded-full bg-muted" />
           </div>
 
           <div className="space-y-3">
-            <div className="h-4 w-48 rounded-full bg-muted" />
-            <div className="h-4 w-36 rounded-full bg-muted" />
+            <div className="h-4 w-32 rounded-full bg-muted" />
+            <div className="h-4 w-40 rounded-full bg-muted" />
           </div>
 
           <div className="flex items-center gap-2 md:hidden">
@@ -40,7 +40,7 @@ export function PlacePageSkeleton() {
           </div>
         </div>
 
-        <div className="mt-8 space-y-4">
+        <div className="mt-8 space-y-2">
           <div className="h-7 w-40 rounded-full bg-muted" />
           <div className="grid grid-cols-1 gap-4 md:grid-cols-3 lg:grid-cols-4">
             {Array.from({ length: 4 }).map((_, index) => (
