@@ -6,7 +6,6 @@ import { useState } from "react";
 import Image from "next/image";
 import { trpc } from "@/lib/trpc";
 import { Button } from "@/components/ui/button";
-import { Badge } from "@/components/ui/badge";
 import { EventCardGrid } from "@/components/events/event-card-grid";
 import {
   MapPin,
@@ -129,6 +128,9 @@ export default function PlacePage() {
 
   const isVenue = place.type === "venue";
   const TypeIcon = isVenue ? Building : Building2;
+  const displayWebsite = place.website
+    ?.replace(/^https?:\/\/(www\.)?/i, "")
+    .replace(/(\.com).*/i, "$1");
 
   // Check if user can edit this place (admin or member)
   const isMember =
@@ -207,19 +209,18 @@ export default function PlacePage() {
                   {place.name}
                 </h1>
                 <p className="text-muted-foreground">@{place.slug}</p>
-                {isVenue ? (
-                  <div className="flex items-center gap-2 text-muted-foreground">
-                    <MapPin className="h-4 w-4" />
-                    <span>{place.address}</span>
+                {place.categories && place.categories.length > 0 && (
+                  <div className="flex flex-wrap gap-2 pt-1">
+                    {place.categories.map((cat) => (
+                      <span
+                        key={cat}
+                        className="inline-flex shrink-0 items-center rounded-full bg-muted/50 px-3.5 py-1.5 text-xs font-medium capitalize text-muted-foreground"
+                      >
+                        {(place as any).categoryLabels?.[cat] || cat}
+                      </span>
+                    ))}
                   </div>
-                ) : place.city && place.state ? (
-                  <div className="flex items-center gap-2 text-muted-foreground">
-                    <MapPin className="h-4 w-4" />
-                    <span>
-                      {place.city}, {place.state}
-                    </span>
-                  </div>
-                ) : null}
+                )}
               </div>
             </div>
 
@@ -270,6 +271,20 @@ export default function PlacePage() {
             {/*  <TypeIcon className="h-4 w-4" />*/}
             {/*  <span>{isVenue ? "Venue" : "Organizer"}</span>*/}
             {/*</div>*/}
+            {isVenue ? (
+              <div className="flex items-center gap-2">
+                <MapPin className="h-4 w-4" />
+                <span>{place.address}</span>
+              </div>
+            ) : place.city && place.state ? (
+              <div className="flex items-center gap-2">
+                <MapPin className="h-4 w-4" />
+                <span>
+                  {place.city}, {place.state}
+                </span>
+              </div>
+            ) : null}
+
             {isVenue && (place as any).hours && (
               <VenueHoursDisplay hours={(place as any).hours as VenueHours} />
             )}
@@ -294,20 +309,10 @@ export default function PlacePage() {
                 className="flex w-fit items-center gap-2 text-muted-foreground hover:underline"
               >
                 <Globe className="h-4 w-4" />
-                <span>Website</span>
+                <span>{displayWebsite}</span>
               </a>
             )}
           </div>
-
-          {place.categories && place.categories.length > 0 && (
-            <div className="flex flex-wrap gap-2">
-              {place.categories.map((cat) => (
-                <Badge key={cat} variant="secondary" className="capitalize">
-                  {(place as any).categoryLabels?.[cat] || cat}
-                </Badge>
-              ))}
-            </div>
-          )}
 
           {/* Mobile follow button */}
           <div className="flex items-center gap-2 md:hidden">
@@ -359,7 +364,7 @@ export default function PlacePage() {
         </div>
       </div>
 
-      <div className="pt-8">
+      <div className="pt-4">
         <StickySectionHeader>
           <span className="text-xl font-semibold">Upcoming Events</span>
         </StickySectionHeader>
@@ -382,7 +387,7 @@ export default function PlacePage() {
 
       {/* Previous Events */}
       {place.pastEvents && (place.pastEvents as any[]).length > 0 && (
-        <div className="pt-8">
+        <div className="pt-4">
           <StickySectionHeader>
             <span className="text-xl font-semibold">Past Events</span>
           </StickySectionHeader>

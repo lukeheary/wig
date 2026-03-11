@@ -1,6 +1,11 @@
 "use client";
 
-import { useParams, usePathname, useRouter, useSearchParams } from "next/navigation";
+import {
+  useParams,
+  usePathname,
+  useRouter,
+  useSearchParams,
+} from "next/navigation";
 import Link from "next/link";
 import Image from "next/image";
 import { trpc } from "@/lib/trpc";
@@ -46,7 +51,7 @@ function EventPageSkeleton() {
             </div>
           </div>
 
-          <div className="pt-6 lg:flex-1 lg:pt-0">
+          <div className="lg:flex-1 lg:pt-0">
             <div className="space-y-3">
               <div className="h-9 w-2/3 animate-pulse rounded-full bg-muted" />
               <div className="h-5 w-1/2 animate-pulse rounded-full bg-muted" />
@@ -413,7 +418,7 @@ export default function EventPage() {
           </div>
 
           {/* Content - Right column on desktop */}
-          <div className="pt-6 lg:flex-1 lg:pt-0">
+          <div className="lg:flex-1 lg:pt-0">
             <div className="mb-2">
               <h1 className="text-3xl font-bold md:text-4xl">{event.title}</h1>
             </div>
