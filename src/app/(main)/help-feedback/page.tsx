@@ -57,6 +57,8 @@ export default function HelpFeedbackPage() {
   const [type, setType] = useState<SupportTicketType>("help");
   const [subject, setSubject] = useState("");
   const [message, setMessage] = useState("");
+  const isSubmitDisabled =
+    subject.trim().length === 0 || message.trim().length === 0;
 
   const {
     data: tickets,
@@ -151,7 +153,7 @@ export default function HelpFeedbackPage() {
 
               <Button
                 type="submit"
-                disabled={createTicket.isPending}
+                disabled={isSubmitDisabled}
                 className="w-full sm:w-auto"
               >
                 {createTicket.isPending ? (
