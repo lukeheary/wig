@@ -15,7 +15,6 @@ import {
   Loader2,
   Building,
   Building2,
-  Edit,
   X,
 } from "lucide-react";
 import { useToast } from "@/hooks/use-toast";
@@ -25,6 +24,7 @@ import { VenueHours } from "@/components/venue-hours-editor";
 import pluralize from "pluralize";
 import { cn } from "@/lib/utils";
 import { StickySectionHeader } from "@/components/ui/sticky-section-header";
+import { PlaceActionMenu } from "@/components/places/place-action-menu";
 
 export default function PlacePage() {
   const params = useParams();
@@ -246,11 +246,7 @@ export default function PlacePage() {
                 )}
               </Button>
               {canEdit && (
-                <Link href={`/venue/${slug}/edit`}>
-                  <Button size="icon" variant="secondary" className="h-10 w-10">
-                    <Edit className="h-4 w-4" />
-                  </Button>
-                </Link>
+                <PlaceActionMenu placeId={place.id} slug={slug} type="venue" />
               )}
             </div>
           </div>
@@ -335,11 +331,7 @@ export default function PlacePage() {
               )}
             </Button>
             {canEdit && (
-              <Link href={`/venue/${slug}/edit`}>
-                <Button size="icon" variant="secondary" className="h-10 w-10">
-                  <Edit className="h-4 w-4" />
-                </Button>
-              </Link>
+              <PlaceActionMenu placeId={place.id} slug={slug} type="venue" />
             )}
           </div>
 

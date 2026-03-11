@@ -431,7 +431,7 @@ export default function EventPage() {
 
           {/* Content - Right column on desktop */}
           <div className="lg:flex-1 lg:pt-0">
-            <div className="mb-2">
+            <div className="mb-2 pt-4">
               <h1 className="text-3xl font-bold md:text-4xl">{event.title}</h1>
             </div>
 
