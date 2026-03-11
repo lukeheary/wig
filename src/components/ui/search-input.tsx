@@ -48,7 +48,7 @@ export const SearchInput = forwardRef<HTMLInputElement, SearchInputProps>(
               e.stopPropagation();
               onBack?.();
             }}
-            className="flex h-10 w-10 shrink-0 items-center justify-center rounded-full text-muted-foreground hover:bg-muted hover:text-foreground transition-colors"
+            className="flex h-10 w-10 shrink-0 items-center justify-center rounded-full text-muted-foreground hover:bg-muted hover:text-foreground transition-colors outline-none focus:outline-none focus-visible:outline-none"
             tabIndex={showBack ? 0 : -1}
           >
             <ArrowLeft className="h-5 w-5" />
