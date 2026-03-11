@@ -674,43 +674,46 @@ function HomePageContent() {
             </div>
           </div>
 
-          {visibleCategories.length > 0 && (
+          {(showSkeletons || visibleCategories.length > 0) && (
             <div className="-mx-4 overflow-x-auto pt-1 [scrollbar-width:none] md:-mx-8 [&::-webkit-scrollbar]:hidden">
               <div className="flex gap-1.5 px-4 md:px-8">
-                {visibleCategories.map((category) => {
-                  const isSelected = selectedCategories.includes(category.key);
-                  return (
-                    <button
-                      key={category.id}
-                      type="button"
-                      aria-pressed={isSelected}
-                      onClick={() => {
-                        void triggerHaptic(HapticPreset.Selection);
-                        toggleCategory(category.key);
-                      }}
-                      className={cn(
-                        "inline-flex shrink-0 items-center gap-1 rounded-full px-3.5 py-1.5 text-xs font-medium transition-colors",
-                        isSelected
-                          ? "bg-foreground text-background"
-                          : "bg-muted/50 text-muted-foreground md:hover:text-foreground"
-                      )}
-                    >
-                      {category.label}
-                      {isSelected && <X className="h-3 w-3" />}
-                    </button>
-                  );
-                })}
+                {showSkeletons
+                  ? [64, 80, 56, 72].map((width, i) => (
+                      <div
+                        key={`pill-skeleton-${i}`}
+                        className="h-7 animate-pulse rounded-full bg-muted/50"
+                        style={{ width: `${width}px` }}
+                      />
+                    ))
+                  : visibleCategories.map((category) => {
+                      const isSelected = selectedCategories.includes(
+                        category.key
+                      );
+                      return (
+                        <button
+                          key={category.id}
+                          type="button"
+                          aria-pressed={isSelected}
+                          onClick={() => {
+                            void triggerHaptic(HapticPreset.Selection);
+                            toggleCategory(category.key);
+                          }}
+                          className={cn(
+                            "inline-flex shrink-0 items-center gap-1 rounded-full px-3.5 py-1.5 text-xs font-medium transition-colors",
+                            isSelected
+                              ? "bg-foreground text-background"
+                              : "bg-muted/50 text-muted-foreground md:hover:text-foreground"
+                          )}
+                        >
+                          {category.label}
+                          {isSelected && <X className="h-3 w-3" />}
+                        </button>
+                      );
+                    })}
               </div>
             </div>
           )}
         </StickySearchBar>
-
-        {/* Initial / Transition Loading State */}
-        {showSkeletons && (
-          <div className="py-2">
-            <EventSkeletonGrid count={8} />
-          </div>
-        )}
 
         {/* Recently Added Events (when search focused but no query) */}
         {isSearchMode && !isSearching && !showSkeletons && (
@@ -755,6 +758,25 @@ function HomePageContent() {
           </div>
         )}
       </div>
+
+      {/* Initial / Transition Loading State */}
+      {showSkeletons && (
+        <div>
+          {!isSearchMode && (
+            <StickyDateHeader
+              dateHeader={
+                new Date().getHours() >= 17
+                  ? "Tonight's Events"
+                  : "Today's Events"
+              }
+              isToday={true}
+            />
+          )}
+          <div className="container mx-auto px-4 py-2">
+            <EventSkeletonGrid count={8} />
+          </div>
+        </div>
+      )}
 
       {/* Friend Activity Feed - only show if there's activity and not in search mode */}
       {!isSearchMode &&
@@ -1010,13 +1032,7 @@ function HomePageContent() {
 export default function HomePage() {
   return (
     <Suspense
-      fallback={
-        <div className="container mx-auto min-h-screen py-8">
-          <div className="flex justify-center py-12">
-            <Loader2 className="h-8 w-8 animate-spin text-muted-foreground" />
-          </div>
-        </div>
-      }
+      fallback={<div className="container mx-auto min-h-screen py-8"></div>}
     >
       <HomePageContent />
     </Suspense>
