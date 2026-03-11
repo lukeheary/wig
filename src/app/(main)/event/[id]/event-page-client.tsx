@@ -52,7 +52,7 @@ function EventPageSkeleton() {
             </div>
           </div>
 
-          <div className="lg:flex-1 lg:pt-0">
+          <div className="pt-4 lg:flex-1 lg:pt-0">
             <div className="space-y-3">
               <div className="h-9 w-2/3 animate-pulse rounded-full bg-muted" />
               <div className="h-5 w-1/2 animate-pulse rounded-full bg-muted" />

@@ -12,7 +12,6 @@ import {
   Globe,
   Instagram,
   Heart,
-  Loader2,
   Building,
   Building2,
   X,
@@ -25,6 +24,7 @@ import pluralize from "pluralize";
 import { cn } from "@/lib/utils";
 import { StickySectionHeader } from "@/components/ui/sticky-section-header";
 import { PlaceActionMenu } from "@/components/places/place-action-menu";
+import { PlacePageSkeleton } from "@/components/places/place-page-skeleton";
 
 export default function PlacePage() {
   const params = useParams();
@@ -104,11 +104,7 @@ export default function PlacePage() {
   };
 
   if (isLoading) {
-    return (
-      <div className="flex justify-center py-12">
-        <Loader2 className="h-8 w-8 animate-spin text-muted-foreground" />
-      </div>
-    );
+    return <PlacePageSkeleton />;
   }
 
   if (!place) {
@@ -204,13 +200,13 @@ export default function PlacePage() {
                 )}
               </div>
 
-              <div className="space-y-1">
+              <div>
                 <h1 className="text-2xl font-bold tracking-tight md:text-3xl">
                   {place.name}
                 </h1>
                 <p className="text-muted-foreground">@{place.slug}</p>
                 {place.categories && place.categories.length > 0 && (
-                  <div className="flex flex-wrap gap-2 pt-1">
+                  <div className="flex flex-wrap gap-2 pt-2">
                     {place.categories.map((cat) => (
                       <span
                         key={cat}

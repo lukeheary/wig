@@ -69,7 +69,7 @@ export function ResponsiveSelect({
       <SheetTrigger asChild>
         <button
           className={cn(
-            "flex h-12 gap-2 w-full items-center justify-between rounded-full border border-input bg-muted px-5 py-2 text-sm focus:outline-none disabled:cursor-not-allowed disabled:opacity-50",
+            "flex h-12 w-full items-center justify-between gap-2 rounded-full border border-input bg-muted px-5 py-2 text-sm focus:outline-none disabled:cursor-not-allowed disabled:opacity-50",
             className
           )}
         >
@@ -88,7 +88,7 @@ export function ResponsiveSelect({
             <button
               key={option.value}
               className={cn(
-                "flex w-full items-center justify-between rounded-lg px-4 py-3 text-left transition-colors hover:bg-muted",
+                "flex w-full items-center justify-between rounded-lg px-4 py-5 text-left transition-colors hover:bg-muted",
                 value === option.value && "bg-muted font-medium"
               )}
               onClick={() => {
