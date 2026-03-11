@@ -353,6 +353,20 @@ export const friendsRouter = router({
       const friendIds = userFriendships.map((f) =>
         f.userId === ctx.auth.userId ? f.friendUserId : f.userId
       );
+      const currentPartnerRelationship = await ctx.db.query.userPartners.findFirst({
+        where: and(
+          eq(userPartners.status, "accepted"),
+          or(
+            eq(userPartners.requesterId, ctx.auth.userId),
+            eq(userPartners.recipientId, ctx.auth.userId)
+          )
+        ),
+      });
+      const currentPartnerUserId = currentPartnerRelationship
+        ? currentPartnerRelationship.requesterId === ctx.auth.userId
+          ? currentPartnerRelationship.recipientId
+          : currentPartnerRelationship.requesterId
+        : null;
 
       // 2. Fetch activity for these friends
       const activities =
@@ -375,7 +389,20 @@ export const friendsRouter = router({
 
       const visibleActivities = activities.filter((activity) => {
         if (activity.entityType !== "event") return true;
-        return Boolean(activity.event);
+        if (!activity.event) return false;
+
+        const includePartner =
+          ((activity.metadata as { includePartner?: boolean } | null)
+            ?.includePartner ?? false) === true;
+        const isPartnerMirroredRsvp =
+          (activity.type === "rsvp_going" || activity.type === "rsvp_interested") &&
+          includePartner;
+
+        if (isPartnerMirroredRsvp && activity.actorUserId === currentPartnerUserId) {
+          return false;
+        }
+
+        return true;
       });
 
       const actorIdsWithPartnerIncluded = [

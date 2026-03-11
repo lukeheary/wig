@@ -11,6 +11,7 @@ import {
   eventCategories,
   eventSeries,
   events,
+  notifications,
   placeFollows,
   placeMembers,
   places,
@@ -77,6 +78,63 @@ function isPendingEventUploadUrl(url: string): boolean {
   } catch {
     return false;
   }
+}
+
+async function notifyPartnerOfMirroredRsvp({
+  ctx,
+  actorUserId,
+  partnerUserId,
+  eventId,
+  status,
+}: {
+  ctx: any;
+  actorUserId: string;
+  partnerUserId: string;
+  eventId: string;
+  status: "going" | "interested";
+}) {
+  const [actor, event] = await Promise.all([
+    ctx.db.query.users.findFirst({
+      where: eq(users.id, actorUserId),
+      columns: {
+        firstName: true,
+        lastName: true,
+        username: true,
+      },
+    }),
+    ctx.db.query.events.findFirst({
+      where: eq(events.id, eventId),
+      columns: {
+        id: true,
+        title: true,
+      },
+    }),
+  ]);
+
+  if (!event) return;
+
+  const actorName =
+    [actor?.firstName, actor?.lastName].filter(Boolean).join(" ").trim() ||
+    actor?.username ||
+    "Your partner";
+  const verb = status === "going" ? "RSVP'd going to" : "RSVP'd interested in";
+
+  await ctx.db.insert(notifications).values({
+    userId: partnerUserId,
+    actorUserId,
+    type: "event_update",
+    entityType: "event",
+    entityId: event.id,
+    title: "Partner RSVP update",
+    body: `${actorName} ${verb} ${event.title} for both of you`,
+    actionUrl: `/event/${event.id}`,
+    metadata: {
+      source: "partner_rsvp",
+      status,
+      eventId: event.id,
+      eventTitle: event.title,
+    },
+  });
 }
 
 function isBucketUrl(url: string): boolean {
@@ -1489,6 +1547,10 @@ export const eventRouter = router({
         Boolean(partnerUserId) &&
         input.includePartner === true &&
         (input.status === "going" || input.status === "interested");
+      const shouldNotifyPartner =
+        Boolean(partnerUserId) &&
+        shouldMirrorPartnerRsvp &&
+        existingMirroredPartnerRsvp?.status !== input.status;
 
       // Upsert RSVP
       const [rsvp] = await ctx.db
@@ -1551,6 +1613,20 @@ export const eventRouter = router({
               )
             );
         }
+      }
+
+      if (
+        shouldNotifyPartner &&
+        partnerUserId &&
+        (input.status === "going" || input.status === "interested")
+      ) {
+        void notifyPartnerOfMirroredRsvp({
+          ctx,
+          actorUserId: ctx.auth.userId,
+          partnerUserId,
+          eventId: input.eventId,
+          status: input.status,
+        });
       }
 
       if (rsvp && (input.status === "going" || input.status === "interested")) {

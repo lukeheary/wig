@@ -94,16 +94,16 @@ export function NotificationsBell() {
   const pendingCount = pendingRequests?.length ?? 0;
   const unreadNotificationsCount =
     unreadNotificationsCountData?.unreadCount ?? 0;
-  const eventNotifications =
-    recentNotifications?.filter(
-      (notification) => notification.type === "event_update"
-    ) ?? [];
-  const supportTicketNotifications =
-    recentNotifications?.filter(
-      (notification) => notification.type === "support_ticket_status_changed"
-    ) ?? [];
+  const notifications = recentNotifications ?? [];
+  const newNotifications = notifications.filter(
+    (notification) => !notification.readAt
+  );
+  const oldNotifications = notifications.filter(
+    (notification) => Boolean(notification.readAt)
+  );
   const notificationCount = pendingCount + unreadNotificationsCount;
-  const hasNotifications = notificationCount > 0;
+  const hasStoredNotifications = notifications.length > 0;
+  const hasInboxItems = hasStoredNotifications || pendingCount > 0;
   const returnTo = buildReturnTo(pathname, searchParams);
 
   const markNotificationsReadIfNeeded = () => {
@@ -129,6 +129,82 @@ export function NotificationsBell() {
     setIsDesktopOpen(open);
   };
 
+  const closeNotifications = () => {
+    markNotificationsReadIfNeeded();
+    setIsMobileOpen(false);
+    setIsDesktopOpen(false);
+  };
+
+  const extractEventTitleFromBody = (body: string) => {
+    const patterns = [
+      /^(.*?\b(?:created|updated|cancelled|postponed|rescheduled|restored)\b )(.+)$/,
+      /^(.*?\bRSVP'd going to\b )(.+?)( for both of you)?$/,
+      /^(.*?\bRSVP'd interested in\b )(.+?)( for both of you)?$/,
+    ];
+
+    for (const pattern of patterns) {
+      const match = body.match(pattern);
+      if (match) {
+        return {
+          prefix: match[1] ?? "",
+          eventTitle: match[2] ?? body,
+          suffix: match[3] ?? "",
+        };
+      }
+    }
+
+    return null;
+  };
+
+  const renderNotificationBody = (notification: {
+    body: string | null;
+    entityType: string;
+    actionUrl: string | null;
+    metadata: unknown;
+  }) => {
+    if (!notification.body) {
+      return null;
+    }
+
+    if (notification.entityType === "event") {
+      const metadata = (notification.metadata as { eventTitle?: string } | null) ?? null;
+      const parsedBody = extractEventTitleFromBody(notification.body);
+      const eventTitle = metadata?.eventTitle || parsedBody?.eventTitle;
+      const prefix = parsedBody?.prefix ?? "";
+      const suffix = parsedBody?.suffix ?? "";
+
+      if (!eventTitle) {
+        return (
+          <p className="mt-1 text-sm text-muted-foreground">
+            <Link
+              href={withReturnTo(notification.actionUrl || "/home", returnTo)}
+              className="hover:underline"
+              onClick={closeNotifications}
+            >
+              {notification.body}
+            </Link>
+          </p>
+        );
+      }
+
+      return (
+        <p className="mt-1 text-sm text-muted-foreground">
+          {prefix}
+          <Link
+            href={withReturnTo(notification.actionUrl || "/home", returnTo)}
+            className="hover:underline"
+            onClick={closeNotifications}
+          >
+            {eventTitle}
+          </Link>
+          {suffix}
+        </p>
+      );
+    }
+
+    return <p className="mt-1 text-sm text-muted-foreground">{notification.body}</p>;
+  };
+
   const NotificationsContent = (
     <div className="space-y-4">
       <div className="flex items-start justify-between gap-4">
@@ -140,18 +216,98 @@ export function NotificationsBell() {
         {/*)}*/}
       </div>
 
-      {!hasNotifications ? (
+      {!hasInboxItems ? (
         <div className="rounded-lg border border-border/60 bg-muted/40 py-8 text-center text-sm text-muted-foreground">
           No new notifications
         </div>
       ) : (
         <div className="max-h-[400px] space-y-3 overflow-y-auto pr-1">
-          {eventNotifications.length > 0 && (
+          {(pendingCount > 0 || newNotifications.length > 0) && (
             <div className="space-y-3">
               <p className="text-xs font-medium uppercase tracking-wide text-muted-foreground">
-                Event updates
+                New
               </p>
-              {eventNotifications.map((notification) => (
+              {(pendingRequests ?? []).map((request) => (
+                <div
+                  key={request.id}
+                  className="flex items-start gap-4 rounded-xl border border-border/60 bg-muted/40 p-4 shadow-sm transition-colors hover:bg-muted/60"
+                >
+                  <UserAvatar
+                    src={request.user.avatarImageUrl}
+                    name={request.user.firstName}
+                    className="h-10 w-10"
+                  />
+
+                  <div className="flex-1 space-y-3">
+                    <div>
+                      <p className="font-semibold leading-snug">
+                        {request.user.firstName} {request.user.lastName}
+                      </p>
+                      <p className="text-muted-foreground">
+                        @{request.user.username}
+                      </p>
+                      <p className="mt-1 text-xs text-muted-foreground">
+                        {formatDistanceToNow(new Date(request.createdAt), {
+                          addSuffix: true,
+                        })}
+                      </p>
+                    </div>
+
+                    <div className="flex items-center gap-2 pt-1">
+                      <Button
+                        size="sm"
+                        variant="outline"
+                        className="h-8 flex-1 text-xs"
+                        onClick={() => {
+                          sendGoogleAnalyticsEvent(
+                            "friend_request_responded",
+                            userId,
+                            {
+                              action: "rejected",
+                              friend_request_id: request.id,
+                              source: "notifications_bell",
+                            }
+                          );
+                          rejectMutation.mutate({
+                            friendRequestId: request.id,
+                          });
+                        }}
+                        disabled={
+                          acceptMutation.isPending || rejectMutation.isPending
+                        }
+                      >
+                        <X className="mr-1 h-3 w-3" />
+                        Reject
+                      </Button>
+                      <Button
+                        size="sm"
+                        className="h-8 flex-1 text-xs"
+                        onClick={() => {
+                          sendGoogleAnalyticsEvent(
+                            "friend_request_responded",
+                            userId,
+                            {
+                              action: "accepted",
+                              friend_request_id: request.id,
+                              source: "notifications_bell",
+                            }
+                          );
+                          acceptMutation.mutate({
+                            friendRequestId: request.id,
+                          });
+                        }}
+                        disabled={
+                          acceptMutation.isPending || rejectMutation.isPending
+                        }
+                      >
+                        <Check className="mr-1 h-3 w-3" />
+                        Accept
+                      </Button>
+                    </div>
+                  </div>
+                </div>
+              ))}
+              {newNotifications.map((notification) => (
                 <div
                   key={notification.id}
                   className="rounded-xl border border-border/60 bg-muted/40 p-4 shadow-sm transition-colors hover:bg-muted/60"
@@ -167,11 +323,7 @@ export function NotificationsBell() {
                       <span className="font-semibold">{notification.title}</span>
                     </Link>
                   </p>
-                  {notification.body && (
-                    <p className="mt-1 text-sm text-muted-foreground">
-                      {notification.body}
-                    </p>
-                  )}
+                  {renderNotificationBody(notification)}
                   <p className="mt-1 text-xs text-muted-foreground">
                     {formatDistanceToNow(new Date(notification.createdAt), {
                       addSuffix: true,
@@ -182,17 +334,17 @@ export function NotificationsBell() {
             </div>
           )}
 
-          {eventNotifications.length > 0 &&
-            supportTicketNotifications.length > 0 && (
+          {(pendingCount > 0 || newNotifications.length > 0) &&
+            oldNotifications.length > 0 && (
               <div className="border-t border-border/60" />
             )}
 
-          {supportTicketNotifications.length > 0 && (
+          {oldNotifications.length > 0 && (
             <div className="space-y-3">
               <p className="text-xs font-medium uppercase tracking-wide text-muted-foreground">
-                Support tickets
+                Old
               </p>
-              {supportTicketNotifications.map((notification) => (
+              {oldNotifications.map((notification) => (
                 <div
                   key={notification.id}
                   className="rounded-xl border border-border/60 bg-muted/40 p-4 shadow-sm transition-colors hover:bg-muted/60"
@@ -200,7 +352,7 @@ export function NotificationsBell() {
                   <p className="text-sm leading-snug">
                     <Link
                       href={withReturnTo(
-                        notification.actionUrl || "/help-feedback",
+                        notification.actionUrl || "/home",
                         returnTo
                       )}
                       className="hover:underline"
@@ -208,11 +360,7 @@ export function NotificationsBell() {
                       <span className="font-semibold">{notification.title}</span>
                     </Link>
                   </p>
-                  {notification.body && (
-                    <p className="mt-1 text-sm text-muted-foreground">
-                      {notification.body}
-                    </p>
-                  )}
+                  {renderNotificationBody(notification)}
                   <p className="mt-1 text-xs text-muted-foreground">
                     {formatDistanceToNow(new Date(notification.createdAt), {
                       addSuffix: true,
@@ -222,93 +370,6 @@ export function NotificationsBell() {
               ))}
             </div>
           )}
-
-          {(eventNotifications.length > 0 ||
-            supportTicketNotifications.length > 0) &&
-            pendingCount > 0 && (
-            <div className="border-t border-border/60" />
-          )}
-
-          {(pendingRequests ?? []).map((request) => (
-            <div
-              key={request.id}
-              className="flex items-start gap-4 rounded-xl border border-border/60 bg-muted/40 p-4 shadow-sm transition-colors hover:bg-muted/60"
-            >
-              <UserAvatar
-                src={request.user.avatarImageUrl}
-                name={request.user.firstName}
-                className="h-10 w-10"
-              />
-
-              <div className="flex-1 space-y-3">
-                <div>
-                  <p className="font-semibold leading-snug">
-                    {request.user.firstName} {request.user.lastName}
-                  </p>
-                  <p className="text-muted-foreground">
-                    @{request.user.username}
-                  </p>
-                  <p className="mt-1 text-xs text-muted-foreground">
-                    {formatDistanceToNow(new Date(request.createdAt), {
-                      addSuffix: true,
-                    })}
-                  </p>
-                </div>
-
-                <div className="flex items-center gap-2 pt-1">
-                  <Button
-                    size="sm"
-                    variant="outline"
-                    className="h-8 flex-1 text-xs"
-                    onClick={() => {
-                      sendGoogleAnalyticsEvent(
-                        "friend_request_responded",
-                        userId,
-                        {
-                          action: "rejected",
-                          friend_request_id: request.id,
-                          source: "notifications_bell",
-                        }
-                      );
-                      rejectMutation.mutate({
-                        friendRequestId: request.id,
-                      });
-                    }}
-                    disabled={
-                      acceptMutation.isPending || rejectMutation.isPending
-                    }
-                  >
-                    <X className="mr-1 h-3 w-3" />
-                    Reject
-                  </Button>
-                  <Button
-                    size="sm"
-                    className="h-8 flex-1 text-xs"
-                    onClick={() => {
-                      sendGoogleAnalyticsEvent(
-                        "friend_request_responded",
-                        userId,
-                        {
-                          action: "accepted",
-                          friend_request_id: request.id,
-                          source: "notifications_bell",
-                        }
-                      );
-                      acceptMutation.mutate({
-                        friendRequestId: request.id,
-                      });
-                    }}
-                    disabled={
-                      acceptMutation.isPending || rejectMutation.isPending
-                    }
-                  >
-                    <Check className="mr-1 h-3 w-3" />
-                    Accept
-                  </Button>
-                </div>
-              </div>
-            </div>
-          ))}
         </div>
       )}
     </div>
@@ -321,7 +382,7 @@ export function NotificationsBell() {
           <SheetTrigger asChild>
             <Button variant="ghost" size="icon" className="relative">
               <Bell className="h-5 w-5" />
-              {hasNotifications && (
+              {notificationCount > 0 && (
                 <span className="absolute -right-1 -top-1 flex h-5 w-5 items-center justify-center rounded-full bg-primary text-[10px] font-semibold text-primary-foreground">
                   {notificationCount}
                 </span>
@@ -346,7 +407,7 @@ export function NotificationsBell() {
               className="relative ml-2 md:ml-0"
             >
               <Bell className="h-5 w-5" />
-              {hasNotifications && (
+              {notificationCount > 0 && (
                 <span className="absolute -right-1 -top-1 flex h-5 w-5 items-center justify-center rounded-full bg-primary text-[10px] font-semibold text-primary-foreground">
                   {notificationCount}
                 </span>

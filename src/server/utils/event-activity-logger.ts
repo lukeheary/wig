@@ -97,6 +97,7 @@ export async function logEventActivity({
         metadata: {
           eventActivityId: activity.id,
           eventId: event.id,
+          eventTitle: event.title,
           eventActivityType: type,
           ...metadata,
         },
