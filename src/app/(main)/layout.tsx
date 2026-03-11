@@ -100,7 +100,7 @@ function MainLayoutContent({ children }: { children: React.ReactNode }) {
 
   const handleSignOut = async () => {
     await signOut();
-    router.push("/");
+    window.location.assign("/");
   };
 
   const closeMobileMenu = () => {

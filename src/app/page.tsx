@@ -1,6 +1,7 @@
 import { auth } from "@clerk/nextjs/server";
 import { redirect } from "next/navigation";
 import Link from "next/link";
+import type { Viewport } from "next";
 import { Button } from "@/components/ui/button";
 import { truculenta } from "@/lib/fonts";
 import { WigLogo } from "@/components/ui/wig-logo";
@@ -8,6 +9,11 @@ import { LandingPageRedirect } from "@/components/landing-page-redirect";
 import { LandingEventsPreview } from "@/components/landing/landing-events-preview";
 import { LandingRecentActivity } from "@/components/landing/landing-recent-activity";
 import { LandingGetStartedLink } from "@/components/landing/landing-get-started-link";
+
+export const viewport: Viewport = {
+  colorScheme: "dark",
+  themeColor: "#1b1b1d",
+};
 
 export default async function LandingPage() {
   const { userId } = await auth();
@@ -62,7 +68,7 @@ export default async function LandingPage() {
                 </span>
               </h2>
 
-              <div className="mx-auto mt-6 flex flex-wrap items-center justify-center gap-3">
+              <div className="mx-auto mt-6 flex flex-wrap items-center justify-center gap-3 pb-8">
                 <div className="flex-1 md:max-w-[180px]">
                   <LandingGetStartedLink location="hero" />
                 </div>

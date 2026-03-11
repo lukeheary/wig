@@ -1,4 +1,4 @@
-import type { Metadata } from "next";
+import type { Metadata, Viewport } from "next";
 import { Inter } from "next/font/google";
 import { Lato } from "next/font/google";
 import { Urbanist } from "next/font/google";
@@ -7,6 +7,7 @@ import Script from "next/script";
 import { ClerkProvider } from "@clerk/nextjs";
 import { TRPCProvider } from "@/components/providers/trpc-provider";
 import { Toaster } from "@/components/ui/toaster";
+import { ThemeColorSync } from "@/components/theme-color-sync";
 import { Providers } from "./providers";
 import { ScrollRestoration } from "@/components/scroll-restoration";
 import { GOOGLE_ANALYTICS_ID } from "@/lib/google-analytics";
@@ -26,6 +27,11 @@ export const metadata: Metadata = {
   metadataBase: new URL(metadataBaseUrl),
   title: "WIG",
   description: "Discover local events and connect with your community",
+};
+
+export const viewport: Viewport = {
+  colorScheme: "dark",
+  themeColor: "#141416",
 };
 
 export default function RootLayout({
@@ -52,6 +58,7 @@ export default function RootLayout({
           </Script>
           <TRPCProvider>
             <Providers>
+              <ThemeColorSync />
               <ScrollRestoration />
               {children}
               <Toaster />
