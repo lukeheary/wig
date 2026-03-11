@@ -8,15 +8,15 @@ import { ActivityItem } from "@/components/friends/activity-feed";
 const DEMO_ACTIVITY_ACTORS = [
   {
     id: "act-1",
-    firstName: "Maya",
+    firstName: "Charlie",
     lastName: null,
     avatarImageUrl: null,
-    partnerFirstName: "Theo",
+    partnerFirstName: "Jamie",
     type: "rsvp_going" as const,
   },
   {
     id: "act-2",
-    firstName: "Ari",
+    firstName: "Jordan",
     lastName: null,
     avatarImageUrl: null,
     partnerFirstName: null,
@@ -24,15 +24,15 @@ const DEMO_ACTIVITY_ACTORS = [
   },
   {
     id: "act-3",
-    firstName: "Lena",
+    firstName: "Blake",
     lastName: null,
     avatarImageUrl: null,
-    partnerFirstName: "Parker",
+    partnerFirstName: "Cameron",
     type: "rsvp_going" as const,
   },
   {
     id: "act-4",
-    firstName: "Zoe",
+    firstName: "Alex",
     lastName: null,
     avatarImageUrl: null,
     partnerFirstName: null,
@@ -44,9 +44,10 @@ export function LandingRecentActivity() {
   const sectionRef = useRef<HTMLDivElement | null>(null);
   const [hasScrolled, setHasScrolled] = useState(false);
   const [isInView, setIsInView] = useState(false);
-  const { data: events, isLoading } = trpc.event.listPublicEventsPreview.useQuery({
-    limit: 4,
-  });
+  const { data: events, isLoading } =
+    trpc.event.listPublicEventsPreview.useQuery({
+      limit: 4,
+    });
 
   useEffect(() => {
     const handleScroll = () => {
@@ -98,7 +99,9 @@ export function LandingRecentActivity() {
         type: actor.type,
         entityId: event.id,
         metadata: {},
-        createdAt: new Date(Date.now() - (index + 1) * 45 * 60 * 1000).toISOString(),
+        createdAt: new Date(
+          Date.now() - (index + 1) * 45 * 60 * 1000
+        ).toISOString(),
         event,
         partnerFirstName: actor.partnerFirstName,
       };

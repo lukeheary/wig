@@ -772,7 +772,7 @@ function HomePageContent() {
               isToday={true}
             />
           )}
-          <div className="container mx-auto px-4 py-2">
+          <div className="container mx-auto px-4">
             <EventSkeletonGrid count={8} />
           </div>
         </div>
