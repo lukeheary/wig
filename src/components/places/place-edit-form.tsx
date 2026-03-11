@@ -499,18 +499,17 @@ export function PlaceEditForm({
             hours={formData.hours}
             onChange={(hours) => setFormData({ ...formData, hours })}
           />
-          <div>
-            <Label>Categories</Label>
-            <CategoryMultiSelect
-              value={formData.categories}
-              onChange={(categories) =>
-                setFormData({ ...formData, categories })
-              }
-              placeholder="Select categories..."
-            />
-          </div>
         </>
       )}
+
+      <div>
+        <Label>Categories</Label>
+        <CategoryMultiSelect
+          value={formData.categories}
+          onChange={(categories) => setFormData({ ...formData, categories })}
+          placeholder="Select categories..."
+        />
+      </div>
 
       {showScraperFields && (
         <div className="space-y-3 rounded-md border p-3">

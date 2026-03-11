@@ -169,7 +169,7 @@ export default function PlacePage() {
       )}
 
       <div className="container mx-auto">
-        <div className="pt-6">
+        <div>
           <div className="flex flex-col gap-4 md:flex-row md:items-center md:justify-between">
             <div className="flex items-center gap-4">
               <div

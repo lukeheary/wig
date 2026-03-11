@@ -55,17 +55,19 @@ export function PlaceManagementPage({
   const returnTo = buildReturnTo(pathname, searchParams);
   const isValidPlaceId = !placeId || UUID_REGEX.test(placeId);
 
-  const { data: placeById, isLoading: isLoadingById } = trpc.place.getPlaceById.useQuery(
-    { id: placeId ?? "00000000-0000-0000-0000-000000000000" },
-    { enabled: !!placeId && isValidPlaceId }
-  );
+  const { data: placeById, isLoading: isLoadingById } =
+    trpc.place.getPlaceById.useQuery(
+      { id: placeId ?? "00000000-0000-0000-0000-000000000000" },
+      { enabled: !!placeId && isValidPlaceId }
+    );
 
   const resolvedSlug = placeSlug ?? placeById?.slug;
 
-  const { data: place, isLoading: isLoadingPlace } = trpc.place.getPlaceBySlug.useQuery(
-    { slug: resolvedSlug ?? "" },
-    { enabled: !!resolvedSlug }
-  );
+  const { data: place, isLoading: isLoadingPlace } =
+    trpc.place.getPlaceBySlug.useQuery(
+      { slug: resolvedSlug ?? "" },
+      { enabled: !!resolvedSlug }
+    );
 
   const { data: placeMembers } = trpc.place.getPlaceMembers.useQuery(
     { placeId: place?.id || "" },
@@ -77,7 +79,8 @@ export function PlaceManagementPage({
     enabled: shouldFetchAdminCheck,
   });
 
-  const canManageMembers = forceCanManageMembers ?? (adminCheck?.isAdmin ?? false);
+  const canManageMembers =
+    forceCanManageMembers ?? adminCheck?.isAdmin ?? false;
 
   const isLoading =
     (!!placeId && isValidPlaceId && isLoadingById) ||
@@ -85,7 +88,9 @@ export function PlaceManagementPage({
 
   const notFound =
     !isLoading &&
-    (!isValidPlaceId || !place || (expectedType && place.type !== expectedType));
+    (!isValidPlaceId ||
+      !place ||
+      (expectedType && place.type !== expectedType));
 
   if (isLoading) {
     return (
@@ -132,7 +137,10 @@ export function PlaceManagementPage({
   const totalMembers = placeMembers?.length || 0;
   const recurringSeries = Object.values(
     upcomingEvents.reduce(
-      (acc: Record<string, { seriesId: string; title: string; events: any[] }>, event: any) => {
+      (
+        acc: Record<string, { seriesId: string; title: string; events: any[] }>,
+        event: any
+      ) => {
         if (!event.seriesId) return acc;
         if (!acc[event.seriesId]) {
           acc[event.seriesId] = {
@@ -164,13 +172,12 @@ export function PlaceManagementPage({
     );
 
   return (
-    <div className="container mx-auto max-w-6xl space-y-6 px-4 py-6">
+    <div className="container mx-auto space-y-6">
       <BackButtonHeader
         backHref={backHref ?? notFoundHref}
         className="items-center"
-      >
-        <h1 className="text-2xl font-bold tracking-tight">{place.name}</h1>
-      </BackButtonHeader>
+        title={place.name}
+      />
 
       <div className="grid grid-cols-2 gap-3 lg:grid-cols-4 lg:gap-4">
         <Card>
@@ -179,8 +186,12 @@ export function PlaceManagementPage({
               <Calendar className="h-4 w-4 text-primary sm:h-5 sm:w-5" />
             </div>
             <div className="flex min-w-0 flex-row items-center gap-2">
-              <p className="text-xl font-bold sm:text-2xl">{upcomingEvents.length}</p>
-              <p className="truncate text-xs text-muted-foreground sm:text-sm">Upcoming</p>
+              <p className="text-xl font-bold sm:text-2xl">
+                {upcomingEvents.length}
+              </p>
+              <p className="truncate text-xs text-muted-foreground sm:text-sm">
+                Upcoming
+              </p>
             </div>
           </CardContent>
         </Card>
@@ -191,8 +202,12 @@ export function PlaceManagementPage({
               <Calendar className="h-4 w-4 text-blue-500 sm:h-5 sm:w-5" />
             </div>
             <div className="flex min-w-0 flex-row items-center gap-2">
-              <p className="text-xl font-bold sm:text-2xl">{pastEvents.length}</p>
-              <p className="truncate text-xs text-muted-foreground sm:text-sm">Past</p>
+              <p className="text-xl font-bold sm:text-2xl">
+                {pastEvents.length}
+              </p>
+              <p className="truncate text-xs text-muted-foreground sm:text-sm">
+                Past
+              </p>
             </div>
           </CardContent>
         </Card>
@@ -204,7 +219,9 @@ export function PlaceManagementPage({
             </div>
             <div className="flex min-w-0 flex-row items-center gap-2">
               <p className="text-xl font-bold sm:text-2xl">{totalFollowers}</p>
-              <p className="truncate text-xs text-muted-foreground sm:text-sm">Followers</p>
+              <p className="truncate text-xs text-muted-foreground sm:text-sm">
+                Followers
+              </p>
             </div>
           </CardContent>
         </Card>
@@ -216,7 +233,9 @@ export function PlaceManagementPage({
             </div>
             <div className="flex min-w-0 flex-row items-center gap-2">
               <p className="text-xl font-bold sm:text-2xl">{totalMembers}</p>
-              <p className="truncate text-xs text-muted-foreground sm:text-sm">Team</p>
+              <p className="truncate text-xs text-muted-foreground sm:text-sm">
+                Team
+              </p>
             </div>
           </CardContent>
         </Card>
@@ -226,7 +245,9 @@ export function PlaceManagementPage({
         <div className="space-y-6 lg:col-span-2">
           <Card>
             <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-4">
-              <CardTitle className="text-lg font-semibold">Upcoming Events</CardTitle>
+              <CardTitle className="text-lg font-semibold">
+                Upcoming Events
+              </CardTitle>
               <Link href={createEventHref}>
                 <Button variant="outline">
                   <Plus className="mr-2 h-4 w-4" />
@@ -255,9 +276,14 @@ export function PlaceManagementPage({
                         </div>
                       )}
                       <div className="min-w-0 flex-1 overflow-hidden">
-                        <p className="truncate text-sm font-medium sm:text-base">{event.title}</p>
+                        <p className="truncate text-sm font-medium sm:text-base">
+                          {event.title}
+                        </p>
                         <p className="truncate text-xs text-muted-foreground sm:text-sm">
-                          {format(new Date(event.startAt), "EEE, MMM d · h:mm a")}
+                          {format(
+                            new Date(event.startAt),
+                            "EEE, MMM d · h:mm a"
+                          )}
                         </p>
                         {event.venue?.name && (
                           <p className="hidden truncate text-sm text-muted-foreground sm:block">
@@ -297,10 +323,10 @@ export function PlaceManagementPage({
 
           <Card>
             <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-4">
-              <CardTitle className="text-lg font-semibold">Recurring Events</CardTitle>
-              <Link
-                href={createRecurringEventHref}
-              >
+              <CardTitle className="text-lg font-semibold">
+                Recurring Events
+              </CardTitle>
+              <Link href={createRecurringEventHref}>
                 <Button variant="outline">
                   <Plus className="mr-2 h-4 w-4" />
                   Add Recurring Event
@@ -316,13 +342,21 @@ export function PlaceManagementPage({
                       className="flex items-center justify-between gap-3 rounded-lg border p-3"
                     >
                       <div className="min-w-0 flex-1">
-                        <p className="truncate text-sm font-medium sm:text-base">{series.title}</p>
+                        <p className="truncate text-sm font-medium sm:text-base">
+                          {series.title}
+                        </p>
                         <p className="truncate text-xs text-muted-foreground sm:text-sm">
-                          Next: {format(new Date(series.nextEvent.startAt), "EEE, MMM d · h:mm a")}
+                          Next:{" "}
+                          {format(
+                            new Date(series.nextEvent.startAt),
+                            "EEE, MMM d · h:mm a"
+                          )}
                         </p>
                         <p className="text-xs text-muted-foreground sm:text-sm">
                           {series.upcomingOccurrences} upcoming{" "}
-                          {series.upcomingOccurrences === 1 ? "occurrence" : "occurrences"}
+                          {series.upcomingOccurrences === 1
+                            ? "occurrence"
+                            : "occurrences"}
                         </p>
                       </div>
                       <Link
@@ -343,11 +377,10 @@ export function PlaceManagementPage({
                   <Repeat className="mx-auto mb-3 h-10 w-10 text-muted-foreground" />
                   <p className="mb-1 font-medium">No recurring events yet</p>
                   <p className="mb-4 text-sm text-muted-foreground">
-                    Add a recurring event series for this {typeLabel.toLowerCase()}
+                    Add a recurring event series for this{" "}
+                    {typeLabel.toLowerCase()}
                   </p>
-                  <Link
-                    href={createRecurringEventHref}
-                  >
+                  <Link href={createRecurringEventHref}>
                     <Button>
                       <Plus className="mr-2 h-4 w-4" />
                       Add Recurring Event
@@ -369,22 +402,18 @@ export function PlaceManagementPage({
         <div className="space-y-6">
           <Card>
             <CardHeader>
-              <CardTitle className="text-lg font-semibold">Quick Actions</CardTitle>
+              <CardTitle className="text-lg font-semibold">
+                Quick Actions
+              </CardTitle>
             </CardHeader>
             <CardContent className="space-y-2">
-              <Link
-                href={createEventHref}
-                className="block"
-              >
+              <Link href={createEventHref} className="block">
                 <Button variant="outline" className="w-full justify-start">
                   <CalendarPlus className="mr-2 h-4 w-4" />
                   Create New Event
                 </Button>
               </Link>
-              <Link
-                href={createRecurringEventHref}
-                className="block"
-              >
+              <Link href={createRecurringEventHref} className="block">
                 <Button variant="outline" className="w-full justify-start">
                   <Repeat className="mr-2 h-4 w-4" />
                   Add Recurring Event
@@ -411,9 +440,13 @@ export function PlaceManagementPage({
             </CardHeader>
             <CardContent className="space-y-4">
               {place.description ? (
-                <p className="text-sm text-muted-foreground">{place.description}</p>
+                <p className="text-sm text-muted-foreground">
+                  {place.description}
+                </p>
               ) : (
-                <p className="text-sm italic text-muted-foreground">No description added yet</p>
+                <p className="text-sm italic text-muted-foreground">
+                  No description added yet
+                </p>
               )}
 
               <div className="space-y-3 text-sm">

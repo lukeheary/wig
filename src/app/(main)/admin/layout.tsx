@@ -29,8 +29,8 @@ export default function AdminLayout({
   }
 
   return (
-    <div className="container mx-auto flex justify-center py-8">
-      <div className="w-full max-w-5xl">{children}</div>
+    <div className="container mx-auto flex justify-center py-4">
+      <div className="w-full">{children}</div>
     </div>
   );
 }
