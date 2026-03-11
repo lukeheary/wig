@@ -18,7 +18,7 @@ function NewEventPageContent() {
   const cancelHref = resolveBackHref({ returnTo, fallbackHref: "/home" });
 
   return (
-    <div className="container mx-auto max-w-2xl space-y-6 py-4">
+    <div className="container mx-auto max-w-2xl space-y-6 pb-4">
       <BackButtonHeader
         backFallbackHref="/home"
         returnTo={returnTo}

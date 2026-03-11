@@ -395,7 +395,7 @@ export default function EditEventSeriesPage() {
   const isSubmitting = isSaving || isDeleting;
 
   return (
-    <div className="container mx-auto max-w-2xl space-y-6 py-4">
+    <div className="container mx-auto max-w-2xl space-y-6 pb-4">
       <BackButtonHeader
         backFallbackHref="/home"
         returnTo={returnTo}
@@ -753,9 +753,7 @@ export default function EditEventSeriesPage() {
                 </Button>
               </div>
               <Button type="submit" disabled={isSubmitting}>
-                {isSaving && (
-                  <Loader2 className="mr-2 h-4 w-4 animate-spin" />
-                )}
+                {isSaving && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
                 Save Recurring Event
               </Button>
             </div>
