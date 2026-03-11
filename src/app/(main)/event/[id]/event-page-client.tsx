@@ -37,6 +37,7 @@ import { SharedBackButton } from "@/components/shared/back-button";
 import { buildReturnTo, withReturnTo } from "@/lib/navigation";
 import { HapticPreset, useHaptics } from "@/hooks/use-haptics";
 import { useAuth } from "@clerk/nextjs";
+import { sendGoogleAnalyticsEvent } from "@/lib/google-analytics";
 
 type RsvpStatus = "going" | "interested" | "not_going";
 
@@ -81,7 +82,7 @@ export default function EventPage() {
   const pathname = usePathname();
   const router = useRouter();
   const searchParams = useSearchParams();
-  const { isSignedIn } = useAuth();
+  const { isSignedIn, userId } = useAuth();
   const eventId = params.id as string;
   const { toast } = useToast();
   const utils = trpc.useUtils();
@@ -205,9 +206,20 @@ export default function EventPage() {
     // If clicking the same status button again, remove the RSVP
     if (event?.userRsvp?.status === status) {
       void triggerHaptic(HapticPreset.Soft);
+      sendGoogleAnalyticsEvent("event_rsvp_changed", userId, {
+        action: "removed",
+        event_id: eventId,
+        previous_status: status,
+      });
       deleteRsvpMutation.mutate({ eventId });
     } else {
       void triggerHaptic(HapticPreset.Success);
+      sendGoogleAnalyticsEvent("event_rsvp_changed", userId, {
+        action: "set",
+        event_id: eventId,
+        status,
+        include_partner: hasActivePartner && includePartner,
+      });
       rsvpMutation.mutate({
         eventId,
         status,

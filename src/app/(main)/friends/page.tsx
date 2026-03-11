@@ -14,9 +14,12 @@ import { useQueryState } from "nuqs";
 import pluralize from "pluralize";
 import { UserList } from "@/components/user-list";
 import { StickySearchBar } from "@/components/ui/sticky-search-bar";
+import { useAuth } from "@clerk/nextjs";
+import { sendGoogleAnalyticsEvent } from "@/lib/google-analytics";
 
 function FriendsPageContent() {
   const { toast } = useToast();
+  const { userId } = useAuth();
   const utils = trpc.useUtils();
   const searchInputRef = useRef<HTMLInputElement>(null);
   const stickySentinelRef = useRef<HTMLDivElement>(null);
@@ -249,11 +252,15 @@ function FriendsPageContent() {
                       !isFriend(user.id) ? (
                         <Button
                           size="sm"
-                          onClick={() =>
+                          onClick={() => {
+                            sendGoogleAnalyticsEvent("friend_request_sent", userId, {
+                              target_user_id: user.id,
+                              source: "friends_search_results",
+                            });
                             sendRequestMutation.mutate({
                               friendUserId: user.id,
-                            })
-                          }
+                            });
+                          }}
                           disabled={sendRequestMutation.isPending}
                         >
                           <UserPlus className="mr-2 h-4 w-4" />
@@ -294,9 +301,13 @@ function FriendsPageContent() {
                     !isFriend(user.id) ? (
                       <Button
                         size="sm"
-                        onClick={() =>
-                          sendRequestMutation.mutate({ friendUserId: user.id })
-                        }
+                        onClick={() => {
+                          sendGoogleAnalyticsEvent("friend_request_sent", userId, {
+                            target_user_id: user.id,
+                            source: "friends_recent_users",
+                          });
+                          sendRequestMutation.mutate({ friendUserId: user.id });
+                        }}
                         disabled={sendRequestMutation.isPending}
                       >
                         <UserPlus className="mr-2 h-4 w-4" />
@@ -334,21 +345,39 @@ function FriendsPageContent() {
                         size="icon"
                         variant="ghost"
                         className="h-8 w-8"
-                        onClick={() =>
+                        onClick={() => {
+                          sendGoogleAnalyticsEvent(
+                            "friend_request_responded",
+                            userId,
+                            {
+                              action: "rejected",
+                              friend_request_id: request.id,
+                              source: "friends_page_preview",
+                            }
+                          );
                           rejectMutation.mutate({
                             friendRequestId: request.id,
-                          })
-                        }
+                          });
+                        }}
                         disabled={rejectMutation.isPending}
                       >
                         <X className="h-4 w-4" />
                       </Button>
                       <Button
-                        onClick={() =>
+                        onClick={() => {
+                          sendGoogleAnalyticsEvent(
+                            "friend_request_responded",
+                            userId,
+                            {
+                              action: "accepted",
+                              friend_request_id: request.id,
+                              source: "friends_page_preview",
+                            }
+                          );
                           acceptMutation.mutate({
                             friendRequestId: request.id,
-                          })
-                        }
+                          });
+                        }}
                         disabled={acceptMutation.isPending}
                       >
                         Accept

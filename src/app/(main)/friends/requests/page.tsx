@@ -8,9 +8,12 @@ import { Check, X, Mail, Loader2 } from "lucide-react";
 import { useToast } from "@/hooks/use-toast";
 import { UserList } from "@/components/user-list";
 import { BackButtonHeader } from "@/components/shared/back-button-header";
+import { useAuth } from "@clerk/nextjs";
+import { sendGoogleAnalyticsEvent } from "@/lib/google-analytics";
 
 function RequestsPageContent() {
   const { toast } = useToast();
+  const { userId } = useAuth();
   const utils = trpc.useUtils();
 
   const { data: pendingRequests, isLoading } =
@@ -88,11 +91,20 @@ function RequestsPageContent() {
                     <Button
                       size="sm"
                       variant="outline"
-                      onClick={() =>
+                      onClick={() => {
+                        sendGoogleAnalyticsEvent(
+                          "friend_request_responded",
+                          userId,
+                          {
+                            action: "rejected",
+                            friend_request_id: request.id,
+                            source: "friend_requests_page",
+                          }
+                        );
                         rejectMutation.mutate({
                           friendRequestId: request.id,
-                        })
-                      }
+                        });
+                      }}
                       disabled={rejectMutation.isPending}
                     >
                       <X className="mr-1 h-4 w-4" />
@@ -100,11 +112,20 @@ function RequestsPageContent() {
                     </Button>
                     <Button
                       size="sm"
-                      onClick={() =>
+                      onClick={() => {
+                        sendGoogleAnalyticsEvent(
+                          "friend_request_responded",
+                          userId,
+                          {
+                            action: "accepted",
+                            friend_request_id: request.id,
+                            source: "friend_requests_page",
+                          }
+                        );
                         acceptMutation.mutate({
                           friendRequestId: request.id,
-                        })
-                      }
+                        });
+                      }}
                       disabled={acceptMutation.isPending}
                     >
                       <Check className="mr-1 h-4 w-4" />

@@ -76,6 +76,8 @@ import { StickySearchBar } from "@/components/ui/sticky-search-bar";
 import { StickySectionHeader } from "@/components/ui/sticky-section-header";
 import { withReturnTo } from "@/lib/navigation";
 import { HapticPreset, useHaptics } from "@/hooks/use-haptics";
+import { useAuth } from "@clerk/nextjs";
+import { sendGoogleAnalyticsEvent } from "@/lib/google-analytics";
 
 type ViewMode = "week" | "month";
 
@@ -120,6 +122,7 @@ function EventSkeletonGrid({ count = 8 }: { count?: number }) {
 function HomePageContent() {
   const { toast } = useToast();
   const { triggerHaptic } = useHaptics();
+  const { userId } = useAuth();
   const [activeFilter, setActiveFilter] = useState<EventFilterTab>("all");
   const [selectedCategories, setSelectedCategories] = useState<string[]>([]);
   const [isSticky, setIsSticky] = useState(false);
@@ -451,6 +454,7 @@ function HomePageContent() {
     }
 
     void triggerHaptic(HapticPreset.Light);
+    let nextDateParam: string;
 
     if (viewMode === "week") {
       const today = startOfDay(new Date());
@@ -461,26 +465,37 @@ function HomePageContent() {
         isSameWeek(prevWeekStart, today, { weekStartsOn: 1 }) ||
         isBefore(prevWeekStart, today)
       ) {
-        await setDateParam(format(today, "yyyy-MM-dd"), {
+        nextDateParam = format(today, "yyyy-MM-dd");
+        await setDateParam(nextDateParam, {
           scroll: false,
           shallow: true,
         });
       } else {
-        await setDateParam(
-          format(startOfWeek(prevWeekStart, { weekStartsOn: 1 }), "yyyy-MM-dd"),
-          { scroll: false, shallow: true }
+        nextDateParam = format(
+          startOfWeek(prevWeekStart, { weekStartsOn: 1 }),
+          "yyyy-MM-dd"
         );
+        await setDateParam(nextDateParam, { scroll: false, shallow: true });
       }
     } else {
-      await setDateParam(format(subMonths(currentDate, 1), "yyyy-MM-dd"), {
+      nextDateParam = format(subMonths(currentDate, 1), "yyyy-MM-dd");
+      await setDateParam(nextDateParam, {
         scroll: false,
         shallow: true,
       });
     }
+
+    sendGoogleAnalyticsEvent("home_date_navigation_clicked", userId, {
+      direction: "previous",
+      view_mode: viewMode,
+      from_date: format(currentDate, "yyyy-MM-dd"),
+      to_date: nextDateParam,
+    });
   };
 
   const handleNext = async () => {
     void triggerHaptic(HapticPreset.Light);
+    let nextDateParam: string;
 
     if (viewMode === "week") {
       const today = startOfDay(new Date());
@@ -493,16 +508,25 @@ function HomePageContent() {
         // From any other week, go to next Monday
         nextDate = addDays(startOfWeek(currentDate, { weekStartsOn: 1 }), 7);
       }
-      await setDateParam(format(nextDate, "yyyy-MM-dd"), {
+      nextDateParam = format(nextDate, "yyyy-MM-dd");
+      await setDateParam(nextDateParam, {
         scroll: false,
         shallow: true,
       });
     } else {
-      await setDateParam(format(addMonths(currentDate, 1), "yyyy-MM-dd"), {
+      nextDateParam = format(addMonths(currentDate, 1), "yyyy-MM-dd");
+      await setDateParam(nextDateParam, {
         scroll: false,
         shallow: true,
       });
     }
+
+    sendGoogleAnalyticsEvent("home_date_navigation_clicked", userId, {
+      direction: "next",
+      view_mode: viewMode,
+      from_date: format(currentDate, "yyyy-MM-dd"),
+      to_date: nextDateParam,
+    });
   };
 
   const handleToday = async () => {

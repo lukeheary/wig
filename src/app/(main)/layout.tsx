@@ -40,13 +40,14 @@ import {
 } from "@/contexts/nav-search-context";
 import { cn } from "@/lib/utils";
 import { buildReturnTo, withReturnTo } from "@/lib/navigation";
+import { sendGoogleAnalyticsEvent } from "@/lib/google-analytics";
 import * as VisuallyHidden from "@radix-ui/react-visually-hidden";
 
 function MainLayoutContent({ children }: { children: React.ReactNode }) {
   const router = useRouter();
   const pathname = usePathname();
   const { signOut } = useClerk();
-  const { isSignedIn } = useAuth();
+  const { isSignedIn, userId } = useAuth();
   const [hasMounted, setHasMounted] = useState(false);
   const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
   const signInHref = withReturnTo("/sign-in", buildReturnTo(pathname, null));
@@ -104,6 +105,16 @@ function MainLayoutContent({ children }: { children: React.ReactNode }) {
     setMobileMenuOpen(false);
   };
 
+  const trackNavigationClick = (
+    destination: string,
+    location: "desktop_nav" | "mobile_menu" | "user_menu" | "auth"
+  ) => {
+    sendGoogleAnalyticsEvent("navigation_item_clicked", userId, {
+      destination,
+      location,
+    });
+  };
+
   return (
     <div className="flex min-h-screen flex-col">
       {/* Navigation Bar */}
@@ -127,7 +138,10 @@ function MainLayoutContent({ children }: { children: React.ReactNode }) {
 
           {/* Center - Desktop Navigation */}
           <nav className="absolute left-1/2 hidden -translate-x-1/2 items-center gap-2 md:flex">
-            <Link href="/home">
+            <Link
+              href="/home"
+              onClick={() => trackNavigationClick("/home", "desktop_nav")}
+            >
               <Button
                 variant="ghost"
                 size="sm"
@@ -136,7 +150,12 @@ function MainLayoutContent({ children }: { children: React.ReactNode }) {
                 Home
               </Button>
             </Link>
-            <Link href="/venues-and-organizers">
+            <Link
+              href="/venues-and-organizers"
+              onClick={() =>
+                trackNavigationClick("/venues-and-organizers", "desktop_nav")
+              }
+            >
               <Button
                 variant="ghost"
                 size="sm"
@@ -147,7 +166,10 @@ function MainLayoutContent({ children }: { children: React.ReactNode }) {
                 Venues & Organizers
               </Button>
             </Link>
-            <Link href="/friends">
+            <Link
+              href="/friends"
+              onClick={() => trackNavigationClick("/friends", "desktop_nav")}
+            >
               <Button
                 variant="ghost"
                 size="sm"
@@ -211,6 +233,9 @@ function MainLayoutContent({ children }: { children: React.ReactNode }) {
                     <DropdownMenuItem asChild>
                       <Link
                         href="/profile"
+                        onClick={() =>
+                          trackNavigationClick("/profile", "user_menu")
+                        }
                         className="flex cursor-pointer items-center gap-4"
                       >
                         <User className="h-4 w-4" />
@@ -221,6 +246,9 @@ function MainLayoutContent({ children }: { children: React.ReactNode }) {
                       <DropdownMenuItem asChild>
                         <Link
                           href="/my-places"
+                          onClick={() =>
+                            trackNavigationClick("/my-places", "user_menu")
+                          }
                           className="flex cursor-pointer items-center gap-4"
                         >
                           <Building className="h-4 w-4" />
@@ -232,6 +260,9 @@ function MainLayoutContent({ children }: { children: React.ReactNode }) {
                       <DropdownMenuItem asChild>
                         <Link
                           href="/admin"
+                          onClick={() =>
+                            trackNavigationClick("/admin", "user_menu")
+                          }
                           className="flex cursor-pointer items-center gap-4"
                         >
                           <Plus className="h-4 w-4" />
@@ -252,7 +283,12 @@ function MainLayoutContent({ children }: { children: React.ReactNode }) {
               </>
             ) : (
               <Link href={signInHref}>
-                <Button variant="ghost">Sign In</Button>
+                <Button
+                  variant="ghost"
+                  onClick={() => trackNavigationClick(signInHref, "auth")}
+                >
+                  Sign In
+                </Button>
               </Link>
             )}
           </div>
@@ -297,7 +333,13 @@ function MainLayoutContent({ children }: { children: React.ReactNode }) {
                 >
                   <SheetHeader></SheetHeader>
                   <nav className="mt-8 flex flex-col gap-2">
-                    <Link href="/home" onClick={closeMobileMenu}>
+                    <Link
+                      href="/home"
+                      onClick={() => {
+                        trackNavigationClick("/home", "mobile_menu");
+                        closeMobileMenu();
+                      }}
+                    >
                       <Button
                         variant="ghost"
                         className={`w-full justify-start px-4 text-base ${isHome ? "text-foreground" : "text-muted-foreground"}`}
@@ -310,7 +352,13 @@ function MainLayoutContent({ children }: { children: React.ReactNode }) {
 
                     <Link
                       href="/venues-and-organizers"
-                      onClick={closeMobileMenu}
+                      onClick={() => {
+                        trackNavigationClick(
+                          "/venues-and-organizers",
+                          "mobile_menu"
+                        );
+                        closeMobileMenu();
+                      }}
                     >
                       <Button
                         variant="ghost"
@@ -321,7 +369,13 @@ function MainLayoutContent({ children }: { children: React.ReactNode }) {
                         Venues & Organizers
                       </Button>
                     </Link>
-                    <Link href="/friends" onClick={closeMobileMenu}>
+                    <Link
+                      href="/friends"
+                      onClick={() => {
+                        trackNavigationClick("/friends", "mobile_menu");
+                        closeMobileMenu();
+                      }}
+                    >
                       <Button
                         variant="ghost"
                         className={`w-full justify-start px-4 text-base ${isFriends ? "text-foreground" : "text-muted-foreground"}`}
@@ -338,7 +392,13 @@ function MainLayoutContent({ children }: { children: React.ReactNode }) {
                     </Link>
 
                     <div className="mt-4 flex flex-col gap-2 border-t pt-4">
-                      <Link href="/profile" onClick={closeMobileMenu}>
+                      <Link
+                        href="/profile"
+                        onClick={() => {
+                          trackNavigationClick("/profile", "mobile_menu");
+                          closeMobileMenu();
+                        }}
+                      >
                         <Button
                           variant="ghost"
                           className={`w-full justify-start px-4 text-base ${isProfile ? "text-foreground" : "text-muted-foreground"}`}
@@ -355,7 +415,13 @@ function MainLayoutContent({ children }: { children: React.ReactNode }) {
                         </Button>
                       </Link>
                       {(hasVenues || hasOrganizers) && (
-                        <Link href="/my-places" onClick={closeMobileMenu}>
+                        <Link
+                          href="/my-places"
+                          onClick={() => {
+                            trackNavigationClick("/my-places", "mobile_menu");
+                            closeMobileMenu();
+                          }}
+                        >
                           <Button
                             variant="ghost"
                             className={`w-full justify-start px-4 text-base ${isMyPlaces ? "text-foreground" : "text-muted-foreground"}`}
@@ -367,7 +433,13 @@ function MainLayoutContent({ children }: { children: React.ReactNode }) {
                         </Link>
                       )}
                       {isAdmin && (
-                        <Link href="/admin" onClick={closeMobileMenu}>
+                        <Link
+                          href="/admin"
+                          onClick={() => {
+                            trackNavigationClick("/admin", "mobile_menu");
+                            closeMobileMenu();
+                          }}
+                        >
                           <Button
                             variant="ghost"
                             className={`w-full justify-start px-4 text-base ${isAdminPage ? "text-foreground" : "text-muted-foreground"}`}
@@ -396,7 +468,12 @@ function MainLayoutContent({ children }: { children: React.ReactNode }) {
               </Sheet>
             ) : (
               <Link href={signInHref}>
-                <Button variant="ghost">Sign In</Button>
+                <Button
+                  variant="ghost"
+                  onClick={() => trackNavigationClick(signInHref, "auth")}
+                >
+                  Sign In
+                </Button>
               </Link>
             )}
           </div>

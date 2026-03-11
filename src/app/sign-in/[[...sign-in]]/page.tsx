@@ -1,5 +1,5 @@
-import { SignIn } from "@clerk/nextjs";
 import { sanitizeReturnTo } from "@/lib/navigation";
+import { SignInPageClient } from "./sign-in-page-client";
 
 export default async function SignInPage({
   searchParams,
@@ -11,10 +11,7 @@ export default async function SignInPage({
 
   return (
     <div className="flex min-h-screen items-center justify-center bg-background">
-      <SignIn
-        fallbackRedirectUrl={returnTo ?? "/home"}
-        forceRedirectUrl={returnTo ?? "/home"}
-      />
+      <SignInPageClient returnTo={returnTo ?? "/home"} />
     </div>
   );
 }

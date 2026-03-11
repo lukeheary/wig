@@ -22,12 +22,15 @@ import { trpc } from "@/lib/trpc";
 import { useToast } from "@/hooks/use-toast";
 import { formatDistanceToNow } from "date-fns";
 import { buildReturnTo, withReturnTo } from "@/lib/navigation";
+import { useAuth } from "@clerk/nextjs";
+import { sendGoogleAnalyticsEvent } from "@/lib/google-analytics";
 
 export function NotificationsBell() {
   const pathname = usePathname();
   const searchParams = useSearchParams();
   const [isMobileOpen, setIsMobileOpen] = useState(false);
   const [isDesktopOpen, setIsDesktopOpen] = useState(false);
+  const { userId } = useAuth();
   const { toast } = useToast();
   const utils = trpc.useUtils();
   const { data: pendingRequests, refetch } =
@@ -218,11 +221,20 @@ export function NotificationsBell() {
                     size="sm"
                     variant="outline"
                     className="h-8 flex-1 text-xs"
-                    onClick={() =>
+                    onClick={() => {
+                      sendGoogleAnalyticsEvent(
+                        "friend_request_responded",
+                        userId,
+                        {
+                          action: "rejected",
+                          friend_request_id: request.id,
+                          source: "notifications_bell",
+                        }
+                      );
                       rejectMutation.mutate({
                         friendRequestId: request.id,
-                      })
-                    }
+                      });
+                    }}
                     disabled={
                       acceptMutation.isPending || rejectMutation.isPending
                     }
@@ -233,11 +245,20 @@ export function NotificationsBell() {
                   <Button
                     size="sm"
                     className="h-8 flex-1 text-xs"
-                    onClick={() =>
+                    onClick={() => {
+                      sendGoogleAnalyticsEvent(
+                        "friend_request_responded",
+                        userId,
+                        {
+                          action: "accepted",
+                          friend_request_id: request.id,
+                          source: "notifications_bell",
+                        }
+                      );
                       acceptMutation.mutate({
                         friendRequestId: request.id,
-                      })
-                    }
+                      });
+                    }}
                     disabled={
                       acceptMutation.isPending || rejectMutation.isPending
                     }

@@ -7,6 +7,7 @@ import { WigLogo } from "@/components/ui/wig-logo";
 import { LandingPageRedirect } from "@/components/landing-page-redirect";
 import { LandingEventsPreview } from "@/components/landing/landing-events-preview";
 import { LandingRecentActivity } from "@/components/landing/landing-recent-activity";
+import { LandingGetStartedLink } from "@/components/landing/landing-get-started-link";
 
 export default async function LandingPage() {
   const { userId } = await auth();
@@ -62,11 +63,9 @@ export default async function LandingPage() {
               </h2>
 
               <div className="mx-auto mt-6 flex flex-wrap items-center justify-center gap-3">
-                <Link href="/sign-up" className="flex-1 md:max-w-[180px]">
-                  <Button size="lg" className="md:w-full">
-                    Get Started
-                  </Button>
-                </Link>
+                <div className="flex-1 md:max-w-[180px]">
+                  <LandingGetStartedLink location="hero" />
+                </div>
               </div>
             </div>
           </section>
@@ -153,9 +152,7 @@ export default async function LandingPage() {
               </p>
 
               <div className="flex flex-wrap items-center justify-center gap-3 pt-4">
-                <Link href="/sign-up">
-                  <Button size="lg">Get Started</Button>
-                </Link>
+                <LandingGetStartedLink location="footer" />
                 <Link href="/sign-in">
                   <Button size="lg" variant="outline">
                     Sign In

@@ -14,9 +14,12 @@ import {
 } from "lucide-react";
 import { useToast } from "@/hooks/use-toast";
 import { useQueryState } from "nuqs";
+import { useAuth } from "@clerk/nextjs";
+import { sendGoogleAnalyticsEvent } from "@/lib/google-analytics";
 
 function SearchPageContent() {
   const { toast } = useToast();
+  const { userId } = useAuth();
   const utils = trpc.useUtils();
   const [searchQuery, setSearchQuery] = useQueryState("q", {
     defaultValue: "",
@@ -129,9 +132,13 @@ function SearchPageContent() {
                   </div>
                   <Button
                     size="sm"
-                    onClick={() =>
-                      sendRequestMutation.mutate({ friendUserId: user.id })
-                    }
+                    onClick={() => {
+                      sendGoogleAnalyticsEvent("friend_request_sent", userId, {
+                        target_user_id: user.id,
+                        source: "friend_search_page_results",
+                      });
+                      sendRequestMutation.mutate({ friendUserId: user.id });
+                    }}
                     disabled={sendRequestMutation.isPending}
                   >
                     <UserPlus className="mr-2 h-4 w-4" />
@@ -181,9 +188,13 @@ function SearchPageContent() {
                     </div>
                     <Button
                       size="sm"
-                      onClick={() =>
-                        sendRequestMutation.mutate({ friendUserId: user.id })
-                      }
+                      onClick={() => {
+                        sendGoogleAnalyticsEvent("friend_request_sent", userId, {
+                          target_user_id: user.id,
+                          source: "friend_search_page_recent",
+                        });
+                        sendRequestMutation.mutate({ friendUserId: user.id });
+                      }}
                       disabled={sendRequestMutation.isPending}
                     >
                       <UserPlus className="mr-2 h-4 w-4" />
