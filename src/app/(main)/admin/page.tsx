@@ -7,7 +7,15 @@ import {
   CardHeader,
   CardTitle,
 } from "@/components/ui/card";
-import { Building, Building2, Download, MapPin, Plus, Tags } from "lucide-react";
+import {
+  Building,
+  Building2,
+  Download,
+  MapPin,
+  Plus,
+  Tags,
+  Ticket,
+} from "lucide-react";
 import Link from "next/link";
 
 export default function AdminPage() {
@@ -17,6 +25,7 @@ export default function AdminPage() {
   });
   const { data: metroAreas } = trpc.admin.listMetroAreas.useQuery();
   const { data: categories } = trpc.admin.listCategories.useQuery();
+  const { data: tickets } = trpc.admin.listSupportTickets.useQuery();
 
   const stats = [
     {
@@ -42,6 +51,12 @@ export default function AdminPage() {
       value: categories?.length ?? 0,
       icon: Tags,
       href: "/admin/categories",
+    },
+    {
+      label: "Tickets",
+      value: tickets?.length ?? 0,
+      icon: Ticket,
+      href: "/admin/tickets",
     },
   ];
 
@@ -109,6 +124,14 @@ export default function AdminPage() {
                 <div className="flex items-center gap-3">
                   <Tags className="h-4 w-4" />
                   <div className="text-sm font-medium">Manage Categories</div>
+                </div>
+              </Card>
+            </Link>
+            <Link href="/admin/tickets">
+              <Card className="p-4 hover:bg-accent">
+                <div className="flex items-center gap-3">
+                  <Ticket className="h-4 w-4" />
+                  <div className="text-sm font-medium">Manage Tickets</div>
                 </div>
               </Card>
             </Link>

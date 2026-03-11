@@ -13,6 +13,7 @@ import {
   Menu,
   Home,
   Search,
+  Headset,
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { trpc } from "@/lib/trpc";
@@ -90,6 +91,7 @@ function MainLayoutContent({ children }: { children: React.ReactNode }) {
     !pathname?.includes("/edit");
   const isFriends = pathname === "/friends";
   const isProfile = pathname === "/profile";
+  const isHelpFeedback = pathname === "/help-feedback";
   const isMyPlaces = pathname === "/my-places";
   const isAdminPage = pathname?.startsWith("/admin");
   const isEventDetail =
@@ -240,6 +242,18 @@ function MainLayoutContent({ children }: { children: React.ReactNode }) {
                       >
                         <User className="h-4 w-4" />
                         My Profile
+                      </Link>
+                    </DropdownMenuItem>
+                    <DropdownMenuItem asChild>
+                      <Link
+                        href="/help-feedback"
+                        onClick={() =>
+                          trackNavigationClick("/help-feedback", "user_menu")
+                        }
+                        className="flex cursor-pointer items-center gap-4"
+                      >
+                        <Headset className="h-4 w-4" />
+                        Help & Feedback
                       </Link>
                     </DropdownMenuItem>
                     {(hasVenues || hasOrganizers) && (
@@ -412,6 +426,25 @@ function MainLayoutContent({ children }: { children: React.ReactNode }) {
                             />
                           </div>
                           My Profile
+                        </Button>
+                      </Link>
+                      <Link
+                        href="/help-feedback"
+                        onClick={() => {
+                          trackNavigationClick(
+                            "/help-feedback",
+                            "mobile_menu"
+                          );
+                          closeMobileMenu();
+                        }}
+                      >
+                        <Button
+                          variant="ghost"
+                          className={`w-full justify-start px-4 text-base ${isHelpFeedback ? "text-foreground" : "text-muted-foreground"}`}
+                          size="lg"
+                        >
+                          <Headset className="mr-3 h-5 w-5" />
+                          Help & Feedback
                         </Button>
                       </Link>
                       {(hasVenues || hasOrganizers) && (

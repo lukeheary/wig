@@ -515,7 +515,7 @@ export default function ProfilePage() {
 
       <Card>
         <CardHeader>
-          <CardTitle>Personal Information</CardTitle>
+          <CardTitle>My Profile</CardTitle>
         </CardHeader>
         <CardContent className="space-y-6">
           {/* Profile Image */}
@@ -764,7 +764,7 @@ export default function ProfilePage() {
 
       <Card>
         <CardHeader>
-          <CardTitle>Partner</CardTitle>
+          <CardTitle>My Partner</CardTitle>
         </CardHeader>
         <CardContent className="space-y-4">
           {acceptedRelationship ? (

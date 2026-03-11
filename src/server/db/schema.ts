@@ -91,6 +91,21 @@ export const partnerStatusEnum = pgEnum("partner_status", [
   "accepted",
 ]);
 
+export const supportTicketTypeEnum = pgEnum("support_ticket_type", [
+  "help",
+  "bug",
+  "feedback",
+  "feature-request",
+]);
+
+export const supportTicketStatusEnum = pgEnum("support_ticket_status", [
+  "open",
+  "in-review",
+  "closed",
+  "planned",
+  "resolved",
+]);
+
 export const scraperTypeEnum = pgEnum("scraper_type", [
   "dice",
   "posh",
@@ -140,6 +155,7 @@ export const usersRelations = relations(users, ({ many }) => ({
   }),
   activities: many(userActivity),
   eventActivities: many(eventActivity),
+  supportTickets: many(supportTickets),
 }));
 
 // ============================================================================
@@ -807,6 +823,43 @@ export const eventActivityRelations = relations(eventActivity, ({ one }) => ({
     references: [events.id],
   }),
 }));
+
+// ============================================================================
+// SUPPORT REQUESTS TABLE
+// ============================================================================
+export const supportTickets = pgTable(
+  "support_tickets",
+  {
+    id: uuid("id").defaultRandom().primaryKey(),
+    userId: text("user_id")
+      .notNull()
+      .references(() => users.id, { onDelete: "cascade" }),
+    type: supportTicketTypeEnum("type").notNull(),
+    status: supportTicketStatusEnum("status").notNull().default("open"),
+    subject: varchar("subject", { length: 255 }).notNull(),
+    message: text("message").notNull(),
+    createdAt: timestamp("created_at").defaultNow().notNull(),
+    updatedAt: timestamp("updated_at").defaultNow().notNull(),
+  },
+  (table) => ({
+    userCreatedAtIdx: index("support_tickets_user_created_at_idx").on(
+      table.userId,
+      table.createdAt
+    ),
+    statusIdx: index("support_tickets_status_idx").on(table.status),
+    typeIdx: index("support_tickets_type_idx").on(table.type),
+  })
+);
+
+export const supportTicketsRelations = relations(
+  supportTickets,
+  ({ one }) => ({
+    user: one(users, {
+      fields: [supportTickets.userId],
+      references: [users.id],
+    }),
+  })
+);
 
 // ============================================================================
 // USER PARTNERS TABLE

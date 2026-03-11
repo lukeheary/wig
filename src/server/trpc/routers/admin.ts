@@ -7,6 +7,7 @@ import {
   places,
   placeMembers,
   scrapers,
+  supportTickets,
   users,
 } from "../../db/schema";
 import { eq, and, or, ilike, desc, ne } from "drizzle-orm";
@@ -20,6 +21,13 @@ import {
 const placeTypeSchema = z.enum(["venue", "organizer"]);
 const placeMemberRoleSchema = z.enum(["owner", "manager", "promoter", "staff"]);
 const scraperTypeSchema = z.enum(["dice", "posh", "clubcafe", "ticketmaster"]);
+const supportTicketStatusSchema = z.enum([
+  "open",
+  "in-review",
+  "closed",
+  "planned",
+  "resolved",
+]);
 const categoryKeySchema = z
   .string()
   .min(1)
@@ -27,6 +35,85 @@ const categoryKeySchema = z
   .regex(/^[a-z0-9-]+$/, "Key must be lowercase alphanumeric with hyphens");
 
 export const adminRouter = router({
+  // ============================================================================
+  // SUPPORT TICKETS
+  // ============================================================================
+
+  listSupportTickets: adminProcedure
+    .input(
+      z
+        .object({
+          status: supportTicketStatusSchema.optional(),
+          search: z.string().trim().optional(),
+        })
+        .optional()
+    )
+    .query(async ({ ctx, input }) => {
+      const conditions = [];
+
+      if (input?.status) {
+        conditions.push(eq(supportTickets.status, input.status));
+      }
+
+      if (input?.search) {
+        conditions.push(
+          or(
+            ilike(supportTickets.subject, `%${input.search}%`),
+            ilike(supportTickets.message, `%${input.search}%`),
+            ilike(users.email, `%${input.search}%`),
+            ilike(users.username, `%${input.search}%`)
+          )!
+        );
+      }
+
+      return ctx.db
+        .select({
+          id: supportTickets.id,
+          userId: supportTickets.userId,
+          type: supportTickets.type,
+          status: supportTickets.status,
+          subject: supportTickets.subject,
+          message: supportTickets.message,
+          createdAt: supportTickets.createdAt,
+          updatedAt: supportTickets.updatedAt,
+          userEmail: users.email,
+          username: users.username,
+          firstName: users.firstName,
+          lastName: users.lastName,
+        })
+        .from(supportTickets)
+        .innerJoin(users, eq(supportTickets.userId, users.id))
+        .where(conditions.length > 0 ? and(...conditions) : undefined)
+        .orderBy(desc(supportTickets.createdAt));
+    }),
+
+  updateSupportTicketStatus: adminProcedure
+    .input(
+      z.object({
+        ticketId: z.string().uuid(),
+        status: supportTicketStatusSchema,
+      })
+    )
+    .mutation(async ({ ctx, input }) => {
+      const [updatedTicket] = await ctx.db
+        .update(supportTickets)
+        .set({
+          status: input.status,
+          updatedAt: new Date(),
+        })
+        .where(eq(supportTickets.id, input.ticketId))
+        .returning();
+
+      if (!updatedTicket) {
+        throw new TRPCError({
+          code: "NOT_FOUND",
+          message: "Support ticket not found",
+        });
+      }
+
+      return updatedTicket;
+    }),
+
   // ============================================================================
   // PLACE MANAGEMENT
   // ============================================================================
