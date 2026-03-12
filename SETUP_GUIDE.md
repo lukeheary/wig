@@ -25,7 +25,7 @@ This guide provides all the code and detailed instructions to complete the Local
 1. Go to [https://neon.tech](https://neon.tech)
 2. Click "Sign Up" or "Sign In"
 3. Create a new project
-4. Name it "social-cal" or similar
+4. Name it "wig" or similar
 5. Copy the connection string (looks like: `postgresql://user:password@ep-xxx.us-east-2.aws.neon.tech/neondb?sslmode=require`)
 6. Go to Settings → Connection Pooling and enable it
 

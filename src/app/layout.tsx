@@ -25,7 +25,7 @@ const metadataBaseUrl =
 
 export const metadata: Metadata = {
   metadataBase: new URL(metadataBaseUrl),
-  title: "WIG",
+  title: "Who Is Going",
   description: "Discover local events and connect with your community",
 };
 
