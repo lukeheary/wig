@@ -5,6 +5,8 @@ import { users, placeMembers } from "@/server/db/schema";
 import { eq, and, ne } from "drizzle-orm";
 import { clerkClient } from "@clerk/nextjs/server";
 
+const RESERVED_USERNAMES = new Set(["luke"]);
+
 export const userRouter = router({
   isAdmin: protectedProcedure.query(async ({ ctx }) => {
     const user = await ctx.db.query.users.findFirst({
@@ -72,6 +74,13 @@ export const userRouter = router({
     .mutation(async ({ ctx, input }) => {
       const userId = ctx.auth.userId;
       const normalizedUsername = input.username.toLowerCase();
+
+      if (RESERVED_USERNAMES.has(normalizedUsername)) {
+        throw new TRPCError({
+          code: "BAD_REQUEST",
+          message: "Username is already taken",
+        });
+      }
 
       // Check if username is already taken by another user
       const existingUser = await ctx.db.query.users.findFirst({

@@ -21,12 +21,14 @@ import {
   SelectTrigger,
   SelectValue,
 } from "@/components/ui/select";
-import { Loader2, UserCircle } from "lucide-react";
+import { Loader2 } from "lucide-react";
 import { useToast } from "@/hooks/use-toast";
 import { GooglePlacesAutocomplete } from "@/components/google-places-autocomplete";
 import { S3Uploader } from "@/components/ui/s3-uploader";
 import { UserAvatar } from "@/components/ui/user-avatar";
 import { DateOfBirthInput } from "@/components/ui/date-of-birth-input";
+
+const RESERVED_USERNAMES = new Set(["luke"]);
 
 export default function OnboardingPage() {
   const router = useRouter();
@@ -78,6 +80,8 @@ export default function OnboardingPage() {
 
   // Check if form is valid for enabling submit button
   const isValidUsername = /^[a-zA-Z0-9_]{3,20}$/.test(formData.username);
+  const normalizedUsername = formData.username.trim().toLowerCase();
+  const isReservedUsername = RESERVED_USERNAMES.has(normalizedUsername);
   const isValidDateOfBirth = () => {
     const day = Number.parseInt(formData.dobDay, 10);
     const month = Number.parseInt(formData.dobMonth, 10);
@@ -98,6 +102,7 @@ export default function OnboardingPage() {
   const isDobValid = isValidDateOfBirth();
   const isFormValid =
     isValidUsername &&
+    !isReservedUsername &&
     formData.city &&
     formData.state &&
     formData.gender &&
@@ -122,6 +127,15 @@ export default function OnboardingPage() {
         title: "Invalid Username",
         description:
           "Username must be 3-20 characters and contain only letters, numbers, and underscores",
+        variant: "destructive",
+      });
+      return;
+    }
+
+    if (isReservedUsername) {
+      toast({
+        title: "Username Taken",
+        description: "Username is already taken",
         variant: "destructive",
       });
       return;
@@ -198,7 +212,7 @@ export default function OnboardingPage() {
   }
 
   return (
-    <div className="flex min-h-screen items-center justify-center bg-muted/30 p-4">
+    <div className="flex min-h-screen items-center justify-center bg-background p-4">
       <Card className="w-full max-w-md">
         <CardHeader className="text-center">
           {/*<div className="mx-auto mb-4 flex h-12 w-12 items-center justify-center rounded-full bg-primary/10">*/}
@@ -256,8 +270,16 @@ export default function OnboardingPage() {
                 autoComplete="off"
                 maxLength={20}
               />
-              <p className="text-xs text-muted-foreground">
-                3-20 characters, letters/numbers/underscores only
+              <p
+                className={`text-xs ${
+                  isReservedUsername
+                    ? "text-destructive"
+                    : "text-muted-foreground"
+                }`}
+              >
+                {isReservedUsername
+                  ? "This username has already been taken"
+                  : "3-20 characters, letters/numbers/underscores only"}
               </p>
             </div>
 
