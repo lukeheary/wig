@@ -303,6 +303,7 @@ export function NotificationsBell() {
     id: string;
     entityId: string;
     type: string;
+    entityType: string;
   }) => {
     if (isFriendRequestNotification(notification)) {
       return (

@@ -5,7 +5,7 @@ import { useRouter } from "next/navigation";
 import { trpc } from "@/lib/trpc";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
-import { Check, X, Mail, Loader2 } from "lucide-react";
+import { Check, X, Mail, Loader2, ChevronRight } from "lucide-react";
 import { useToast } from "@/hooks/use-toast";
 import { UserList } from "@/components/user-list";
 import { useAuth } from "@clerk/nextjs";
@@ -13,6 +13,8 @@ import { sendGoogleAnalyticsEvent } from "@/lib/google-analytics";
 import { Card, CardContent } from "@/components/ui/card";
 import { SearchInput } from "@/components/ui/search-input";
 import { StickySectionHeader } from "@/components/ui/sticky-section-header";
+import { StickySearchBar } from "@/components/ui/sticky-search-bar";
+import pluralize from "pluralize";
 
 function RequestsPageContent() {
   const router = useRouter();
@@ -25,6 +27,7 @@ function RequestsPageContent() {
     trpc.friends.listFriends.useQuery({
       statusFilter: "pending",
     });
+  const { data: allFriends } = trpc.friends.listFriends.useQuery({});
 
   const acceptMutation = trpc.friends.acceptFriendRequest.useMutation({
     onSuccess: () => {
@@ -61,6 +64,8 @@ function RequestsPageContent() {
 
   const sentRequests = pendingRequests?.filter((f) => f.isSender) || [];
   const receivedRequests = pendingRequests?.filter((f) => !f.isSender) || [];
+  const acceptedFriends =
+    allFriends?.filter((f) => f.status === "accepted") || [];
   const normalizedQuery = searchQuery.trim().toLowerCase();
   const matchesQuery = (request: (typeof sentRequests)[number]) => {
     if (!normalizedQuery) return true;
@@ -88,15 +93,41 @@ function RequestsPageContent() {
   const hasAnyRequests = receivedRequests.length > 0 || sentRequests.length > 0;
 
   return (
-    <div className="container mx-auto pb-4">
-      <SearchInput
-        value={searchQuery}
-        onChange={setSearchQuery}
-        placeholder="Search requests..."
-        showBack
-        onBack={() => router.push("/friends")}
-        className="w-full pb-4"
-      />
+    <div className="container mx-auto pb-8 pt-4">
+      <StickySearchBar>
+        <SearchInput
+          value={searchQuery}
+          onChange={setSearchQuery}
+          placeholder="Search requests..."
+          showBack
+          onBack={() => router.push("/friends")}
+          className="w-full"
+        />
+
+        <div className="flex w-full shrink-0 gap-2 sm:w-auto">
+          <div className="flex-1 sm:w-32 sm:flex-none lg:w-40">
+            <div className="flex h-12 items-center justify-between rounded-full bg-muted px-5">
+              <p className="flex flex-row items-center gap-1.5 text-base font-medium lg:text-lg">
+                <span>{acceptedFriends.length}</span>
+                <span className="text-sm text-muted-foreground">
+                  {pluralize("Friend", acceptedFriends.length)}
+                </span>
+              </p>
+              <ChevronRight className="h-4 w-4 text-muted-foreground lg:h-5 lg:w-5" />
+            </div>
+          </div>
+          <div className="flex-1 sm:w-32 sm:flex-none lg:w-40">
+            <div className="flex h-12 items-center justify-between rounded-full bg-muted px-5">
+              <p className="flex flex-row items-center gap-1.5 text-base font-medium lg:text-lg">
+                <span>{receivedRequests.length}</span>
+                <span className="text-sm text-muted-foreground">
+                  {pluralize("Request", receivedRequests.length)}
+                </span>
+              </p>
+            </div>
+          </div>
+        </div>
+      </StickySearchBar>
 
       {isLoading ? (
         <div className="flex justify-center py-12">
