@@ -198,6 +198,41 @@ export const partnersRouter = router({
         ctx.db
       );
 
+      const currentUser = await ctx.db.query.users.findFirst({
+        where: eq(users.id, ctx.auth.userId),
+        columns: {
+          firstName: true,
+          lastName: true,
+          username: true,
+        },
+      });
+
+      const accepterName =
+        [currentUser?.firstName, currentUser?.lastName]
+          .filter(Boolean)
+          .join(" ")
+          .trim() ||
+        currentUser?.username ||
+        "Someone";
+
+      await createNotification(
+        {
+          userId: partnerRequest.requesterId,
+          actorUserId: ctx.auth.userId,
+          type: "partner_request_accepted",
+          entityType: "partner_request",
+          entityId: input.partnerId,
+          title: "Partner request accepted",
+          body: `${accepterName} accepted your partner request`,
+          actionUrl: "/profile",
+          metadata: {
+            requestId: input.partnerId,
+            requestType: "partner",
+          },
+        },
+        ctx.db
+      );
+
       return updatedRelationship;
     }),
 

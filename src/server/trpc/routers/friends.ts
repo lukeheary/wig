@@ -206,6 +206,41 @@ export const friendsRouter = router({
         ctx.db
       );
 
+      const currentUser = await ctx.db.query.users.findFirst({
+        where: eq(users.id, ctx.auth.userId),
+        columns: {
+          firstName: true,
+          lastName: true,
+          username: true,
+        },
+      });
+
+      const accepterName =
+        [currentUser?.firstName, currentUser?.lastName]
+          .filter(Boolean)
+          .join(" ")
+          .trim() ||
+        currentUser?.username ||
+        "Someone";
+
+      await createNotification(
+        {
+          userId: friendRequest.userId,
+          actorUserId: ctx.auth.userId,
+          type: "friend_request_accepted",
+          entityType: "friend_request",
+          entityId: input.friendRequestId,
+          title: "Friend request accepted",
+          body: `${accepterName} accepted your friend request`,
+          actionUrl: "/friends/list",
+          metadata: {
+            requestId: input.friendRequestId,
+            requestType: "friend",
+          },
+        },
+        ctx.db
+      );
+
       return updatedFriendship;
     }),
 

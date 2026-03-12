@@ -75,7 +75,9 @@ export const eventActivityTypeEnum = pgEnum("event_activity_type", [
 export const notificationTypeEnum = pgEnum("notification_type", [
   "event_update",
   "friend_request",
+  "friend_request_accepted",
   "partner_request",
+  "partner_request_accepted",
   "support_ticket_status_changed",
 ]);
 
