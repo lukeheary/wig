@@ -1,6 +1,7 @@
 "use client";
 
 import { Suspense, useMemo, useState } from "react";
+import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { trpc } from "@/lib/trpc";
 import { Badge } from "@/components/ui/badge";
@@ -40,6 +41,8 @@ function FriendsListContent() {
 
   return (
     <div className="container mx-auto pb-8 pt-4">
+      <div className="h-px w-full" />
+
       <StickySearchBar>
         <SearchInput
           value={searchQuery}
@@ -61,8 +64,11 @@ function FriendsListContent() {
               </p>
             </div>
           </div>
-          <div className="flex-1 sm:w-32 sm:flex-none lg:w-40">
-            <div className="flex h-12 items-center justify-between rounded-full bg-muted px-5">
+          <Link
+            href="/friends/requests"
+            className="flex-1 sm:w-32 sm:flex-none lg:w-40"
+          >
+            <div className="flex h-12 cursor-pointer items-center justify-between rounded-full bg-muted px-5 transition-colors hover:bg-muted/80">
               <p className="flex flex-row items-center gap-1.5 text-base font-medium lg:text-lg">
                 <span>{pendingRequests.length}</span>
                 <span className="text-sm text-muted-foreground">
@@ -71,7 +77,7 @@ function FriendsListContent() {
               </p>
               <ChevronRight className="h-4 w-4 text-muted-foreground lg:h-5 lg:w-5" />
             </div>
-          </div>
+          </Link>
         </div>
       </StickySearchBar>
 
