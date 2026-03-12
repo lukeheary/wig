@@ -195,7 +195,7 @@ function FriendsPageContent() {
               href="/friends/list"
               className="flex-1 sm:w-32 sm:flex-none lg:w-40"
             >
-              <div className="flex h-12 cursor-pointer items-center justify-between rounded-full bg-muted px-4 transition-colors hover:bg-muted/80">
+              <div className="flex h-12 cursor-pointer items-center justify-between rounded-full bg-muted px-5 transition-colors hover:bg-muted/80">
                 <p className="flex flex-row items-center gap-1.5 text-base font-medium lg:text-lg">
                   <span>{acceptedFriends.length}</span>
                   <span className={"text-sm text-muted-foreground"}>
@@ -209,7 +209,7 @@ function FriendsPageContent() {
               href="/friends/requests"
               className="flex-1 sm:w-32 sm:flex-none lg:w-40"
             >
-              <div className="flex h-12 cursor-pointer items-center justify-between rounded-full bg-muted px-4 transition-colors hover:bg-muted/80">
+              <div className="flex h-12 cursor-pointer items-center justify-between rounded-full bg-muted px-5 transition-colors hover:bg-muted/80">
                 <p className="flex flex-row items-center gap-1.5 text-base font-medium lg:text-lg">
                   <span>{receivedRequests.length}</span>
                   <span className={"text-sm text-muted-foreground"}>

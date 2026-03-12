@@ -74,10 +74,11 @@ function SearchPageContent() {
   const relatedUserIds = new Set(
     friends.map((friendship) => friendship.friend?.id).filter(Boolean)
   );
-  const isAlreadyAdded = (targetUserId: string) => relatedUserIds.has(targetUserId);
+  const isAlreadyAdded = (targetUserId: string) =>
+    relatedUserIds.has(targetUserId);
 
   return (
-    <div className="container mx-auto space-y-4 pb-4">
+    <div className="container mx-auto pb-4">
       <BackButtonHeader
         backHref="/friends"
         title="Find Friends"
@@ -144,7 +145,9 @@ function SearchPageContent() {
                       });
                       sendRequestMutation.mutate({ friendUserId: user.id });
                     }}
-                    disabled={sendRequestMutation.isPending || isAlreadyAdded(user.id)}
+                    disabled={
+                      sendRequestMutation.isPending || isAlreadyAdded(user.id)
+                    }
                   >
                     {!isAlreadyAdded(user.id) && (
                       <UserPlus className="mr-2 h-4 w-4" />
@@ -194,7 +197,9 @@ function SearchPageContent() {
                       </div>
                       <Button
                         size="sm"
-                        variant={isAlreadyAdded(user.id) ? "outline" : "default"}
+                        variant={
+                          isAlreadyAdded(user.id) ? "outline" : "default"
+                        }
                         onClick={() => {
                           if (isAlreadyAdded(user.id)) return;
                           sendGoogleAnalyticsEvent(
@@ -208,7 +213,8 @@ function SearchPageContent() {
                           sendRequestMutation.mutate({ friendUserId: user.id });
                         }}
                         disabled={
-                          sendRequestMutation.isPending || isAlreadyAdded(user.id)
+                          sendRequestMutation.isPending ||
+                          isAlreadyAdded(user.id)
                         }
                       >
                         {!isAlreadyAdded(user.id) && (

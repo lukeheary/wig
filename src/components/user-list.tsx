@@ -42,15 +42,15 @@ export function UserList<T>({
           <div
             key={user.id || index}
             className={cn(
-              "flex items-center justify-between py-4",
+              "flex items-center justify-between py-4 first:pt-0 last:pb-0",
               onItemClick && "cursor-pointer hover:bg-muted/50"
             )}
             onClick={() => onItemClick?.(item)}
           >
             <div className="flex items-center gap-3">
-              <UserAvatar 
-                src={user.avatarImageUrl} 
-                name={user.firstName} 
+              <UserAvatar
+                src={user.avatarImageUrl}
+                name={user.firstName}
               />
               <div>
                 <div className="flex items-center gap-2">

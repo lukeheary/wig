@@ -7,7 +7,7 @@ import { BackButtonHeader } from "@/components/shared/back-button-header";
 
 function ActivityPageContent() {
   return (
-    <div className="container mx-auto space-y-4 pb-4">
+    <div className="container mx-auto pb-4">
       <BackButtonHeader
         backHref="/friends"
         title="Activity"
