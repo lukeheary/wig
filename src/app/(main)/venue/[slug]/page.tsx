@@ -236,7 +236,12 @@ export default function PlacePage() {
                 )}
               </Button>
               {canEdit && (
-                <PlaceActionMenu placeId={place.id} slug={slug} type="venue" />
+                <PlaceActionMenu
+                  placeId={place.id}
+                  slug={slug}
+                  type="venue"
+                  isAdmin={isAdmin}
+                />
               )}
             </div>
           </div>

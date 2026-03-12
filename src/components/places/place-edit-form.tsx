@@ -150,6 +150,7 @@ export function PlaceEditForm({
       city: string;
       state: string;
       formattedAddress: string;
+      website?: string;
       latitude?: number;
       longitude?: number;
       openingHours?: google.maps.places.PlaceOpeningHours;
@@ -233,6 +234,7 @@ export function PlaceEditForm({
         address: place.address,
         city: place.city,
         state: place.state,
+        website: place.website ?? prev.website,
         latitude: place.latitude || null,
         longitude: place.longitude || null,
         hours: hours ?? prev.hours,
@@ -512,7 +514,7 @@ export function PlaceEditForm({
       </div>
 
       {showScraperFields && (
-        <div className="space-y-3 rounded-md border p-3">
+        <div id="scraper-settings" className="space-y-3 rounded-md border p-3">
           <p className="text-sm font-medium">Scraper (Optional)</p>
           <div>
             <Label>Scraper Type</Label>

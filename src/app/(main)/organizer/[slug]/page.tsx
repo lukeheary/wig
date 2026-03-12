@@ -240,6 +240,7 @@ export default function PlacePage() {
                   placeId={place.id}
                   slug={slug}
                   type="organizer"
+                  isAdmin={isAdmin}
                 />
               )}
             </div>

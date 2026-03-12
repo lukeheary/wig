@@ -436,12 +436,14 @@ export const adminRouter = router({
   getScraperForPlace: adminProcedure
     .input(z.object({ placeId: z.string().uuid() }))
     .query(async ({ ctx, input }) => {
-      return await ctx.db.query.scrapers.findFirst({
+      const scraper = await ctx.db.query.scrapers.findFirst({
         where: eq(scrapers.placeId, input.placeId),
         with: {
           place: true,
         },
       });
+
+      return scraper ?? null;
     }),
 
   upsertPlaceScraper: adminProcedure

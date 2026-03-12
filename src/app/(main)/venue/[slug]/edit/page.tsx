@@ -35,24 +35,13 @@ export default function EditPlacePage() {
 
   // Get current user
   const { data: currentUser } = trpc.user.getCurrentUser.useQuery();
+  const { data: scraperConfig } = trpc.admin.getScraperForPlace.useQuery(
+    { placeId: place?.id ?? "" },
+    { enabled: isAdmin && !!place?.id }
+  );
 
-  const updateMutation = trpc.place.updatePlace.useMutation({
-    onSuccess: (_, variables) => {
-      // toast({
-      //   title: "Success",
-      //   description: "Place updated successfully",
-      // });
-      // Navigate to the new slug if it changed
-      router.push(`/venue/${variables.slug || slug}`);
-    },
-    onError: (error) => {
-      toast({
-        title: "Error",
-        description: error.message,
-        variant: "destructive",
-      });
-    },
-  });
+  const updateMutation = trpc.place.updatePlace.useMutation();
+  const upsertScraperMutation = trpc.admin.upsertPlaceScraper.useMutation();
 
   // Check if user can edit this place
   const isMember =
@@ -60,7 +49,7 @@ export default function EditPlacePage() {
     place?.members?.some((member: any) => member.userId === currentUser.id);
   const canEdit = isAdmin || isMember;
 
-  const handleSubmit = (formData: PlaceFormData) => {
+  const handleSubmit = async (formData: PlaceFormData) => {
     if (!place) return;
 
     if (!formData.slug || !formData.name) {
@@ -82,23 +71,42 @@ export default function EditPlacePage() {
       return;
     }
 
-    updateMutation.mutate({
-      placeId: place.id,
-      slug: formData.slug,
-      name: formData.name,
-      description: formData.description || undefined,
-      logoImageUrl: formData.logoImageUrl, // Pass as-is, schema accepts "" or valid URL
-      coverImageUrl: formData.coverImageUrl, // Pass as-is, schema accepts "" or valid URL
-      address: formData.address || undefined,
-      city: formData.city || undefined,
-      state: formData.state || undefined,
-      website: formData.website || undefined,
-      instagram: formData.instagram || undefined,
-      latitude: formData.latitude ?? undefined,
-      longitude: formData.longitude ?? undefined,
-      hours: formData.hours ?? undefined,
-      categories: formData.categories,
-    });
+    try {
+      await updateMutation.mutateAsync({
+        placeId: place.id,
+        slug: formData.slug,
+        name: formData.name,
+        description: formData.description || undefined,
+        logoImageUrl: formData.logoImageUrl,
+        coverImageUrl: formData.coverImageUrl,
+        address: formData.address || undefined,
+        city: formData.city || undefined,
+        state: formData.state || undefined,
+        website: formData.website || undefined,
+        instagram: formData.instagram || undefined,
+        latitude: formData.latitude ?? undefined,
+        longitude: formData.longitude ?? undefined,
+        hours: formData.hours ?? undefined,
+        categories: formData.categories,
+      });
+
+      if (isAdmin) {
+        await upsertScraperMutation.mutateAsync({
+          placeId: place.id,
+          scraper: formData.scraper,
+          searchString: formData.scraperSearchString,
+        });
+      }
+
+      router.push(`/venue/${formData.slug || slug}`);
+    } catch (error) {
+      toast({
+        title: "Error",
+        description:
+          error instanceof Error ? error.message : "Failed to update place",
+        variant: "destructive",
+      });
+    }
   };
 
   if (placeLoading) {
@@ -158,6 +166,8 @@ export default function EditPlacePage() {
     longitude: place.longitude || null,
     hours: (place as any).hours || null,
     categories: place.categories || [],
+    scraper: scraperConfig?.scraper ?? null,
+    scraperSearchString: scraperConfig?.searchString ?? "",
   };
 
   return (
@@ -171,7 +181,8 @@ export default function EditPlacePage() {
         mode="edit"
         onSubmit={handleSubmit}
         onCancel={() => router.push(backHref)}
-        isSubmitting={updateMutation.isPending}
+        isSubmitting={updateMutation.isPending || upsertScraperMutation.isPending}
+        showScraperFields={isAdmin}
       />
     </div>
   );

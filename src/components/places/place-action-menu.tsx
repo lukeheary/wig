@@ -3,7 +3,13 @@
 import { useState } from "react";
 import Link from "next/link";
 import { usePathname } from "next/navigation";
-import { CalendarPlus, Edit, MoreHorizontal, Repeat } from "lucide-react";
+import {
+  CalendarPlus,
+  Edit,
+  MoreHorizontal,
+  Repeat,
+  Search,
+} from "lucide-react";
 import { Button } from "@/components/ui/button";
 import {
   DropdownMenu,
@@ -25,12 +31,14 @@ type PlaceActionMenuProps = {
   placeId: string;
   slug: string;
   type: "venue" | "organizer";
+  isAdmin?: boolean;
 };
 
 export function PlaceActionMenu({
   placeId,
   slug,
   type,
+  isAdmin = false,
 }: PlaceActionMenuProps) {
   const [open, setOpen] = useState(false);
   const isDesktop = useMediaQuery("(min-width: 768px)");
@@ -45,6 +53,7 @@ export function PlaceActionMenu({
     `/event/new?recurring=true&${queryKey}=${placeId}`,
     returnTo
   );
+  const editScraperHref = withReturnTo(`/${type}/${slug}/edit#scraper-settings`, returnTo);
 
   const trigger = (
     <Button size="icon" variant="secondary" className="h-10 w-10">
@@ -64,6 +73,14 @@ export function PlaceActionMenu({
               Edit {typeLabel}
             </Link>
           </DropdownMenuItem>
+          {isAdmin && (
+            <DropdownMenuItem asChild>
+              <Link href={editScraperHref}>
+                <Search className="h-4 w-4" />
+                Edit Scraper
+              </Link>
+            </DropdownMenuItem>
+          )}
           <DropdownMenuItem asChild>
             <Link href={createEventHref}>
               <CalendarPlus className="h-4 w-4" />
@@ -97,6 +114,16 @@ export function PlaceActionMenu({
             <Edit className="h-4 w-4" />
             Edit {typeLabel}
           </Link>
+          {isAdmin && (
+            <Link
+              href={editScraperHref}
+              className="flex w-full items-center gap-3 rounded-lg px-4 py-5 transition-colors hover:bg-muted"
+              onClick={() => setOpen(false)}
+            >
+              <Search className="h-4 w-4" />
+              Edit Scraper
+            </Link>
+          )}
           <Link
             href={createEventHref}
             className="flex w-full items-center gap-3 rounded-lg px-4 py-5 transition-colors hover:bg-muted"
