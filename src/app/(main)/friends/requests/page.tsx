@@ -140,16 +140,23 @@ function RequestsPageContent() {
           <Loader2 className="h-8 w-8 animate-spin text-muted-foreground" />
         </div>
       ) : !hasAnyRequests ? (
-        <Card>
-          <CardContent className="pt-6">
-            <div className="py-8 text-center">
-              <Mail className="mx-auto mb-4 h-12 w-12 text-muted-foreground" />
-              <p className="text-muted-foreground">
-                No pending friend requests
-              </p>
-            </div>
-          </CardContent>
-        </Card>
+        <>
+          <StickySectionHeader className="-mx-4">
+            <h2 className="text-xl font-semibold tracking-tight">
+              Friend Requests
+            </h2>
+          </StickySectionHeader>
+          <Card>
+            <CardContent className="pt-6">
+              <div className="py-8 text-center">
+                <Mail className="mx-auto mb-4 h-12 w-12 text-muted-foreground" />
+                <p className="text-muted-foreground">
+                  No pending friend requests
+                </p>
+              </div>
+            </CardContent>
+          </Card>
+        </>
       ) : normalizedQuery &&
         filteredReceivedRequests.length === 0 &&
         filteredSentRequests.length === 0 ? (
