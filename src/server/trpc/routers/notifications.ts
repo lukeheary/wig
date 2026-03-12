@@ -8,6 +8,9 @@ export const notificationsRouter = router({
       where: eq(notifications.userId, ctx.auth.userId),
       orderBy: [desc(notifications.createdAt)],
       limit: 50,
+      with: {
+        actor: true,
+      },
     });
   }),
 

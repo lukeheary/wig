@@ -12,7 +12,7 @@ function FriendsListContent() {
   const acceptedFriends = friends?.filter((f) => f.status === "accepted") || [];
 
   return (
-    <div className="container mx-auto space-y-4 py-8">
+    <div className="container mx-auto space-y-4 pb-4">
       <BackButtonHeader backHref="/friends" title="My Friends" />
 
       {isLoading ? (

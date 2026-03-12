@@ -11,7 +11,6 @@ import {
   eventCategories,
   eventSeries,
   events,
-  notifications,
   placeFollows,
   placeMembers,
   places,
@@ -49,6 +48,7 @@ import {
   normalizeSeriesDaysOfWeek,
 } from "@/server/utils/event-series";
 import { EVENT_STATUS_VALUES, type EventStatus } from "@/lib/event-status";
+import { createNotification } from "@/server/utils/notifications";
 
 function resolveEventUpdateActivityType(
   previousStatus: EventStatus,
@@ -119,7 +119,7 @@ async function notifyPartnerOfMirroredRsvp({
     "Your partner";
   const verb = status === "going" ? "RSVP'd going to" : "RSVP'd interested in";
 
-  await ctx.db.insert(notifications).values({
+  await createNotification({
     userId: partnerUserId,
     actorUserId,
     type: "event_update",
@@ -134,7 +134,7 @@ async function notifyPartnerOfMirroredRsvp({
       eventId: event.id,
       eventTitle: event.title,
     },
-  });
+  }, ctx.db);
 }
 
 function isBucketUrl(url: string): boolean {

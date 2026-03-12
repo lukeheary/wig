@@ -58,7 +58,7 @@ function RequestsPageContent() {
   const receivedRequests = pendingRequests?.filter((f) => !f.isSender) || [];
 
   return (
-    <div className="container mx-auto space-y-6 py-8">
+    <div className="container mx-auto space-y-4 pb-4">
       <BackButtonHeader backHref="/friends" title="Friend Requests" />
 
       {isLoading ? (
@@ -68,7 +68,8 @@ function RequestsPageContent() {
       ) : (
         <>
           {/* Received Requests */}
-          <div className="space-y-3">
+          <section>
+            <h2 className="text-lg font-semibold">Received Requests</h2>
             {receivedRequests.length === 0 ? (
               <div className="py-8 text-center">
                 <Mail className="mx-auto mb-4 h-12 w-12 text-muted-foreground" />
@@ -87,10 +88,11 @@ function RequestsPageContent() {
                   avatarImageUrl: req.friend?.avatarImageUrl || null,
                 })}
                 renderAction={(request) => (
-                  <div className="flex gap-2">
+                  <div className="flex items-center gap-4">
                     <Button
-                      size="sm"
-                      variant="outline"
+                      size="icon"
+                      variant="ghost"
+                      className="h-8 w-8"
                       onClick={() => {
                         sendGoogleAnalyticsEvent(
                           "friend_request_responded",
@@ -107,11 +109,9 @@ function RequestsPageContent() {
                       }}
                       disabled={rejectMutation.isPending}
                     >
-                      <X className="mr-1 h-4 w-4" />
-                      Reject
+                      <X className="h-4 w-4" />
                     </Button>
                     <Button
-                      size="sm"
                       onClick={() => {
                         sendGoogleAnalyticsEvent(
                           "friend_request_responded",
@@ -128,18 +128,17 @@ function RequestsPageContent() {
                       }}
                       disabled={acceptMutation.isPending}
                     >
-                      <Check className="mr-1 h-4 w-4" />
                       Accept
                     </Button>
                   </div>
                 )}
               />
             )}
-          </div>
+          </section>
 
           {/* Sent Requests */}
           {sentRequests.length > 0 && (
-            <div className="space-y-3">
+            <section>
               <h2 className="text-lg font-semibold">Sent Requests</h2>
               <UserList
                 items={sentRequests}
@@ -152,7 +151,7 @@ function RequestsPageContent() {
                 })}
                 renderAction={() => <Badge variant="outline">Pending</Badge>}
               />
-            </div>
+            </section>
           )}
         </>
       )}

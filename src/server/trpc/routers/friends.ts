@@ -10,6 +10,10 @@ import {
 } from "../../db/schema";
 import { eq, and, or, ne, sql, inArray, desc } from "drizzle-orm";
 import { TRPCError } from "@trpc/server";
+import {
+  createNotification,
+  deleteNotificationsForEntity,
+} from "@/server/utils/notifications";
 
 export const friendsRouter = router({
   searchUsers: protectedProcedure
@@ -117,6 +121,40 @@ export const friendsRouter = router({
         })
         .returning();
 
+      const currentUser = await ctx.db.query.users.findFirst({
+        where: eq(users.id, ctx.auth.userId),
+        columns: {
+          firstName: true,
+          lastName: true,
+          username: true,
+        },
+      });
+
+      const senderName =
+        [currentUser?.firstName, currentUser?.lastName]
+          .filter(Boolean)
+          .join(" ")
+          .trim() ||
+        currentUser?.username ||
+        "Someone";
+
+      await createNotification(
+        {
+          userId: input.friendUserId,
+          actorUserId: ctx.auth.userId,
+          type: "friend_request",
+          entityType: "friend_request",
+          entityId: friendRequest.id,
+          title: "Friend request",
+          body: `${senderName} sent you a friend request`,
+          metadata: {
+            requestId: friendRequest.id,
+            requestType: "friend",
+          },
+        },
+        ctx.db
+      );
+
       return friendRequest;
     }),
 
@@ -159,6 +197,15 @@ export const friendsRouter = router({
         .where(eq(userFriends.id, input.friendRequestId))
         .returning();
 
+      await deleteNotificationsForEntity(
+        {
+          userId: ctx.auth.userId,
+          entityType: "friend_request",
+          entityIds: [input.friendRequestId],
+        },
+        ctx.db
+      );
+
       return updatedFriendship;
     }),
 
@@ -188,6 +235,14 @@ export const friendsRouter = router({
       }
 
       await ctx.db.delete(userFriends).where(eq(userFriends.id, input.friendRequestId));
+
+      await deleteNotificationsForEntity(
+        {
+          entityType: "friend_request",
+          entityIds: [input.friendRequestId],
+        },
+        ctx.db
+      );
 
       return { success: true };
     }),

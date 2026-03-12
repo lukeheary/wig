@@ -36,7 +36,7 @@ export default function MyPlacesPage() {
   const showOrganizersSection = !hasOnlyOneVenue;
 
   return (
-    <div className="container mx-auto space-y-4 py-8">
+    <div className="container mx-auto space-y-4 pb-4">
       {/*<div className="flex justify-end">*/}
       {/*  <Link href="/event/new?recurring=true">*/}
       {/*    <Button>*/}

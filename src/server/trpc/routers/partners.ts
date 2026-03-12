@@ -3,6 +3,10 @@ import { and, desc, eq, or } from "drizzle-orm";
 import { z } from "zod";
 import { userFriends, userPartners, users } from "../../db/schema";
 import { protectedProcedure, router } from "../init";
+import {
+  createNotification,
+  deleteNotificationsForEntity,
+} from "@/server/utils/notifications";
 
 export const partnersRouter = router({
   sendPartnerRequest: protectedProcedure
@@ -111,6 +115,40 @@ export const partnersRouter = router({
         })
         .returning();
 
+      const currentUser = await ctx.db.query.users.findFirst({
+        where: eq(users.id, ctx.auth.userId),
+        columns: {
+          firstName: true,
+          lastName: true,
+          username: true,
+        },
+      });
+
+      const senderName =
+        [currentUser?.firstName, currentUser?.lastName]
+          .filter(Boolean)
+          .join(" ")
+          .trim() ||
+        currentUser?.username ||
+        "Someone";
+
+      await createNotification(
+        {
+          userId: input.recipientId,
+          actorUserId: ctx.auth.userId,
+          type: "partner_request",
+          entityType: "partner_request",
+          entityId: partnerRequest.id,
+          title: "Partner request",
+          body: `${senderName} wants to be your partner`,
+          metadata: {
+            requestId: partnerRequest.id,
+            requestType: "partner",
+          },
+        },
+        ctx.db
+      );
+
       return partnerRequest;
     }),
 
@@ -151,6 +189,15 @@ export const partnersRouter = router({
         .where(eq(userPartners.id, input.partnerId))
         .returning();
 
+      await deleteNotificationsForEntity(
+        {
+          userId: ctx.auth.userId,
+          entityType: "partner_request",
+          entityIds: [input.partnerId],
+        },
+        ctx.db
+      );
+
       return updatedRelationship;
     }),
 
@@ -179,6 +226,15 @@ export const partnersRouter = router({
       }
 
       await ctx.db.delete(userPartners).where(eq(userPartners.id, input.partnerId));
+
+      await deleteNotificationsForEntity(
+        {
+          entityType: "partner_request",
+          entityIds: [input.partnerId],
+        },
+        ctx.db
+      );
+
       return { success: true };
     }),
 

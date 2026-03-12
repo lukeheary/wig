@@ -4,10 +4,10 @@ import {
   eventActivityTypeEnum,
   eventRsvps,
   events,
-  notifications,
   users,
 } from "../db/schema";
 import { and, eq, inArray } from "drizzle-orm";
+import { createNotifications } from "./notifications";
 
 type EventActivityType = (typeof eventActivityTypeEnum.enumValues)[number];
 
@@ -84,12 +84,12 @@ export async function logEventActivity({
       restored: "restored",
     };
 
-    await db.insert(notifications).values(
+    await createNotifications(
       recipientIds.map((userId) => ({
         userId,
         actorUserId,
-        type: "event_update" as const,
-        entityType: "event" as const,
+        type: "event_update",
+        entityType: "event",
         entityId: event.id,
         title: "Event update",
         body: `${actorName} ${actionTextByType[type]} ${event.title}`,
@@ -101,7 +101,8 @@ export async function logEventActivity({
           eventActivityType: type,
           ...metadata,
         },
-      }))
+      })),
+      db
     );
   } catch (error) {
     console.error("Failed to log event activity:", error);

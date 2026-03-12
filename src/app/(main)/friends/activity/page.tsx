@@ -3,18 +3,16 @@
 import { Suspense } from "react";
 import { Loader2 } from "lucide-react";
 import { ActivityFeed } from "@/components/friends/activity-feed";
+import { BackButtonHeader } from "@/components/shared/back-button-header";
 
 function ActivityPageContent() {
   return (
-    <div className="container mx-auto space-y-4 py-8">
-      <div>
-        <h1 className="text-2xl font-bold tracking-tight md:text-3xl">
-          Activity
-        </h1>
-        <p className="text-muted-foreground">
-          See what your friends are up to
-        </p>
-      </div>
+    <div className="container mx-auto space-y-4 pb-4">
+      <BackButtonHeader
+        backHref="/friends"
+        title="Activity"
+        subtitle="See what your friends are up to"
+      />
 
       <ActivityFeed />
     </div>

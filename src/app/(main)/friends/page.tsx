@@ -89,6 +89,9 @@ function FriendsPageContent() {
 
   const acceptedFriends = friends?.filter((f) => f.status === "accepted") || [];
   const receivedRequests = pendingRequests?.filter((f) => !f.isSender) || [];
+  const relatedUserIds = new Set(
+    (friends ?? []).map((friendship) => friendship.friend?.id).filter(Boolean)
+  );
 
   // Mutations
   const sendRequestMutation = trpc.friends.sendFriendRequest.useMutation({
@@ -145,6 +148,8 @@ function FriendsPageContent() {
   const isFriend = (userId: string) => {
     return acceptedFriends.some((f) => f.friend?.id === userId);
   };
+
+  const isAlreadyAdded = (userId: string) => relatedUserIds.has(userId);
 
   // Sort search results: friends first, then others
   const sortedSearchResults = searchResults
@@ -220,7 +225,7 @@ function FriendsPageContent() {
 
       {isSearchMode ? (
         // Search Mode View
-        <div className="space-y-3">
+        <div>
           {isSearching ? (
             // Search Results
             <>
@@ -249,14 +254,22 @@ function FriendsPageContent() {
                       ) : null
                     }
                     renderAction={(user) =>
-                      !isFriend(user.id) ? (
+                      isAlreadyAdded(user.id) ? (
+                        <Button size="sm" disabled variant="outline">
+                          Added
+                        </Button>
+                      ) : (
                         <Button
                           size="sm"
                           onClick={() => {
-                            sendGoogleAnalyticsEvent("friend_request_sent", userId, {
-                              target_user_id: user.id,
-                              source: "friends_search_results",
-                            });
+                            sendGoogleAnalyticsEvent(
+                              "friend_request_sent",
+                              userId,
+                              {
+                                target_user_id: user.id,
+                                source: "friends_search_results",
+                              }
+                            );
                             sendRequestMutation.mutate({
                               friendUserId: user.id,
                             });
@@ -266,7 +279,7 @@ function FriendsPageContent() {
                           <UserPlus className="mr-2 h-4 w-4" />
                           Add
                         </Button>
-                      ) : null
+                      )
                     }
                   />
                 </>
@@ -275,7 +288,7 @@ function FriendsPageContent() {
           ) : (
             // Recent Users (when focused but no query)
             <>
-              <div className={"pt-4"}>
+              <div>
                 <h2 className="text-xl font-semibold">Recently Joined</h2>
               </div>
               {recentLoading ? (
@@ -298,14 +311,22 @@ function FriendsPageContent() {
                     ) : null
                   }
                   renderAction={(user) =>
-                    !isFriend(user.id) ? (
+                    isAlreadyAdded(user.id) ? (
+                      <Button size="sm" disabled variant="outline">
+                        Added
+                      </Button>
+                    ) : (
                       <Button
                         size="sm"
                         onClick={() => {
-                          sendGoogleAnalyticsEvent("friend_request_sent", userId, {
-                            target_user_id: user.id,
-                            source: "friends_recent_users",
-                          });
+                          sendGoogleAnalyticsEvent(
+                            "friend_request_sent",
+                            userId,
+                            {
+                              target_user_id: user.id,
+                              source: "friends_recent_users",
+                            }
+                          );
                           sendRequestMutation.mutate({ friendUserId: user.id });
                         }}
                         disabled={sendRequestMutation.isPending}
@@ -313,7 +334,7 @@ function FriendsPageContent() {
                         <UserPlus className="mr-2 h-4 w-4" />
                         Add
                       </Button>
-                    ) : null
+                    )
                   }
                 />
               )}
@@ -325,11 +346,11 @@ function FriendsPageContent() {
         <>
           {/* Pending Requests Preview */}
           {receivedRequests.length > 0 && (
-            <div className={"mt-4"}>
+            <div>
               <div className="flex items-center justify-between">
                 <h2 className={"text-xl font-semibold"}>Friend Requests</h2>
               </div>
-              <div className="space-y-3">
+              <div>
                 <UserList
                   items={receivedRequests.slice(0, 3)}
                   getUser={(req) => ({
