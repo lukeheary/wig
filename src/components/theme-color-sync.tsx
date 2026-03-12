@@ -3,8 +3,8 @@
 import { useEffect } from "react";
 import { usePathname } from "next/navigation";
 
-const DEFAULT_THEME_COLOR = "#141416";
-const LANDING_THEME_COLOR = "#1b1b1d";
+const DEFAULT_THEME_COLOR = "#131315";
+const LANDING_THEME_COLOR = "#1B1B1D";
 
 function upsertMetaTag(name: string, content: string) {
   let element = document.querySelector<HTMLMetaElement>(`meta[name="${name}"]`);

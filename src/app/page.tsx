@@ -12,7 +12,7 @@ import { LandingGetStartedLink } from "@/components/landing/landing-get-started-
 
 export const viewport: Viewport = {
   colorScheme: "dark",
-  themeColor: "#1b1b1d",
+  themeColor: "#1B1B1D",
 };
 
 export default async function LandingPage() {
