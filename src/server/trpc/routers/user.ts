@@ -216,6 +216,15 @@ export const userRouter = router({
   updateProfile: protectedProcedure
     .input(
       z.object({
+        username: z
+          .string()
+          .min(3, "Username must be at least 3 characters")
+          .max(20, "Username must be at most 20 characters")
+          .regex(
+            /^[a-zA-Z0-9_]+$/,
+            "Username can only contain letters, numbers, and underscores"
+          )
+          .optional(),
         firstName: z.string().min(1).max(100).optional(),
         lastName: z.string().min(1).max(100).optional(),
         avatarImageUrl: z.string().url().optional(),
@@ -230,15 +239,36 @@ export const userRouter = router({
     )
     .mutation(async ({ ctx, input }) => {
       const userId = ctx.auth.userId;
+      const normalizedUsername = input.username?.toLowerCase().trim();
 
-      console.log("updateProfile called for user:", userId);
-      console.log("Input data:", input);
+      if (normalizedUsername !== undefined) {
+        if (RESERVED_USERNAMES.has(normalizedUsername)) {
+          throw new TRPCError({
+            code: "BAD_REQUEST",
+            message: "Username is already taken",
+          });
+        }
+
+        const existingUser = await ctx.db.query.users.findFirst({
+          where: and(eq(users.username, normalizedUsername), ne(users.id, userId)),
+        });
+
+        if (existingUser) {
+          throw new TRPCError({
+            code: "BAD_REQUEST",
+            message: "Username is already taken",
+          });
+        }
+      }
 
       // Build update object with only provided fields
       const updateData: Record<string, any> = {
         updatedAt: new Date(),
       };
 
+      if (normalizedUsername !== undefined) {
+        updateData.username = normalizedUsername;
+      }
       if (input.firstName !== undefined) {
         updateData.firstName = input.firstName;
       }
@@ -261,8 +291,6 @@ export const userRouter = router({
         updateData.dateOfBirth = input.dateOfBirth;
       }
 
-      console.log("Updating database with:", updateData);
-
       // Update in our database
       const [updatedUser] = await ctx.db
         .update(users)
@@ -276,15 +304,6 @@ export const userRouter = router({
           message: "Failed to update profile",
         });
       }
-
-      console.log("Database updated successfully:", {
-        id: updatedUser.id,
-        avatarImageUrl: updatedUser.avatarImageUrl,
-        firstName: updatedUser.firstName,
-        lastName: updatedUser.lastName,
-        city: updatedUser.city,
-        state: updatedUser.state,
-      });
 
       // Sync with Clerk (firstName and lastName only, not avatarImageUrl as we use S3)
       try {

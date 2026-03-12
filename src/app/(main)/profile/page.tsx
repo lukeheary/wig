@@ -16,6 +16,7 @@ import { S3Uploader } from "@/components/ui/s3-uploader";
 import { DateOfBirthInput } from "@/components/ui/date-of-birth-input";
 
 export default function ProfilePage() {
+  const RESERVED_USERNAMES = new Set(["luke"]);
   const { toast } = useToast();
   const utils = trpc.useUtils();
   const { user: clerkUser, isLoaded: isClerkLoaded } = useUser();
@@ -34,6 +35,7 @@ export default function ProfilePage() {
 
   const [firstName, setFirstName] = useState("");
   const [lastName, setLastName] = useState("");
+  const [username, setUsername] = useState("");
   const [avatarImageUrl, setImageUrl] = useState("");
   const [city, setCity] = useState("");
   const [state, setState] = useState("");
@@ -136,6 +138,7 @@ export default function ProfilePage() {
     if (user) {
       setFirstName(user.firstName || "");
       setLastName(user.lastName || "");
+      setUsername(user.username || "");
       setImageUrl(user.avatarImageUrl || "");
       setCity(user.city || "");
       setState(user.state || "");
@@ -295,6 +298,28 @@ export default function ProfilePage() {
   );
 
   const handleSave = () => {
+    const normalizedUsername = username.trim().toLowerCase();
+    const isValidUsername = /^[a-zA-Z0-9_]{3,20}$/.test(normalizedUsername);
+
+    if (!isValidUsername) {
+      toast({
+        title: "Validation Error",
+        description:
+          "Username must be 3-20 characters and contain only letters, numbers, and underscores",
+        variant: "destructive",
+      });
+      return;
+    }
+
+    if (RESERVED_USERNAMES.has(normalizedUsername)) {
+      toast({
+        title: "Username Taken",
+        description: "Username is already taken",
+        variant: "destructive",
+      });
+      return;
+    }
+
     if (!isValidDateOfBirth(dobDay, dobMonth, dobYear)) {
       toast({
         title: "Validation Error",
@@ -310,6 +335,7 @@ export default function ProfilePage() {
         : undefined;
 
     updateProfileMutation.mutate({
+      username: normalizedUsername,
       firstName: firstName || undefined,
       lastName: lastName || undefined,
       avatarImageUrl: avatarImageUrl || undefined,
@@ -426,6 +452,7 @@ export default function ProfilePage() {
     if (user) {
       setFirstName(user.firstName || "");
       setLastName(user.lastName || "");
+      setUsername(user.username || "");
       setImageUrl(user.avatarImageUrl || "");
       setCity(user.city || "");
       setState(user.state || "");
@@ -703,12 +730,11 @@ export default function ProfilePage() {
               <Label htmlFor="username">Username</Label>
               <Input
                 id="username"
-                value={user.username}
-                disabled
-                className="bg-muted"
+                value={username}
+                onChange={(e) => setUsername(e.target.value.toLowerCase())}
               />
               <p className="text-xs text-muted-foreground">
-                Username cannot be changed after initial setup
+                3-20 characters, letters, numbers, and underscores only
               </p>
             </div>
 
@@ -742,7 +768,8 @@ export default function ProfilePage() {
                 onClick={handleSave}
                 disabled={
                   updateProfileMutation.isPending ||
-                  (firstName === (user.firstName || "") &&
+                  (username === (user.username || "") &&
+                    firstName === (user.firstName || "") &&
                     lastName === (user.lastName || "") &&
                     city === (user.city || "") &&
                     state === (user.state || "") &&
