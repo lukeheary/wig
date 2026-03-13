@@ -4,6 +4,7 @@ import { useEffect, useRef, useState } from "react";
 import { Loader2, Users } from "lucide-react";
 import { trpc } from "@/lib/trpc";
 import { ActivityItem } from "@/components/friends/activity-feed";
+import { EmptyStateCard } from "@/components/shared/empty-state-card";
 
 const DEMO_ACTIVITY_ACTORS = [
   {
@@ -115,12 +116,7 @@ export function LandingRecentActivity() {
           <Loader2 className="h-8 w-8 animate-spin text-muted-foreground" />
         </div>
       ) : activityItems.length === 0 ? (
-        <div className="flex flex-col items-center justify-center py-16 text-center">
-          <div className="mb-4 rounded-full bg-muted/30 p-4">
-            <Users className="h-8 w-8 text-muted-foreground/60" />
-          </div>
-          <p className="text-lg font-medium">No recent activity</p>
-        </div>
+        <EmptyStateCard icon={Users} title="No recent activity" />
       ) : (
         <div className="space-y-4">
           <div className="flex flex-col">

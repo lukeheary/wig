@@ -7,7 +7,7 @@ import { SearchInput } from "@/components/ui/search-input";
 import { useNavbarSearch } from "@/contexts/nav-search-context";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
-import { Loader2, ChevronRight, UserPlus, X } from "lucide-react";
+import { Loader2, ChevronRight, UserPlus, X, Users } from "lucide-react";
 import { ActivityFeed } from "@/components/friends/activity-feed";
 import { useToast } from "@/hooks/use-toast";
 import { useQueryState } from "nuqs";
@@ -17,6 +17,7 @@ import { StickySearchBar } from "@/components/ui/sticky-search-bar";
 import { StickySectionHeader } from "@/components/ui/sticky-section-header";
 import { useAuth } from "@clerk/nextjs";
 import { sendGoogleAnalyticsEvent } from "@/lib/google-analytics";
+import { EmptyStateCard } from "@/components/shared/empty-state-card";
 
 function FriendsPageContent() {
   const { toast } = useToast();
@@ -297,9 +298,10 @@ function FriendsPageContent() {
                   <Loader2 className="h-8 w-8 animate-spin text-muted-foreground" />
                 </div>
               ) : !recentUsers?.items || recentUsers.items.length === 0 ? (
-                <div className="py-12 text-center text-muted-foreground">
-                  No recent members to show
-                </div>
+                <EmptyStateCard
+                  icon={Users}
+                  title="No recent members to show"
+                />
               ) : (
                 <UserList
                   items={recentUsers.items}

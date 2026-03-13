@@ -12,6 +12,7 @@ import { SearchInput } from "@/components/ui/search-input";
 import { StickySectionHeader } from "@/components/ui/sticky-section-header";
 import { StickySearchBar } from "@/components/ui/sticky-search-bar";
 import pluralize from "pluralize";
+import { EmptyStateCard } from "@/components/shared/empty-state-card";
 
 function FriendsListContent() {
   const router = useRouter();
@@ -92,15 +93,12 @@ function FriendsListContent() {
               <Loader2 className="h-8 w-8 animate-spin text-muted-foreground" />
             </div>
           ) : acceptedFriends.length === 0 ? (
-            <div className="py-12 text-center">
-              <Users className="mx-auto mb-4 h-12 w-12 text-muted-foreground" />
-              <p className="mb-2 text-muted-foreground">
-                You don&apos;t have any friends yet
-              </p>
-              <p className="text-sm text-muted-foreground">
-                Use the Find Friends page to connect with people
-              </p>
-            </div>
+            <EmptyStateCard
+              icon={Users}
+              title="You don't have any friends yet"
+              description="Use the Find Friends page to connect with people"
+              showCard={false}
+            />
           ) : filteredFriends.length === 0 ? (
             <div className="py-12 text-center text-muted-foreground">
               No friends found

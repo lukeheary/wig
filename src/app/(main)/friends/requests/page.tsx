@@ -16,6 +16,7 @@ import { SearchInput } from "@/components/ui/search-input";
 import { StickySectionHeader } from "@/components/ui/sticky-section-header";
 import { StickySearchBar } from "@/components/ui/sticky-search-bar";
 import pluralize from "pluralize";
+import { EmptyStateCard } from "@/components/shared/empty-state-card";
 
 function RequestsPageContent() {
   const router = useRouter();
@@ -146,16 +147,7 @@ function RequestsPageContent() {
               Friend Requests
             </h2>
           </StickySectionHeader>
-          <Card>
-            <CardContent className="pt-6">
-              <div className="py-8 text-center">
-                <Mail className="mx-auto mb-4 h-12 w-12 text-muted-foreground" />
-                <p className="text-muted-foreground">
-                  No pending friend requests
-                </p>
-              </div>
-            </CardContent>
-          </Card>
+          <EmptyStateCard icon={Mail} title="No pending friend requests" />
         </>
       ) : normalizedQuery &&
         filteredReceivedRequests.length === 0 &&
@@ -178,14 +170,15 @@ function RequestsPageContent() {
             <Card>
               <CardContent className="pt-6">
                 {filteredReceivedRequests.length === 0 ? (
-                  <div className="py-8 text-center">
-                    <Mail className="mx-auto mb-4 h-12 w-12 text-muted-foreground" />
-                    <p className="text-muted-foreground">
-                      {normalizedQuery
+                  <EmptyStateCard
+                    icon={Mail}
+                    title={
+                      normalizedQuery
                         ? "No received requests found"
-                        : "No pending friend requests"}
-                    </p>
-                  </div>
+                        : "No pending friend requests"
+                    }
+                    showCard={false}
+                  />
                 ) : (
                   <UserList
                     items={filteredReceivedRequests}

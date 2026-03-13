@@ -28,6 +28,7 @@ import Link from "next/link";
 import { formatRelativeEventDate } from "@/lib/utils";
 import { StickySectionHeader } from "@/components/ui/sticky-section-header";
 import { buildReturnTo, withReturnTo } from "@/lib/navigation";
+import { EmptyStateCard } from "@/components/shared/empty-state-card";
 
 interface ActivityItemProps {
   activity: any;
@@ -523,14 +524,7 @@ export function ActivityFeed({
     if (hideWhenEmpty) {
       return null;
     }
-    return (
-      <div className="flex flex-col items-center justify-center py-16 text-center">
-        <div className="mb-4 rounded-full bg-muted/30 p-4">
-          <Users className="h-8 w-8 text-muted-foreground/60" />
-        </div>
-        <p className="text-lg font-medium">No recent activity</p>
-      </div>
-    );
+    return <EmptyStateCard icon={Users} title="No recent activity" />;
   }
 
   if (groupByRecency) {
