@@ -402,10 +402,13 @@ export const friendsRouter = router({
 
       // Get recent users, excluding self and existing friends
       const recentUsers = await ctx.db.query.users.findMany({
-        where: sql`${users.id} NOT IN (${sql.join(
-          excludedUserIds.map((id) => sql`${id}`),
-          sql`, `
-        )})`,
+        where: and(
+          eq(users.isOnboarding, false),
+          sql`${users.id} NOT IN (${sql.join(
+            excludedUserIds.map((id) => sql`${id}`),
+            sql`, `
+          )})`
+        ),
         orderBy: [desc(users.createdAt)],
         limit: input.limit + 1, // Fetch one extra to check if there are more
         offset: input.cursor,

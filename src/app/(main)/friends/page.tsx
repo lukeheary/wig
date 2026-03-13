@@ -14,6 +14,7 @@ import { useQueryState } from "nuqs";
 import pluralize from "pluralize";
 import { UserList } from "@/components/user-list";
 import { StickySearchBar } from "@/components/ui/sticky-search-bar";
+import { StickySectionHeader } from "@/components/ui/sticky-section-header";
 import { useAuth } from "@clerk/nextjs";
 import { sendGoogleAnalyticsEvent } from "@/lib/google-analytics";
 
@@ -288,9 +289,9 @@ function FriendsPageContent() {
           ) : (
             // Recent Users (when focused but no query)
             <>
-              <div>
+              <StickySectionHeader className="-mx-4">
                 <h2 className="text-xl font-semibold">Recently Joined</h2>
-              </div>
+              </StickySectionHeader>
               {recentLoading ? (
                 <div className="flex justify-center py-12">
                   <Loader2 className="h-8 w-8 animate-spin text-muted-foreground" />
