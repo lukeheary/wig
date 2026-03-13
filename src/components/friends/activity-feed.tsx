@@ -46,9 +46,14 @@ export function ActivityItem({ activity }: ActivityItemProps) {
   const pathname = usePathname();
   const searchParams = useSearchParams();
   const { actor, type, entityId, metadata, createdAt, event } = activity;
+  const place = activity.place;
   const isEventStatusUpdate = EVENT_UPDATE_TYPES.has(type);
   const returnTo = buildReturnTo(pathname, searchParams);
   const eventHref = withReturnTo(`/event/${entityId}`, returnTo);
+  const placeHref =
+    place?.slug && place?.type
+      ? `/${place.type === "organizer" ? "organizer" : "venue"}/${place.slug}`
+      : null;
 
   const eventDate = event?.startAt ? new Date(event.startAt) : null;
   const isEventPast = eventDate
@@ -78,6 +83,12 @@ export function ActivityItem({ activity }: ActivityItemProps) {
         return <Building2 className="h-4 w-4 text-blue-500" />;
       case "follow_organizer":
         return <Users className="h-4 w-4 text-purple-500" />;
+      case "follow_place":
+        return place?.type === "organizer" ? (
+          <Users className="h-4 w-4 text-purple-500" />
+        ) : (
+          <Building2 className="h-4 w-4 text-blue-500" />
+        );
       case "created_event":
         return <CalendarPlus className="h-4 w-4 text-orange-500" />;
       case "cancelled":
@@ -114,6 +125,7 @@ export function ActivityItem({ activity }: ActivityItemProps) {
       activity.event?.title ||
       activity.venue?.name ||
       activity.organizer?.name ||
+      place?.name ||
       metadata?.name ||
       metadata?.title ||
       "an entity";
@@ -222,28 +234,14 @@ export function ActivityItem({ activity }: ActivityItemProps) {
           </>
         );
       case "follow_venue":
-        return (
-          <>
-            {actorName} started following{" "}
-            {activity.venue?.slug ? (
-              <Link
-                href={`/venue/${activity.venue.slug}`}
-                className="font-medium text-primary hover:underline"
-              >
-                {entityName}
-              </Link>
-            ) : (
-              <span className="font-medium text-foreground">{entityName}</span>
-            )}
-          </>
-        );
       case "follow_organizer":
+      case "follow_place":
         return (
           <>
             {actorName} started following{" "}
-            {activity.organizer?.slug ? (
+            {placeHref ? (
               <Link
-                href={`/organizer/${activity.organizer.slug}`}
+                href={placeHref}
                 className="font-medium text-primary hover:underline"
               >
                 {entityName}

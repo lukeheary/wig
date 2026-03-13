@@ -447,6 +447,14 @@ export const friendsRouter = router({
       const friendIds = userFriendships.map((f) =>
         f.userId === ctx.auth.userId ? f.friendUserId : f.userId
       );
+      const friendSinceByUserId = new Map(
+        userFriendships.map((friendship) => [
+          friendship.userId === ctx.auth.userId
+            ? friendship.friendUserId
+            : friendship.userId,
+          friendship.updatedAt,
+        ])
+      );
       const currentPartnerRelationship = await ctx.db.query.userPartners.findFirst({
         where: and(
           eq(userPartners.status, "accepted"),
@@ -482,6 +490,11 @@ export const friendsRouter = router({
           : [];
 
       const visibleActivities = activities.filter((activity) => {
+        if (activity.type === "follow_place") return false;
+        const friendSince = friendSinceByUserId.get(activity.actorUserId);
+        if (friendSince && new Date(activity.createdAt) < new Date(friendSince)) {
+          return false;
+        }
         if (activity.entityType !== "event") return true;
         if (!activity.event) return false;
 
