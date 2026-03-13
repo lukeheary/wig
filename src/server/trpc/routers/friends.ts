@@ -54,6 +54,7 @@ export const friendsRouter = router({
             sql`LOWER(${users.firstName}) LIKE LOWER(${searchPattern})`,
             sql`LOWER(${users.lastName}) LIKE LOWER(${searchPattern})`
           ),
+          eq(users.isOnboarding, false),
           sql`${users.id} NOT IN (${sql.join(
             excludedUserIds.map((id) => sql`${id}`),
             sql`, `
