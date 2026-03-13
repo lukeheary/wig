@@ -91,7 +91,7 @@ function MainLayoutContent({ children }: { children: React.ReactNode }) {
     !pathname?.includes("/edit");
   const isFriends = pathname === "/friends";
   const isProfile = pathname === "/profile";
-  const isHelpFeedback = pathname === "/help-feedback";
+  const isSupport = pathname === "/support";
   const isMyPlaces = pathname === "/my-places";
   const isAdminPage = pathname?.startsWith("/admin");
   const isEventDetail =
@@ -246,9 +246,9 @@ function MainLayoutContent({ children }: { children: React.ReactNode }) {
                     </DropdownMenuItem>
                     <DropdownMenuItem asChild>
                       <Link
-                        href="/help-feedback"
+                        href="/support"
                         onClick={() =>
-                          trackNavigationClick("/help-feedback", "user_menu")
+                          trackNavigationClick("/support", "user_menu")
                         }
                         className="flex cursor-pointer items-center gap-4"
                       >
@@ -429,10 +429,10 @@ function MainLayoutContent({ children }: { children: React.ReactNode }) {
                         </Button>
                       </Link>
                       <Link
-                        href="/help-feedback"
+                        href="/support"
                         onClick={() => {
                           trackNavigationClick(
-                            "/help-feedback",
+                            "/support",
                             "mobile_menu"
                           );
                           closeMobileMenu();
@@ -440,7 +440,7 @@ function MainLayoutContent({ children }: { children: React.ReactNode }) {
                       >
                         <Button
                           variant="ghost"
-                          className={`w-full justify-start px-4 text-base ${isHelpFeedback ? "text-foreground" : "text-muted-foreground"}`}
+                          className={`w-full justify-start px-4 text-base ${isSupport ? "text-foreground" : "text-muted-foreground"}`}
                           size="lg"
                         >
                           <Headset className="mr-3 h-5 w-5" />

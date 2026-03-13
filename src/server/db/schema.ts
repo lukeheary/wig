@@ -122,6 +122,12 @@ export const supportTicketStatusEnum = pgEnum("support_ticket_status", [
   "resolved",
 ]);
 
+export const supportTicketSeverityEnum = pgEnum("support_ticket_severity", [
+  "low",
+  "medium",
+  "high",
+]);
+
 export const supportTicketActivityTypeEnum = pgEnum(
   "support_ticket_activity_type",
   ["created", "status_changed"]
@@ -912,6 +918,7 @@ export const supportTickets = pgTable(
       .references(() => users.id, { onDelete: "cascade" }),
     type: supportTicketTypeEnum("type").notNull(),
     status: supportTicketStatusEnum("status").notNull().default("open"),
+    severity: supportTicketSeverityEnum("severity").notNull().default("low"),
     subject: varchar("subject", { length: 255 }).notNull(),
     message: text("message").notNull(),
     createdAt: timestamp("created_at").defaultNow().notNull(),

@@ -73,6 +73,7 @@ export const adminRouter = router({
           id: supportTickets.id,
           userId: supportTickets.userId,
           type: supportTickets.type,
+          severity: supportTickets.severity,
           status: supportTickets.status,
           subject: supportTickets.subject,
           message: supportTickets.message,
@@ -155,7 +156,7 @@ export const adminRouter = router({
         entityId: existingTicket.id,
         title: "Ticket status updated",
         body: `Your ticket "${existingTicket.subject}" is now ${statusLabels[input.status]}.`,
-        actionUrl: "/help-feedback",
+        actionUrl: "/support",
         metadata: {
           ticketId: existingTicket.id,
           fromStatus: existingTicket.status,
