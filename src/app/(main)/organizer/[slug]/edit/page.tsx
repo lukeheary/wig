@@ -171,7 +171,7 @@ export default function EditPlacePage() {
   };
 
   return (
-    <div className="container mx-auto max-w-2xl space-y-4 py-8">
+    <div className="container mx-auto max-w-2xl space-y-4 pb-8">
       <BackButtonHeader backHref={backHref} title={`Edit ${typeLabel}`} />
 
       <PlaceEditForm
@@ -181,7 +181,9 @@ export default function EditPlacePage() {
         mode="edit"
         onSubmit={handleSubmit}
         onCancel={() => router.push(backHref)}
-        isSubmitting={updateMutation.isPending || upsertScraperMutation.isPending}
+        isSubmitting={
+          updateMutation.isPending || upsertScraperMutation.isPending
+        }
         showScraperFields={isAdmin}
       />
     </div>

@@ -632,7 +632,7 @@ function HomePageContent() {
                     variant="ghost"
                     size="icon"
                     className={cn(
-                      "h-full w-10 rounded-none border-r bg-muted px-0",
+                      "h-full w-10 rounded-none border-r bg-muted px-0 active:bg-muted/80",
                       isCurrentWeek &&
                         "cursor-not-allowed opacity-50 hover:bg-muted"
                     )}
@@ -644,7 +644,7 @@ function HomePageContent() {
                   <Button
                     variant="ghost"
                     size="icon"
-                    className="h-full w-10 rounded-none bg-muted px-0 focus:bg-muted/80"
+                    className="h-full w-10 rounded-none bg-muted px-0 focus:bg-muted/80 active:bg-muted/80"
                     onClick={handleNext}
                   >
                     <ChevronRight className="h-4 w-4" />

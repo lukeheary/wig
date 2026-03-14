@@ -318,22 +318,14 @@ export default function EditEventPage() {
   }
 
   return (
-    <div className="container mx-auto max-w-2xl space-y-4 py-8">
+    <div className="container mx-auto max-w-2xl space-y-4 pb-8">
       <BackButtonHeader backHref={eventDetailHref} title="Edit Event" />
-
-      {/* Venue Details */}
-      <VenueSelector
-        selectedVenue={selectedVenue}
-        onVenueSelect={setSelectedVenue}
-        isCreatingNew={isCreatingNewVenue}
-        setIsCreatingNew={setIsCreatingNewVenue}
-      />
 
       <Card>
         <CardContent>
           <form onSubmit={handleSubmit} className="space-y-6">
             {/* Event Image */}
-            <div className="space-y-2">
+            <div className="space-y-2 pt-6">
               <Label htmlFor="image">Event Image</Label>
               <S3Uploader
                 folder={`events/${eventId}`}
@@ -456,6 +448,14 @@ export default function EditEventPage() {
                 />
               </div>
             </div>
+
+            {/* Venue Details */}
+            <VenueSelector
+              selectedVenue={selectedVenue}
+              onVenueSelect={setSelectedVenue}
+              isCreatingNew={isCreatingNewVenue}
+              setIsCreatingNew={setIsCreatingNewVenue}
+            />
 
             {/* Submit Button */}
             <div className="flex gap-3">
