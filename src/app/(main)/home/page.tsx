@@ -451,6 +451,14 @@ function HomePageContent() {
     return grouped;
   }, [filteredEvents]);
 
+  const shouldShowRecentActivity =
+    !isSearchMode &&
+    !showSkeletons &&
+    hasRecentActivity &&
+    isCurrentWeek &&
+    activeFilter === "all" &&
+    selectedCategories.length === 0;
+
   const handlePrevious = async () => {
     if (isCurrentWeek) {
       void triggerHaptic(HapticPreset.Warning);
@@ -805,28 +813,25 @@ function HomePageContent() {
         </div>
       )}
 
-      {/* Friend Activity Feed - only show if there's activity and not in search mode */}
-      {!isSearchMode &&
-        !showSkeletons &&
-        hasRecentActivity &&
-        isCurrentWeek && (
-          <div className="mb-4">
-            <StickySectionHeader>
-              <Link
-                href="/friends"
-                className="flex items-center gap-1 transition-colors hover:text-primary"
-              >
-                <h1 className="text-xl font-bold tracking-tight">
-                  Recent Activity
-                </h1>
-                <ChevronRight className="h-4 w-4" />
-              </Link>
-            </StickySectionHeader>
-            <div className="container mx-auto px-4">
-              <ActivityFeed limit={3} hideWhenEmpty hidePastEvents />
-            </div>
+      {/* Friend Activity Feed - only show in the default home view */}
+      {shouldShowRecentActivity && (
+        <div className="mb-4">
+          <StickySectionHeader>
+            <Link
+              href="/friends"
+              className="flex items-center gap-1 transition-colors hover:text-primary"
+            >
+              <h1 className="text-xl font-bold tracking-tight">
+                Recent Activity
+              </h1>
+              <ChevronRight className="h-4 w-4" />
+            </Link>
+          </StickySectionHeader>
+          <div className="container mx-auto px-4">
+            <ActivityFeed limit={3} hideWhenEmpty hidePastEvents />
           </div>
-        )}
+        </div>
+      )}
 
       {/* Week View - outside container for full-width sticky headers */}
       {!isSearchMode && viewMode === "week" && events && !showSkeletons && (
