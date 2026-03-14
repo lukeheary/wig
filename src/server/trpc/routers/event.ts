@@ -1123,6 +1123,7 @@ export const eventRouter = router({
         endDate: z.date(),
         followedOnly: z.boolean().default(false),
         friendsGoingOnly: z.boolean().default(false),
+        rsvpStatusFilter: z.enum(["going", "interested"]).optional(),
         category: z.string().optional(),
         city: z.string().optional(),
         state: z.string().optional(),
@@ -1342,6 +1343,26 @@ export const eventRouter = router({
           }
         } else {
           // User has no friends
+          return [];
+        }
+      }
+
+      if (input.rsvpStatusFilter) {
+        const userRsvps = await ctx.db.query.eventRsvps.findMany({
+          where: and(
+            eq(eventRsvps.userId, ctx.auth.userId),
+            eq(eventRsvps.status, input.rsvpStatusFilter)
+          ),
+          columns: {
+            eventId: true,
+          },
+        });
+
+        const eventIds = [...new Set(userRsvps.map((rsvp) => rsvp.eventId))];
+
+        if (eventIds.length > 0) {
+          conditions.push(inArray(events.id, eventIds));
+        } else {
           return [];
         }
       }

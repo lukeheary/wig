@@ -277,7 +277,7 @@ function HomePageContent() {
   // Scroll to search and focus callback for navbar search button
   const scrollToSearchAndFocus = useCallback(() => {
     // Jump to top instantly
-    window.scrollTo(0, 0);
+    window.scrollTo({ top: 0, left: 0, behavior: "auto" });
     // Focus the search input immediately
     searchInputRef.current?.focus();
   }, []);
@@ -333,6 +333,10 @@ function HomePageContent() {
       endDate: dateRange.endDate,
       followedOnly: activeFilter === "followed",
       friendsGoingOnly: activeFilter === "friends",
+      rsvpStatusFilter:
+        activeFilter === "going" || activeFilter === "interested"
+          ? activeFilter
+          : undefined,
       city:
         effectiveCity && effectiveCity !== "all" ? effectiveCity : undefined,
       search: searchQuery || undefined,
@@ -353,6 +357,10 @@ function HomePageContent() {
         endDate: addDays(startOfDay(new Date()), 365),
         followedOnly: activeFilter === "followed",
         friendsGoingOnly: activeFilter === "friends",
+        rsvpStatusFilter:
+          activeFilter === "going" || activeFilter === "interested"
+            ? activeFilter
+            : undefined,
         city:
           effectiveCity && effectiveCity !== "all" ? effectiveCity : undefined,
         limit: 20,

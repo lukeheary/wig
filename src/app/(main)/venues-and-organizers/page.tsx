@@ -59,7 +59,7 @@ function PlacesPageContent() {
 
   // Scroll to top and focus search input when navbar search button is clicked
   const scrollToSearchAndFocus = useCallback(() => {
-    window.scrollTo(0, 0);
+    window.scrollTo({ top: 0, left: 0, behavior: "auto" });
     searchInputRef.current?.focus();
   }, []);
 

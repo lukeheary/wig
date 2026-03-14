@@ -8,12 +8,11 @@ import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Calendar, Users, Building2, Loader2 } from "lucide-react";
 import { useToast } from "@/hooks/use-toast";
 import { EventFilterSelect } from "@/components/events/event-filter-select";
-
-type FilterTab = "all" | "followed" | "friends";
+import { EventFilterTab } from "@/types/events";
 
 export default function HomePage() {
   const { toast } = useToast();
-  const [activeFilter, setActiveFilter] = useState<FilterTab>("all");
+  const [activeFilter, setActiveFilter] = useState<EventFilterTab>("all");
 
   // Calculate 7-day range starting from today
   const dateRange = useMemo(() => {
@@ -32,6 +31,10 @@ export default function HomePage() {
     endDate: dateRange.endDate,
     followedOnly: activeFilter === "followed",
     friendsGoingOnly: activeFilter === "friends",
+    rsvpStatusFilter:
+      activeFilter === "going" || activeFilter === "interested"
+        ? activeFilter
+        : undefined,
   });
 
   // Group events by day
@@ -142,6 +145,10 @@ export default function HomePage() {
                 "Start following businesses to see their events here"}
               {activeFilter === "friends" &&
                 "Add friends and see what events they're attending"}
+              {activeFilter === "going" &&
+                "RSVP going to events to see them here"}
+              {activeFilter === "interested" &&
+                "Mark events as interested to see them here"}
               {activeFilter === "all" && "Check back later for upcoming events"}
             </p>
           </CardContent>

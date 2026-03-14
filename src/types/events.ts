@@ -1,1 +1,6 @@
-export type EventFilterTab = "all" | "followed" | "friends";
+export type EventFilterTab =
+  | "all"
+  | "followed"
+  | "friends"
+  | "going"
+  | "interested";
