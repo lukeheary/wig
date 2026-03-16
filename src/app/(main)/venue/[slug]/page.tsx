@@ -26,6 +26,7 @@ import { StickySectionHeader } from "@/components/ui/sticky-section-header";
 import { CategoryPillList } from "@/components/categories/category-pill";
 import { PlaceActionMenu } from "@/components/places/place-action-menu";
 import { PlacePageSkeleton } from "@/components/places/place-page-skeleton";
+import { EventsPlaceholder } from "@/components/shared/events-placeholder";
 
 export default function PlacePage() {
   const params = useParams();
@@ -367,11 +368,7 @@ export default function PlacePage() {
               gap="md"
             />
           ) : (
-            <div className="flex min-h-[112px] items-center justify-center rounded-lg border border-dashed md:min-h-[300px]">
-              <p className="text-sm text-muted-foreground">
-                No upcoming events scheduled
-              </p>
-            </div>
+            <EventsPlaceholder />
           )}
         </div>
       </div>

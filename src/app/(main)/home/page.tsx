@@ -63,6 +63,8 @@ import { cn, formatTime } from "@/lib/utils";
 import { EventFilterSelect } from "@/components/events/event-filter-select";
 import { ResponsiveSelect } from "@/components/ui/responsive-select";
 import { EventFilterTab } from "@/types/events";
+import { EmptyStateCard } from "@/components/shared/empty-state-card";
+import { EventsPlaceholder } from "@/components/shared/events-placeholder";
 import { useQueryState, parseAsString, parseAsIsoDate } from "nuqs";
 import { parseISO, subDays } from "date-fns";
 import {
@@ -259,11 +261,22 @@ function HomePageContent() {
 
   // Determine if we're actively searching (has query text)
   const isSearching = Boolean(searchQuery && searchQuery.trim().length > 0);
+  const isDefaultCalendarView = activeFilter === "all";
+  const isFilteredFeedView = !isSearching && !isDefaultCalendarView;
 
   const handleExitSearch = () => {
     setIsSearchMode(false);
     setSearchQuery("");
     searchInputRef.current?.blur();
+  };
+
+  const handleBackFromSearchOrFilter = () => {
+    if (isFilteredFeedView) {
+      setActiveFilter("all");
+      return;
+    }
+
+    handleExitSearch();
   };
 
   const toggleCategory = useCallback((categoryKey: string) => {
@@ -298,7 +311,7 @@ function HomePageContent() {
     const isLastNightWindow = isCurrentWeek && new Date().getHours() < 6;
 
     // When searching, search all future events (1 year ahead)
-    if (isSearching) {
+    if (isSearching || isFilteredFeedView) {
       return { startDate: today, endDate: addDays(today, 365) };
     }
 
@@ -319,7 +332,7 @@ function HomePageContent() {
       const end = endOfMonth(currentDate);
       return { startDate: start, endDate: end };
     }
-  }, [viewMode, currentDate, isCurrentWeek, isSearching]);
+  }, [viewMode, currentDate, isCurrentWeek, isSearching, isFilteredFeedView]);
 
   // Fetch events with current filters
   const {
@@ -390,7 +403,8 @@ function HomePageContent() {
   }, [events, referenceCoords, cityDistanceMap]);
 
   const sortedUpcomingSearchEvents = useMemo(() => {
-    if (!upcomingSearchEvents || !referenceCoords) return upcomingSearchEvents ?? [];
+    if (!upcomingSearchEvents || !referenceCoords)
+      return upcomingSearchEvents ?? [];
 
     const nextEvents = [...upcomingSearchEvents];
     nextEvents.sort((a, b) => {
@@ -464,7 +478,7 @@ function HomePageContent() {
     !showSkeletons &&
     hasRecentActivity &&
     isCurrentWeek &&
-    activeFilter === "all" &&
+    isDefaultCalendarView &&
     selectedCategories.length === 0;
 
   const handlePrevious = async () => {
@@ -624,15 +638,17 @@ function HomePageContent() {
                   value={searchQuery}
                   onChange={setSearchQuery}
                   onFocus={() => setIsSearchMode(true)}
-                  showBack={isSearchMode}
-                  onBack={handleExitSearch}
+                  showBack={isSearchMode || isFilteredFeedView}
+                  onBack={handleBackFromSearchOrFilter}
                   className="w-full"
                 />
               </Suspense>
               <div
                 className={cn(
                   "shrink-0 overflow-hidden transition-all duration-200 ease-out md:hidden",
-                  isSearchMode ? "ml-0 w-0 opacity-0" : "ml-2 opacity-100"
+                  isSearchMode || isFilteredFeedView
+                    ? "ml-0 w-0 opacity-0"
+                    : "ml-2 opacity-100"
                 )}
               >
                 <div className="flex h-12 items-center overflow-hidden rounded-full border border-input bg-background shadow-sm">
@@ -688,7 +704,9 @@ function HomePageContent() {
               <div
                 className={cn(
                   "hidden shrink-0 overflow-hidden transition-all duration-200 ease-out md:block",
-                  isSearchMode ? "w-0 opacity-0" : "w-[82px] opacity-100"
+                  isSearchMode || isFilteredFeedView
+                    ? "w-0 opacity-0"
+                    : "w-[82px] opacity-100"
                 )}
               >
                 <div className="flex h-12 items-center overflow-hidden rounded-full border border-input bg-background shadow-sm">
@@ -767,9 +785,10 @@ function HomePageContent() {
                 <Loader2 className="h-8 w-8 animate-spin text-muted-foreground" />
               </div>
             ) : filteredUpcomingSearchEvents.length === 0 ? (
-              <div className="py-12 text-center text-muted-foreground">
-                No upcoming events to show
-              </div>
+              <EmptyStateCard
+                icon={CalendarIcon}
+                title="No upcoming events to show"
+              />
             ) : (
               <EventCardGrid
                 events={filteredUpcomingSearchEvents}
@@ -784,13 +803,11 @@ function HomePageContent() {
         {isSearching && events && !showSkeletons && (
           <div className="space-y-4">
             {filteredEvents.length === 0 ? (
-              <div className="py-12 text-center">
-                <CalendarIcon className="mx-auto mb-4 h-12 w-12 text-muted-foreground" />
-                <h3 className="mb-2 text-lg font-semibold">No events found</h3>
-                <p className="text-muted-foreground">
-                  Try adjusting your search or filters
-                </p>
-              </div>
+              <EmptyStateCard
+                icon={CalendarIcon}
+                title="No events found"
+                description="Try adjusting your search or filters"
+              />
             ) : (
               <EventCardGrid
                 events={filteredEvents}
@@ -842,228 +859,251 @@ function HomePageContent() {
       )}
 
       {/* Week View - outside container for full-width sticky headers */}
-      {!isSearchMode && viewMode === "week" && events && !showSkeletons && (
-        <div className="space-y-4">
-          {daysToDisplay.map((date) => {
-            const dateKey = format(date, "yyyy-MM-dd");
-            const dayEvents = eventsByDay[dateKey] || [];
-            const now = new Date();
-            const isEarlyMorning = now.getHours() < 6;
-            const yesterday = startOfDay(subDays(now, 1));
-            const isToday = isSameDay(date, new Date());
-            const isLastNightSection =
-              isCurrentWeek && isEarlyMorning && isSameDay(date, yesterday);
-            const currentHour = new Date().getHours();
-            const isEvening = currentHour >= 17;
-
-            if (isLastNightSection && dayEvents.length === 0) {
-              return null;
-            }
-
-            const dateHeader = isLastNightSection
-              ? "Last Night's Events"
-              : isToday
-                ? isEvening
-                  ? "Tonight's Events"
-                  : "Today's Events"
-                : format(date, "EEE, MMM d");
-
-            return (
-              <div key={dateKey}>
-                <StickyDateHeader dateHeader={dateHeader} isToday={isToday} />
-                <div className="container mx-auto px-4">
-                  {dayEvents.length === 0 ? (
-                    <div className="flex min-h-[112px] items-center justify-center rounded-lg border border-dashed md:min-h-[300px]">
-                      <p className="text-sm text-muted-foreground">
-                        No events scheduled
-                      </p>
-                    </div>
-                  ) : (
-                    <EventCardGrid
-                      events={dayEvents}
-                      columns={{ mobile: 1, tablet: 3, desktop: 4 }}
-                      gap="md"
-                    />
-                  )}
-                </div>
-              </div>
-            );
-          })}
+      {isFilteredFeedView && events && !showSkeletons && (
+        <div>
+          <StickyDateHeader dateHeader="Upcoming Events" isToday={false} />
+          <div className="container mx-auto px-4">
+            {filteredEvents.length === 0 ? (
+              <EventsPlaceholder />
+            ) : (
+              <EventCardGrid
+                events={filteredEvents}
+                columns={{ mobile: 1, tablet: 3, desktop: 4 }}
+                gap="md"
+              />
+            )}
+          </div>
         </div>
       )}
 
+      {/* Week View - outside container for full-width sticky headers */}
+      {!isSearchMode &&
+        isDefaultCalendarView &&
+        viewMode === "week" &&
+        events &&
+        !showSkeletons && (
+          <div className="space-y-4">
+            {daysToDisplay.map((date) => {
+              const dateKey = format(date, "yyyy-MM-dd");
+              const dayEvents = eventsByDay[dateKey] || [];
+              const now = new Date();
+              const isEarlyMorning = now.getHours() < 6;
+              const yesterday = startOfDay(subDays(now, 1));
+              const isToday = isSameDay(date, new Date());
+              const isLastNightSection =
+                isCurrentWeek && isEarlyMorning && isSameDay(date, yesterday);
+              const currentHour = new Date().getHours();
+              const isEvening = currentHour >= 17;
+
+              if (isLastNightSection && dayEvents.length === 0) {
+                return null;
+              }
+
+              const dateHeader = isLastNightSection
+                ? "Last Night's Events"
+                : isToday
+                  ? isEvening
+                    ? "Tonight's Events"
+                    : "Today's Events"
+                  : format(date, "EEE, MMM d");
+
+              return (
+                <div key={dateKey}>
+                  <StickyDateHeader dateHeader={dateHeader} isToday={isToday} />
+                  <div className="container mx-auto px-4">
+                    {dayEvents.length === 0 ? (
+                      <EventsPlaceholder message="No events scheduled" />
+                    ) : (
+                      <EventCardGrid
+                        events={dayEvents}
+                        columns={{ mobile: 1, tablet: 3, desktop: 4 }}
+                        gap="md"
+                      />
+                    )}
+                  </div>
+                </div>
+              );
+            })}
+          </div>
+        )}
+
       <div className="container mx-auto px-4">
         {/* Month View - only show when not in search mode */}
-        {!isSearchMode && viewMode === "month" && events && !showSkeletons && (
-          <Card>
-            <CardContent className="p-4">
-              {/* Day of week headers */}
-              <div className="mb-2 grid grid-cols-7 gap-2">
-                {["Sun", "Mon", "Tue", "Wed", "Thu", "Fri", "Sat"].map(
-                  (day) => (
-                    <div
-                      key={day}
-                      className="py-2 text-center text-sm font-medium text-muted-foreground"
-                    >
-                      {day}
-                    </div>
-                  )
-                )}
-              </div>
-
-              {/* Calendar grid */}
-              <div className="grid grid-cols-7 gap-2">
-                {daysToDisplay.map((date) => {
-                  const dateKey = format(date, "yyyy-MM-dd");
-                  const dayEvents = eventsByDay[dateKey] || [];
-                  const isToday = isSameDay(date, new Date());
-                  const isCurrentMonth = isSameMonth(date, currentDate);
-
-                  return (
-                    <div
-                      key={dateKey}
-                      className={cn(
-                        "min-h-[120px] rounded-lg border p-2",
-                        !isCurrentMonth && "bg-muted/50 text-muted-foreground",
-                        isToday && "border-primary bg-primary/5"
-                      )}
-                    >
+        {!isSearchMode &&
+          isDefaultCalendarView &&
+          viewMode === "month" &&
+          events &&
+          !showSkeletons && (
+            <Card>
+              <CardContent className="p-4">
+                {/* Day of week headers */}
+                <div className="mb-2 grid grid-cols-7 gap-2">
+                  {["Sun", "Mon", "Tue", "Wed", "Thu", "Fri", "Sat"].map(
+                    (day) => (
                       <div
+                        key={day}
+                        className="py-2 text-center text-sm font-medium text-muted-foreground"
+                      >
+                        {day}
+                      </div>
+                    )
+                  )}
+                </div>
+
+                {/* Calendar grid */}
+                <div className="grid grid-cols-7 gap-2">
+                  {daysToDisplay.map((date) => {
+                    const dateKey = format(date, "yyyy-MM-dd");
+                    const dayEvents = eventsByDay[dateKey] || [];
+                    const isToday = isSameDay(date, new Date());
+                    const isCurrentMonth = isSameMonth(date, currentDate);
+
+                    return (
+                      <div
+                        key={dateKey}
                         className={cn(
-                          "mb-1 text-sm font-medium",
-                          isToday && "text-primary"
+                          "min-h-[120px] rounded-lg border p-2",
+                          !isCurrentMonth &&
+                            "bg-muted/50 text-muted-foreground",
+                          isToday && "border-primary bg-primary/5"
                         )}
                       >
-                        {format(date, "d")}
-                      </div>
-                      <div className="space-y-1">
-                        {dayEvents.slice(0, 3).map((event) => {
-                          const eventImageUrl =
-                            event.coverImageUrl ||
-                            event.venue?.logoImageUrl ||
-                            event.organizer?.logoImageUrl ||
-                            null;
+                        <div
+                          className={cn(
+                            "mb-1 text-sm font-medium",
+                            isToday && "text-primary"
+                          )}
+                        >
+                          {format(date, "d")}
+                        </div>
+                        <div className="space-y-1">
+                          {dayEvents.slice(0, 3).map((event) => {
+                            const eventImageUrl =
+                              event.coverImageUrl ||
+                              event.venue?.logoImageUrl ||
+                              event.organizer?.logoImageUrl ||
+                              null;
 
-                          return (
-                            <HoverCard
-                              key={event.id}
-                              openDelay={200}
-                              closeDelay={100}
-                            >
-                              <HoverCardTrigger asChild>
-                                <div
-                                  className="cursor-pointer truncate rounded bg-primary/10 p-1 text-xs text-primary hover:bg-primary/20"
-                                  onClick={() => {
-                                    const returnTo = `${window.location.pathname}${window.location.search}`;
-                                    window.location.href = withReturnTo(
-                                      `/event/${event.id}`,
-                                      returnTo
-                                    );
-                                  }}
-                                >
-                                  {event.title}
-                                </div>
-                              </HoverCardTrigger>
-                              <HoverCardContent
-                                className="w-80"
-                                side="right"
-                                align="start"
+                            return (
+                              <HoverCard
+                                key={event.id}
+                                openDelay={200}
+                                closeDelay={100}
                               >
-                                <div className="space-y-3">
-                                  {/* Event Image */}
-                                  {eventImageUrl && (
-                                    <div className="relative h-32 w-full overflow-hidden rounded-md">
-                                      <Image
-                                        src={eventImageUrl}
-                                        alt={event.title}
-                                        fill
-                                        className="object-cover"
-                                      />
-                                    </div>
-                                  )}
-
-                                  {/* Title */}
-                                  <div>
-                                    <h4 className="mb-1 text-base font-semibold leading-tight">
-                                      {event.title}
-                                    </h4>
-                                    <div className="flex flex-wrap gap-1">
-                                      {event.categories
-                                        ?.slice(0, 2)
-                                        .map((cat) => (
-                                          <span
-                                            key={cat}
-                                            className="rounded-full bg-primary/10 px-2 py-0.5 text-xs capitalize text-primary"
-                                          >
-                                            {categoryLabelMap[cat] || cat}
-                                          </span>
-                                        ))}
-                                    </div>
+                                <HoverCardTrigger asChild>
+                                  <div
+                                    className="cursor-pointer truncate rounded bg-primary/10 p-1 text-xs text-primary hover:bg-primary/20"
+                                    onClick={() => {
+                                      const returnTo = `${window.location.pathname}${window.location.search}`;
+                                      window.location.href = withReturnTo(
+                                        `/event/${event.id}`,
+                                        returnTo
+                                      );
+                                    }}
+                                  >
+                                    {event.title}
                                   </div>
+                                </HoverCardTrigger>
+                                <HoverCardContent
+                                  className="w-80"
+                                  side="right"
+                                  align="start"
+                                >
+                                  <div className="space-y-3">
+                                    {/* Event Image */}
+                                    {eventImageUrl && (
+                                      <div className="relative h-32 w-full overflow-hidden rounded-md">
+                                        <Image
+                                          src={eventImageUrl}
+                                          alt={event.title}
+                                          fill
+                                          className="object-cover"
+                                        />
+                                      </div>
+                                    )}
 
-                                  {/* Date & Time */}
-                                  <div className="flex items-start gap-2 text-sm">
-                                    <Clock className="mt-0.5 h-4 w-4 flex-shrink-0 text-muted-foreground" />
+                                    {/* Title */}
                                     <div>
-                                      <div className="font-medium">
-                                        {format(
-                                          new Date(event.startAt),
-                                          "EEEE, MMMM d"
-                                        )}
-                                      </div>
-                                      <div className="text-muted-foreground">
-                                        {formatTime(event.startAt)}
-                                        {event.endAt &&
-                                          ` - ${formatTime(event.endAt)}`}
+                                      <h4 className="mb-1 text-base font-semibold leading-tight">
+                                        {event.title}
+                                      </h4>
+                                      <div className="flex flex-wrap gap-1">
+                                        {event.categories
+                                          ?.slice(0, 2)
+                                          .map((cat) => (
+                                            <span
+                                              key={cat}
+                                              className="rounded-full bg-primary/10 px-2 py-0.5 text-xs capitalize text-primary"
+                                            >
+                                              {categoryLabelMap[cat] || cat}
+                                            </span>
+                                          ))}
                                       </div>
                                     </div>
-                                  </div>
 
-                                  {/* Location */}
-                                  {(event.venue?.name || event.city) && (
+                                    {/* Date & Time */}
                                     <div className="flex items-start gap-2 text-sm">
-                                      <MapPin className="mt-0.5 h-4 w-4 flex-shrink-0 text-muted-foreground" />
+                                      <Clock className="mt-0.5 h-4 w-4 flex-shrink-0 text-muted-foreground" />
                                       <div>
-                                        {event.venue?.name && (
-                                          <div className="font-medium">
-                                            {event.venue.name}
-                                          </div>
-                                        )}
+                                        <div className="font-medium">
+                                          {format(
+                                            new Date(event.startAt),
+                                            "EEEE, MMMM d"
+                                          )}
+                                        </div>
                                         <div className="text-muted-foreground">
-                                          {event.city}, {event.state}
+                                          {formatTime(event.startAt)}
+                                          {event.endAt &&
+                                            ` - ${formatTime(event.endAt)}`}
                                         </div>
                                       </div>
                                     </div>
-                                  )}
 
-                                  {event.organizer && (
-                                    <div className="border-t pt-2 text-xs text-muted-foreground">
-                                      Hosted by {event.organizer.name}
+                                    {/* Location */}
+                                    {(event.venue?.name || event.city) && (
+                                      <div className="flex items-start gap-2 text-sm">
+                                        <MapPin className="mt-0.5 h-4 w-4 flex-shrink-0 text-muted-foreground" />
+                                        <div>
+                                          {event.venue?.name && (
+                                            <div className="font-medium">
+                                              {event.venue.name}
+                                            </div>
+                                          )}
+                                          <div className="text-muted-foreground">
+                                            {event.city}, {event.state}
+                                          </div>
+                                        </div>
+                                      </div>
+                                    )}
+
+                                    {event.organizer && (
+                                      <div className="border-t pt-2 text-xs text-muted-foreground">
+                                        Hosted by {event.organizer.name}
+                                      </div>
+                                    )}
+
+                                    {/* Click to view */}
+                                    <div className="pt-1 text-center text-xs text-muted-foreground">
+                                      Click to view full details
                                     </div>
-                                  )}
-
-                                  {/* Click to view */}
-                                  <div className="pt-1 text-center text-xs text-muted-foreground">
-                                    Click to view full details
                                   </div>
-                                </div>
-                              </HoverCardContent>
-                            </HoverCard>
-                          );
-                        })}
-                        {dayEvents.length > 3 && (
-                          <div className="text-xs text-muted-foreground">
-                            +{dayEvents.length - 3} more
-                          </div>
-                        )}
+                                </HoverCardContent>
+                              </HoverCard>
+                            );
+                          })}
+                          {dayEvents.length > 3 && (
+                            <div className="text-xs text-muted-foreground">
+                              +{dayEvents.length - 3} more
+                            </div>
+                          )}
+                        </div>
                       </div>
-                    </div>
-                  );
-                })}
-              </div>
-            </CardContent>
-          </Card>
-        )}
+                    );
+                  })}
+                </div>
+              </CardContent>
+            </Card>
+          )}
       </div>
     </div>
   );
