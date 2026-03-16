@@ -27,6 +27,7 @@ import { ResponsiveSelect } from "@/components/ui/responsive-select";
 import { resolveMetroArea } from "@/lib/metro-areas";
 import { cn } from "@/lib/utils";
 import { StickySearchBar } from "@/components/ui/sticky-search-bar";
+import { HapticPreset, useHaptics } from "@/hooks/use-haptics";
 
 type FilterType = "all" | "venues" | "organizers" | "following";
 
@@ -54,9 +55,11 @@ function PlaceSkeletonGrid({ count = 9 }: { count?: number }) {
 
 function PlacesPageContent() {
   const { setShowNavbarSearch, registerScrollToSearch } = useNavbarSearch();
+  const { triggerHaptic } = useHaptics();
   const searchInputRef = useRef<HTMLInputElement>(null);
   const stickySentinelRef = useRef<HTMLDivElement>(null);
   const [isSticky, setIsSticky] = useState(false);
+  const [isSearchMode, setIsSearchMode] = useState(false);
   const [selectedCategories, setSelectedCategories] = useState<string[]>([]);
 
   // Scroll to top and focus search input when navbar search button is clicked
@@ -222,6 +225,15 @@ function PlacesPageContent() {
     );
   }, []);
 
+  const handleBackFromSearchOrFilter = useCallback(() => {
+    setIsSearchMode(false);
+    searchInputRef.current?.blur();
+
+    if (isFilteredPlacesView) {
+      setFilterType("all");
+    }
+  }, [isFilteredPlacesView, setFilterType]);
+
   const isLoading = isLoadingPlaces;
 
   return (
@@ -239,8 +251,9 @@ function PlacesPageContent() {
                 placeholder="Search venues & organizers..."
                 value={searchQuery}
                 onChange={setSearchQuery}
-                showBack={isFilteredPlacesView}
-                onBack={() => setFilterType("all")}
+                onFocus={() => setIsSearchMode(true)}
+                showBack={isSearchMode || isFilteredPlacesView}
+                onBack={handleBackFromSearchOrFilter}
                 className="w-full"
               />
             </Suspense>
@@ -300,7 +313,10 @@ function PlacesPageContent() {
                         key={category.id}
                         type="button"
                         aria-pressed={isSelected}
-                        onClick={() => toggleCategory(category.key)}
+                        onClick={() => {
+                          void triggerHaptic(HapticPreset.Selection);
+                          toggleCategory(category.key);
+                        }}
                         className={cn(
                           "inline-flex shrink-0 items-center gap-1 rounded-full px-3.5 py-1.5 text-xs font-medium transition-colors",
                           isSelected
