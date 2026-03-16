@@ -344,12 +344,8 @@ function HomePageContent() {
     {
       startDate: dateRange.startDate,
       endDate: dateRange.endDate,
-      followedOnly: activeFilter === "followed",
-      friendsGoingOnly: activeFilter === "friends",
-      rsvpStatusFilter:
-        activeFilter === "going" || activeFilter === "interested"
-          ? activeFilter
-          : undefined,
+      friendsRsvpOnly: activeFilter === "friends",
+      myRsvpOnly: activeFilter === "mine",
       city:
         effectiveCity && effectiveCity !== "all" ? effectiveCity : undefined,
       search: searchQuery || undefined,
@@ -368,12 +364,8 @@ function HomePageContent() {
       {
         startDate: startOfDay(new Date()),
         endDate: addDays(startOfDay(new Date()), 365),
-        followedOnly: activeFilter === "followed",
-        friendsGoingOnly: activeFilter === "friends",
-        rsvpStatusFilter:
-          activeFilter === "going" || activeFilter === "interested"
-            ? activeFilter
-            : undefined,
+        friendsRsvpOnly: activeFilter === "friends",
+        myRsvpOnly: activeFilter === "mine",
         city:
           effectiveCity && effectiveCity !== "all" ? effectiveCity : undefined,
         limit: 20,

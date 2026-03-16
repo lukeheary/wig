@@ -29,12 +29,8 @@ export default function HomePage() {
   } = trpc.event.listEventsByRange.useQuery({
     startDate: dateRange.startDate,
     endDate: dateRange.endDate,
-    followedOnly: activeFilter === "followed",
-    friendsGoingOnly: activeFilter === "friends",
-    rsvpStatusFilter:
-      activeFilter === "going" || activeFilter === "interested"
-        ? activeFilter
-        : undefined,
+    friendsRsvpOnly: activeFilter === "friends",
+    myRsvpOnly: activeFilter === "mine",
   });
 
   // Group events by day
@@ -141,14 +137,10 @@ export default function HomePage() {
             <Calendar className="mx-auto mb-4 h-12 w-12 text-muted-foreground" />
             <h3 className="mb-2 text-lg font-semibold">No events found</h3>
             <p className="mb-4 text-muted-foreground">
-              {activeFilter === "followed" &&
-                "Start following businesses to see their events here"}
               {activeFilter === "friends" &&
-                "Add friends and see what events they're attending"}
-              {activeFilter === "going" &&
-                "RSVP going to events to see them here"}
-              {activeFilter === "interested" &&
-                "Mark events as interested to see them here"}
+                "Add friends to see events they're interested in or going to"}
+              {activeFilter === "mine" &&
+                "RSVP or mark events as interested to see them here"}
               {activeFilter === "all" && "Check back later for upcoming events"}
             </p>
           </CardContent>

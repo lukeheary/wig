@@ -1123,6 +1123,8 @@ export const eventRouter = router({
         endDate: z.date(),
         followedOnly: z.boolean().default(false),
         friendsGoingOnly: z.boolean().default(false),
+        friendsRsvpOnly: z.boolean().default(false),
+        myRsvpOnly: z.boolean().default(false),
         rsvpStatusFilter: z.enum(["going", "interested"]).optional(),
         category: z.string().optional(),
         city: z.string().optional(),
@@ -1314,8 +1316,8 @@ export const eventRouter = router({
         }
       }
 
-      // Filter by events friends are going to
-      if (input.friendsGoingOnly) {
+      // Filter by events friends have RSVP'd to
+      if (input.friendsGoingOnly || input.friendsRsvpOnly) {
         const friendConnections = await ctx.db.query.userFriends.findMany({
           where: and(
             eq(userFriends.userId, ctx.auth.userId),
@@ -1329,7 +1331,9 @@ export const eventRouter = router({
           const friendRsvps = await ctx.db.query.eventRsvps.findMany({
             where: and(
               inArray(eventRsvps.userId, friendIds),
-              eq(eventRsvps.status, "going")
+              input.friendsRsvpOnly
+                ? inArray(eventRsvps.status, ["going", "interested"])
+                : eq(eventRsvps.status, "going")
             ),
           });
 
@@ -1352,6 +1356,26 @@ export const eventRouter = router({
           where: and(
             eq(eventRsvps.userId, ctx.auth.userId),
             eq(eventRsvps.status, input.rsvpStatusFilter)
+          ),
+          columns: {
+            eventId: true,
+          },
+        });
+
+        const eventIds = [...new Set(userRsvps.map((rsvp) => rsvp.eventId))];
+
+        if (eventIds.length > 0) {
+          conditions.push(inArray(events.id, eventIds));
+        } else {
+          return [];
+        }
+      }
+
+      if (input.myRsvpOnly) {
+        const userRsvps = await ctx.db.query.eventRsvps.findMany({
+          where: and(
+            eq(eventRsvps.userId, ctx.auth.userId),
+            inArray(eventRsvps.status, ["going", "interested"])
           ),
           columns: {
             eventId: true,
