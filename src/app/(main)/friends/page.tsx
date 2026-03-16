@@ -1,13 +1,12 @@
 "use client";
 
-import { Suspense, useState, useRef, useEffect, useCallback } from "react";
-import Link from "next/link";
+import { Suspense, useState, useRef, useEffect, useCallback, useMemo } from "react";
 import { trpc } from "@/lib/trpc";
 import { SearchInput } from "@/components/ui/search-input";
 import { useNavbarSearch } from "@/contexts/nav-search-context";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
-import { Loader2, ChevronRight, UserPlus, X, Users } from "lucide-react";
+import { Loader2, ChevronRight, UserPlus, X, Users, Mail } from "lucide-react";
 import { ActivityFeed } from "@/components/friends/activity-feed";
 import { useToast } from "@/hooks/use-toast";
 import { useQueryState } from "nuqs";
@@ -18,6 +17,10 @@ import { StickySectionHeader } from "@/components/ui/sticky-section-header";
 import { useAuth } from "@clerk/nextjs";
 import { sendGoogleAnalyticsEvent } from "@/lib/google-analytics";
 import { EmptyStateCard } from "@/components/shared/empty-state-card";
+import { cn } from "@/lib/utils";
+import { Card, CardContent } from "@/components/ui/card";
+
+type FriendsView = "discover" | "list" | "requests";
 
 function FriendsPageContent() {
   const { toast } = useToast();
@@ -28,9 +31,17 @@ function FriendsPageContent() {
   const [isSearchMode, setIsSearchMode] = useState(false);
   const [isSticky, setIsSticky] = useState(false);
   const { setShowNavbarSearch, registerScrollToSearch } = useNavbarSearch();
+  const [activeView, setActiveView] = useQueryState<FriendsView>("view", {
+    defaultValue: "discover",
+    parse: (value) =>
+      value === "list" || value === "requests" ? value : "discover",
+    serialize: (value) => value,
+  });
   const [searchQuery, setSearchQuery] = useQueryState("q", {
     defaultValue: "",
   });
+  const [friendsListSearchQuery, setFriendsListSearchQuery] = useState("");
+  const [requestsSearchQuery, setRequestsSearchQuery] = useState("");
 
   // Scroll to top and focus search input when navbar search button is clicked
   const scrollToSearchAndFocus = useCallback(() => {
@@ -90,6 +101,7 @@ function FriendsPageContent() {
     );
 
   const acceptedFriends = friends?.filter((f) => f.status === "accepted") || [];
+  const sentRequests = pendingRequests?.filter((f) => f.isSender) || [];
   const receivedRequests = pendingRequests?.filter((f) => !f.isSender) || [];
   const relatedUserIds = new Set(
     (friends ?? []).map((friendship) => friendship.friend?.id).filter(Boolean)
@@ -170,62 +182,373 @@ function FriendsPageContent() {
     searchInputRef.current?.blur();
   };
 
+  const openFriendsView = (view: Exclude<FriendsView, "discover">) => {
+    setIsSearchMode(false);
+    setSearchQuery("");
+    if (view === "list") {
+      setFriendsListSearchQuery("");
+    }
+    if (view === "requests") {
+      setRequestsSearchQuery("");
+    }
+    void setActiveView(view);
+    window.scrollTo({ top: 0, left: 0, behavior: "smooth" });
+    window.requestAnimationFrame(() => {
+      window.setTimeout(() => {
+        searchInputRef.current?.focus();
+      }, 0);
+    });
+  };
+
+  const handleExitSubView = () => {
+    void setActiveView("discover");
+    searchInputRef.current?.blur();
+  };
+
   const isSearching = searchQuery.length >= 2;
+  const isSubView = activeView !== "discover";
+  const activeSearchValue =
+    activeView === "list"
+      ? friendsListSearchQuery
+      : activeView === "requests"
+        ? requestsSearchQuery
+        : searchQuery;
+  const activeSearchPlaceholder =
+    activeView === "list"
+      ? "Search your friends..."
+      : activeView === "requests"
+        ? "Search requests..."
+        : "Search friends or find new people...";
+
+  const filteredFriends = useMemo(() => {
+    const query = friendsListSearchQuery.trim().toLowerCase();
+    if (!query) return acceptedFriends;
+
+    return acceptedFriends.filter((friend) => {
+      const firstName = friend.friend?.firstName?.toLowerCase() ?? "";
+      const lastName = friend.friend?.lastName?.toLowerCase() ?? "";
+      const username = friend.friend?.username?.toLowerCase() ?? "";
+      const fullName = `${firstName} ${lastName}`.trim();
+
+      return (
+        fullName.includes(query) ||
+        firstName.includes(query) ||
+        lastName.includes(query) ||
+        username.includes(query)
+      );
+    });
+  }, [acceptedFriends, friendsListSearchQuery]);
+
+  const normalizedRequestQuery = requestsSearchQuery.trim().toLowerCase();
+  const matchesRequestQuery = useCallback(
+    (request: (typeof sentRequests)[number]) => {
+      if (!normalizedRequestQuery) return true;
+
+      const firstName = request.friend?.firstName?.toLowerCase() ?? "";
+      const lastName = request.friend?.lastName?.toLowerCase() ?? "";
+      const username = request.friend?.username?.toLowerCase() ?? "";
+      const fullName = `${firstName} ${lastName}`.trim();
+
+      return (
+        fullName.includes(normalizedRequestQuery) ||
+        firstName.includes(normalizedRequestQuery) ||
+        lastName.includes(normalizedRequestQuery) ||
+        username.includes(normalizedRequestQuery)
+      );
+    },
+    [normalizedRequestQuery]
+  );
+
+  const filteredReceivedRequests = useMemo(
+    () => receivedRequests.filter(matchesRequestQuery),
+    [receivedRequests, matchesRequestQuery]
+  );
+  const filteredSentRequests = useMemo(
+    () => sentRequests.filter(matchesRequestQuery),
+    [sentRequests, matchesRequestQuery]
+  );
+  const hasAnyRequests = receivedRequests.length > 0 || sentRequests.length > 0;
 
   return (
     <div className="container mx-auto pb-8 pt-4">
       {/* Sticky sentinel for intersection observer */}
       <div ref={stickySentinelRef} className="h-px w-full" />
 
-      <StickySearchBar>
-        <Suspense fallback={null}>
-          <SearchInput
-            ref={searchInputRef}
-            placeholder="Search friends or find new people..."
-            value={searchQuery}
-            onChange={setSearchQuery}
-            onFocus={() => setIsSearchMode(true)}
-            showBack={isSearchMode}
-            onBack={handleExitSearch}
-            className="w-full"
-          />
-        </Suspense>
+      <StickySearchBar innerClassName="w-full flex-col items-stretch sm:flex-col sm:items-stretch">
+        <div className="flex w-full flex-col gap-2 sm:flex-row sm:items-center">
+          <div className="flex w-full flex-row">
+            <Suspense fallback={null}>
+              <SearchInput
+                ref={searchInputRef}
+                placeholder={activeSearchPlaceholder}
+                value={activeSearchValue}
+                onChange={(value) => {
+                  if (activeView === "list") {
+                    setFriendsListSearchQuery(value);
+                    return;
+                  }
 
-        {!isSearchMode && (
-          <div className="flex w-full shrink-0 gap-2 sm:w-auto">
-            <Link
-              href="/friends/list"
+                  if (activeView === "requests") {
+                    setRequestsSearchQuery(value);
+                    return;
+                  }
+
+                  setSearchQuery(value);
+                }}
+                onFocus={() => {
+                  if (activeView === "discover") {
+                    setIsSearchMode(true);
+                  }
+                }}
+                showBack={isSearchMode || isSubView}
+                onBack={isSubView ? handleExitSubView : handleExitSearch}
+                className="w-full"
+              />
+            </Suspense>
+          </div>
+
+          <div
+            className={cn(
+              "flex w-full shrink-0 gap-2 overflow-hidden transition-all duration-200 ease-out",
+              isSearchMode
+                ? "max-h-0 opacity-0 sm:w-0"
+                : "max-h-16 opacity-100 sm:w-[264px] lg:w-[328px]"
+            )}
+            aria-hidden={isSearchMode}
+          >
+            <button
+              type="button"
+              onClick={() => openFriendsView("list")}
               className="flex-1 sm:w-32 sm:flex-none lg:w-40"
+              tabIndex={isSearchMode ? -1 : 0}
             >
-              <div className="flex h-12 cursor-pointer items-center justify-between rounded-full bg-muted px-5 transition-colors hover:bg-muted/80">
+              <div
+                className="flex h-12 cursor-pointer items-center justify-between rounded-full bg-muted px-5 transition-colors hover:bg-muted/80"
+              >
                 <p className="flex flex-row items-center gap-1.5 text-base font-medium lg:text-lg">
                   <span>{acceptedFriends.length}</span>
-                  <span className={"text-sm text-muted-foreground"}>
+                  <span className="text-sm text-muted-foreground">
                     {pluralize("Friend", acceptedFriends.length)}
                   </span>
                 </p>
-                <ChevronRight className="h-4 w-4 text-muted-foreground lg:h-5 lg:w-5" />
+                <ChevronRight
+                  className={cn(
+                    "h-4 w-4 text-muted-foreground transition-opacity lg:h-5 lg:w-5",
+                    activeView === "list" && "opacity-0"
+                  )}
+                />
               </div>
-            </Link>
-            <Link
-              href="/friends/requests"
+            </button>
+            <button
+              type="button"
+              onClick={() => openFriendsView("requests")}
               className="flex-1 sm:w-32 sm:flex-none lg:w-40"
+              tabIndex={isSearchMode ? -1 : 0}
             >
-              <div className="flex h-12 cursor-pointer items-center justify-between rounded-full bg-muted px-5 transition-colors hover:bg-muted/80">
+              <div
+                className="flex h-12 cursor-pointer items-center justify-between rounded-full bg-muted px-5 transition-colors hover:bg-muted/80"
+              >
                 <p className="flex flex-row items-center gap-1.5 text-base font-medium lg:text-lg">
                   <span>{receivedRequests.length}</span>
-                  <span className={"text-sm text-muted-foreground"}>
+                  <span className="text-sm text-muted-foreground">
                     {pluralize("Request", receivedRequests.length)}
                   </span>
                 </p>
-                <ChevronRight className="h-4 w-4 text-muted-foreground lg:h-5 lg:w-5" />
+                <ChevronRight
+                  className={cn(
+                    "h-4 w-4 text-muted-foreground transition-opacity lg:h-5 lg:w-5",
+                    activeView === "requests" && "opacity-0"
+                  )}
+                />
               </div>
-            </Link>
+            </button>
           </div>
-        )}
+        </div>
       </StickySearchBar>
 
-      {isSearchMode ? (
+      {isSubView ? (
+        activeView === "list" ? (
+          <>
+            <StickySectionHeader className="-mx-4">
+              <h2 className="text-xl font-semibold tracking-tight">My Friends</h2>
+            </StickySectionHeader>
+
+            <Card>
+              <CardContent className="pt-6">
+                {!friends ? (
+                  <div className="flex justify-center py-12">
+                    <Loader2 className="h-8 w-8 animate-spin text-muted-foreground" />
+                  </div>
+                ) : acceptedFriends.length === 0 ? (
+                  <EmptyStateCard
+                    icon={Users}
+                    title="You don't have any friends yet"
+                    description="Use the Find Friends page to connect with people"
+                    showCard={false}
+                  />
+                ) : filteredFriends.length === 0 ? (
+                  <div className="py-12 text-center text-muted-foreground">
+                    No friends found
+                  </div>
+                ) : (
+                  <UserList
+                    items={filteredFriends}
+                    getUser={(friend) => ({
+                      id: friend.friend?.id || "",
+                      firstName: friend.friend?.firstName || null,
+                      lastName: friend.friend?.lastName || null,
+                      username: friend.friend?.username || null,
+                      avatarImageUrl: friend.friend?.avatarImageUrl || null,
+                    })}
+                  />
+                )}
+              </CardContent>
+            </Card>
+          </>
+        ) : (
+          <>
+            {!pendingRequests ? (
+              <div className="flex justify-center py-12">
+                <Loader2 className="h-8 w-8 animate-spin text-muted-foreground" />
+              </div>
+            ) : !hasAnyRequests ? (
+              <>
+                <StickySectionHeader className="-mx-4">
+                  <h2 className="text-xl font-semibold tracking-tight">
+                    Friend Requests
+                  </h2>
+                </StickySectionHeader>
+                <EmptyStateCard icon={Mail} title="No pending friend requests" />
+              </>
+            ) : normalizedRequestQuery &&
+              filteredReceivedRequests.length === 0 &&
+              filteredSentRequests.length === 0 ? (
+              <Card>
+                <CardContent className="pt-6">
+                  <div className="py-12 text-center text-muted-foreground">
+                    No requests found
+                  </div>
+                </CardContent>
+              </Card>
+            ) : (
+              <>
+                <section>
+                  <StickySectionHeader className="-mx-4">
+                    <h2 className="text-xl font-semibold tracking-tight">
+                      Received Requests
+                    </h2>
+                  </StickySectionHeader>
+                  <Card>
+                    <CardContent className="pt-6">
+                      {filteredReceivedRequests.length === 0 ? (
+                        <EmptyStateCard
+                          icon={Mail}
+                          title={
+                            normalizedRequestQuery
+                              ? "No received requests found"
+                              : "No pending friend requests"
+                          }
+                          showCard={false}
+                        />
+                      ) : (
+                        <UserList
+                          items={filteredReceivedRequests}
+                          getUser={(req) => ({
+                            id: req.friend?.id || "",
+                            firstName: req.friend?.firstName || null,
+                            lastName: req.friend?.lastName || null,
+                            username: req.friend?.username || null,
+                            avatarImageUrl: req.friend?.avatarImageUrl || null,
+                          })}
+                          renderAction={(request) => (
+                            <div className="flex items-center gap-4">
+                              <Button
+                                size="icon"
+                                variant="ghost"
+                                className="h-8 w-8"
+                                onClick={() => {
+                                  sendGoogleAnalyticsEvent(
+                                    "friend_request_responded",
+                                    userId,
+                                    {
+                                      action: "rejected",
+                                      friend_request_id: request.id,
+                                      source: "friend_requests_page",
+                                    }
+                                  );
+                                  rejectMutation.mutate({
+                                    friendRequestId: request.id,
+                                  });
+                                }}
+                                disabled={rejectMutation.isPending}
+                              >
+                                <X className="h-4 w-4" />
+                              </Button>
+                              <Button
+                                onClick={() => {
+                                  sendGoogleAnalyticsEvent(
+                                    "friend_request_responded",
+                                    userId,
+                                    {
+                                      action: "accepted",
+                                      friend_request_id: request.id,
+                                      source: "friend_requests_page",
+                                    }
+                                  );
+                                  acceptMutation.mutate({
+                                    friendRequestId: request.id,
+                                  });
+                                }}
+                                disabled={acceptMutation.isPending}
+                              >
+                                Accept
+                              </Button>
+                            </div>
+                          )}
+                        />
+                      )}
+                    </CardContent>
+                  </Card>
+                </section>
+
+                {(filteredSentRequests.length > 0 ||
+                  (!normalizedRequestQuery && sentRequests.length > 0)) && (
+                  <section className="pt-4">
+                    <StickySectionHeader className="-mx-4">
+                      <h2 className="text-xl font-semibold tracking-tight">
+                        Sent Requests
+                      </h2>
+                    </StickySectionHeader>
+                    <Card>
+                      <CardContent className="pt-6">
+                        {filteredSentRequests.length === 0 ? (
+                          <div className="py-4 text-sm text-muted-foreground">
+                            No sent requests found
+                          </div>
+                        ) : (
+                          <UserList
+                            items={filteredSentRequests}
+                            getUser={(req) => ({
+                              id: req.friend?.id || "",
+                              firstName: req.friend?.firstName || null,
+                              lastName: req.friend?.lastName || null,
+                              username: req.friend?.username || null,
+                              avatarImageUrl: req.friend?.avatarImageUrl || null,
+                            })}
+                            renderBadges={() => (
+                              <Badge variant="outline">Pending</Badge>
+                            )}
+                          />
+                        )}
+                      </CardContent>
+                    </Card>
+                  </section>
+                )}
+              </>
+            )}
+          </>
+        )
+      ) : isSearchMode ? (
         // Search Mode View
         <div>
           {isSearching ? (

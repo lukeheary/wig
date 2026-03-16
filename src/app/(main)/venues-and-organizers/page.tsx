@@ -131,6 +131,7 @@ function PlacesPageContent() {
   const isReady = !isLoadingUser;
 
   // Determine place type filter
+  const isFilteredPlacesView = filterType !== "all";
   const placeType =
     filterType === "venues"
       ? "venue"
@@ -185,49 +186,55 @@ function PlacesPageContent() {
       <div ref={stickySentinelRef} className="h-px w-full" />
 
       {/* Search and Filters */}
-      <StickySearchBar>
-        <Suspense fallback={null}>
-          <SearchInput
-            ref={searchInputRef}
-            placeholder="Search venues & organizers..."
-            value={searchQuery}
-            onChange={setSearchQuery}
-            className="w-full"
-          />
-        </Suspense>
+      <StickySearchBar innerClassName="w-full flex-col items-stretch sm:flex-col sm:items-stretch">
+        <div className="flex w-full flex-col gap-2 sm:flex-row sm:items-center">
+          <div className="flex w-full flex-row">
+            <Suspense fallback={null}>
+              <SearchInput
+                ref={searchInputRef}
+                placeholder="Search venues & organizers..."
+                value={searchQuery}
+                onChange={setSearchQuery}
+                showBack={isFilteredPlacesView}
+                onBack={() => setFilterType("all")}
+                className="w-full"
+              />
+            </Suspense>
+          </div>
 
-        {/* Filters */}
-        <div className="flex w-full gap-2 sm:w-fit">
-          {/* City Filter */}
-          <ResponsiveSelect
-            value={effectiveCity ?? "all"}
-            onValueChange={setSelectedCity}
-            options={[
-              { value: "all", label: "All Cities" },
-              ...(cities?.map((city) => ({
-                value: city.city,
-                label: `${city.city}, ${city.state}`,
-              })) || []),
-            ]}
-            placeholder="Select city"
-            title="Select City"
-            className="min-w-0 flex-1 sm:w-[180px] sm:flex-none"
-          />
+          {/* Filters */}
+          <div className="flex w-full gap-2 sm:w-fit">
+            {/* City Filter */}
+            <ResponsiveSelect
+              value={effectiveCity ?? "all"}
+              onValueChange={setSelectedCity}
+              options={[
+                { value: "all", label: "All Cities" },
+                ...(cities?.map((city) => ({
+                  value: city.city,
+                  label: `${city.city}, ${city.state}`,
+                })) || []),
+              ]}
+              placeholder="Select city"
+              title="Select City"
+              className="min-w-0 flex-1 sm:w-[180px] sm:flex-none"
+            />
 
-          {/* Type Filter */}
-          <ResponsiveSelect
-            value={filterType}
-            onValueChange={(value) => setFilterType(value as FilterType)}
-            options={[
-              { value: "all", label: "All" },
-              { value: "venues", label: "Venues" },
-              { value: "organizers", label: "Organizers" },
-              { value: "following", label: "Following" },
-            ]}
-            placeholder="Filter"
-            title="Filter Places"
-            className="min-w-0 flex-1 sm:w-[180px] sm:flex-none"
-          />
+            {/* Type Filter */}
+            <ResponsiveSelect
+              value={filterType}
+              onValueChange={(value) => setFilterType(value as FilterType)}
+              options={[
+                { value: "all", label: "All" },
+                { value: "venues", label: "Venues" },
+                { value: "organizers", label: "Organizers" },
+                { value: "following", label: "Following" },
+              ]}
+              placeholder="Filter"
+              title="Filter Places"
+              className="min-w-0 flex-1 sm:w-[180px] sm:flex-none"
+            />
+          </div>
         </div>
       </StickySearchBar>
 
