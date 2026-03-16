@@ -2,6 +2,7 @@
 
 import { trpc } from "@/lib/trpc";
 import { UserAvatar } from "@/components/ui/user-avatar";
+import Image from "next/image";
 import {
   Loader2,
   Users,
@@ -71,6 +72,10 @@ export function ActivityItem({ activity }: ActivityItemProps) {
         : `on ${format(eventDate, "MMMM do")}`
     : null;
 
+  if (isEventStatusUpdate) {
+    return null;
+  }
+
   const renderIcon = () => {
     switch (type) {
       case "rsvp_going":
@@ -129,6 +134,29 @@ export function ActivityItem({ activity }: ActivityItemProps) {
       metadata?.name ||
       metadata?.title ||
       "an entity";
+    const eventTitleInline = activity.event ? (
+      <>
+        {activity.event.coverImageUrl ? (
+          <span className="relative ml-1 mr-1.5 inline-block h-5 w-5 shrink-0 overflow-hidden rounded-[4px] bg-muted align-[-0.2em]">
+            <Image
+              src={activity.event.coverImageUrl}
+              alt={activity.event.title || "Event image"}
+              fill
+              sizes="20px"
+              className="object-cover"
+            />
+          </span>
+        ) : null}
+        <Link
+          href={eventHref}
+          className="font-medium text-primary hover:underline"
+        >
+          {entityName}
+        </Link>
+      </>
+    ) : (
+      <span className="font-medium text-foreground">{entityName}</span>
+    );
 
     switch (type) {
       case "rsvp_going":
@@ -140,12 +168,7 @@ export function ActivityItem({ activity }: ActivityItemProps) {
               : isPluralSubject
                 ? "are going to"
                 : "is going to"}{" "}
-            <Link
-              href={eventHref}
-              className="font-medium text-primary hover:underline"
-            >
-              {entityName}
-            </Link>
+            {eventTitleInline}
             {activity.event?.venue?.name && (
               <>
                 {" "}
@@ -177,12 +200,7 @@ export function ActivityItem({ activity }: ActivityItemProps) {
               : isPluralSubject
                 ? "are interested in"
                 : "is interested in"}{" "}
-            <Link
-              href={eventHref}
-              className="font-medium text-primary hover:underline"
-            >
-              {entityName}
-            </Link>
+            {eventTitleInline}
             {activity.event?.venue?.name && (
               <>
                 {" "}
@@ -207,12 +225,7 @@ export function ActivityItem({ activity }: ActivityItemProps) {
         return (
           <>
             {subjectName} {isPluralSubject ? "are" : "is"} no longer going to{" "}
-            <Link
-              href={eventHref}
-              className="font-medium text-primary hover:underline"
-            >
-              {entityName}
-            </Link>
+            {eventTitleInline}
             {activity.event?.venue?.name && (
               <>
                 {" "}
@@ -456,7 +469,7 @@ export function ActivityItem({ activity }: ActivityItemProps) {
         <p className="text-base text-muted-foreground">
           {content}
           {!isEventStatusUpdate && eventRelativeDate && (
-            <span className="ml-1.5 font-medium text-foreground/80">
+            <span className="ml-1.5 font-medium text-muted-foreground">
               {eventRelativeDate}
             </span>
           )}
@@ -501,14 +514,18 @@ export function ActivityFeed({
       limit,
     });
 
+  const visibleActivities = rawActivities?.filter(
+    (activity: any) => !EVENT_UPDATE_TYPES.has(activity.type)
+  );
+
   const activities = hidePastEvents
-    ? rawActivities?.filter((activity: any) => {
+    ? visibleActivities?.filter((activity: any) => {
         if (!activity.event?.startAt) return true;
         const eventDate = startOfDay(new Date(activity.event.startAt));
         const today = startOfDay(new Date());
         return eventDate >= today;
       })
-    : rawActivities;
+    : visibleActivities;
 
   if (isLoading) {
     return (
@@ -592,14 +609,18 @@ export function useHasRecentActivity(
     limit,
   });
 
+  const visibleActivities = activities?.filter(
+    (activity: any) => !EVENT_UPDATE_TYPES.has(activity.type)
+  );
+
   const filteredActivities = hidePastEvents
-    ? activities?.filter((activity: any) => {
+    ? visibleActivities?.filter((activity: any) => {
         if (!activity.event?.startAt) return true;
         const eventDate = startOfDay(new Date(activity.event.startAt));
         const today = startOfDay(new Date());
         return eventDate >= today;
       })
-    : activities;
+    : visibleActivities;
 
   return {
     hasActivity:
