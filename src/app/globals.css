@@ -76,4 +76,17 @@
     --tw-ring-color: transparent !important;
     --tw-ring-offset-width: 0px !important;
   }
+
+  .search-input,
+  .search-input:focus-within,
+  .search-input input,
+  .search-input input:focus,
+  .search-input input:focus-visible,
+  .search-input button,
+  .search-input button:focus,
+  .search-input button:focus-visible {
+    outline: none !important;
+    box-shadow: none !important;
+    -webkit-box-shadow: none !important;
+  }
 }

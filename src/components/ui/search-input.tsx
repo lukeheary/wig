@@ -33,7 +33,10 @@ export const SearchInput = forwardRef<HTMLInputElement, SearchInputProps>(
     ref
   ) {
     return (
-      <div className={cn("relative flex items-center", className)}>
+      <div
+        className={cn("search-input relative flex items-center", className)}
+        style={{ WebkitTapHighlightColor: "transparent" }}
+      >
         {/* Back button container - always present, width animates */}
         <div
           className={cn(
@@ -43,6 +46,12 @@ export const SearchInput = forwardRef<HTMLInputElement, SearchInputProps>(
         >
           <button
             type="button"
+            onMouseDown={(e) => {
+              e.preventDefault();
+            }}
+            onPointerDown={(e) => {
+              e.preventDefault();
+            }}
             onClick={(e) => {
               e.preventDefault();
               e.stopPropagation();
@@ -63,7 +72,10 @@ export const SearchInput = forwardRef<HTMLInputElement, SearchInputProps>(
             onChange={(e) => onChange(e.target.value)}
             onFocus={onFocus}
             onBlur={onBlur}
-            className={cn("pl-10 transition-all duration-200", showClear && value && "pr-10")}
+            className={cn(
+              "appearance-none pl-10 shadow-none transition-all duration-200 [box-shadow:none] [-webkit-appearance:none] [-webkit-tap-highlight-color:transparent] focus:shadow-none focus-visible:shadow-none",
+              showClear && value && "pr-10"
+            )}
           />
           {/* Clear button with fade transition */}
           <div
@@ -74,6 +86,12 @@ export const SearchInput = forwardRef<HTMLInputElement, SearchInputProps>(
           >
             <button
               type="button"
+              onMouseDown={(e) => {
+                e.preventDefault();
+              }}
+              onPointerDown={(e) => {
+                e.preventDefault();
+              }}
               onClick={() => onChange("")}
               className="rounded-full p-1 text-muted-foreground hover:bg-muted hover:text-foreground transition-colors"
               tabIndex={showClear && value ? 0 : -1}

@@ -20,6 +20,7 @@ import {
   CalendarDays,
   MapPin,
   Loader2,
+  X,
 } from "lucide-react";
 import { useQueryState } from "nuqs";
 import { ResponsiveSelect } from "@/components/ui/responsive-select";
@@ -56,6 +57,7 @@ function PlacesPageContent() {
   const searchInputRef = useRef<HTMLInputElement>(null);
   const stickySentinelRef = useRef<HTMLDivElement>(null);
   const [isSticky, setIsSticky] = useState(false);
+  const [selectedCategories, setSelectedCategories] = useState<string[]>([]);
 
   // Scroll to top and focus search input when navbar search button is clicked
   const scrollToSearchAndFocus = useCallback(() => {
@@ -117,6 +119,7 @@ function PlacesPageContent() {
 
   // Get available cities
   const { data: cities } = trpc.event.getAvailableCities.useQuery();
+  const { data: activeCategories } = trpc.category.listActive.useQuery();
 
   // Determine the effective city: use URL param if set, otherwise resolve user's city to metro
   const effectiveCity = useMemo(() => {
@@ -172,11 +175,52 @@ function PlacesPageContent() {
         latitude: place.latitude,
         longitude: place.longitude,
         eventCount: place.eventCount,
+        categories: place.categories ?? [],
       }))
       .sort((a, b) =>
         a.name.localeCompare(b.name, undefined, { sensitivity: "base" })
       );
   }, [placesData]);
+
+  const availableCategoryKeys = useMemo(() => {
+    const keys = new Set<string>();
+
+    combinedItems.forEach((item) =>
+      item.categories.forEach((category) => keys.add(category))
+    );
+
+    return keys;
+  }, [combinedItems]);
+
+  const visibleCategories = useMemo(
+    () =>
+      (activeCategories ?? []).filter((category) =>
+        availableCategoryKeys.has(category.key)
+      ),
+    [activeCategories, availableCategoryKeys]
+  );
+
+  useEffect(() => {
+    setSelectedCategories((prev) =>
+      prev.filter((category) => availableCategoryKeys.has(category))
+    );
+  }, [availableCategoryKeys]);
+
+  const filteredItems = useMemo(() => {
+    if (selectedCategories.length === 0) return combinedItems;
+
+    return combinedItems.filter((item) =>
+      selectedCategories.every((category) => item.categories.includes(category))
+    );
+  }, [combinedItems, selectedCategories]);
+
+  const toggleCategory = useCallback((categoryKey: string) => {
+    setSelectedCategories((prev) =>
+      prev.includes(categoryKey)
+        ? prev.filter((key) => key !== categoryKey)
+        : [...prev, categoryKey]
+    );
+  }, []);
 
   const isLoading = isLoadingPlaces;
 
@@ -236,15 +280,51 @@ function PlacesPageContent() {
             />
           </div>
         </div>
+
+        {(isLoading || visibleCategories.length > 0) && (
+          <div className="-mx-4 overflow-x-auto pt-1 [scrollbar-width:none] sm:-mx-0 [&::-webkit-scrollbar]:hidden">
+            <div className="flex gap-1.5 px-4 sm:px-0">
+              {isLoading
+                ? [64, 80, 56, 72].map((width, i) => (
+                    <div
+                      key={`place-pill-skeleton-${i}`}
+                      className="h-7 animate-pulse rounded-full bg-muted/50"
+                      style={{ width: `${width}px` }}
+                    />
+                  ))
+                : visibleCategories.map((category) => {
+                    const isSelected = selectedCategories.includes(category.key);
+
+                    return (
+                      <button
+                        key={category.id}
+                        type="button"
+                        aria-pressed={isSelected}
+                        onClick={() => toggleCategory(category.key)}
+                        className={cn(
+                          "inline-flex shrink-0 items-center gap-1 rounded-full px-3.5 py-1.5 text-xs font-medium transition-colors",
+                          isSelected
+                            ? "bg-foreground text-background"
+                            : "bg-muted/50 text-muted-foreground md:hover:text-foreground"
+                        )}
+                      >
+                        {category.label}
+                        {isSelected && <X className="h-3 w-3" />}
+                      </button>
+                    );
+                  })}
+            </div>
+          </div>
+        )}
       </StickySearchBar>
 
       {/* Loading State */}
       {(isLoading || !isReady) && <PlaceSkeletonGrid />}
 
       {/* Combined Grid */}
-      {!isLoading && isReady && combinedItems.length > 0 && (
+      {!isLoading && isReady && filteredItems.length > 0 && (
         <div className="grid gap-2 md:grid-cols-2 lg:grid-cols-3">
-          {combinedItems.map((item) => (
+          {filteredItems.map((item) => (
             <Link
               key={`${item.type}-${item.id}`}
               href={`/${item.type === "venue" ? "venue" : "organizer"}/${item.slug}`}
@@ -313,7 +393,7 @@ function PlacesPageContent() {
       )}
 
       {/* Empty State */}
-      {!isLoading && isReady && combinedItems.length === 0 && (
+      {!isLoading && isReady && filteredItems.length === 0 && (
         <Card className={"mt-4"}>
           <CardContent className="py-12 text-center">
             <div className="mx-auto mb-4 flex justify-center gap-2">
@@ -322,7 +402,9 @@ function PlacesPageContent() {
             </div>
             <h3 className="mb-2 text-lg font-semibold">No results found</h3>
             <p className="mb-4 text-muted-foreground">
-              {filterType === "following"
+              {selectedCategories.length > 0
+                ? "Try removing a category filter or adjusting your search"
+                : filterType === "following"
                 ? "You aren't following any venues or organizers yet"
                 : searchQuery
                   ? "Try adjusting your search or filters"
