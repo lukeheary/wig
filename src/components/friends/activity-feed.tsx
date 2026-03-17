@@ -95,6 +95,7 @@ export function ActivityItem({ activity }: ActivityItemProps) {
           <Building2 className="h-4 w-4 text-blue-500" />
         );
       case "created_event":
+      case "created":
         return <CalendarPlus className="h-4 w-4 text-orange-500" />;
       case "cancelled":
         return <X className="h-4 w-4 text-red-500" />;
@@ -265,6 +266,7 @@ export function ActivityItem({ activity }: ActivityItemProps) {
           </>
         );
       case "created_event":
+      case "created":
         return (
           <>
             {actorName} created a new event:{" "}

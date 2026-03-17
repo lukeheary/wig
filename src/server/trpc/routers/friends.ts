@@ -606,7 +606,7 @@ export const friendsRouter = router({
           : [];
 
       const normalizedEventUpdates = eventUpdates
-        .filter((update) => Boolean(update.event))
+        .filter((update) => Boolean(update.event) && update.type !== "created")
         .map((update) => ({
           ...update,
           entityType: "event" as const,
