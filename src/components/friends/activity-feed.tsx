@@ -3,6 +3,7 @@
 import { trpc } from "@/lib/trpc";
 import { UserAvatar } from "@/components/ui/user-avatar";
 import Image from "next/image";
+import { useEffect } from "react";
 import {
   Loader2,
   Users,
@@ -498,6 +499,14 @@ export function ActivityFeed({
         return eventDate >= today;
       })
     : visibleActivities;
+
+  useEffect(() => {
+    if (limit !== 3 || !hidePastEvents) return;
+
+    console.log("[Recent Activity][/home] rawActivities", rawActivities);
+    console.log("[Recent Activity][/home] visibleActivities", visibleActivities);
+    console.log("[Recent Activity][/home] finalActivities", activities);
+  }, [activities, hidePastEvents, limit, rawActivities, visibleActivities]);
 
   if (isLoading) {
     return (
