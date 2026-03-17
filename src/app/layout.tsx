@@ -1,4 +1,5 @@
 import type { Metadata, Viewport } from "next";
+import { createElement } from "react";
 import { Inter } from "next/font/google";
 import { Lato } from "next/font/google";
 import { Urbanist } from "next/font/google";
@@ -42,6 +43,12 @@ export default function RootLayout({
   return (
     <ClerkProvider>
       <html lang="en">
+        <head>
+          {createElement("meta", {
+            name: "impact-site-verification",
+            value: "48bb8a3a-aca5-4981-aea2-7729c02877ca",
+          } as any)}
+        </head>
         <body className={urbanist.className}>
           <Script
             src={`https://www.googletagmanager.com/gtag/js?id=${GOOGLE_ANALYTICS_ID}`}
