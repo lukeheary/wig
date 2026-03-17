@@ -483,6 +483,7 @@ export const friendsRouter = router({
 
       const visibleActivities = activities.filter((activity) => {
         if (activity.type === "follow_place") return false;
+        if (activity.type === "created_event") return false;
         if (activity.entityType !== "event") return true;
         if (!activity.event) return false;
 
