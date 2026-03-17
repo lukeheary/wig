@@ -367,17 +367,13 @@ function FriendsPageContent() {
           <div
             className={cn(
               "flex w-full shrink-0 gap-2 overflow-hidden transition-all duration-200 ease-out",
-              isSearchMode
-                ? "max-h-0 opacity-0 sm:w-0"
-                : "max-h-16 opacity-100 sm:w-[264px] lg:w-[328px]"
+              "max-h-16 opacity-100 sm:w-[264px] lg:w-[328px]"
             )}
-            aria-hidden={isSearchMode}
           >
             <button
               type="button"
               onClick={() => openFriendsView("list")}
               className="flex-1 sm:w-32 sm:flex-none lg:w-40"
-              tabIndex={isSearchMode ? -1 : 0}
             >
               <div
                 className="flex h-12 cursor-pointer items-center justify-between rounded-full bg-muted px-5 transition-colors hover:bg-muted/80"
@@ -400,7 +396,6 @@ function FriendsPageContent() {
               type="button"
               onClick={() => openFriendsView("requests")}
               className="flex-1 sm:w-32 sm:flex-none lg:w-40"
-              tabIndex={isSearchMode ? -1 : 0}
             >
               <div
                 className="flex h-12 cursor-pointer items-center justify-between rounded-full bg-muted px-5 transition-colors hover:bg-muted/80"
