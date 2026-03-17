@@ -532,11 +532,13 @@ export const placeRouter = router({
           ...mapEventCategoryData(e),
           userRsvp: userRsvpMap.get(e.id) || null,
           friendsGoing: attendeesMap.get(e.id) || [],
+          friendsInterested: [] as never[],
         })),
         pastEvents: pastEvents.map((e) => ({
           ...mapEventCategoryData(e),
           userRsvp: userRsvpMap.get(e.id) || null,
           friendsGoing: attendeesMap.get(e.id) || [],
+          friendsInterested: [] as never[],
         })),
       };
     }),

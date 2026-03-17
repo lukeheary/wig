@@ -1,11 +1,13 @@
 "use client";
 
-import { EventCard } from "@/components/calendar/event-card";
+import {
+  EventCard,
+  type EventCardItem,
+} from "@/components/calendar/event-card";
 import { cn } from "@/lib/utils";
-import { type EventListItem } from "@/types/trpc";
 
 interface EventCardGridProps {
-  events: EventListItem[];
+  events: EventCardItem[];
   columns?: {
     mobile: number;
     tablet?: number;

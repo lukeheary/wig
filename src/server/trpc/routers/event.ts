@@ -1430,7 +1430,7 @@ export const eventRouter = router({
               where: and(
                 inArray(eventRsvps.eventId, eventIds),
                 eq(eventRsvps.partnerRsvpByUserId, ctx.auth.userId),
-                eq(eventRsvps.status, "going")
+                inArray(eventRsvps.status, ["going", "interested"])
               ),
               with: {
                 user: true,
@@ -1453,14 +1453,14 @@ export const eventRouter = router({
         f.userId === ctx.auth.userId ? f.friendUserId : f.userId
       );
 
-      // Fetch friends' RSVPs (going status only)
+      // Fetch friends' RSVPs that should appear in the social stack
       const friendsRsvps =
         eventIds.length > 0 && friendIds.length > 0
           ? await ctx.db.query.eventRsvps.findMany({
               where: and(
                 inArray(eventRsvps.eventId, eventIds),
                 inArray(eventRsvps.userId, friendIds),
-                eq(eventRsvps.status, "going")
+                inArray(eventRsvps.status, ["going", "interested"])
               ),
               with: {
                 user: true,
@@ -1468,25 +1468,39 @@ export const eventRouter = router({
             })
           : [];
 
-      // Create a map of event IDs to attendees (current user + friends)
-      const attendeesMap = new Map<string, typeof friendsRsvps>();
-      const addAttendee = (eventId: string, attendee: (typeof friendsRsvps)[number]) => {
-        if (!attendeesMap.has(eventId)) {
-          attendeesMap.set(eventId, []);
+      // Create a map of event IDs to social RSVPs (current user + friends)
+      const socialRsvpsMap = new Map<string, typeof friendsRsvps>();
+      const addSocialRsvp = (eventId: string, attendee: (typeof friendsRsvps)[number]) => {
+        if (!socialRsvpsMap.has(eventId)) {
+          socialRsvpsMap.set(eventId, []);
         }
 
-        const attendees = attendeesMap.get(eventId)!;
-        if (attendees.some((existing) => existing.userId === attendee.userId)) {
+        const attendees = socialRsvpsMap.get(eventId)!;
+        const existingIndex = attendees.findIndex(
+          (existing) => existing.userId === attendee.userId
+        );
+
+        if (existingIndex >= 0) {
+          const existing = attendees[existingIndex];
+          if (
+            existing.status === "interested" &&
+            attendee.status === "going"
+          ) {
+            attendees[existingIndex] = attendee;
+          }
           return;
         }
 
         attendees.push(attendee);
       };
 
-      // Add current user if they're going to any events
+      // Add current user if they've RSVP'd to any events
       for (const userRsvp of userRsvps) {
-        if (userRsvp.status === "going" && currentUser) {
-          addAttendee(userRsvp.eventId, {
+        if (
+          (userRsvp.status === "going" || userRsvp.status === "interested") &&
+          currentUser
+        ) {
+          addSocialRsvp(userRsvp.eventId, {
             ...userRsvp,
             user: currentUser,
           } as any);
@@ -1495,20 +1509,27 @@ export const eventRouter = router({
 
       // Add mirrored partner RSVPs for the current user
       for (const rsvp of mirroredPartnerRsvps) {
-        addAttendee(rsvp.eventId, rsvp);
+        addSocialRsvp(rsvp.eventId, rsvp);
       }
 
       // Add friends to the map
       for (const rsvp of friendsRsvps) {
-        addAttendee(rsvp.eventId, rsvp);
+        addSocialRsvp(rsvp.eventId, rsvp);
       }
 
-      // Attach user RSVP and friends going to each event
+      // Attach user RSVP and social friend activity to each event
 
       return eventList.map((event) => ({
         ...mapEventCategoryData(event),
         userRsvp: rsvpMap.get(event.id) || null,
-        friendsGoing: attendeesMap.get(event.id) || [],
+        friendsGoing:
+          (socialRsvpsMap.get(event.id) || []).filter(
+            (rsvp) => rsvp.status === "going"
+          ) || [],
+        friendsInterested:
+          (socialRsvpsMap.get(event.id) || []).filter(
+            (rsvp) => rsvp.status === "interested"
+          ) || [],
       }));
     }),
 
@@ -2207,6 +2228,7 @@ export const eventRouter = router({
         ...mapEventCategoryData(event),
         userRsvp: null,
         friendsGoing: [] as never[],
+        friendsInterested: [] as never[],
       }));
     }),
 
@@ -2438,6 +2460,7 @@ export const eventRouter = router({
         ...mapEventCategoryData(event),
         userRsvp: rsvpMap.get(event.id) || null,
         friendsGoing: attendeesMap.get(event.id) || [],
+        friendsInterested: [] as never[],
       }));
     }),
 });

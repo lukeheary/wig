@@ -40,6 +40,13 @@ import { sendGoogleAnalyticsEvent } from "@/lib/google-analytics";
 import { CategoryPillList } from "@/components/categories/category-pill";
 
 type RsvpStatus = "going" | "interested" | "not_going";
+type SocialAvatarUser = {
+  id: string;
+  avatarImageUrl: string | null;
+  firstName: string | null;
+  lastName: string | null;
+  rsvpStatus: "going" | "interested";
+};
 
 function EventPageSkeleton() {
   return (
@@ -260,10 +267,26 @@ export default function EventPage() {
     );
   }
 
-  const goingCount = attendees?.filter((a) => a.status === "going").length || 0;
-  // Get users who are going for avatar stack
-  const goingUsers =
-    attendees?.filter((a) => a.status === "going").map((a) => a.user) || [];
+  const goingAttendees = attendees?.filter((a) => a.status === "going") || [];
+  const interestedAttendees =
+    attendees?.filter((a) => a.status === "interested") || [];
+  const goingCount = goingAttendees.length;
+  const interestedCount = interestedAttendees.length;
+  const socialStackUsers: SocialAvatarUser[] = [
+    ...goingAttendees,
+    ...interestedAttendees,
+  ].flatMap((attendee) => {
+    if (attendee.status !== "going" && attendee.status !== "interested") {
+      return [];
+    }
+
+    return [
+      {
+        ...attendee.user,
+        rsvpStatus: attendee.status,
+      },
+    ];
+  });
   const eventImageUrl =
     event.coverImageUrl ||
     event.venue?.logoImageUrl ||
@@ -409,9 +432,13 @@ export default function EventPage() {
               </div>
 
               {/* Avatars - Overlay on bottom right */}
-              {goingUsers.length > 0 && (
+              {socialStackUsers.length > 0 && (
                 <div className="absolute bottom-4 right-4">
-                  <AvatarStack users={goingUsers} maxDisplay={5} size="md" />
+                  <AvatarStack
+                    users={socialStackUsers}
+                    maxDisplay={5}
+                    size="md"
+                  />
                 </div>
               )}
 
@@ -579,34 +606,63 @@ export default function EventPage() {
             </div>
 
             {/* Lineup / Attendees Section */}
-            {attendees && attendees.length > 0 && (
+            {goingCount > 0 && (
               <div className={"pt-4"}>
                 <h2 className="mb-4 text-2xl font-bold">Who&apos;s Going</h2>
                 <div className="grid grid-cols-2 gap-4 md:grid-cols-3">
-                  {attendees
-                    .filter((a) => a.status === "going")
-                    .slice(0, 9)
-                    .map((attendee) => (
-                      <div
-                        key={attendee.user.id}
-                        className="flex items-center gap-3 rounded-lg border bg-card p-3"
-                      >
-                        <UserAvatar
-                          src={attendee.user.avatarImageUrl}
-                          name={attendee.user.firstName}
-                          className="h-10 w-10"
-                        />
-                        <div className="text-sm">
-                          <p className="font-medium">
-                            {attendee.user.firstName} {attendee.user.lastName}
-                          </p>
-                        </div>
+                  {goingAttendees.slice(0, 9).map((attendee) => (
+                    <div
+                      key={attendee.user.id}
+                      className="flex items-center gap-3 rounded-lg border bg-card p-3"
+                    >
+                      <UserAvatar
+                        src={attendee.user.avatarImageUrl}
+                        name={attendee.user.firstName}
+                        className="h-10 w-10"
+                      />
+                      <div className="text-sm">
+                        <p className="font-medium">
+                          {attendee.user.firstName} {attendee.user.lastName}
+                        </p>
                       </div>
-                    ))}
+                    </div>
+                  ))}
                 </div>
                 {goingCount > 9 && (
                   <p className="mt-4 text-sm text-muted-foreground">
                     And {goingCount - 9} others are going
+                  </p>
+                )}
+              </div>
+            )}
+
+            {interestedCount > 0 && (
+              <div className={"pt-4"}>
+                <h2 className="mb-4 text-2xl font-bold">
+                  Who&apos;s Interested
+                </h2>
+                <div className="grid grid-cols-2 gap-4 md:grid-cols-3">
+                  {interestedAttendees.slice(0, 9).map((attendee) => (
+                    <div
+                      key={attendee.user.id}
+                      className="flex items-center gap-3 rounded-lg border bg-card p-3"
+                    >
+                      <UserAvatar
+                        src={attendee.user.avatarImageUrl}
+                        name={attendee.user.firstName}
+                        className="h-10 w-10 opacity-50"
+                      />
+                      <div className="text-sm">
+                        <p className="font-medium">
+                          {attendee.user.firstName} {attendee.user.lastName}
+                        </p>
+                      </div>
+                    </div>
+                  ))}
+                </div>
+                {interestedCount > 9 && (
+                  <p className="mt-4 text-sm text-muted-foreground">
+                    And {interestedCount - 9} others are interested
                   </p>
                 )}
               </div>

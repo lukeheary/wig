@@ -61,6 +61,7 @@ function withMockFriendsGoing(events: EventListItem[]): EventListItem[] {
     const attendeeCount = ((event.title.length + index) % 4) + 1;
     const startIndex = index % MOCK_EVENT_ATTENDEES.length;
     const friendsGoing = Array.from({ length: attendeeCount }, (_, offset) => ({
+      status: offset === attendeeCount - 1 && attendeeCount > 1 ? "interested" : "going",
       user: MOCK_EVENT_ATTENDEES[
         (startIndex + offset) % MOCK_EVENT_ATTENDEES.length
       ],
@@ -68,7 +69,10 @@ function withMockFriendsGoing(events: EventListItem[]): EventListItem[] {
 
     return {
       ...event,
-      friendsGoing,
+      friendsGoing: friendsGoing.filter((rsvp) => rsvp.status === "going"),
+      friendsInterested: friendsGoing.filter(
+        (rsvp) => rsvp.status === "interested"
+      ),
     };
   });
 }

@@ -1,10 +1,12 @@
 import { UserAvatar } from "@/components/ui/user-avatar";
+import { cn } from "@/lib/utils";
 
 interface User {
   id: string;
   avatarImageUrl: string | null;
   firstName: string | null;
   lastName: string | null;
+  rsvpStatus?: "going" | "interested";
 }
 
 interface AvatarStackProps {
@@ -45,15 +47,24 @@ export function AvatarStack({
   return (
     <div className={`flex items-center -space-x-2 ${className}`}>
       <div className="flex -space-x-2">
-        {displayedUsers.map((user) => (
-          <UserAvatar
-            key={user.id}
-            src={user.avatarImageUrl}
-            name={user.firstName}
-            size={avatarSize}
-            className={`${sizeClass} border border-background bg-background`}
-          />
-        ))}
+        {displayedUsers.map((user) => {
+          const isInterested = user.rsvpStatus === "interested";
+
+          return (
+            <div key={user.id} className="relative">
+              <UserAvatar
+                src={user.avatarImageUrl}
+                name={user.firstName}
+                size={avatarSize}
+                className={cn(
+                  sizeClass,
+                  "border border-background bg-background",
+                  isInterested && "opacity-50"
+                )}
+              />
+            </div>
+          );
+        })}
       </div>
       {remainingCount > 0 && (
         <div

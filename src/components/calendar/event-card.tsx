@@ -12,8 +12,20 @@ import { AvatarStack } from "@/components/ui/avatar-stack";
 import { getEventStatusLabel } from "@/lib/event-status";
 import { buildReturnTo, withReturnTo } from "@/lib/navigation";
 
+type SocialUser = {
+  id: string;
+  avatarImageUrl: string | null;
+  firstName: string | null;
+  lastName: string | null;
+  rsvpStatus: "going" | "interested";
+};
+
+export type EventCardItem = Omit<EventListItem, "friendsInterested"> & {
+  friendsInterested?: EventListItem["friendsInterested"];
+};
+
 interface EventCardProps {
-  event: EventListItem;
+  event: EventCardItem;
 }
 
 export function EventCard({ event }: EventCardProps) {
@@ -28,7 +40,21 @@ export function EventCard({ event }: EventCardProps) {
   const startTime = formatTime(event.startAt);
 
   const friendsGoing = event.friendsGoing || [];
-  const goingUsers = friendsGoing.map((rsvp) => rsvp.user);
+  const friendsInterested = event.friendsInterested || [];
+  const socialUsers: SocialUser[] = [...friendsGoing, ...friendsInterested].flatMap(
+    (rsvp) => {
+      if (rsvp.status !== "going" && rsvp.status !== "interested") {
+        return [];
+      }
+
+      return [
+        {
+          ...rsvp.user,
+          rsvpStatus: rsvp.status,
+        },
+      ];
+    }
+  );
   const hasInactiveStatus = event.status !== "active";
   const eventImageUrl =
     event.coverImageUrl ||
@@ -96,9 +122,9 @@ export function EventCard({ event }: EventCardProps) {
         </div>
 
         {/* Friends Going - pinned to bottom right of the full card */}
-        {goingUsers.length > 0 && (
+        {socialUsers.length > 0 && (
           <div className="absolute bottom-2 right-2">
-            <AvatarStack users={goingUsers} maxDisplay={3} size="sm" />
+            <AvatarStack users={socialUsers} maxDisplay={3} size="sm" />
           </div>
         )}
       </Card>
