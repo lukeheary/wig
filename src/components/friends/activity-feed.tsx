@@ -43,6 +43,8 @@ const EVENT_UPDATE_TYPES = new Set([
   "updated",
 ]);
 
+const HIDDEN_ACTIVITY_TYPES = new Set(["created", "created_event"]);
+
 export function ActivityItem({ activity }: ActivityItemProps) {
   const pathname = usePathname();
   const searchParams = useSearchParams();
@@ -94,9 +96,6 @@ export function ActivityItem({ activity }: ActivityItemProps) {
         ) : (
           <Building2 className="h-4 w-4 text-blue-500" />
         );
-      case "created_event":
-      case "created":
-        return <CalendarPlus className="h-4 w-4 text-orange-500" />;
       case "cancelled":
         return <X className="h-4 w-4 text-red-500" />;
       case "postponed":
@@ -262,37 +261,6 @@ export function ActivityItem({ activity }: ActivityItemProps) {
               </Link>
             ) : (
               <span className="font-medium text-foreground">{entityName}</span>
-            )}
-          </>
-        );
-      case "created_event":
-      case "created":
-        return (
-          <>
-            {actorName} created a new event:{" "}
-            <Link
-              href={eventHref}
-              className="font-medium text-primary hover:underline"
-            >
-              {entityName}
-            </Link>
-            {activity.event?.venue?.name && (
-              <>
-                {" "}
-                at{" "}
-                {activity.event.venue?.slug ? (
-                  <Link
-                    href={`/venue/${activity.event.venue.slug}`}
-                    className="font-medium text-primary hover:underline"
-                  >
-                    {activity.event.venue?.name}
-                  </Link>
-                ) : (
-                  <span className="font-medium text-foreground">
-                    {activity.event.venue?.name}
-                  </span>
-                )}
-              </>
             )}
           </>
         );
@@ -517,7 +485,9 @@ export function ActivityFeed({
     });
 
   const visibleActivities = rawActivities?.filter(
-    (activity: any) => !EVENT_UPDATE_TYPES.has(activity.type)
+    (activity: any) =>
+      !EVENT_UPDATE_TYPES.has(activity.type) &&
+      !HIDDEN_ACTIVITY_TYPES.has(activity.type)
   );
 
   const activities = hidePastEvents
@@ -612,7 +582,9 @@ export function useHasRecentActivity(
   });
 
   const visibleActivities = activities?.filter(
-    (activity: any) => !EVENT_UPDATE_TYPES.has(activity.type)
+    (activity: any) =>
+      !EVENT_UPDATE_TYPES.has(activity.type) &&
+      !HIDDEN_ACTIVITY_TYPES.has(activity.type)
   );
 
   const filteredActivities = hidePastEvents
