@@ -454,19 +454,44 @@ export const placeRouter = router({
           userRsvpMap.set(rsvp.eventId, rsvp);
         }
 
+        const mirroredPartnerRsvps = await ctx.db.query.eventRsvps.findMany({
+          where: and(
+            inArray(eventRsvps.eventId, allEventIds),
+            eq(eventRsvps.partnerRsvpByUserId, ctx.auth.userId),
+            eq(eventRsvps.status, "going")
+          ),
+          with: {
+            user: true,
+          },
+        });
+
+        const addAttendee = (eventId: string, attendee: any) => {
+          if (!attendeesMap.has(eventId)) {
+            attendeesMap.set(eventId, []);
+          }
+
+          const attendees = attendeesMap.get(eventId)!;
+          if (attendees.some((existing) => existing.userId === attendee.userId)) {
+            return;
+          }
+
+          attendees.push(attendee);
+        };
+
         // Add current user to attendeesMap if they're going
         if (currentUser) {
           for (const userRsvp of userRsvps) {
             if (userRsvp.status === "going") {
-              if (!attendeesMap.has(userRsvp.eventId)) {
-                attendeesMap.set(userRsvp.eventId, []);
-              }
-              attendeesMap.get(userRsvp.eventId)!.push({
+              addAttendee(userRsvp.eventId, {
                 ...userRsvp,
                 user: currentUser,
               } as any);
             }
           }
+        }
+
+        for (const rsvp of mirroredPartnerRsvps) {
+          addAttendee(rsvp.eventId, rsvp);
         }
 
         const friendConnections = await ctx.db.query.userFriends.findMany({
@@ -496,10 +521,7 @@ export const placeRouter = router({
           });
 
           for (const rsvp of friendsRsvps) {
-            if (!attendeesMap.has(rsvp.eventId)) {
-              attendeesMap.set(rsvp.eventId, []);
-            }
-            attendeesMap.get(rsvp.eventId)!.push(rsvp);
+            addAttendee(rsvp.eventId, rsvp);
           }
         }
       }

@@ -1424,6 +1424,20 @@ export const eventRouter = router({
       // Create a map of event IDs to RSVPs
       const rsvpMap = new Map(userRsvps.map((r) => [r.eventId, r]));
 
+      const mirroredPartnerRsvps =
+        eventIds.length > 0
+          ? await ctx.db.query.eventRsvps.findMany({
+              where: and(
+                inArray(eventRsvps.eventId, eventIds),
+                eq(eventRsvps.partnerRsvpByUserId, ctx.auth.userId),
+                eq(eventRsvps.status, "going")
+              ),
+              with: {
+                user: true,
+              },
+            })
+          : [];
+
       // Fetch user's friends (bidirectional - where user is either sender or receiver)
       const friendConnections = await ctx.db.query.userFriends.findMany({
         where: and(
@@ -1456,27 +1470,37 @@ export const eventRouter = router({
 
       // Create a map of event IDs to attendees (current user + friends)
       const attendeesMap = new Map<string, typeof friendsRsvps>();
+      const addAttendee = (eventId: string, attendee: (typeof friendsRsvps)[number]) => {
+        if (!attendeesMap.has(eventId)) {
+          attendeesMap.set(eventId, []);
+        }
+
+        const attendees = attendeesMap.get(eventId)!;
+        if (attendees.some((existing) => existing.userId === attendee.userId)) {
+          return;
+        }
+
+        attendees.push(attendee);
+      };
 
       // Add current user if they're going to any events
       for (const userRsvp of userRsvps) {
         if (userRsvp.status === "going" && currentUser) {
-          if (!attendeesMap.has(userRsvp.eventId)) {
-            attendeesMap.set(userRsvp.eventId, []);
-          }
-          // Add current user to the beginning of the array
-          attendeesMap.get(userRsvp.eventId)!.push({
+          addAttendee(userRsvp.eventId, {
             ...userRsvp,
             user: currentUser,
           } as any);
         }
       }
 
+      // Add mirrored partner RSVPs for the current user
+      for (const rsvp of mirroredPartnerRsvps) {
+        addAttendee(rsvp.eventId, rsvp);
+      }
+
       // Add friends to the map
       for (const rsvp of friendsRsvps) {
-        if (!attendeesMap.has(rsvp.eventId)) {
-          attendeesMap.set(rsvp.eventId, []);
-        }
-        attendeesMap.get(rsvp.eventId)!.push(rsvp);
+        addAttendee(rsvp.eventId, rsvp);
       }
 
       // Attach user RSVP and friends going to each event
@@ -2328,6 +2352,20 @@ export const eventRouter = router({
       // Create a map of event IDs to RSVPs
       const rsvpMap = new Map(userRsvps.map((r) => [r.eventId, r]));
 
+      const mirroredPartnerRsvps =
+        eventIds.length > 0
+          ? await ctx.db.query.eventRsvps.findMany({
+              where: and(
+                inArray(eventRsvps.eventId, eventIds),
+                eq(eventRsvps.partnerRsvpByUserId, ctx.auth.userId),
+                eq(eventRsvps.status, "going")
+              ),
+              with: {
+                user: true,
+              },
+            })
+          : [];
+
       // currentUser already fetched above
 
       // Fetch user's friends
@@ -2362,26 +2400,37 @@ export const eventRouter = router({
 
       // Create a map of event IDs to attendees
       const attendeesMap = new Map<string, typeof friendsRsvps>();
+      const addAttendee = (eventId: string, attendee: (typeof friendsRsvps)[number]) => {
+        if (!attendeesMap.has(eventId)) {
+          attendeesMap.set(eventId, []);
+        }
+
+        const attendees = attendeesMap.get(eventId)!;
+        if (attendees.some((existing) => existing.userId === attendee.userId)) {
+          return;
+        }
+
+        attendees.push(attendee);
+      };
 
       // Add current user if they're going to any events
       for (const userRsvp of userRsvps) {
         if (userRsvp.status === "going" && currentUser) {
-          if (!attendeesMap.has(userRsvp.eventId)) {
-            attendeesMap.set(userRsvp.eventId, []);
-          }
-          attendeesMap.get(userRsvp.eventId)!.push({
+          addAttendee(userRsvp.eventId, {
             ...userRsvp,
             user: currentUser,
           } as any);
         }
       }
 
+      // Add mirrored partner RSVPs for the current user
+      for (const rsvp of mirroredPartnerRsvps) {
+        addAttendee(rsvp.eventId, rsvp);
+      }
+
       // Add friends to the map
       for (const rsvp of friendsRsvps) {
-        if (!attendeesMap.has(rsvp.eventId)) {
-          attendeesMap.set(rsvp.eventId, []);
-        }
-        attendeesMap.get(rsvp.eventId)!.push(rsvp);
+        addAttendee(rsvp.eventId, rsvp);
       }
 
       // Return events with userRsvp and friendsGoing attached
