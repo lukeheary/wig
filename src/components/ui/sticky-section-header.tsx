@@ -42,7 +42,14 @@ export function StickySectionHeader({
       <div className={cn("sticky top-14 z-30 w-full md:top-16", className)}>
         <div className="container mx-auto flex flex-row px-4">
           <div className="w-fit bg-background pr-0.5">{children}</div>
-          <img src={"/svg/header-corner.svg"} alt="" aria-hidden />
+          <img
+            src="/svg/header-corner.svg"
+            alt=""
+            aria-hidden
+            width={36}
+            height={36}
+            className="block h-9 w-9 shrink-0"
+          />
         </div>
       </div>
     </>
