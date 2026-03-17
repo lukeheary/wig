@@ -82,6 +82,7 @@ import { useAuth } from "@clerk/nextjs";
 import { sendGoogleAnalyticsEvent } from "@/lib/google-analytics";
 
 type ViewMode = "week" | "month";
+const HOME_ADD_FRIENDS_BANNER_KEY = "wig:home:add-friends-banner-dismissed";
 
 function StickyDateHeader({
   dateHeader,
@@ -127,6 +128,8 @@ function HomePageContent() {
   const { userId } = useAuth();
   const [activeFilter, setActiveFilter] = useState<EventFilterTab>("all");
   const [selectedCategories, setSelectedCategories] = useState<string[]>([]);
+  const [isAddFriendsBannerDismissed, setIsAddFriendsBannerDismissed] =
+    useState(false);
   const [isSticky, setIsSticky] = useState(false);
   const stickySentinelRef = useRef<HTMLDivElement>(null);
   const searchInputRef = useRef<HTMLInputElement>(null);
@@ -176,6 +179,9 @@ function HomePageContent() {
   // Get current user to show their city
   const { data: currentUser, isLoading: isLoadingUser } =
     trpc.user.getCurrentUser.useQuery();
+  const { data: acceptedFriends } = trpc.friends.listFriends.useQuery({
+    statusFilter: "accepted",
+  });
 
   // Check if there's recent activity to show
   const { hasActivity: hasRecentActivity } = useHasRecentActivity(3, true);
@@ -472,6 +478,34 @@ function HomePageContent() {
     isCurrentWeek &&
     isDefaultCalendarView &&
     selectedCategories.length === 0;
+  const hasAcceptedFriends = (acceptedFriends?.length ?? 0) > 0;
+  const shouldShowAddFriendsBanner =
+    !isSearchMode &&
+    !isSearching &&
+    !showSkeletons &&
+    isDefaultCalendarView &&
+    !hasAcceptedFriends &&
+    !isAddFriendsBannerDismissed;
+
+  useEffect(() => {
+    if (typeof window === "undefined") return;
+    setIsAddFriendsBannerDismissed(
+      window.localStorage.getItem(HOME_ADD_FRIENDS_BANNER_KEY) === "true"
+    );
+  }, []);
+
+  useEffect(() => {
+    if (!hasAcceptedFriends || typeof window === "undefined") return;
+    window.localStorage.removeItem(HOME_ADD_FRIENDS_BANNER_KEY);
+    setIsAddFriendsBannerDismissed(false);
+  }, [hasAcceptedFriends]);
+
+  const handleAddFriendsBannerClick = useCallback(() => {
+    if (typeof window !== "undefined") {
+      window.localStorage.setItem(HOME_ADD_FRIENDS_BANNER_KEY, "true");
+    }
+    setIsAddFriendsBannerDismissed(true);
+  }, []);
 
   const handlePrevious = async () => {
     if (isCurrentWeek) {
@@ -768,6 +802,30 @@ function HomePageContent() {
             </div>
           )}
         </StickySearchBar>
+
+        {shouldShowAddFriendsBanner && (
+          <Card className="mb-4 bg-primary/5">
+            <Link
+              href="/friends"
+              aria-label="Go to friends page"
+              onClick={handleAddFriendsBannerClick}
+              className="block"
+            >
+              <CardContent className="flex items-center justify-between gap-4 p-4">
+                <div className="space-y-1">
+                  <p className="text-xl font-semibold text-foreground">
+                    WIG is better with friends.
+                  </p>
+                  <p className="text-sm text-muted-foreground">
+                    Add your friends to see who is going out.
+                  </p>
+                </div>
+
+                <ChevronRight className="h-5 w-5 shrink-0 text-white" />
+              </CardContent>
+            </Link>
+          </Card>
+        )}
 
         {/* Recently Added Events (when search focused but no query) */}
         {isSearchMode && !isSearching && !showSkeletons && (

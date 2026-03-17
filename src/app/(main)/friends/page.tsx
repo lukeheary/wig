@@ -85,6 +85,13 @@ function FriendsPageContent() {
   const { data: pendingRequests } = trpc.friends.listFriends.useQuery({
     statusFilter: "pending",
   });
+  const acceptedFriends = friends?.filter((f) => f.status === "accepted") || [];
+  const shouldShowRecentUsers =
+    (isSearchMode && searchQuery.length < 2) ||
+    (!isSearchMode &&
+      activeView === "discover" &&
+      !!friends &&
+      acceptedFriends.length === 0);
 
   // Search users (includes friends and non-friends)
   const { data: searchResults, isLoading: searchLoading } =
@@ -97,10 +104,9 @@ function FriendsPageContent() {
   const { data: recentUsers, isLoading: recentLoading } =
     trpc.friends.getRecentUsers.useQuery(
       { limit: 20, cursor: 0 },
-      { enabled: isSearchMode && searchQuery.length < 2 }
+      { enabled: shouldShowRecentUsers }
     );
 
-  const acceptedFriends = friends?.filter((f) => f.status === "accepted") || [];
   const sentRequests = pendingRequests?.filter((f) => f.isSender) || [];
   const receivedRequests = pendingRequests?.filter((f) => !f.isSender) || [];
   const relatedUserIds = new Set(
@@ -268,6 +274,57 @@ function FriendsPageContent() {
     [sentRequests, matchesRequestQuery]
   );
   const hasAnyRequests = receivedRequests.length > 0 || sentRequests.length > 0;
+
+  const renderRecentlyJoined = () => (
+    <>
+      <StickySectionHeader className="-mx-4">
+        <h2 className="text-xl font-semibold">Recently Joined</h2>
+      </StickySectionHeader>
+      {recentLoading ? (
+        <div className="flex justify-center py-12">
+          <Loader2 className="h-8 w-8 animate-spin text-muted-foreground" />
+        </div>
+      ) : !recentUsers?.items || recentUsers.items.length === 0 ? (
+        <EmptyStateCard icon={Users} title="No recent members to show" />
+      ) : (
+        <UserList
+          items={recentUsers.items}
+          getUser={(user) => user}
+          renderBadges={(user) =>
+            isFriend(user.id) ? (
+              <Badge variant="secondary" className="text-xs">
+                Friend
+              </Badge>
+            ) : null
+          }
+          renderAction={(user) =>
+            isAlreadyAdded(user.id) ? (
+              <Button size="sm" disabled variant="outline">
+                Added
+              </Button>
+            ) : (
+              <Button
+                size="sm"
+                onClick={() => {
+                  sendGoogleAnalyticsEvent("friend_request_sent", userId, {
+                    target_user_id: user.id,
+                    source: isSearchMode
+                      ? "friends_recent_users"
+                      : "friends_zero_state_recent_users",
+                  });
+                  sendRequestMutation.mutate({ friendUserId: user.id });
+                }}
+                disabled={sendRequestMutation.isPending}
+              >
+                <UserPlus className="mr-2 h-4 w-4" />
+                Add
+              </Button>
+            )
+          }
+        />
+      )}
+    </>
+  );
 
   return (
     <div className="container mx-auto pb-8 pt-4">
@@ -612,59 +669,7 @@ function FriendsPageContent() {
             </>
           ) : (
             // Recent Users (when focused but no query)
-            <>
-              <StickySectionHeader className="-mx-4">
-                <h2 className="text-xl font-semibold">Recently Joined</h2>
-              </StickySectionHeader>
-              {recentLoading ? (
-                <div className="flex justify-center py-12">
-                  <Loader2 className="h-8 w-8 animate-spin text-muted-foreground" />
-                </div>
-              ) : !recentUsers?.items || recentUsers.items.length === 0 ? (
-                <EmptyStateCard
-                  icon={Users}
-                  title="No recent members to show"
-                />
-              ) : (
-                <UserList
-                  items={recentUsers.items}
-                  getUser={(user) => user}
-                  renderBadges={(user) =>
-                    isFriend(user.id) ? (
-                      <Badge variant="secondary" className="text-xs">
-                        Friend
-                      </Badge>
-                    ) : null
-                  }
-                  renderAction={(user) =>
-                    isAlreadyAdded(user.id) ? (
-                      <Button size="sm" disabled variant="outline">
-                        Added
-                      </Button>
-                    ) : (
-                      <Button
-                        size="sm"
-                        onClick={() => {
-                          sendGoogleAnalyticsEvent(
-                            "friend_request_sent",
-                            userId,
-                            {
-                              target_user_id: user.id,
-                              source: "friends_recent_users",
-                            }
-                          );
-                          sendRequestMutation.mutate({ friendUserId: user.id });
-                        }}
-                        disabled={sendRequestMutation.isPending}
-                      >
-                        <UserPlus className="mr-2 h-4 w-4" />
-                        Add
-                      </Button>
-                    )
-                  }
-                />
-              )}
-            </>
+            renderRecentlyJoined()
           )}
         </div>
       ) : (
@@ -737,9 +742,13 @@ function FriendsPageContent() {
           )}
 
           {/* Activity Feed */}
-          <div>
-            <ActivityFeed groupByRecency groupHeaderClassName="-mx-4" />
-          </div>
+          {acceptedFriends.length === 0 ? (
+            renderRecentlyJoined()
+          ) : (
+            <div>
+              <ActivityFeed groupByRecency groupHeaderClassName="-mx-4" />
+            </div>
+          )}
         </>
       )}
     </div>
