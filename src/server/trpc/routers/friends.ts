@@ -428,6 +428,7 @@ export const friendsRouter = router({
       z.object({
         limit: z.number().min(1).max(100).default(50),
         offset: z.number().min(0).default(0),
+        includeEventUpdates: z.boolean().default(true),
       })
     )
     .query(async ({ ctx, input }) => {
@@ -575,44 +576,51 @@ export const friendsRouter = router({
       }
 
       // 3. Add event updates for events the current user is following via RSVP
-      const subscribedRsvps = await ctx.db.query.eventRsvps.findMany({
-        where: and(
-          eq(eventRsvps.userId, ctx.auth.userId),
-          inArray(eventRsvps.status, ["going", "interested"])
-        ),
-        columns: {
-          eventId: true,
-        },
-      });
+      const normalizedEventUpdates = input.includeEventUpdates
+        ? (
+            await (async () => {
+              const subscribedRsvps = await ctx.db.query.eventRsvps.findMany({
+                where: and(
+                  eq(eventRsvps.userId, ctx.auth.userId),
+                  inArray(eventRsvps.status, ["going", "interested"])
+                ),
+                columns: {
+                  eventId: true,
+                },
+              });
 
-      const subscribedEventIds = [
-        ...new Set(subscribedRsvps.map((rsvp) => rsvp.eventId)),
-      ];
+              const subscribedEventIds = [
+                ...new Set(subscribedRsvps.map((rsvp) => rsvp.eventId)),
+              ];
 
-      const eventUpdates =
-        subscribedEventIds.length > 0
-          ? await ctx.db.query.eventActivity.findMany({
-              where: inArray(eventActivity.eventId, subscribedEventIds),
-              orderBy: [desc(eventActivity.createdAt)],
-              limit: feedWindow,
-              with: {
-                actor: true,
-                event: {
-                  with: {
-                    venue: true,
+              if (subscribedEventIds.length === 0) {
+                return [];
+              }
+
+              const eventUpdates = await ctx.db.query.eventActivity.findMany({
+                where: inArray(eventActivity.eventId, subscribedEventIds),
+                orderBy: [desc(eventActivity.createdAt)],
+                limit: feedWindow,
+                with: {
+                  actor: true,
+                  event: {
+                    with: {
+                      venue: true,
+                    },
                   },
                 },
-              },
-            })
-          : [];
+              });
 
-      const normalizedEventUpdates = eventUpdates
-        .filter((update) => Boolean(update.event) && update.type !== "created")
-        .map((update) => ({
-          ...update,
-          entityType: "event" as const,
-          entityId: update.eventId,
-        }));
+              return eventUpdates
+                .filter((update) => Boolean(update.event) && update.type !== "created")
+                .map((update) => ({
+                  ...update,
+                  entityType: "event" as const,
+                  entityId: update.eventId,
+                }));
+            })()
+          )
+        : [];
 
       return [...friendFeed, ...normalizedEventUpdates]
         .sort(

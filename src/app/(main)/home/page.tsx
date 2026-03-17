@@ -903,7 +903,12 @@ function HomePageContent() {
             </Link>
           </StickySectionHeader>
           <div className="container mx-auto px-4">
-            <ActivityFeed limit={3} hideWhenEmpty hidePastEvents />
+            <ActivityFeed
+              limit={3}
+              hideWhenEmpty
+              hidePastEvents
+              includeEventUpdates={false}
+            />
           </div>
         </div>
       )}

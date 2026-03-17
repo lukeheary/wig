@@ -3,7 +3,6 @@
 import { trpc } from "@/lib/trpc";
 import { UserAvatar } from "@/components/ui/user-avatar";
 import Image from "next/image";
-import { useEffect } from "react";
 import {
   Loader2,
   Users,
@@ -459,6 +458,7 @@ interface ActivityFeedProps {
   hidePastEvents?: boolean;
   groupByRecency?: boolean;
   groupHeaderClassName?: string;
+  includeEventUpdates?: boolean;
 }
 
 function getRecencyLabel(createdAt: Date) {
@@ -479,10 +479,12 @@ export function ActivityFeed({
   hidePastEvents = false,
   groupByRecency = false,
   groupHeaderClassName,
+  includeEventUpdates = true,
 }: ActivityFeedProps) {
   const { data: rawActivities, isLoading } =
     trpc.friends.getFriendFeed.useQuery({
       limit,
+      includeEventUpdates,
     });
 
   const visibleActivities = rawActivities?.filter(
@@ -499,14 +501,6 @@ export function ActivityFeed({
         return eventDate >= today;
       })
     : visibleActivities;
-
-  useEffect(() => {
-    if (limit !== 3 || !hidePastEvents) return;
-
-    console.log("[Recent Activity][/home] rawActivities", rawActivities);
-    console.log("[Recent Activity][/home] visibleActivities", visibleActivities);
-    console.log("[Recent Activity][/home] finalActivities", activities);
-  }, [activities, hidePastEvents, limit, rawActivities, visibleActivities]);
 
   if (isLoading) {
     return (
