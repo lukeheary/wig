@@ -24,7 +24,7 @@ import {
   Expand,
 } from "lucide-react";
 import { useToast } from "@/hooks/use-toast";
-import { format } from "date-fns";
+import { differenceInCalendarDays, format, startOfDay } from "date-fns";
 import { cn } from "@/lib/utils";
 import { AvatarStack } from "@/components/ui/avatar-stack";
 import { useEffect, useMemo, useState } from "react";
@@ -296,6 +296,16 @@ export default function EventPage() {
   const eventDate = new Date(event.startAt);
   const formattedDate = format(eventDate, "EEE, MMM d");
   const timeWithoutTz = format(eventDate, "h:mm a");
+  const daysUntilEvent = differenceInCalendarDays(
+    startOfDay(eventDate),
+    startOfDay(new Date())
+  );
+  const relativeDateLabel =
+    daysUntilEvent === 1
+      ? "tomorrow"
+      : daysUntilEvent > 1
+        ? `in ${daysUntilEvent} days`
+        : null;
   const timezone =
     new Intl.DateTimeFormat("en-US", { timeZoneName: "short" })
       .formatToParts(eventDate)
@@ -489,6 +499,11 @@ export default function EventPage() {
               <Calendar className="h-4 w-4" />
               <span>
                 {formattedDate} at {formattedTime}
+                {relativeDateLabel ? (
+                  <span className="ml-2 text-sm text-muted-foreground">
+                    ({relativeDateLabel})
+                  </span>
+                ) : null}
               </span>
             </div>
 
