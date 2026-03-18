@@ -11,6 +11,7 @@ import {
 } from "@/components/places/place-edit-form";
 import Link from "next/link";
 import { BackButtonHeader } from "@/components/shared/back-button-header";
+import { PageContainer } from "@/components/shared/page-container";
 import { resolveBackHref } from "@/lib/navigation";
 
 export default function EditPlacePage() {
@@ -171,7 +172,7 @@ export default function EditPlacePage() {
   };
 
   return (
-    <div className="container mx-auto max-w-2xl space-y-2 pb-4">
+    <PageContainer className="max-w-2xl space-y-2">
       <BackButtonHeader backHref={backHref} title={`Edit ${typeLabel}`} />
 
       <PlaceEditForm
@@ -186,6 +187,6 @@ export default function EditPlacePage() {
         }
         showScraperFields={isAdmin}
       />
-    </div>
+    </PageContainer>
   );
 }

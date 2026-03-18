@@ -4,10 +4,11 @@ import { Suspense } from "react";
 import { Loader2 } from "lucide-react";
 import { ActivityFeed } from "@/components/friends/activity-feed";
 import { BackButtonHeader } from "@/components/shared/back-button-header";
+import { PageContainer } from "@/components/shared/page-container";
 
 function ActivityPageContent() {
   return (
-    <div className="container mx-auto pb-4">
+    <PageContainer>
       <BackButtonHeader
         backHref="/friends"
         title="Activity"
@@ -15,7 +16,7 @@ function ActivityPageContent() {
       />
 
       <ActivityFeed />
-    </div>
+    </PageContainer>
   );
 }
 

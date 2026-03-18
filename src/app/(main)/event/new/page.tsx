@@ -5,6 +5,7 @@ import { useRouter, useSearchParams } from "next/navigation";
 import { Loader2 } from "lucide-react";
 import { EventForm } from "@/components/events/event-form";
 import { BackButtonHeader } from "@/components/shared/back-button-header";
+import { PageContainer } from "@/components/shared/page-container";
 import { resolveBackHref, withReturnTo } from "@/lib/navigation";
 
 function NewEventPageContent() {
@@ -18,7 +19,7 @@ function NewEventPageContent() {
   const cancelHref = resolveBackHref({ returnTo, fallbackHref: "/home" });
 
   return (
-    <div className="container mx-auto max-w-2xl space-y-6 pb-4">
+    <PageContainer className="max-w-2xl space-y-6">
       <BackButtonHeader
         backFallbackHref="/home"
         returnTo={returnTo}
@@ -38,7 +39,7 @@ function NewEventPageContent() {
         }}
         onCancel={() => router.push(cancelHref)}
       />
-    </div>
+    </PageContainer>
   );
 }
 

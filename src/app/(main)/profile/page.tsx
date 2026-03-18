@@ -14,6 +14,7 @@ import { useToast } from "@/hooks/use-toast";
 import { GooglePlacesAutocomplete } from "@/components/google-places-autocomplete";
 import { S3Uploader } from "@/components/ui/s3-uploader";
 import { DateOfBirthInput } from "@/components/ui/date-of-birth-input";
+import { PageContainer } from "@/components/shared/page-container";
 
 export default function ProfilePage() {
   const RESERVED_USERNAMES = new Set(["luke"]);
@@ -534,7 +535,7 @@ export default function ProfilePage() {
   );
 
   return (
-    <div className="container mx-auto max-w-2xl space-y-6 pb-4">
+    <PageContainer className="max-w-2xl space-y-6">
       {/*<div className="flex items-center justify-between">*/}
       {/*  <h1 className="text-3xl font-bold">Profile</h1>*/}
       {/*  /!*<UserButton afterSignOutUrl="/sign-in" />*!/*/}
@@ -981,6 +982,6 @@ export default function ProfilePage() {
       {/*    </div>*/}
       {/*  </CardContent>*/}
       {/*</Card>*/}
-    </div>
+    </PageContainer>
   );
 }

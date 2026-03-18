@@ -15,6 +15,7 @@ import {
 import pluralize from "pluralize";
 import Link from "next/link";
 import { Button } from "@/components/ui/button";
+import { PageContainer } from "@/components/shared/page-container";
 
 export default function MyPlacesPage() {
   const { data: myPlaces, isLoading } = trpc.place.getMyPlaces.useQuery();
@@ -36,7 +37,7 @@ export default function MyPlacesPage() {
   const showOrganizersSection = !hasOnlyOneVenue;
 
   return (
-    <div className="container mx-auto space-y-4 pb-4">
+    <PageContainer className="space-y-4">
       {/*<div className="flex justify-end">*/}
       {/*  <Link href="/event/new?recurring=true">*/}
       {/*    <Button>*/}
@@ -195,6 +196,6 @@ export default function MyPlacesPage() {
           )}
         </div>
       )}
-    </div>
+    </PageContainer>
   );
 }

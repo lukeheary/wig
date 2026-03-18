@@ -24,6 +24,7 @@ import { StickySectionHeader } from "@/components/ui/sticky-section-header";
 import { useAuth } from "@clerk/nextjs";
 import { sendGoogleAnalyticsEvent } from "@/lib/google-analytics";
 import { EmptyStateCard } from "@/components/shared/empty-state-card";
+import { PageContainer } from "@/components/shared/page-container";
 import { cn } from "@/lib/utils";
 import { Card, CardContent } from "@/components/ui/card";
 
@@ -334,7 +335,7 @@ function FriendsPageContent() {
   );
 
   return (
-    <div className="container mx-auto pb-4 pt-4">
+    <PageContainer>
       {/* Sticky sentinel for intersection observer */}
       <div ref={stickySentinelRef} className="h-px w-full" />
 
@@ -755,7 +756,7 @@ function FriendsPageContent() {
           )}
         </>
       )}
-    </div>
+    </PageContainer>
   );
 }
 

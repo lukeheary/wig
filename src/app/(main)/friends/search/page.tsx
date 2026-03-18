@@ -17,6 +17,7 @@ import { useQueryState } from "nuqs";
 import { useAuth } from "@clerk/nextjs";
 import { sendGoogleAnalyticsEvent } from "@/lib/google-analytics";
 import { BackButtonHeader } from "@/components/shared/back-button-header";
+import { PageContainer } from "@/components/shared/page-container";
 
 function SearchPageContent() {
   const { toast } = useToast();
@@ -78,7 +79,7 @@ function SearchPageContent() {
     relatedUserIds.has(targetUserId);
 
   return (
-    <div className="container mx-auto pb-4">
+    <PageContainer>
       <BackButtonHeader
         backHref="/friends"
         title="Find Friends"
@@ -254,7 +255,7 @@ function SearchPageContent() {
           </section>
         </>
       )}
-    </div>
+    </PageContainer>
   );
 }
 

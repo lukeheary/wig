@@ -16,6 +16,7 @@ import { VenueSelector, VenueData } from "@/components/events/venue-selector";
 import { CategoryMultiSelect } from "@/components/category-multi-select";
 import { DatePicker } from "@/components/ui/date-picker";
 import { BackButtonHeader } from "@/components/shared/back-button-header";
+import { PageContainer } from "@/components/shared/page-container";
 import {
   Select,
   SelectContent,
@@ -318,7 +319,7 @@ export default function EditEventPage() {
   }
 
   return (
-    <div className="container mx-auto max-w-2xl space-y-2 pb-4">
+    <PageContainer className="max-w-2xl space-y-2">
       <div className="flex flex-wrap items-center justify-between gap-3">
         <BackButtonHeader backHref={eventDetailHref} title="Edit Event" />
         <Button
@@ -509,6 +510,6 @@ export default function EditEventPage() {
           </form>
         </CardContent>
       </Card>
-    </div>
+    </PageContainer>
   );
 }

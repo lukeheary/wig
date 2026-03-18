@@ -28,6 +28,7 @@ import { resolveMetroArea } from "@/lib/metro-areas";
 import { cn } from "@/lib/utils";
 import { StickySearchBar } from "@/components/ui/sticky-search-bar";
 import { HapticPreset, useHaptics } from "@/hooks/use-haptics";
+import { PageContainer } from "@/components/shared/page-container";
 
 type FilterType = "all" | "venues" | "organizers" | "following";
 
@@ -237,7 +238,7 @@ function PlacesPageContent() {
   const isLoading = isLoadingPlaces;
 
   return (
-    <div className="container mx-auto pb-4 pt-4">
+    <PageContainer>
       {/* Sticky sentinel for intersection observer */}
       <div ref={stickySentinelRef} className="h-px w-full" />
 
@@ -431,7 +432,7 @@ function PlacesPageContent() {
           </CardContent>
         </Card>
       )}
-    </div>
+    </PageContainer>
   );
 }
 

@@ -22,6 +22,7 @@ import {
 import { DatePicker } from "@/components/ui/date-picker";
 import { Button } from "@/components/ui/button";
 import { BackButtonHeader } from "@/components/shared/back-button-header";
+import { PageContainer } from "@/components/shared/page-container";
 import {
   EVENT_STATUS_VALUES,
   getEventStatusLabel,
@@ -395,7 +396,7 @@ export default function EditEventSeriesPage() {
   const isSubmitting = isSaving || isDeleting;
 
   return (
-    <div className="container mx-auto max-w-2xl space-y-2 pb-4">
+    <PageContainer className="max-w-2xl space-y-2">
       <div className="flex flex-wrap items-center justify-between gap-3">
         <BackButtonHeader
           backFallbackHref="/home"
@@ -770,6 +771,6 @@ export default function EditEventSeriesPage() {
           </form>
         </CardContent>
       </Card>
-    </div>
+    </PageContainer>
   );
 }

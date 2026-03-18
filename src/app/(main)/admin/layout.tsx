@@ -29,7 +29,7 @@ export default function AdminLayout({
   }
 
   return (
-    <div className="container mx-auto flex justify-center pb-4">
+    <div className="container mx-auto flex justify-center pb-6">
       <div className="w-full">{children}</div>
     </div>
   );
