@@ -371,8 +371,8 @@ export default function EventPage() {
       <div className="container mx-auto w-full px-4 pb-6">
         <div className="lg:flex lg:items-start lg:gap-10">
           {/* Cover Image - Left column on desktop */}
-          <div className="lg:w-[360px] lg:flex-none">
-            <div className="relative aspect-square w-full overflow-hidden rounded-2xl bg-muted lg:aspect-auto lg:min-h-[360px]">
+          <div className="lg:w-[420px] lg:flex-none">
+            <div className="relative aspect-square w-full overflow-hidden rounded-2xl bg-muted lg:aspect-auto lg:min-h-[420px]">
               {eventImageUrl ? (
                 <div className="h-full w-full">
                   <Image
@@ -383,7 +383,7 @@ export default function EventPage() {
                       "object-cover",
                       isStatusFlagged && "opacity-50 blur-[2px]"
                     )}
-                    sizes="360px"
+                    sizes="420px"
                     priority
                   />
                 </div>
@@ -467,9 +467,11 @@ export default function EventPage() {
           </div>
 
           {/* Content - Right column on desktop */}
-          <div className="lg:flex-1 lg:pt-0">
+          <div className="lg:flex-1 lg:pt-14">
             <div className="mb-2 pt-4">
-              <h1 className="text-3xl font-bold md:text-4xl">{event.title}</h1>
+              <h1 className="font-space-grotesk text-3xl font-bold md:text-6xl">
+                {event.title}
+              </h1>
             </div>
 
             {(event.venue?.name || (event.categories?.length ?? 0) > 0) && (
@@ -492,7 +494,7 @@ export default function EventPage() {
 
             <div
               className={cn(
-                "mt-1 flex items-center gap-2 text-lg",
+                "mt-1 flex items-center gap-2 text-lg text-neon-teal",
                 isStatusFlagged && "text-muted-foreground line-through"
               )}
             >
@@ -539,7 +541,7 @@ export default function EventPage() {
                         ? "secondary"
                         : "outline"
                     }
-                    className="flex-1 text-base font-medium"
+                    className="flex-1 py-6 text-base font-medium"
                     size="lg"
                     onClick={() => handleRsvp("interested")}
                     disabled={
@@ -553,7 +555,7 @@ export default function EventPage() {
                       event.userRsvp?.status === "going" ? "default" : "outline"
                     }
                     className={cn(
-                      "flex-1 text-base font-medium transition-colors",
+                      "flex-1 py-6 text-base font-medium transition-colors",
                       event.userRsvp?.status === "going" &&
                         "border-transparent bg-green-500 text-black hover:bg-green-600"
                     )}

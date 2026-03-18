@@ -107,3 +107,9 @@
     padding: 0;
   }
 }
+
+@layer utilities {
+  .font-space-grotesk {
+    font-family: var(--font-space-grotesk), sans-serif;
+  }
+}

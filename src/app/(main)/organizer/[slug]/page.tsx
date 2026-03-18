@@ -366,7 +366,7 @@ export default function PlacePage() {
       {place.pastEvents && (place.pastEvents as any[]).length > 0 && (
         <div className="pt-4">
           <StickySectionHeader>
-            <span className="text-xl font-semibold">Past Events</span>
+            <span>Past Events</span>
           </StickySectionHeader>
           <div className="container mx-auto">
             <EventCardGrid

@@ -149,7 +149,7 @@ export function ActivityItem({ activity }: ActivityItemProps) {
         ) : null}
         <Link
           href={eventHref}
-          className="font-medium text-primary hover:underline"
+          className="font-medium text-neon-teal text-primary hover:underline"
         >
           {entityName}
         </Link>
@@ -267,7 +267,10 @@ export function ActivityItem({ activity }: ActivityItemProps) {
       case "cancelled":
         return (
           <>
-            <Link href={eventHref} className="font-medium text-primary hover:underline">
+            <Link
+              href={eventHref}
+              className="font-medium text-primary hover:underline"
+            >
               {entityName}
             </Link>
             {activity.event?.venue?.name && (
@@ -288,14 +291,17 @@ export function ActivityItem({ activity }: ActivityItemProps) {
                 )}
               </>
             )}
-            {cancelledEventDatePhrase ? ` ${cancelledEventDatePhrase}` : ""}{" "}
-            has been cancelled
+            {cancelledEventDatePhrase ? ` ${cancelledEventDatePhrase}` : ""} has
+            been cancelled
           </>
         );
       case "postponed":
         return (
           <>
-            <Link href={eventHref} className="font-medium text-primary hover:underline">
+            <Link
+              href={eventHref}
+              className="font-medium text-primary hover:underline"
+            >
               {entityName}
             </Link>
             {activity.event?.venue?.name && (
@@ -322,7 +328,10 @@ export function ActivityItem({ activity }: ActivityItemProps) {
       case "rescheduled":
         return (
           <>
-            <Link href={eventHref} className="font-medium text-primary hover:underline">
+            <Link
+              href={eventHref}
+              className="font-medium text-primary hover:underline"
+            >
               {entityName}
             </Link>
             {activity.event?.venue?.name && (
@@ -349,7 +358,10 @@ export function ActivityItem({ activity }: ActivityItemProps) {
       case "restored":
         return (
           <>
-            <Link href={eventHref} className="font-medium text-primary hover:underline">
+            <Link
+              href={eventHref}
+              className="font-medium text-primary hover:underline"
+            >
               {entityName}
             </Link>
             {activity.event?.venue?.name && (
@@ -376,7 +388,10 @@ export function ActivityItem({ activity }: ActivityItemProps) {
       case "updated":
         return (
           <>
-            <Link href={eventHref} className="font-medium text-primary hover:underline">
+            <Link
+              href={eventHref}
+              className="font-medium text-primary hover:underline"
+            >
               {entityName}
             </Link>
             {activity.event?.venue?.name && (
@@ -542,9 +557,7 @@ export function ActivityFeed({
         {groups.map((group) => (
           <div key={`${group.label}-${group.items[0]?.id || "group"}`}>
             <StickySectionHeader className={groupHeaderClassName}>
-              <h2 className="text-xl font-semibold tracking-tight">
-                {group.label}
-              </h2>
+              <h2 className="tracking-tight">{group.label}</h2>
             </StickySectionHeader>
             <div className="flex flex-col">
               {group.items.map((activity: any) => (

@@ -286,7 +286,7 @@ function FriendsPageContent() {
   const renderRecentlyJoined = () => (
     <>
       <StickySectionHeader className="-mx-4">
-        <h2 className="text-xl font-semibold">Recently Joined</h2>
+        <h2>Recently Joined</h2>
       </StickySectionHeader>
       {recentLoading ? (
         <div className="flex justify-center py-12">
@@ -426,9 +426,7 @@ function FriendsPageContent() {
         activeView === "list" ? (
           <>
             <StickySectionHeader className="-mx-4">
-              <h2 className="text-xl font-semibold tracking-tight">
-                My Friends
-              </h2>
+              <h2 className="tracking-tight">My Friends</h2>
             </StickySectionHeader>
 
             <Card>
@@ -472,9 +470,7 @@ function FriendsPageContent() {
             ) : !hasAnyRequests ? (
               <>
                 <StickySectionHeader className="-mx-4">
-                  <h2 className="text-xl font-semibold tracking-tight">
-                    Friend Requests
-                  </h2>
+                  <h2 className="tracking-tight">Friend Requests</h2>
                 </StickySectionHeader>
                 <EmptyStateCard
                   icon={Mail}
@@ -495,9 +491,7 @@ function FriendsPageContent() {
               <>
                 <section>
                   <StickySectionHeader className="-mx-4">
-                    <h2 className="text-xl font-semibold tracking-tight">
-                      Received Requests
-                    </h2>
+                    <h2 className="tracking-tight">Received Requests</h2>
                   </StickySectionHeader>
                   <Card>
                     <CardContent className="pt-6">
@@ -576,9 +570,7 @@ function FriendsPageContent() {
                   (!normalizedRequestQuery && sentRequests.length > 0)) && (
                   <section className="pt-4">
                     <StickySectionHeader className="-mx-4">
-                      <h2 className="text-xl font-semibold tracking-tight">
-                        Sent Requests
-                      </h2>
+                      <h2 className="tracking-tight">Sent Requests</h2>
                     </StickySectionHeader>
                     <Card>
                       <CardContent className="pt-6">

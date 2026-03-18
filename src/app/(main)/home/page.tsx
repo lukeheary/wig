@@ -93,9 +93,7 @@ function StickyDateHeader({
 }) {
   return (
     <StickySectionHeader>
-      <span className={cn("text-xl font-semibold", isToday && "text-primary")}>
-        {dateHeader}
-      </span>
+      <span className={cn(isToday && "text-primary")}>{dateHeader}</span>
     </StickySectionHeader>
   );
 }
@@ -789,7 +787,7 @@ function HomePageContent() {
                           className={cn(
                             "inline-flex shrink-0 items-center gap-1 rounded-full px-3.5 py-1.5 text-xs font-medium transition-colors",
                             isSelected
-                              ? "bg-foreground text-background"
+                              ? "bg-neon-teal text-background"
                               : "bg-muted/50 text-muted-foreground md:hover:text-foreground"
                           )}
                         >

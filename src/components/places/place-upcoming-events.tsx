@@ -75,7 +75,7 @@ export function PlaceUpcomingEvents({ events }: PlaceUpcomingEventsProps) {
       {groupedEvents.map((group) => (
         <div key={group.label} className="pt-4">
           <StickySectionHeader>
-            <span className="text-xl font-semibold">{group.label}</span>
+            <span>{group.label}</span>
           </StickySectionHeader>
           <div className="container mx-auto">
             <EventCardGrid

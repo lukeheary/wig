@@ -41,20 +41,21 @@ export function EventCard({ event }: EventCardProps) {
 
   const friendsGoing = event.friendsGoing || [];
   const friendsInterested = event.friendsInterested || [];
-  const socialUsers: SocialUser[] = [...friendsGoing, ...friendsInterested].flatMap(
-    (rsvp) => {
-      if (rsvp.status !== "going" && rsvp.status !== "interested") {
-        return [];
-      }
-
-      return [
-        {
-          ...rsvp.user,
-          rsvpStatus: rsvp.status,
-        },
-      ];
+  const socialUsers: SocialUser[] = [
+    ...friendsGoing,
+    ...friendsInterested,
+  ].flatMap((rsvp) => {
+    if (rsvp.status !== "going" && rsvp.status !== "interested") {
+      return [];
     }
-  );
+
+    return [
+      {
+        ...rsvp.user,
+        rsvpStatus: rsvp.status,
+      },
+    ];
+  });
   const hasInactiveStatus = event.status !== "active";
   const eventImageUrl =
     event.coverImageUrl ||
@@ -103,7 +104,7 @@ export function EventCard({ event }: EventCardProps) {
             {/* Date */}
             <div
               className={cn(
-                "text-sm text-primary/70 md:text-sm",
+                "text-sm font-normal text-neon-teal md:text-sm",
                 hasInactiveStatus && "line-through"
               )}
             >
