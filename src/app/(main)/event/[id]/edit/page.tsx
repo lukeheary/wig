@@ -55,6 +55,7 @@ export default function EditEventPage() {
   const [formData, setFormData] = useState({
     title: "",
     description: "",
+    eventUrl: "",
     coverImageUrl: "",
     categories: [] as string[],
     status: "active" as EventStatus,
@@ -186,6 +187,7 @@ export default function EditEventPage() {
       setFormData({
         title: event.title || "",
         description: event.description || "",
+        eventUrl: event.eventUrl || "",
         coverImageUrl: event.coverImageUrl || "",
         categories: event.categories || [],
         status: event.status,
@@ -279,6 +281,7 @@ export default function EditEventPage() {
         eventId,
         title: formData.title,
         description: formData.description || undefined,
+        eventUrl: formData.eventUrl || undefined,
         coverImageUrl: formData.coverImageUrl,
         categories: formData.categories,
         status: formData.status,
@@ -423,6 +426,19 @@ export default function EditEventPage() {
                 }
                 placeholder="Describe your event"
                 rows={5}
+              />
+            </div>
+
+            <div className="space-y-2">
+              <Label htmlFor="eventUrl">Event URL</Label>
+              <Input
+                id="eventUrl"
+                type="url"
+                value={formData.eventUrl}
+                onChange={(e) =>
+                  setFormData({ ...formData, eventUrl: e.target.value })
+                }
+                placeholder="https://example.com/event"
               />
             </div>
 

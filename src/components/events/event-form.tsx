@@ -60,6 +60,7 @@ export function EventForm({
   const [formData, setFormData] = useState({
     title: "",
     description: "",
+    eventUrl: "",
     coverImageUrl: "",
     categories: [] as string[],
     status: "active" as EventStatus,
@@ -409,6 +410,7 @@ export function EventForm({
         organizerId,
         title: formData.title,
         description: formData.description || undefined,
+        eventUrl: formData.eventUrl || undefined,
         coverImageUrl: resolvedCoverImageUrl,
         categories: formData.categories,
         status: formData.status,
@@ -685,6 +687,19 @@ export function EventForm({
                 }
                 placeholder="Describe your event..."
                 rows={4}
+              />
+            </div>
+
+            <div className="space-y-2">
+              <Label htmlFor="eventUrl">Event URL</Label>
+              <Input
+                id="eventUrl"
+                type="url"
+                value={formData.eventUrl}
+                onChange={(e) =>
+                  setFormData({ ...formData, eventUrl: e.target.value })
+                }
+                placeholder="https://example.com/event"
               />
             </div>
 

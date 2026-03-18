@@ -1,6 +1,12 @@
 "use client";
 
-import { differenceInCalendarWeeks, startOfWeek, compareAsc } from "date-fns";
+import {
+  differenceInCalendarMonths,
+  differenceInCalendarWeeks,
+  startOfMonth,
+  startOfWeek,
+  compareAsc,
+} from "date-fns";
 import { EventCardGrid } from "@/components/events/event-card-grid";
 import { EventsPlaceholder } from "@/components/shared/events-placeholder";
 import { StickySectionHeader } from "@/components/ui/sticky-section-header";
@@ -16,6 +22,11 @@ function getWeekLabel(weeksAway: number) {
   return `In ${weeksAway} Weeks`;
 }
 
+function getMonthLabel(monthsAway: number) {
+  if (monthsAway <= 1) return "Next Month";
+  return `In ${monthsAway} Months`;
+}
+
 export function PlaceUpcomingEvents({ events }: PlaceUpcomingEventsProps) {
   if (!events || events.length === 0) {
     return (
@@ -27,6 +38,7 @@ export function PlaceUpcomingEvents({ events }: PlaceUpcomingEventsProps) {
 
   const now = new Date();
   const currentWeekStart = startOfWeek(now);
+  const currentMonthStart = startOfMonth(now);
   const groupedEvents = events
     .slice()
     .sort((left, right) =>
@@ -34,14 +46,17 @@ export function PlaceUpcomingEvents({ events }: PlaceUpcomingEventsProps) {
     )
     .reduce<Array<{ label: string; events: EventCardItem[] }>>(
       (groups, event) => {
+        const eventDate = new Date(event.startAt);
         const weeksAway = Math.max(
           0,
-          differenceInCalendarWeeks(
-            startOfWeek(new Date(event.startAt)),
-            currentWeekStart
-          )
+          differenceInCalendarWeeks(startOfWeek(eventDate), currentWeekStart)
         );
-        const label = getWeekLabel(weeksAway);
+        const monthsAway = Math.max(
+          0,
+          differenceInCalendarMonths(startOfMonth(eventDate), currentMonthStart)
+        );
+        const label =
+          weeksAway <= 3 ? getWeekLabel(weeksAway) : getMonthLabel(monthsAway);
         const currentGroup = groups.at(-1);
 
         if (!currentGroup || currentGroup.label !== label) {
