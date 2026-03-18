@@ -4,7 +4,7 @@ import Link from "next/link";
 import { usePathname, useSearchParams } from "next/navigation";
 import Image from "next/image";
 import { Card } from "@/components/ui/card";
-import { cn, formatTime } from "@/lib/utils";
+import { cn, formatTime, splitTrailingParenthetical } from "@/lib/utils";
 import { Calendar } from "lucide-react";
 import { format } from "date-fns";
 import { type EventListItem } from "@/types/trpc";
@@ -38,6 +38,8 @@ export function EventCard({ event }: EventCardProps) {
   const month = format(eventDate, "MMM");
   const day = format(eventDate, "d");
   const startTime = formatTime(event.startAt);
+  const { main: titleMain, trailingParenthetical } =
+    splitTrailingParenthetical(event.title);
 
   const friendsGoing = event.friendsGoing || [];
   const friendsInterested = event.friendsInterested || [];
@@ -98,13 +100,19 @@ export function EventCard({ event }: EventCardProps) {
           <div className="flex-1 space-y-1 py-1 pl-3 pr-1 md:px-3 md:py-3">
             {/* Title */}
             <h3 className="line-clamp-2 text-base font-bold leading-tight transition-colors group-hover:text-primary md:text-base">
-              {event.title}
+              {titleMain}
+              {trailingParenthetical ? (
+                <span className="whitespace-nowrap">
+                  {" "}
+                  {trailingParenthetical}
+                </span>
+              ) : null}
             </h3>
 
             {/* Date */}
             <div
               className={cn(
-                "text-sm font-normal text-neon-teal md:text-sm",
+                "font-space-grotesk text-sm font-normal text-neon-teal md:text-sm",
                 hasInactiveStatus && "line-through"
               )}
             >

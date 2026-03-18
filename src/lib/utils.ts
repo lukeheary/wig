@@ -31,6 +31,25 @@ export function formatRelativeEventDate(date: Date): string {
   return `on ${format(date, "MMM d")}`;
 }
 
+export function splitTrailingParenthetical(text: string): {
+  main: string;
+  trailingParenthetical: string | null;
+} {
+  const match = text.match(/^(.*?)(\s*\([^()]+\))$/);
+
+  if (!match) {
+    return {
+      main: text,
+      trailingParenthetical: null,
+    };
+  }
+
+  return {
+    main: match[1],
+    trailingParenthetical: match[2].trimStart(),
+  };
+}
+
 export function generateSlug(text: string): string {
   return text
     .toLowerCase()

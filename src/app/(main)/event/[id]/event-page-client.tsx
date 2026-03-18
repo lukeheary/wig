@@ -25,7 +25,7 @@ import {
 } from "lucide-react";
 import { useToast } from "@/hooks/use-toast";
 import { differenceInCalendarDays, format, startOfDay } from "date-fns";
-import { cn } from "@/lib/utils";
+import { cn, splitTrailingParenthetical } from "@/lib/utils";
 import { AvatarStack } from "@/components/ui/avatar-stack";
 import { useEffect, useMemo, useState } from "react";
 import {
@@ -318,6 +318,9 @@ export default function EventPage() {
   const isStatusFlagged = event.status !== "active";
   const isCancelledEvent = event.status === "cancelled";
   const statusLabel = getEventStatusLabel(event.status);
+  const { main: titleMain, trailingParenthetical } = splitTrailingParenthetical(
+    event.title
+  );
 
   // Check if user can edit this event
   const canEdit =
@@ -470,15 +473,40 @@ export default function EventPage() {
           <div className="lg:flex-1 lg:pt-14">
             <div className="mb-2 pt-4">
               <h1 className="font-space-grotesk text-3xl font-bold md:text-6xl">
-                {event.title}
+                {titleMain}
+                {trailingParenthetical ? (
+                  <span className="whitespace-nowrap">
+                    {" "}
+                    {trailingParenthetical}
+                  </span>
+                ) : null}
               </h1>
+            </div>
+
+            <div
+              className={cn(
+                "mt-1 flex items-center gap-2 text-lg text-neon-teal",
+                isStatusFlagged && "text-muted-foreground line-through"
+              )}
+            >
+              <Calendar className="h-4 w-4" />
+              <span>
+                <span className={"font-space-grotesk"}>
+                  {formattedDate} at {formattedTime}
+                </span>
+                {relativeDateLabel ? (
+                  <span className="ml-2 text-sm text-muted-foreground">
+                    ({relativeDateLabel})
+                  </span>
+                ) : null}
+              </span>
             </div>
 
             {(event.venue?.name || (event.categories?.length ?? 0) > 0) && (
               <div className="mt-1 flex flex-wrap items-center gap-2">
                 {event.venue?.name && (
                   <Link
-                    className="flex w-fit items-center gap-2 text-lg transition-colors hover:underline"
+                    className="font-space-grotesk flex w-fit items-center gap-2 text-lg transition-colors hover:underline"
                     href={`/venue/${event.venue?.slug}`}
                   >
                     <MapPin className="h-4 w-4" />
@@ -491,23 +519,6 @@ export default function EventPage() {
                 />
               </div>
             )}
-
-            <div
-              className={cn(
-                "mt-1 flex items-center gap-2 text-lg text-neon-teal",
-                isStatusFlagged && "text-muted-foreground line-through"
-              )}
-            >
-              <Calendar className="h-4 w-4" />
-              <span>
-                {formattedDate} at {formattedTime}
-                {relativeDateLabel ? (
-                  <span className="ml-2 text-sm text-muted-foreground">
-                    ({relativeDateLabel})
-                  </span>
-                ) : null}
-              </span>
-            </div>
 
             {event.organizer && (
               <Link
