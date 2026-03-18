@@ -26,7 +26,7 @@ import { StickySectionHeader } from "@/components/ui/sticky-section-header";
 import { CategoryPillList } from "@/components/categories/category-pill";
 import { PlaceActionMenu } from "@/components/places/place-action-menu";
 import { PlacePageSkeleton } from "@/components/places/place-page-skeleton";
-import { EventsPlaceholder } from "@/components/shared/events-placeholder";
+import { PlaceUpcomingEvents } from "@/components/places/place-upcoming-events";
 
 export default function PlacePage() {
   const params = useParams();
@@ -356,22 +356,7 @@ export default function PlacePage() {
         </div>
       </div>
 
-      <div className="pt-4">
-        <StickySectionHeader>
-          <span className="text-xl font-semibold">Upcoming Events</span>
-        </StickySectionHeader>
-        <div className="container mx-auto">
-          {place.events && place.events.length > 0 ? (
-            <EventCardGrid
-              events={place.events}
-              columns={{ mobile: 1, tablet: 3, desktop: 4 }}
-              gap="md"
-            />
-          ) : (
-            <EventsPlaceholder />
-          )}
-        </div>
-      </div>
+      <PlaceUpcomingEvents events={place.events} />
 
       {/* Previous Events */}
       {place.pastEvents && (place.pastEvents as any[]).length > 0 && (
