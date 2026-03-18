@@ -172,7 +172,7 @@ export function PlaceManagementPage({
     );
 
   return (
-    <div className="container mx-auto space-y-6">
+    <div className="mx-auto space-y-6">
       <BackButtonHeader
         backHref={backHref ?? notFoundHref}
         className="items-center"

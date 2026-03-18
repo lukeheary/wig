@@ -336,7 +336,7 @@ export default function EditEventSeriesPage() {
       seriesId,
       title: formData.title,
       description: formData.description || undefined,
-      coverImageUrl: formData.coverImageUrl || undefined,
+      coverImageUrl: formData.coverImageUrl,
       categories: formData.categories,
       status: formData.status,
       visibility: formData.visibility,

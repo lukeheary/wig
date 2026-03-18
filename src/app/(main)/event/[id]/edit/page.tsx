@@ -318,12 +318,24 @@ export default function EditEventPage() {
   }
 
   return (
-    <div className="container mx-auto max-w-2xl space-y-4 pb-8">
-      <BackButtonHeader backHref={eventDetailHref} title="Edit Event" />
+    <div className="container mx-auto max-w-2xl space-y-2 pb-8">
+      <div className="flex flex-wrap items-center justify-between gap-3">
+        <BackButtonHeader backHref={eventDetailHref} title="Edit Event" />
+        <Button
+          type="submit"
+          form="edit-event-form"
+          disabled={updateMutation.isPending || deleteMutation.isPending}
+        >
+          {updateMutation.isPending && (
+            <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+          )}
+          Update Event
+        </Button>
+      </div>
 
       <Card>
         <CardContent>
-          <form onSubmit={handleSubmit} className="space-y-6">
+          <form id="edit-event-form" onSubmit={handleSubmit} className="space-y-6">
             {/* Event Image */}
             <div className="space-y-2 pt-6">
               <Label htmlFor="image">Event Image</Label>

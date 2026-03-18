@@ -602,7 +602,7 @@ export const eventRouter = router({
         seriesId: z.string().uuid(),
         title: z.string().min(1).max(255),
         description: z.string().optional(),
-        coverImageUrl: z.string().url().optional(),
+        coverImageUrl: z.string().url().optional().or(z.literal("")),
         eventUrl: z.string().url().optional(),
         source: z.string().max(50).optional(),
         externalId: z.string().optional(),
@@ -674,13 +674,18 @@ export const eventRouter = router({
         nextSeriesTimeZone
       );
 
+      const seriesImageWasRemoved =
+        input.coverImageUrl === "" && existingSeries.coverImageUrl !== null;
+
       const [updatedSeries] = await ctx.db
         .update(eventSeries)
         .set({
           title: input.title,
           description: input.description ?? null,
           coverImageUrl:
-            input.coverImageUrl !== undefined
+            input.coverImageUrl === ""
+              ? null
+              : input.coverImageUrl !== undefined
               ? input.coverImageUrl
               : existingSeries.coverImageUrl,
           eventUrl:
@@ -819,6 +824,18 @@ export const eventRouter = router({
             .set({ coverImageUrl: preservedCoverImageUrl })
             .where(eq(events.id, event.id));
         }
+      }
+
+      if (seriesImageWasRemoved && existingSeries.coverImageUrl) {
+        await ctx.db
+          .update(events)
+          .set({ coverImageUrl: null })
+          .where(
+            and(
+              eq(events.seriesId, input.seriesId),
+              eq(events.coverImageUrl, existingSeries.coverImageUrl)
+            )
+          );
       }
 
       return {

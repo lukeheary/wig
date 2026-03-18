@@ -9,6 +9,7 @@ import {
   MoreHorizontal,
   Repeat,
   Search,
+  Shield,
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import {
@@ -54,6 +55,7 @@ export function PlaceActionMenu({
     returnTo
   );
   const editScraperHref = withReturnTo(`/${type}/${slug}/edit#scraper-settings`, returnTo);
+  const adminHref = `/admin/${type}/${placeId}`;
 
   const trigger = (
     <Button size="icon" variant="secondary" className="h-10 w-10">
@@ -73,6 +75,14 @@ export function PlaceActionMenu({
               Edit {typeLabel}
             </Link>
           </DropdownMenuItem>
+          {isAdmin && (
+            <DropdownMenuItem asChild>
+              <Link href={adminHref}>
+                <Shield className="h-4 w-4" />
+                Admin Menu
+              </Link>
+            </DropdownMenuItem>
+          )}
           {isAdmin && (
             <DropdownMenuItem asChild>
               <Link href={editScraperHref}>
@@ -114,6 +124,16 @@ export function PlaceActionMenu({
             <Edit className="h-4 w-4" />
             Edit {typeLabel}
           </Link>
+          {isAdmin && (
+            <Link
+              href={adminHref}
+              className="flex w-full items-center gap-3 rounded-lg px-4 py-5 transition-colors hover:bg-muted"
+              onClick={() => setOpen(false)}
+            >
+              <Shield className="h-4 w-4" />
+              Admin Menu
+            </Link>
+          )}
           {isAdmin && (
             <Link
               href={editScraperHref}
