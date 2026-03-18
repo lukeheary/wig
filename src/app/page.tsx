@@ -68,7 +68,7 @@ export default async function LandingPage() {
                 </span>
               </h2>
 
-              <div className="mx-auto mt-6 flex flex-wrap items-center justify-center gap-3 pb-8">
+              <div className="mx-auto mt-6 flex flex-wrap items-center justify-center gap-3 pb-4">
                 <div className="flex-1 md:max-w-[180px]">
                   <LandingGetStartedLink location="hero" />
                 </div>

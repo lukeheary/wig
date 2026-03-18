@@ -49,12 +49,18 @@ export function PlaceActionMenu({
   const queryKey = type === "venue" ? "venueId" : "organizerId";
 
   const editHref = withReturnTo(`/${type}/${slug}/edit`, returnTo);
-  const createEventHref = withReturnTo(`/event/new?${queryKey}=${placeId}`, returnTo);
+  const createEventHref = withReturnTo(
+    `/event/new?${queryKey}=${placeId}`,
+    returnTo
+  );
   const createEventSeriesHref = withReturnTo(
     `/event/new?recurring=true&${queryKey}=${placeId}`,
     returnTo
   );
-  const editScraperHref = withReturnTo(`/${type}/${slug}/edit#scraper-settings`, returnTo);
+  const editScraperHref = withReturnTo(
+    `/${type}/${slug}/edit#scraper-settings`,
+    returnTo
+  );
   const adminHref = `/admin/${type}/${placeId}`;
 
   const trigger = (
@@ -75,14 +81,12 @@ export function PlaceActionMenu({
               Edit {typeLabel}
             </Link>
           </DropdownMenuItem>
-          {isAdmin && (
-            <DropdownMenuItem asChild>
-              <Link href={adminHref}>
-                <Shield className="h-4 w-4" />
-                Admin Menu
-              </Link>
-            </DropdownMenuItem>
-          )}
+          <DropdownMenuItem asChild>
+            <Link href={adminHref}>
+              <Shield className="h-4 w-4" />
+              Admin Settings
+            </Link>
+          </DropdownMenuItem>
           {isAdmin && (
             <DropdownMenuItem asChild>
               <Link href={editScraperHref}>
@@ -111,7 +115,7 @@ export function PlaceActionMenu({
   return (
     <Sheet open={open} onOpenChange={setOpen}>
       <SheetTrigger asChild>{trigger}</SheetTrigger>
-      <SheetContent side="bottom" className="px-0 pb-8 pt-6 outline-none">
+      <SheetContent side="bottom" className="px-0 pb-4 pt-6 outline-none">
         <SheetHeader className="px-6 pb-4 text-left">
           <SheetTitle>{typeLabel} Actions</SheetTitle>
         </SheetHeader>
@@ -124,16 +128,14 @@ export function PlaceActionMenu({
             <Edit className="h-4 w-4" />
             Edit {typeLabel}
           </Link>
-          {isAdmin && (
-            <Link
-              href={adminHref}
-              className="flex w-full items-center gap-3 rounded-lg px-4 py-5 transition-colors hover:bg-muted"
-              onClick={() => setOpen(false)}
-            >
-              <Shield className="h-4 w-4" />
-              Admin Menu
-            </Link>
-          )}
+          <Link
+            href={adminHref}
+            className="flex w-full items-center gap-3 rounded-lg px-4 py-5 transition-colors hover:bg-muted"
+            onClick={() => setOpen(false)}
+          >
+            <Shield className="h-4 w-4" />
+            Admin Settings
+          </Link>
           {isAdmin && (
             <Link
               href={editScraperHref}

@@ -1,6 +1,13 @@
 "use client";
 
-import { Suspense, useState, useRef, useEffect, useCallback, useMemo } from "react";
+import {
+  Suspense,
+  useState,
+  useRef,
+  useEffect,
+  useCallback,
+  useMemo,
+} from "react";
 import { trpc } from "@/lib/trpc";
 import { SearchInput } from "@/components/ui/search-input";
 import { useNavbarSearch } from "@/contexts/nav-search-context";
@@ -327,7 +334,7 @@ function FriendsPageContent() {
   );
 
   return (
-    <div className="container mx-auto pb-8 pt-4">
+    <div className="container mx-auto pb-4 pt-4">
       {/* Sticky sentinel for intersection observer */}
       <div ref={stickySentinelRef} className="h-px w-full" />
 
@@ -375,9 +382,7 @@ function FriendsPageContent() {
               onClick={() => openFriendsView("list")}
               className="flex-1 sm:w-32 sm:flex-none lg:w-40"
             >
-              <div
-                className="flex h-12 cursor-pointer items-center justify-between rounded-full bg-muted px-5 transition-colors hover:bg-muted/80"
-              >
+              <div className="flex h-12 cursor-pointer items-center justify-between rounded-full bg-muted px-5 transition-colors hover:bg-muted/80">
                 <p className="flex flex-row items-center gap-1.5 text-base font-medium lg:text-lg">
                   <span>{acceptedFriends.length}</span>
                   <span className="text-sm text-muted-foreground">
@@ -397,9 +402,7 @@ function FriendsPageContent() {
               onClick={() => openFriendsView("requests")}
               className="flex-1 sm:w-32 sm:flex-none lg:w-40"
             >
-              <div
-                className="flex h-12 cursor-pointer items-center justify-between rounded-full bg-muted px-5 transition-colors hover:bg-muted/80"
-              >
+              <div className="flex h-12 cursor-pointer items-center justify-between rounded-full bg-muted px-5 transition-colors hover:bg-muted/80">
                 <p className="flex flex-row items-center gap-1.5 text-base font-medium lg:text-lg">
                   <span>{receivedRequests.length}</span>
                   <span className="text-sm text-muted-foreground">
@@ -422,7 +425,9 @@ function FriendsPageContent() {
         activeView === "list" ? (
           <>
             <StickySectionHeader className="-mx-4">
-              <h2 className="text-xl font-semibold tracking-tight">My Friends</h2>
+              <h2 className="text-xl font-semibold tracking-tight">
+                My Friends
+              </h2>
             </StickySectionHeader>
 
             <Card>
@@ -470,7 +475,10 @@ function FriendsPageContent() {
                     Friend Requests
                   </h2>
                 </StickySectionHeader>
-                <EmptyStateCard icon={Mail} title="No pending friend requests" />
+                <EmptyStateCard
+                  icon={Mail}
+                  title="No pending friend requests"
+                />
               </>
             ) : normalizedRequestQuery &&
               filteredReceivedRequests.length === 0 &&
@@ -585,7 +593,8 @@ function FriendsPageContent() {
                               firstName: req.friend?.firstName || null,
                               lastName: req.friend?.lastName || null,
                               username: req.friend?.username || null,
-                              avatarImageUrl: req.friend?.avatarImageUrl || null,
+                              avatarImageUrl:
+                                req.friend?.avatarImageUrl || null,
                             })}
                             renderBadges={() => (
                               <Badge variant="outline">Pending</Badge>

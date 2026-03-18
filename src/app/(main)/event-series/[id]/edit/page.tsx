@@ -395,19 +395,29 @@ export default function EditEventSeriesPage() {
   const isSubmitting = isSaving || isDeleting;
 
   return (
-    <div className="container mx-auto max-w-2xl space-y-6 pb-4">
-      <BackButtonHeader
-        backFallbackHref="/home"
-        returnTo={returnTo}
-        title="Edit Recurring Event"
-      />
+    <div className="container mx-auto max-w-2xl space-y-2 pb-4">
+      <div className="flex flex-wrap items-center justify-between gap-3">
+        <BackButtonHeader
+          backFallbackHref="/home"
+          returnTo={returnTo}
+          title="Edit Series"
+        />
+        <Button
+          type="submit"
+          form="edit-series-form"
+          disabled={isSubmitting}
+        >
+          {isSaving && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
+          Update Series
+        </Button>
+      </div>
 
       <Card>
         <CardHeader>
-          <CardTitle>Recurring Event Details</CardTitle>
+          <CardTitle>Series Details</CardTitle>
         </CardHeader>
         <CardContent>
-          <form onSubmit={handleSubmit} className="space-y-6">
+          <form id="edit-series-form" onSubmit={handleSubmit} className="space-y-6">
             <div className="space-y-2">
               <Label htmlFor="image">Event Image</Label>
               <S3Uploader
@@ -754,7 +764,7 @@ export default function EditEventSeriesPage() {
               </div>
               <Button type="submit" disabled={isSubmitting}>
                 {isSaving && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
-                Save Recurring Event
+                Update Series
               </Button>
             </div>
           </form>

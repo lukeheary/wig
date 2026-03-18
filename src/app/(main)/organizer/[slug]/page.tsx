@@ -137,7 +137,7 @@ export default function PlacePage() {
   const canEdit = isAdmin || isMember;
 
   return (
-    <div className="bg-background pb-8">
+    <div className="bg-background pb-4">
       {expandedImage && (
         <div
           className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 p-4 backdrop-blur-xl"

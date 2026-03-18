@@ -647,7 +647,7 @@ function HomePageContent() {
   }, []);
 
   return (
-    <div className="relative min-h-screen pb-12">
+    <div className="relative min-h-screen pb-4">
       <div className="container relative mx-auto pt-4">
         {/* Sentinel for sticky detection */}
         <div ref={stickySentinelRef} className="h-px w-full" />

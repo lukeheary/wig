@@ -171,7 +171,7 @@ export default function EditPlacePage() {
   };
 
   return (
-    <div className="container mx-auto max-w-2xl space-y-2 pb-8">
+    <div className="container mx-auto max-w-2xl space-y-2 pb-4">
       <BackButtonHeader backHref={backHref} title={`Edit ${typeLabel}`} />
 
       <PlaceEditForm

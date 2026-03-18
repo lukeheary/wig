@@ -172,7 +172,7 @@ export function PlaceManagementPage({
     );
 
   return (
-    <div className="mx-auto space-y-6">
+    <div className="mx-auto space-y-2">
       <BackButtonHeader
         backHref={backHref ?? notFoundHref}
         className="items-center"
@@ -324,12 +324,12 @@ export function PlaceManagementPage({
           <Card>
             <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-4">
               <CardTitle className="text-lg font-semibold">
-                Recurring Events
+                Event Series
               </CardTitle>
               <Link href={createRecurringEventHref}>
                 <Button variant="outline">
                   <Plus className="mr-2 h-4 w-4" />
-                  Add Recurring Event
+                  Add Event Series
                 </Button>
               </Link>
             </CardHeader>
@@ -375,15 +375,14 @@ export function PlaceManagementPage({
               ) : (
                 <div className="py-8 text-center">
                   <Repeat className="mx-auto mb-3 h-10 w-10 text-muted-foreground" />
-                  <p className="mb-1 font-medium">No recurring events yet</p>
+                  <p className="mb-1 font-medium">No event series yet</p>
                   <p className="mb-4 text-sm text-muted-foreground">
-                    Add a recurring event series for this{" "}
-                    {typeLabel.toLowerCase()}
+                    Add an event series for this {typeLabel.toLowerCase()}
                   </p>
                   <Link href={createRecurringEventHref}>
                     <Button>
                       <Plus className="mr-2 h-4 w-4" />
-                      Add Recurring Event
+                      Add Event Series
                     </Button>
                   </Link>
                 </div>
@@ -416,7 +415,7 @@ export function PlaceManagementPage({
               <Link href={createRecurringEventHref} className="block">
                 <Button variant="outline" className="w-full justify-start">
                   <Repeat className="mr-2 h-4 w-4" />
-                  Add Recurring Event
+                  Add Event Series
                 </Button>
               </Link>
               <Link href={placeHref} className="block">

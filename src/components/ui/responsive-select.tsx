@@ -79,7 +79,7 @@ export function ResponsiveSelect({
           <ChevronDown className="h-4 w-4 opacity-50" />
         </button>
       </SheetTrigger>
-      <SheetContent side="bottom" className="px-0 pb-8 pt-6 outline-none">
+      <SheetContent side="bottom" className="px-0 pb-4 pt-6 outline-none">
         <SheetHeader className="px-6 pb-4 text-left">
           <SheetTitle>{title}</SheetTitle>
         </SheetHeader>

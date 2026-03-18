@@ -237,7 +237,7 @@ function PlacesPageContent() {
   const isLoading = isLoadingPlaces;
 
   return (
-    <div className="container mx-auto pb-8 pt-4">
+    <div className="container mx-auto pb-4 pt-4">
       {/* Sticky sentinel for intersection observer */}
       <div ref={stickySentinelRef} className="h-px w-full" />
 
@@ -306,7 +306,9 @@ function PlacesPageContent() {
                     />
                   ))
                 : visibleCategories.map((category) => {
-                    const isSelected = selectedCategories.includes(category.key);
+                    const isSelected = selectedCategories.includes(
+                      category.key
+                    );
 
                     return (
                       <button
@@ -421,10 +423,10 @@ function PlacesPageContent() {
               {selectedCategories.length > 0
                 ? "Try removing a category filter or adjusting your search"
                 : filterType === "following"
-                ? "You aren't following any venues or organizers yet"
-                : searchQuery
-                  ? "Try adjusting your search or filters"
-                  : "No venues or organizers available yet"}
+                  ? "You aren't following any venues or organizers yet"
+                  : searchQuery
+                    ? "Try adjusting your search or filters"
+                    : "No venues or organizers available yet"}
             </p>
           </CardContent>
         </Card>
