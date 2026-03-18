@@ -38,8 +38,9 @@ export function EventCard({ event }: EventCardProps) {
   const month = format(eventDate, "MMM");
   const day = format(eventDate, "d");
   const startTime = formatTime(event.startAt);
-  const { main: titleMain, trailingParenthetical } =
-    splitTrailingParenthetical(event.title);
+  const { main: titleMain, trailingParenthetical } = splitTrailingParenthetical(
+    event.title
+  );
 
   const friendsGoing = event.friendsGoing || [];
   const friendsInterested = event.friendsInterested || [];
@@ -112,7 +113,7 @@ export function EventCard({ event }: EventCardProps) {
             {/* Date */}
             <div
               className={cn(
-                "font-space-grotesk text-sm font-normal text-neon-teal md:text-sm",
+                "font-space-grotesk text-sm font-normal leading-tight text-neon-teal md:text-sm",
                 hasInactiveStatus && "line-through"
               )}
             >
@@ -120,7 +121,7 @@ export function EventCard({ event }: EventCardProps) {
             </div>
 
             {/* Venue & Organizer */}
-            <div className="line-clamp-1 text-sm text-primary/70 md:text-sm">
+            <div className="line-clamp-1 text-sm leading-tight text-primary/70 md:text-sm">
               {event.venue && `${event.venue.name}`}
               {/*{event.organizer &&*/}
               {/*  (event.venue*/}

@@ -24,7 +24,8 @@ const config: Config = {
         ring: "hsl(var(--ring))",
         background: "hsl(var(--background))",
         foreground: "hsl(var(--foreground))",
-        "neon-teal": "#ff727a",
+        "neon-teal": "#8fd2ff",
+        // "neon-teal": "#ff727a",
         primary: {
           DEFAULT: "hsl(var(--primary))",
           foreground: "hsl(var(--primary-foreground))",

@@ -471,7 +471,7 @@ export default function EventPage() {
 
           {/* Content - Right column on desktop */}
           <div className="lg:flex-1 lg:pt-14">
-            <div className="mb-2 pt-4">
+            <div className="pt-4">
               <h1 className="font-space-grotesk text-3xl font-bold md:text-6xl">
                 {titleMain}
                 {trailingParenthetical ? (
