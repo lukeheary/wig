@@ -1905,7 +1905,7 @@ export const eventRouter = router({
         eventId: z.string().uuid(),
         title: z.string().min(1).max(255).optional(),
         description: z.string().optional(),
-        coverImageUrl: z.string().url().optional(),
+        coverImageUrl: z.string().url().optional().or(z.literal("")),
         eventUrl: z.string().url().optional(),
         source: z.string().max(50).optional(),
         externalId: z.string().optional(),
@@ -1972,7 +1972,8 @@ export const eventRouter = router({
       if (updates.description !== undefined)
         updateData.description = updates.description;
       if (updates.coverImageUrl !== undefined)
-        updateData.coverImageUrl = updates.coverImageUrl;
+        updateData.coverImageUrl =
+          updates.coverImageUrl === "" ? null : updates.coverImageUrl;
       if (updates.eventUrl !== undefined)
         updateData.eventUrl = updates.eventUrl;
       if (updates.source !== undefined) updateData.source = updates.source;

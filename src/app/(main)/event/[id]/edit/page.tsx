@@ -126,7 +126,13 @@ export default function EditEventPage() {
   };
 
   const updateMutation = trpc.event.updateEvent.useMutation({
-    onSuccess: () => {
+    onSuccess: async () => {
+      await Promise.all([
+        utils.event.getEventById.invalidate({ eventId }),
+        utils.event.listEventsByRange.invalidate(),
+        utils.event.getRecentlyAddedEvents.invalidate(),
+      ]);
+
       // toast({
       //   title: "Success",
       //   description: "Event updated successfully",
@@ -273,7 +279,7 @@ export default function EditEventPage() {
         eventId,
         title: formData.title,
         description: formData.description || undefined,
-        coverImageUrl: formData.coverImageUrl || undefined,
+        coverImageUrl: formData.coverImageUrl,
         categories: formData.categories,
         status: formData.status,
         startAt: startDate,
