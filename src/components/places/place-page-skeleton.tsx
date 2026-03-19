@@ -11,8 +11,8 @@ export function PlacePageSkeleton() {
               <div className="h-8 w-40 rounded-full bg-muted md:h-9 md:w-56" />
               <div className="mt-2 h-5 w-24 rounded-full bg-muted" />
               <div className="flex flex-wrap gap-2 pt-2">
-                <div className="h-7 w-24 rounded-full bg-muted" />
-                <div className="h-7 w-20 rounded-full bg-muted" />
+                <div className="h-6 w-24 rounded-full bg-muted" />
+                <div className="h-6 w-20 rounded-full bg-muted" />
               </div>
             </div>
           </div>

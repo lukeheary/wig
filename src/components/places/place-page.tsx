@@ -39,6 +39,7 @@ export function PlacePage({ actionMenuType }: PlacePageProps) {
     url: string;
     alt: string;
   } | null>(null);
+  const [showPastEvents, setShowPastEvents] = useState(false);
 
   const { data: place, isLoading } = trpc.place.getPlaceBySlug.useQuery({
     slug,
@@ -318,18 +319,35 @@ export function PlacePage({ actionMenuType }: PlacePageProps) {
       <PlaceUpcomingEvents events={place.events} />
 
       {place.pastEvents && (place.pastEvents as any[]).length > 0 && (
-        <div className="pt-4">
-          <StickySectionHeader>
-            <span>Past Events</span>
-          </StickySectionHeader>
-          <div className="container mx-auto">
-            <EventCardGrid
-              events={place.pastEvents as any}
-              columns={{ mobile: 1, tablet: 3, desktop: 4 }}
-              gap="md"
-            />
-          </div>
-        </div>
+        <>
+          {!showPastEvents && (
+            <div className="container mx-auto pt-6">
+              <Button
+                variant="neon"
+                size="lg"
+                className="w-full !py-5 font-space-grotesk rounded-xl text-base font-medium lg:text-lg"
+                onClick={() => setShowPastEvents(true)}
+              >
+                Show Past Events
+              </Button>
+            </div>
+          )}
+
+          {showPastEvents && (
+            <div className="pt-4">
+              <StickySectionHeader>
+                <span>Past Events</span>
+              </StickySectionHeader>
+              <div className="container mx-auto">
+                <EventCardGrid
+                  events={place.pastEvents as any}
+                  columns={{ mobile: 1, tablet: 3, desktop: 4 }}
+                  gap="md"
+                />
+              </div>
+            </div>
+          )}
+        </>
       )}
     </div>
   );
