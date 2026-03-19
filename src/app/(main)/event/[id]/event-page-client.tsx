@@ -553,7 +553,7 @@ export default function EventPage() {
               <div className="flex flex-wrap items-center gap-2 pt-0.5 md:pt-1">
                 {event.venue?.name && (
                   <Link
-                    className="flex w-fit items-center gap-2 text-lg transition-colors hover:underline md:text-2xl"
+                    className="font-space-grotesk flex w-fit items-center gap-2 text-lg transition-colors hover:underline md:text-2xl"
                     href={`/venue/${event.venue?.slug}`}
                   >
                     <span>{event.venue.name}</span>
@@ -568,11 +568,11 @@ export default function EventPage() {
             )}
 
             {event.organizer && (
-              <div className="flex w-fit items-center gap-1.5 pt-0.5 text-base text-muted-foreground md:pt-1 md:text-2xl">
+              <div className="flex w-fit items-center gap-1 pt-0.5 text-base text-muted-foreground md:pt-1 md:text-2xl">
                 <span>Organized by </span>
                 <Link
                   href={`/organizer/${event.organizer.slug}`}
-                  className="flex items-center gap-2 transition-colors hover:underline"
+                  className="font-space-grotesk flex items-center gap-2 transition-colors hover:underline"
                 >
                   {event.organizer.name}
                 </Link>
@@ -584,7 +584,7 @@ export default function EventPage() {
                 href={event.eventUrl}
                 target="_blank"
                 rel="noopener noreferrer"
-                className="flex w-fit items-center gap-2 pt-0.5 text-muted-foreground transition-colors hover:underline md:pt-1 md:text-lg"
+                className="font-space-grotesk flex w-fit items-center gap-2 pt-0.5 text-muted-foreground transition-colors hover:underline md:pt-1 md:text-lg"
               >
                 <span>View on {sourceLabel}</span>
                 <ExternalLink className="h-4 w-4" />

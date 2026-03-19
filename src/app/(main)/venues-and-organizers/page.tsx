@@ -370,7 +370,7 @@ function PlacesPageContent() {
                     )}
                   </div>
 
-                  <div className="flex flex-1 flex-col justify-between py-1 pl-3 pr-1">
+                  <div className="font-space-grotesk flex flex-1 flex-col justify-between py-1 pl-3 pr-1">
                     <div className="space-y-1">
                       <h3 className="line-clamp-2 text-base font-bold leading-tight">
                         {item.name}
