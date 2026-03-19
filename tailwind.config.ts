@@ -25,6 +25,7 @@ const config: Config = {
         background: "hsl(var(--background))",
         foreground: "hsl(var(--foreground))",
         "neon-teal": "#8fd2ff",
+        "neon-teal-hover": "#A9DDFF",
         // "neon-teal": "#ff727a",
         primary: {
           DEFAULT: "hsl(var(--primary))",

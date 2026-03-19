@@ -469,8 +469,7 @@ export default function EventPage() {
             </div>
           </div>
 
-          {/* Content - Right column on desktop */}
-          <div className="lg:flex-1 lg:pt-14">
+          <div className="space-y-1 md:space-y-2 lg:flex-1 lg:pt-14">
             <div className="pt-4">
               <h1 className="font-space-grotesk text-3xl font-bold md:text-6xl">
                 {titleMain}
@@ -485,13 +484,13 @@ export default function EventPage() {
 
             <div
               className={cn(
-                "mt-1 flex items-center gap-2 text-lg text-neon-teal",
+                "flex items-center gap-2 text-lg text-neon-teal md:text-2xl",
                 isStatusFlagged && "text-muted-foreground line-through"
               )}
             >
               {/*<Calendar className="h-4 w-4" />*/}
               <span>
-                <span className={"font-space-grotesk"}>
+                <span className={"font-space-grotesk font-medium"}>
                   {formattedDate} at {formattedTime}
                 </span>
                 {relativeDateLabel ? (
@@ -503,10 +502,10 @@ export default function EventPage() {
             </div>
 
             {(event.venue?.name || (event.categories?.length ?? 0) > 0) && (
-              <div className="mt-1 flex flex-wrap items-center gap-2">
+              <div className="flex flex-wrap items-center gap-2">
                 {event.venue?.name && (
                   <Link
-                    className="font-space-grotesk flex w-fit items-center gap-2 text-lg transition-colors hover:underline"
+                    className="font-space-grotesk flex w-fit items-center gap-2 text-lg transition-colors hover:underline md:text-2xl"
                     href={`/venue/${event.venue?.slug}`}
                   >
                     {/*<MapPin className="h-4 w-4" />*/}
@@ -535,10 +534,10 @@ export default function EventPage() {
                 href={event.eventUrl}
                 target="_blank"
                 rel="noopener noreferrer"
-                className="mt-1 flex w-fit items-center gap-2 text-muted-foreground transition-colors hover:underline"
+                className="flex w-fit items-center gap-2 text-muted-foreground transition-colors hover:underline md:text-lg"
               >
-                <ExternalLink className="h-4 w-4" />
                 <span>View on {sourceLabel}</span>
+                <ExternalLink className="h-4 w-4" />
               </a>
             )}
 
@@ -568,7 +567,7 @@ export default function EventPage() {
                     className={cn(
                       "flex-1 py-6 text-base font-medium transition-colors",
                       event.userRsvp?.status === "going" &&
-                        "border-transparent bg-green-500 text-black hover:bg-green-600"
+                        "hover:bg-neon-teal-hover border-transparent bg-neon-teal text-black"
                     )}
                     size="lg"
                     onClick={() => handleRsvp("going")}

@@ -113,7 +113,7 @@ export function EventCard({ event }: EventCardProps) {
             {/* Date */}
             <div
               className={cn(
-                "font-space-grotesk text-sm font-normal leading-tight text-neon-teal md:text-sm",
+                "font-space-grotesk text-sm font-medium leading-tight text-neon-teal md:text-sm",
                 hasInactiveStatus && "line-through"
               )}
             >
