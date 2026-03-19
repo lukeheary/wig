@@ -41,7 +41,7 @@ export function StickySectionHeader({
       <div ref={sentinelRef} className="h-0 w-full" />
       <div className={cn("sticky top-14 z-30 w-full md:top-16", className)}>
         <div className="container mx-auto flex flex-row px-4">
-          <div className="font-space-grotesk w-fit bg-background pr-0.5 text-xl font-semibold">
+          <div className="font-space-grotesk w-fit bg-background pr-0.5 text-xl font-semibold underline decoration-neon-teal decoration-2 underline-offset-[6px]">
             {children}
           </div>
           <img

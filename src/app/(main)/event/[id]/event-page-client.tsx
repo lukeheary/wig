@@ -489,7 +489,7 @@ export default function EventPage() {
                 isStatusFlagged && "text-muted-foreground line-through"
               )}
             >
-              <Calendar className="h-4 w-4" />
+              {/*<Calendar className="h-4 w-4" />*/}
               <span>
                 <span className={"font-space-grotesk"}>
                   {formattedDate} at {formattedTime}
@@ -509,7 +509,7 @@ export default function EventPage() {
                     className="font-space-grotesk flex w-fit items-center gap-2 text-lg transition-colors hover:underline"
                     href={`/venue/${event.venue?.slug}`}
                   >
-                    <MapPin className="h-4 w-4" />
+                    {/*<MapPin className="h-4 w-4" />*/}
                     <span>{event.venue.name}</span>
                   </Link>
                 )}
@@ -525,7 +525,7 @@ export default function EventPage() {
                 href={`/organizer/${event.organizer.slug}`}
                 className="mt-1 flex w-fit items-center gap-2 text-muted-foreground transition-colors hover:underline"
               >
-                <Users className="h-4 w-4" />
+                {/*<Users className="h-4 w-4" />*/}
                 <span>Organized by {event.organizer.name}</span>
               </Link>
             )}
