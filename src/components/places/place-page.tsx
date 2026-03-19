@@ -122,6 +122,11 @@ export function PlacePage({ actionMenuType }: PlacePageProps) {
       (member: { userId: string }) => member.userId === currentUser.id
     );
   const canEdit = isAdmin || Boolean(isMember);
+  const followButtonClassName = cn(
+    "font-space-grotesk rounded-xl py-6 text-base font-medium lg:text-lg",
+    isFollowing &&
+      "border-transparent bg-neon-teal text-black hover:bg-neon-teal-hover hover:text-black active:text-black"
+  );
 
   return (
     <div className="bg-background pb-6">
@@ -156,7 +161,7 @@ export function PlacePage({ actionMenuType }: PlacePageProps) {
       <div className="container mx-auto">
         <div>
           <div className="flex flex-col gap-4 md:flex-row md:items-center md:justify-between">
-            <div className="flex items-center gap-4">
+            <div className="flex gap-4">
               <div
                 className={cn(
                   "relative h-24 w-24 flex-shrink-0 overflow-hidden rounded-2xl bg-muted shadow-sm md:h-32 md:w-32",
@@ -190,10 +195,10 @@ export function PlacePage({ actionMenuType }: PlacePageProps) {
               </div>
 
               <div>
-                <h1 className="font-space-grotesk text-2xl font-bold tracking-tight md:text-4xl">
+                <h1 className="font-space-grotesk text-3xl font-bold tracking-tight md:text-4xl">
                   {place.name}
                 </h1>
-                <p className="pt-1 text-base text-muted-foreground md:text-lg">
+                <p className="text-base text-muted-foreground md:text-lg">
                   @{place.slug}
                 </p>
                 <CategoryPillList
@@ -206,24 +211,15 @@ export function PlacePage({ actionMenuType }: PlacePageProps) {
 
             <div className="hidden items-center gap-2 md:flex">
               <Button
-                variant={isFollowing ? "outline" : "default"}
+                variant="neon"
                 onClick={handleFollowToggle}
                 disabled={
                   followMutation.isPending || unfollowMutation.isPending
                 }
-                className="rounded-full"
+                size="lg"
+                className={cn("min-w-[160px] !py-5", followButtonClassName)}
               >
-                {isFollowing ? (
-                  <>
-                    <Heart className="mr-2 h-4 w-4 fill-current" />
-                    Following
-                  </>
-                ) : (
-                  <>
-                    <Heart className="mr-2 h-4 w-4" />
-                    Follow
-                  </>
-                )}
+                {isFollowing ? <>Following</> : <>Follow</>}
               </Button>
               {canEdit && (
                 <PlaceActionMenu
@@ -296,22 +292,13 @@ export function PlacePage({ actionMenuType }: PlacePageProps) {
 
           <div className="flex items-center gap-2 md:hidden">
             <Button
-              variant={isFollowing ? "outline" : "default"}
+              variant="neon"
               onClick={handleFollowToggle}
+              size="lg"
               disabled={followMutation.isPending || unfollowMutation.isPending}
-              className="flex-1 rounded-full"
+              className={cn("flex-1 !py-5", followButtonClassName)}
             >
-              {isFollowing ? (
-                <>
-                  <Heart className="mr-2 h-4 w-4 fill-current" />
-                  Following
-                </>
-              ) : (
-                <>
-                  <Heart className="mr-2 h-4 w-4" />
-                  Follow
-                </>
-              )}
+              {isFollowing ? <>Following</> : <>Follow</>}
             </Button>
             {canEdit && (
               <PlaceActionMenu

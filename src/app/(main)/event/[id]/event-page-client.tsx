@@ -586,11 +586,11 @@ export default function EventPage() {
                 {/* RSVP Buttons - Shared across mobile and desktop */}
                 <div className="flex gap-2 pb-2 pt-3">
                   <Button
-                    variant="outline"
+                    variant="neon"
                     className={cn(
-                      "font-space-grotesk flex-1 rounded-xl border border-neon-teal bg-transparent py-6 text-base font-medium hover:bg-transparent lg:text-lg",
+                      "font-space-grotesk flex-1 rounded-xl py-5 text-base font-medium lg:text-lg",
                       event.userRsvp?.status === "interested" &&
-                        "border-transparent bg-neon-teal text-black hover:bg-neon-teal-hover"
+                        "border-transparent bg-neon-teal text-black hover:bg-neon-teal-hover hover:text-black active:text-black"
                     )}
                     size="lg"
                     onClick={() => handleRsvp("interested")}
@@ -599,11 +599,11 @@ export default function EventPage() {
                     Interested
                   </Button>
                   <Button
-                    variant="outline"
+                    variant="neon"
                     className={cn(
-                      "font-space-grotesk flex-1 rounded-xl border border-neon-teal bg-transparent py-6 text-base font-medium hover:bg-transparent lg:text-lg",
+                      "font-space-grotesk flex-1 rounded-xl py-5 text-base font-medium lg:text-lg",
                       event.userRsvp?.status === "going" &&
-                        "border-transparent bg-neon-teal text-black hover:bg-neon-teal-hover"
+                        "border-transparent bg-neon-teal text-black hover:bg-neon-teal-hover hover:text-black active:text-black"
                     )}
                     size="lg"
                     onClick={() => handleRsvp("going")}
@@ -617,11 +617,11 @@ export default function EventPage() {
                   <div className="mb-4">
                     <Button
                       type="button"
-                      variant="outline"
+                      variant="neon"
                       className={cn(
-                        "font-space-grotesk w-full rounded-xl border border-neon-teal bg-transparent py-4 text-base font-medium hover:bg-transparent sm:w-auto sm:min-w-[220px]",
+                        "font-space-grotesk w-full rounded-xl text-base font-medium sm:w-auto sm:min-w-[220px]",
                         includePartner &&
-                          "border-transparent bg-neon-teal text-black hover:bg-neon-teal-hover"
+                          "border-transparent bg-neon-teal text-black hover:bg-neon-teal-hover hover:text-black active:text-black"
                       )}
                       onClick={handlePartnerToggle}
                       disabled={isRsvpPending}
