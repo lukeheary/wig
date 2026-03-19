@@ -548,6 +548,7 @@ export default function EventPage() {
                     className="font-space-grotesk flex w-fit items-center gap-2 text-lg transition-colors hover:underline md:text-2xl"
                     href={`/venue/${event.venue?.slug}`}
                   >
+                    <span>{event.venue.name}</span>
                     {event.venue.logoImageUrl ? (
                       <UserAvatar
                         src={event.venue.logoImageUrl}
@@ -555,7 +556,6 @@ export default function EventPage() {
                         className="h-6 w-6 rounded-md border border-background ring-1 ring-muted/20 md:h-7 md:w-7"
                       />
                     ) : null}
-                    <span>{event.venue.name}</span>
                   </Link>
                 )}
               </div>
@@ -568,6 +568,7 @@ export default function EventPage() {
                   href={`/organizer/${event.organizer.slug}`}
                   className="flex items-center gap-2 transition-colors hover:underline"
                 >
+                  {event.organizer.name}
                   {event.organizer.logoImageUrl ? (
                     <UserAvatar
                       src={event.organizer.logoImageUrl}
@@ -575,7 +576,6 @@ export default function EventPage() {
                       className="h-6 w-6 rounded-md border border-background ring-1 ring-muted/20 md:h-7 md:w-7"
                     />
                   ) : null}
-                  {event.organizer.name}
                 </Link>
               </div>
             )}
