@@ -368,19 +368,19 @@ export default function EventPage() {
 
   return (
     <div className="relative isolate -mt-16 min-h-screen bg-background pt-16">
-      {eventImageUrl && (
-        <div className="pointer-events-none absolute inset-0 -z-10 overflow-hidden">
-          <Image
-            src={eventImageUrl}
-            alt=""
-            fill
-            className="scale-110 object-cover opacity-20 blur-2xl"
-            sizes="100vw"
-            priority
-          />
-          <div className="absolute inset-0 bg-[linear-gradient(to_bottom,hsl(var(--background))_0%,hsl(var(--background))_10%,hsl(var(--background)/0.85)_40%,hsl(var(--background)/0.3)_70%,hsl(var(--background)/0)_100%)] md:bg-gradient-to-b md:from-background/60 md:via-background/60 md:to-background" />
-        </div>
-      )}
+      {/*{eventImageUrl && (*/}
+      {/*  <div className="pointer-events-none absolute inset-0 -z-10 overflow-hidden">*/}
+      {/*    <Image*/}
+      {/*      src={eventImageUrl}*/}
+      {/*      alt=""*/}
+      {/*      fill*/}
+      {/*      className="scale-110 object-cover opacity-20 blur-2xl"*/}
+      {/*      sizes="100vw"*/}
+      {/*      priority*/}
+      {/*    />*/}
+      {/*    <div className="absolute inset-0 bg-[linear-gradient(to_bottom,hsl(var(--background))_0%,hsl(var(--background))_10%,hsl(var(--background)/0.85)_40%,hsl(var(--background)/0.3)_70%,hsl(var(--background)/0)_100%)] md:bg-gradient-to-b md:from-background/60 md:via-background/60 md:to-background" />*/}
+      {/*  </div>*/}
+      {/*)}*/}
       {/* Image Modal */}
       {isImageModalOpen && eventImageUrl && (
         <div
