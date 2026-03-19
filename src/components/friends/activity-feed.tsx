@@ -431,26 +431,28 @@ export function ActivityItem({ activity }: ActivityItemProps) {
 
   return (
     <div className="flex gap-3 pb-2 last:pb-0">
-      <div className="relative flex flex-col items-center pt-1.5">
-        <UserAvatar
-          src={
-            isEventStatusUpdate
-              ? activity.event?.venue?.logoImageUrl
-              : actor.avatarImageUrl
-          }
-          name={
-            isEventStatusUpdate
-              ? activity.event?.venue?.name || activity.event?.title
-              : actor.firstName
-          }
-          className={
-            isEventStatusUpdate
-              ? "h-11 w-11 rounded-md border-2 border-background ring-2 ring-muted/20"
-              : "-mt-1.5 h-11 w-11 rounded-full border-2 border-background ring-2 ring-muted/20"
-          }
-        />
-        <div className="absolute -right-[4px] bottom-[16px] rounded-full bg-background p-0.5">
-          {renderIcon()}
+      <div className="flex pt-1.5">
+        <div className="relative h-11 w-11 shrink-0">
+          <UserAvatar
+            src={
+              isEventStatusUpdate
+                ? activity.event?.venue?.logoImageUrl
+                : actor.avatarImageUrl
+            }
+            name={
+              isEventStatusUpdate
+                ? activity.event?.venue?.name || activity.event?.title
+                : actor.firstName
+            }
+            className={
+              isEventStatusUpdate
+                ? "h-11 w-11 rounded-md border-2 border-background ring-2 ring-muted/20"
+                : "-mt-1.5 h-11 w-11 rounded-full border-2 border-background ring-2 ring-muted/20"
+            }
+          />
+          <div className="absolute -right-1 bottom-1 rounded-full bg-background bg-card p-0.5">
+            {renderIcon()}
+          </div>
         </div>
       </div>
       <div className="flex-1">
