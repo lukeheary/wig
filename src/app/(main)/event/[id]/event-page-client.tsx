@@ -361,6 +361,8 @@ export default function EventPage() {
   const { main: titleMain, trailingParenthetical } = splitTrailingParenthetical(
     event.title
   );
+  const imageOverlayButtonClassName =
+    "h-11 w-11 rounded-full bg-black/55 text-white shadow-[0_10px_28px_rgba(0,0,0,0.45)] backdrop-blur-sm transition-all hover:scale-[1.02] hover:bg-black/72 hover:text-white";
 
   // Check if user can edit this event
   const canEdit =
@@ -447,20 +449,23 @@ export default function EventPage() {
               <SharedBackButton
                 fallbackHref={isSignedIn ? "/home" : "/"}
                 returnTo={returnTo}
-                variant="secondary"
+                variant="ghost"
                 size="icon"
-                className="absolute left-4 top-4 h-10 w-10"
-                iconClassName="h-4 w-4"
+                className={cn(
+                  "absolute left-3 top-3",
+                  imageOverlayButtonClassName
+                )}
+                iconClassName="h-[18px] w-[18px]"
               />
 
               {/* Action Icons - Overlay on top right */}
-              <div className="absolute right-4 top-4 flex gap-2">
+              <div className="absolute right-3 top-3 flex gap-2">
                 {canEdit && (
                   <Link href={editHref}>
                     <Button
                       size="icon"
-                      variant="secondary"
-                      className="h-10 w-10"
+                      variant="ghost"
+                      className={imageOverlayButtonClassName}
                     >
                       <Edit className="h-4 w-4" />
                     </Button>
@@ -471,8 +476,8 @@ export default function EventPage() {
                 {/*</Button>*/}
                 <Button
                   size="icon"
-                  variant="secondary"
-                  className="h-10 w-10"
+                  variant="ghost"
+                  className={imageOverlayButtonClassName}
                   onClick={() => void handleShare()}
                   aria-label={isShareCopied ? "Link copied" : "Copy event link"}
                 >
@@ -486,7 +491,7 @@ export default function EventPage() {
 
               {/* Avatars - Overlay on bottom right */}
               {socialStackUsers.length > 0 && (
-                <div className="absolute bottom-4 right-4">
+                <div className="absolute bottom-3 right-3">
                   <AvatarStack
                     users={socialStackUsers}
                     maxDisplay={5}
@@ -499,8 +504,11 @@ export default function EventPage() {
               {eventImageUrl && (
                 <Button
                   size="icon"
-                  variant="secondary"
-                  className="absolute bottom-4 left-4 h-10 w-10"
+                  variant="ghost"
+                  className={cn(
+                    "absolute bottom-3 left-3",
+                    imageOverlayButtonClassName
+                  )}
                   onClick={() => setIsImageModalOpen(true)}
                 >
                   <Expand className="h-4 w-4" />
@@ -509,7 +517,7 @@ export default function EventPage() {
             </div>
           </div>
 
-          <div className="space-y-1 md:space-y-2 lg:flex-1 lg:pt-14">
+          <div className="lg:flex-1 lg:pt-14">
             <div className="pt-4">
               <h1 className="font-space-grotesk text-3xl font-bold md:text-6xl">
                 {titleMain}
@@ -524,7 +532,7 @@ export default function EventPage() {
 
             <div
               className={cn(
-                "flex items-center gap-2 text-lg text-neon-teal md:text-2xl",
+                "flex items-center gap-2 pt-1 text-lg text-neon-teal md:text-2xl",
                 isStatusFlagged && "text-muted-foreground line-through"
               )}
             >
@@ -542,7 +550,7 @@ export default function EventPage() {
             </div>
 
             {(event.venue?.name || (event.categories?.length ?? 0) > 0) && (
-              <div className="flex flex-wrap items-center gap-2">
+              <div className="flex flex-wrap items-center gap-2 md:pt-1">
                 {event.venue?.name && (
                   <Link
                     className="font-space-grotesk flex w-fit items-center gap-2 text-lg transition-colors hover:underline md:text-2xl"
@@ -551,11 +559,16 @@ export default function EventPage() {
                     <span>{event.venue.name}</span>
                   </Link>
                 )}
+                <CategoryPillList
+                  categories={event.categories || []}
+                  categoryLabelMap={categoryLabelMap}
+                  pillClassName={"py-1 px-2"}
+                />
               </div>
             )}
 
             {event.organizer && (
-              <div className="font-space-grotesk mt-1 flex w-fit items-center gap-2 text-lg text-muted-foreground md:text-2xl">
+              <div className="font-space-grotesk flex w-fit items-center gap-2 pt-1 text-base text-muted-foreground md:pt-1 md:text-2xl">
                 <span>Organized by </span>
                 <Link
                   href={`/organizer/${event.organizer.slug}`}
@@ -571,17 +584,12 @@ export default function EventPage() {
                 href={event.eventUrl}
                 target="_blank"
                 rel="noopener noreferrer"
-                className="flex w-fit items-center gap-2 text-muted-foreground transition-colors hover:underline md:text-lg"
+                className="flex w-fit items-center gap-2 text-muted-foreground transition-colors hover:underline md:pt-1 md:text-lg"
               >
                 <span>View on {sourceLabel}</span>
                 <ExternalLink className="h-4 w-4" />
               </a>
             )}
-
-            <CategoryPillList
-              categories={event.categories || []}
-              categoryLabelMap={categoryLabelMap}
-            />
 
             {!isCancelledEvent && (
               <>
