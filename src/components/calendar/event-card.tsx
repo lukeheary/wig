@@ -98,7 +98,7 @@ export function EventCard({ event }: EventCardProps) {
           </div>
 
           {/* Event Information - to the right on mobile, below on desktop */}
-          <div className="font-space-grotesk flex-1 space-y-1 py-1 pl-3 pr-1 md:px-3 md:py-3">
+          <div className="font-space-grotesk flex-1 space-y-1.5 py-1 pl-3 pr-1 md:px-3 md:py-3">
             {/* Title */}
             <h3 className="line-clamp-2 text-base/5 font-medium transition-colors group-hover:text-primary">
               {titleMain}
@@ -113,7 +113,7 @@ export function EventCard({ event }: EventCardProps) {
             {/* Date */}
             <div
               className={cn(
-                "text-sm leading-tight text-neon-teal md:text-sm",
+                "text-sm font-medium leading-tight text-neon-teal md:text-sm",
                 hasInactiveStatus && "line-through"
               )}
             >

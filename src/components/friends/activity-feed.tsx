@@ -38,6 +38,16 @@ interface ActivityItemProps {
   activity: any;
 }
 
+function ActivityHighlight({
+  children,
+  className = "",
+}: {
+  children: React.ReactNode;
+  className?: string;
+}) {
+  return <span className={`font-space-grotesk ${className}`}>{children}</span>;
+}
+
 const EVENT_UPDATE_TYPES = new Set([
   "cancelled",
   "postponed",
@@ -116,14 +126,14 @@ export function ActivityItem({ activity }: ActivityItemProps) {
 
   const renderContent = () => {
     const actorName = (
-      <span className="font-medium text-foreground">
+      <ActivityHighlight className="font-medium text-foreground">
         {actor.firstName} {actor.lastName}
-      </span>
+      </ActivityHighlight>
     );
     const subjectName = activity.partnerFirstName ? (
-      <span className="font-medium text-foreground">
+      <ActivityHighlight className="font-medium text-foreground">
         {actor.firstName} and {activity.partnerFirstName}
-      </span>
+      </ActivityHighlight>
     ) : (
       actorName
     );
@@ -152,13 +162,15 @@ export function ActivityItem({ activity }: ActivityItemProps) {
         ) : null}
         <Link
           href={eventHref}
-          className="font-medium text-neon-teal text-primary hover:underline"
+          className="font-space-grotesk font-medium text-neon-teal text-primary hover:underline"
         >
           {entityName}
         </Link>
       </>
     ) : (
-      <span className="font-medium text-foreground">{entityName}</span>
+      <ActivityHighlight className="font-medium text-foreground">
+        {entityName}
+      </ActivityHighlight>
     );
 
     switch (type) {
@@ -179,14 +191,14 @@ export function ActivityItem({ activity }: ActivityItemProps) {
                 {activity.event.venue?.slug ? (
                   <Link
                     href={`/venue/${activity.event.venue.slug}`}
-                    className="font-medium text-primary hover:underline"
+                    className="font-space-grotesk font-medium text-primary hover:underline"
                   >
                     {activity.event.venue?.name}
                   </Link>
                 ) : (
-                  <span className="font-medium text-foreground">
+                  <ActivityHighlight className="font-medium text-foreground">
                     {activity.event.venue?.name}
-                  </span>
+                  </ActivityHighlight>
                 )}
               </>
             )}
@@ -211,14 +223,14 @@ export function ActivityItem({ activity }: ActivityItemProps) {
                 {activity.event.venue?.slug ? (
                   <Link
                     href={`/venue/${activity.event.venue.slug}`}
-                    className="font-medium text-primary hover:underline"
+                    className="font-space-grotesk font-medium text-primary hover:underline"
                   >
                     {activity.event.venue?.name}
                   </Link>
                 ) : (
-                  <span className="font-medium text-foreground">
+                  <ActivityHighlight className="font-medium text-foreground">
                     {activity.event.venue?.name}
-                  </span>
+                  </ActivityHighlight>
                 )}
               </>
             )}
@@ -236,14 +248,14 @@ export function ActivityItem({ activity }: ActivityItemProps) {
                 {activity.event.venue?.slug ? (
                   <Link
                     href={`/venue/${activity.event.venue.slug}`}
-                    className="font-medium text-primary hover:underline"
+                    className="font-space-grotesk font-medium text-primary hover:underline"
                   >
                     {activity.event.venue?.name}
                   </Link>
                 ) : (
-                  <span className="font-medium text-foreground">
+                  <ActivityHighlight className="font-medium text-foreground">
                     {activity.event.venue?.name}
-                  </span>
+                  </ActivityHighlight>
                 )}
               </>
             )}
@@ -258,12 +270,14 @@ export function ActivityItem({ activity }: ActivityItemProps) {
             {placeHref ? (
               <Link
                 href={placeHref}
-                className="font-medium text-primary hover:underline"
+                className="font-space-grotesk font-medium text-primary hover:underline"
               >
                 {entityName}
               </Link>
             ) : (
-              <span className="font-medium text-foreground">{entityName}</span>
+              <ActivityHighlight className="font-medium text-foreground">
+                {entityName}
+              </ActivityHighlight>
             )}
           </>
         );
@@ -272,7 +286,7 @@ export function ActivityItem({ activity }: ActivityItemProps) {
           <>
             <Link
               href={eventHref}
-              className="font-medium text-primary hover:underline"
+              className="font-space-grotesk font-medium text-primary hover:underline"
             >
               {entityName}
             </Link>
@@ -283,14 +297,14 @@ export function ActivityItem({ activity }: ActivityItemProps) {
                 {activity.event.venue?.slug ? (
                   <Link
                     href={`/venue/${activity.event.venue.slug}`}
-                    className="font-medium text-primary hover:underline"
+                    className="font-space-grotesk font-medium text-primary hover:underline"
                   >
                     {activity.event.venue?.name}
                   </Link>
                 ) : (
-                  <span className="font-medium text-foreground">
+                  <ActivityHighlight className="font-medium text-foreground">
                     {activity.event.venue?.name}
-                  </span>
+                  </ActivityHighlight>
                 )}
               </>
             )}
@@ -303,7 +317,7 @@ export function ActivityItem({ activity }: ActivityItemProps) {
           <>
             <Link
               href={eventHref}
-              className="font-medium text-primary hover:underline"
+              className="font-space-grotesk font-medium text-primary hover:underline"
             >
               {entityName}
             </Link>
@@ -314,14 +328,14 @@ export function ActivityItem({ activity }: ActivityItemProps) {
                 {activity.event.venue?.slug ? (
                   <Link
                     href={`/venue/${activity.event.venue.slug}`}
-                    className="font-medium text-primary hover:underline"
+                    className="font-space-grotesk font-medium text-primary hover:underline"
                   >
                     {activity.event.venue?.name}
                   </Link>
                 ) : (
-                  <span className="font-medium text-foreground">
+                  <ActivityHighlight className="font-medium text-foreground">
                     {activity.event.venue?.name}
-                  </span>
+                  </ActivityHighlight>
                 )}
               </>
             )}{" "}
@@ -333,7 +347,7 @@ export function ActivityItem({ activity }: ActivityItemProps) {
           <>
             <Link
               href={eventHref}
-              className="font-medium text-primary hover:underline"
+              className="font-space-grotesk font-medium text-primary hover:underline"
             >
               {entityName}
             </Link>
@@ -344,14 +358,14 @@ export function ActivityItem({ activity }: ActivityItemProps) {
                 {activity.event.venue?.slug ? (
                   <Link
                     href={`/venue/${activity.event.venue.slug}`}
-                    className="font-medium text-primary hover:underline"
+                    className="font-space-grotesk font-medium text-primary hover:underline"
                   >
                     {activity.event.venue?.name}
                   </Link>
                 ) : (
-                  <span className="font-medium text-foreground">
+                  <ActivityHighlight className="font-medium text-foreground">
                     {activity.event.venue?.name}
-                  </span>
+                  </ActivityHighlight>
                 )}
               </>
             )}{" "}
@@ -363,7 +377,7 @@ export function ActivityItem({ activity }: ActivityItemProps) {
           <>
             <Link
               href={eventHref}
-              className="font-medium text-primary hover:underline"
+              className="font-space-grotesk font-medium text-primary hover:underline"
             >
               {entityName}
             </Link>
@@ -374,14 +388,14 @@ export function ActivityItem({ activity }: ActivityItemProps) {
                 {activity.event.venue?.slug ? (
                   <Link
                     href={`/venue/${activity.event.venue.slug}`}
-                    className="font-medium text-primary hover:underline"
+                    className="font-space-grotesk font-medium text-primary hover:underline"
                   >
                     {activity.event.venue?.name}
                   </Link>
                 ) : (
-                  <span className="font-medium text-foreground">
+                  <ActivityHighlight className="font-medium text-foreground">
                     {activity.event.venue?.name}
-                  </span>
+                  </ActivityHighlight>
                 )}
               </>
             )}{" "}
@@ -393,7 +407,7 @@ export function ActivityItem({ activity }: ActivityItemProps) {
           <>
             <Link
               href={eventHref}
-              className="font-medium text-primary hover:underline"
+              className="font-space-grotesk font-medium text-primary hover:underline"
             >
               {entityName}
             </Link>
@@ -404,14 +418,14 @@ export function ActivityItem({ activity }: ActivityItemProps) {
                 {activity.event.venue?.slug ? (
                   <Link
                     href={`/venue/${activity.event.venue.slug}`}
-                    className="font-medium text-primary hover:underline"
+                    className="font-space-grotesk font-medium text-primary hover:underline"
                   >
                     {activity.event.venue?.name}
                   </Link>
                 ) : (
-                  <span className="font-medium text-foreground">
+                  <ActivityHighlight className="font-medium text-foreground">
                     {activity.event.venue?.name}
-                  </span>
+                  </ActivityHighlight>
                 )}
               </>
             )}{" "}

@@ -371,12 +371,12 @@ function PlacesPageContent() {
                   </div>
 
                   <div className="font-space-grotesk flex flex-1 flex-col justify-between py-1 pl-3 pr-1">
-                    <div className="space-y-1">
-                      <h3 className="line-clamp-2 text-base font-bold leading-tight">
+                    <div className="space-y-1.5">
+                      <h3 className="line-clamp-2 text-base font-medium leading-tight">
                         {item.name}
                       </h3>
                       {item.city && item.state && (
-                        <div className="flex items-center gap-1.5 text-sm text-neon-teal">
+                        <div className="flex items-center gap-1.5 text-sm font-medium text-neon-teal">
                           {/*<MapPin className="h-3.5 w-3.5" />*/}
                           <span>
                             {item.city}, {item.state}

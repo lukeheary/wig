@@ -553,7 +553,7 @@ export default function EventPage() {
               <div className="flex flex-wrap items-center gap-2 pt-0.5 md:pt-1">
                 {event.venue?.name && (
                   <Link
-                    className="font-space-grotesk flex w-fit items-center gap-2 text-lg transition-colors hover:underline md:text-2xl"
+                    className="font-space-grotesk flex w-fit items-center gap-2 text-lg font-medium transition-colors hover:underline md:text-2xl"
                     href={`/venue/${event.venue?.slug}`}
                   >
                     <span>{event.venue.name}</span>
