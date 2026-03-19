@@ -100,7 +100,7 @@ export function EventCard({ event }: EventCardProps) {
           {/* Event Information - to the right on mobile, below on desktop */}
           <div className="font-space-grotesk flex-1 space-y-1 py-1 pl-3 pr-1 md:px-3 md:py-3">
             {/* Title */}
-            <h3 className="line-clamp-2 text-base font-bold leading-tight transition-colors group-hover:text-primary md:text-base">
+            <h3 className="line-clamp-2 text-base/5 font-medium transition-colors group-hover:text-primary">
               {titleMain}
               {trailingParenthetical ? (
                 <span className="whitespace-nowrap">

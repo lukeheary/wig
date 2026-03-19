@@ -5,7 +5,7 @@ import { trpc } from "@/lib/trpc";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
-import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
+import { Card, CardContent } from "@/components/ui/card";
 import { UserAvatar } from "@/components/ui/user-avatar";
 import { Separator } from "@/components/ui/separator";
 import { useUser, useReverification } from "@clerk/nextjs";
@@ -15,6 +15,7 @@ import { GooglePlacesAutocomplete } from "@/components/google-places-autocomplet
 import { S3Uploader } from "@/components/ui/s3-uploader";
 import { DateOfBirthInput } from "@/components/ui/date-of-birth-input";
 import { PageContainer } from "@/components/shared/page-container";
+import { StickySectionHeader } from "@/components/ui/sticky-section-header";
 
 export default function ProfilePage() {
   const RESERVED_USERNAMES = new Set(["luke"]);
@@ -535,17 +536,17 @@ export default function ProfilePage() {
   );
 
   return (
-    <PageContainer className="max-w-2xl space-y-6">
+    <PageContainer className="max-w-2xl pt-0">
       {/*<div className="flex items-center justify-between">*/}
       {/*  <h1 className="text-3xl font-bold">Profile</h1>*/}
       {/*  /!*<UserButton afterSignOutUrl="/sign-in" />*!/*/}
       {/*</div>*/}
 
+      <StickySectionHeader className="-mx-4">
+        <h2 className="tracking-tight">My Profile</h2>
+      </StickySectionHeader>
       <Card>
-        <CardHeader>
-          <CardTitle>My Profile</CardTitle>
-        </CardHeader>
-        <CardContent className="space-y-6">
+        <CardContent className="space-y-6 pt-4">
           {/* Profile Image */}
           <div className="flex items-center gap-6">
             <UserAvatar
@@ -790,11 +791,11 @@ export default function ProfilePage() {
         </CardContent>
       </Card>
 
+      <StickySectionHeader className="-mx-4 pt-6">
+        <h2 className="tracking-tight">My Partner</h2>
+      </StickySectionHeader>
       <Card>
-        <CardHeader>
-          <CardTitle>My Partner</CardTitle>
-        </CardHeader>
-        <CardContent className="space-y-4">
+        <CardContent className="space-y-4 pt-4">
           {acceptedRelationship ? (
             <>
               <div className="flex items-center gap-3 rounded-lg border p-3">

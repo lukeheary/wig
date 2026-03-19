@@ -241,7 +241,7 @@ export function PlaceManagementPage({
         </Card>
       </div>
 
-      <div className="grid gap-6 lg:grid-cols-3">
+      <div className="grid gap-6 pt-2 lg:grid-cols-3">
         <div className="space-y-6 lg:col-span-2">
           <Card>
             <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-4">
@@ -262,7 +262,7 @@ export function PlaceManagementPage({
                     <Link
                       key={event.id}
                       href={withReturnTo(`/event/${event.id}`, returnTo)}
-                      className="flex items-center gap-3 overflow-hidden rounded-lg border p-2 transition-colors hover:bg-muted/50 sm:gap-4 sm:p-3"
+                      className="flex w-full min-w-0 items-center gap-3 overflow-hidden rounded-lg border p-2 transition-colors hover:bg-muted/50 sm:gap-4 sm:p-3"
                     >
                       {event.coverImageUrl ? (
                         <img
@@ -275,7 +275,7 @@ export function PlaceManagementPage({
                           <Calendar className="h-5 w-5 text-muted-foreground sm:h-6 sm:w-6" />
                         </div>
                       )}
-                      <div className="min-w-0 flex-1 overflow-hidden">
+                      <div className="w-0 min-w-0 flex-1 overflow-hidden">
                         <p className="truncate text-sm font-medium sm:text-base">
                           {event.title}
                         </p>
