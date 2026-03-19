@@ -552,21 +552,20 @@ export default function EventPage() {
                     <span>{event.venue.name}</span>
                   </Link>
                 )}
-                <CategoryPillList
-                  categories={event.categories || []}
-                  categoryLabelMap={categoryLabelMap}
-                />
               </div>
             )}
 
             {event.organizer && (
-              <Link
-                href={`/organizer/${event.organizer.slug}`}
-                className="mt-1 flex w-fit items-center gap-2 text-muted-foreground transition-colors hover:underline"
-              >
+              <div className="font-space-grotesk mt-1 flex w-fit items-center gap-2 text-lg text-muted-foreground md:text-2xl">
                 {/*<Users className="h-4 w-4" />*/}
-                <span>Organized by {event.organizer.name}</span>
-              </Link>
+                <span>Organized by </span>
+                <Link
+                  href={`/organizer/${event.organizer.slug}`}
+                  className="transition-colors hover:underline"
+                >
+                  {event.organizer.name}
+                </Link>
+              </div>
             )}
 
             {event.eventUrl && (
@@ -580,6 +579,11 @@ export default function EventPage() {
                 <ExternalLink className="h-4 w-4" />
               </a>
             )}
+
+            <CategoryPillList
+              categories={event.categories || []}
+              categoryLabelMap={categoryLabelMap}
+            />
 
             {!isCancelledEvent && (
               <>
