@@ -42,11 +42,11 @@ export function StickySectionHeader({
       <div className={cn("sticky top-14 z-30 w-full md:top-16", className)}>
         <div className="container mx-auto flex flex-row px-4">
           <div className="flex w-fit items-center gap-2 bg-background pr-0.5">
-            <span
-              aria-hidden
-              className="h-6 w-1 rounded-full bg-neon-teal shadow-[0_0_18px_rgba(0,245,212,0.5)]"
-            />
-            <div className="font-space-grotesk text-xl font-semibold">
+            {/*<span*/}
+            {/*  aria-hidden*/}
+            {/*  className="h-6 w-1 rounded-full bg-neon-teal shadow-[0_0_18px_rgba(0,245,212,0.5)]"*/}
+            {/*/>*/}
+            <div className="font-space-grotesk pb-2 text-xl font-semibold">
               {children}
             </div>
           </div>

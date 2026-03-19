@@ -129,6 +129,7 @@ function HomePageContent() {
   const [isAddFriendsBannerDismissed, setIsAddFriendsBannerDismissed] =
     useState(false);
   const [isSticky, setIsSticky] = useState(false);
+  const [isDateNavigating, setIsDateNavigating] = useState(false);
   const stickySentinelRef = useRef<HTMLDivElement>(null);
   const searchInputRef = useRef<HTMLInputElement>(null);
   const [isSearchMode, setIsSearchMode] = useState(false);
@@ -360,7 +361,8 @@ function HomePageContent() {
     }
   );
 
-  const showSkeletons = !isReady || (isLoading && !events);
+  const showSkeletons =
+    !isReady || (!events && isLoading) || isDateNavigating;
 
   // Fetch upcoming events for focused-empty search state
   const { data: upcomingSearchEvents, isLoading: upcomingSearchLoading } =
@@ -484,6 +486,26 @@ function HomePageContent() {
     isDefaultCalendarView &&
     !hasAcceptedFriends &&
     !isAddFriendsBannerDismissed;
+  const shouldShowReturnToCurrentWeekButton =
+    viewMode === "week" &&
+    !isCurrentWeek &&
+    !isSearchMode &&
+    !isFilteredFeedView;
+  const skeletonDateHeader = useMemo(() => {
+    if (isSearchMode) return null;
+
+    if (viewMode === "week") {
+      if (isCurrentWeek) {
+        return new Date().getHours() >= 17
+          ? "Tonight's Events"
+          : "Today's Events";
+      }
+
+      return format(dateRange.startDate, "EEE, MMM d");
+    }
+
+    return format(currentDate, "MMMM yyyy");
+  }, [currentDate, dateRange.startDate, isCurrentWeek, isSearchMode, viewMode]);
 
   useEffect(() => {
     if (typeof window === "undefined") return;
@@ -512,6 +534,7 @@ function HomePageContent() {
     }
 
     void triggerHaptic(HapticPreset.Light);
+    setIsDateNavigating(true);
     let nextDateParam: string;
 
     if (viewMode === "week") {
@@ -553,6 +576,7 @@ function HomePageContent() {
 
   const handleNext = async () => {
     void triggerHaptic(HapticPreset.Light);
+    setIsDateNavigating(true);
     let nextDateParam: string;
 
     if (viewMode === "week") {
@@ -588,6 +612,7 @@ function HomePageContent() {
   };
 
   const handleToday = async () => {
+    setIsDateNavigating(true);
     await setDateParam(format(new Date(), "yyyy-MM-dd"), {
       scroll: false,
       shallow: true,
@@ -618,6 +643,12 @@ function HomePageContent() {
       });
     }
   }, [error, toast]);
+
+  useEffect(() => {
+    if (!isFetching) {
+      setIsDateNavigating(false);
+    }
+  }, [isFetching]);
 
   useEffect(() => {
     const observer = new IntersectionObserver(
@@ -654,7 +685,35 @@ function HomePageContent() {
         <StickySearchBar innerClassName="w-full flex-col items-stretch sm:flex-col sm:items-stretch">
           <div className="flex w-full flex-col gap-2 sm:flex-row sm:items-center">
             {/* Search Input */}
-            <div className="flex w-full flex-row">
+            <div className="flex w-full flex-row items-center">
+              <div
+                className={cn(
+                  "overflow-hidden transition-all duration-200 ease-out",
+                  shouldShowReturnToCurrentWeekButton
+                    ? "mr-2 w-12 opacity-100"
+                    : "mr-0 w-0 opacity-0"
+                )}
+              >
+                <button
+                  type="button"
+                  onMouseDown={(e) => {
+                    e.preventDefault();
+                  }}
+                  onPointerDown={(e) => {
+                    e.preventDefault();
+                  }}
+                  onClick={(e) => {
+                    e.preventDefault();
+                    e.stopPropagation();
+                    void handleToday();
+                  }}
+                  className="flex h-10 w-10 shrink-0 items-center justify-center rounded-full text-muted-foreground transition-colors outline-none hover:bg-muted hover:text-foreground focus:outline-none focus-visible:outline-none"
+                  tabIndex={shouldShowReturnToCurrentWeekButton ? 0 : -1}
+                  aria-label="Back to current week"
+                >
+                  <ChevronLeft className="h-5 w-5" />
+                </button>
+              </div>
               <Suspense fallback={null}>
                 <SearchInput
                   ref={searchInputRef}
@@ -664,7 +723,7 @@ function HomePageContent() {
                   onFocus={() => setIsSearchMode(true)}
                   showBack={isSearchMode || isFilteredFeedView}
                   onBack={handleBackFromSearchOrFilter}
-                  className="w-full"
+                  className="min-w-0 flex-1"
                 />
               </Suspense>
               <div
@@ -870,14 +929,10 @@ function HomePageContent() {
       {/* Initial / Transition Loading State */}
       {showSkeletons && (
         <div>
-          {!isSearchMode && (
+          {skeletonDateHeader && (
             <StickyDateHeader
-              dateHeader={
-                new Date().getHours() >= 17
-                  ? "Tonight's Events"
-                  : "Today's Events"
-              }
-              isToday={true}
+              dateHeader={skeletonDateHeader}
+              isToday={isCurrentWeek}
             />
           )}
           <div className="container mx-auto px-4">
