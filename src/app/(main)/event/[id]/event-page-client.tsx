@@ -549,13 +549,6 @@ export default function EventPage() {
                     href={`/venue/${event.venue?.slug}`}
                   >
                     <span>{event.venue.name}</span>
-                    {event.venue.logoImageUrl ? (
-                      <UserAvatar
-                        src={event.venue.logoImageUrl}
-                        name={event.venue.name}
-                        className="h-6 w-6 rounded-md border border-background ring-1 ring-muted/20 md:h-7 md:w-7"
-                      />
-                    ) : null}
                   </Link>
                 )}
               </div>
@@ -569,13 +562,6 @@ export default function EventPage() {
                   className="flex items-center gap-2 transition-colors hover:underline"
                 >
                   {event.organizer.name}
-                  {event.organizer.logoImageUrl ? (
-                    <UserAvatar
-                      src={event.organizer.logoImageUrl}
-                      name={event.organizer.name}
-                      className="h-6 w-6 rounded-md border border-background ring-1 ring-muted/20 md:h-7 md:w-7"
-                    />
-                  ) : null}
                 </Link>
               </div>
             )}
