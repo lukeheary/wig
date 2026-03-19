@@ -266,6 +266,7 @@ function HomePageContent() {
 
   // Determine if we're actively searching (has query text)
   const isSearching = Boolean(searchQuery && searchQuery.trim().length > 0);
+  const isSearchView = isSearchMode || isSearching;
   const isDefaultCalendarView = activeFilter === "all";
   const isFilteredFeedView = !isSearching && !isDefaultCalendarView;
 
@@ -377,7 +378,7 @@ function HomePageContent() {
         limit: 20,
       },
       {
-        enabled: isReady && isSearchMode && !isSearching,
+        enabled: isReady && isSearchView && !isSearching,
       }
     );
 
@@ -472,7 +473,7 @@ function HomePageContent() {
   }, [filteredEvents]);
 
   const shouldShowRecentActivity =
-    !isSearchMode &&
+    !isSearchView &&
     !showSkeletons &&
     hasRecentActivity &&
     isCurrentWeek &&
@@ -480,7 +481,7 @@ function HomePageContent() {
     selectedCategories.length === 0;
   const hasAcceptedFriends = (acceptedFriends?.length ?? 0) > 0;
   const shouldShowAddFriendsBanner =
-    !isSearchMode &&
+    !isSearchView &&
     !isSearching &&
     !showSkeletons &&
     isDefaultCalendarView &&
@@ -489,10 +490,10 @@ function HomePageContent() {
   const shouldShowReturnToCurrentWeekButton =
     viewMode === "week" &&
     !isCurrentWeek &&
-    !isSearchMode &&
+    !isSearchView &&
     !isFilteredFeedView;
   const skeletonDateHeader = useMemo(() => {
-    if (isSearchMode) return null;
+    if (isSearchView) return null;
 
     if (viewMode === "week") {
       if (isCurrentWeek) {
@@ -505,7 +506,7 @@ function HomePageContent() {
     }
 
     return format(currentDate, "MMMM yyyy");
-  }, [currentDate, dateRange.startDate, isCurrentWeek, isSearchMode, viewMode]);
+  }, [currentDate, dateRange.startDate, isCurrentWeek, isSearchView, viewMode]);
 
   useEffect(() => {
     if (typeof window === "undefined") return;
@@ -721,7 +722,7 @@ function HomePageContent() {
                   value={searchQuery}
                   onChange={setSearchQuery}
                   onFocus={() => setIsSearchMode(true)}
-                  showBack={isSearchMode || isFilteredFeedView}
+                  showBack={isSearchView || isFilteredFeedView}
                   onBack={handleBackFromSearchOrFilter}
                   className="min-w-0 flex-1"
                 />
@@ -729,7 +730,7 @@ function HomePageContent() {
               <div
                 className={cn(
                   "shrink-0 overflow-hidden transition-all duration-200 ease-out md:hidden",
-                  isSearchMode || isFilteredFeedView
+                  isSearchView || isFilteredFeedView
                     ? "ml-0 w-0 opacity-0"
                     : "ml-2 opacity-100"
                 )}
@@ -787,7 +788,7 @@ function HomePageContent() {
               <div
                 className={cn(
                   "hidden shrink-0 overflow-hidden transition-all duration-200 ease-out md:block",
-                  isSearchMode || isFilteredFeedView
+                  isSearchView || isFilteredFeedView
                     ? "w-0 opacity-0"
                     : "w-[82px] opacity-100"
                 )}
@@ -885,7 +886,7 @@ function HomePageContent() {
         )}
 
         {/* Recently Added Events (when search focused but no query) */}
-        {isSearchMode && !isSearching && !showSkeletons && (
+        {isSearchView && !isSearching && !showSkeletons && (
           <div className="space-y-4">
             {upcomingSearchLoading ? (
               <div className="flex justify-center py-12">
@@ -985,7 +986,7 @@ function HomePageContent() {
       )}
 
       {/* Week View - outside container for full-width sticky headers */}
-      {!isSearchMode &&
+      {!isSearchView &&
         isDefaultCalendarView &&
         viewMode === "week" &&
         events &&
@@ -1037,7 +1038,7 @@ function HomePageContent() {
 
       <div className="container mx-auto px-4">
         {/* Month View - only show when not in search mode */}
-        {!isSearchMode &&
+        {!isSearchView &&
           isDefaultCalendarView &&
           viewMode === "month" &&
           events &&
