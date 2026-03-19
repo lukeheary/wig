@@ -98,9 +98,9 @@ export function EventCard({ event }: EventCardProps) {
           </div>
 
           {/* Event Information - to the right on mobile, below on desktop */}
-          <div className="flex-1 space-y-1.5 py-1 pl-3 pr-1 md:px-3 md:py-3">
+          <div className="flex-1 py-1 pl-3 pr-1 md:px-3 md:py-3">
             {/* Title */}
-            <h3 className="font-space-grotesk line-clamp-2 text-base font-bold leading-tight transition-colors group-hover:text-primary md:text-base">
+            <h3 className="line-clamp-2 text-base font-bold leading-tight transition-colors group-hover:text-primary md:text-base">
               {titleMain}
               {trailingParenthetical ? (
                 <span className="whitespace-nowrap">
@@ -113,7 +113,7 @@ export function EventCard({ event }: EventCardProps) {
             {/* Date */}
             <div
               className={cn(
-                "font-space-grotesk text-sm font-medium leading-tight text-neon-teal md:text-sm",
+                "font-space-grotesk pt-1 text-sm leading-tight text-neon-teal md:text-sm",
                 hasInactiveStatus && "line-through"
               )}
             >
@@ -121,7 +121,7 @@ export function EventCard({ event }: EventCardProps) {
             </div>
 
             {/* Venue & Organizer */}
-            <div className="font-space-grotesk line-clamp-1 text-sm leading-tight text-primary/70 md:text-sm">
+            <div className="line-clamp-1 pt-1 text-sm leading-tight text-primary/70 md:text-sm">
               {event.venue && `${event.venue.name}`}
               {/*{event.organizer &&*/}
               {/*  (event.venue*/}

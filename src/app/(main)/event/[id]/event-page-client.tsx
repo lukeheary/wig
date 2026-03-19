@@ -550,10 +550,10 @@ export default function EventPage() {
             </div>
 
             {(event.venue?.name || (event.categories?.length ?? 0) > 0) && (
-              <div className="flex flex-wrap items-center gap-2 pt-0.5">
+              <div className="flex flex-wrap items-center gap-2 pt-0.5 md:pt-1">
                 {event.venue?.name && (
                   <Link
-                    className="font-space-grotesk flex w-fit items-center gap-2 text-lg transition-colors hover:underline md:text-2xl"
+                    className="flex w-fit items-center gap-2 text-lg transition-colors hover:underline md:text-2xl"
                     href={`/venue/${event.venue?.slug}`}
                   >
                     <span>{event.venue.name}</span>
@@ -568,7 +568,7 @@ export default function EventPage() {
             )}
 
             {event.organizer && (
-              <div className="font-space-grotesk flex w-fit items-center gap-1.5 pt-0.5 text-base text-muted-foreground md:pt-1 md:text-2xl">
+              <div className="flex w-fit items-center gap-1.5 pt-0.5 text-base text-muted-foreground md:pt-1 md:text-2xl">
                 <span>Organized by </span>
                 <Link
                   href={`/organizer/${event.organizer.slug}`}
@@ -649,7 +649,9 @@ export default function EventPage() {
 
             {/* About Section */}
             <div className={"pt-4"}>
-              <h2 className="mb-2 text-2xl font-bold">About</h2>
+              <h2 className="font-space-grotesk mb-2 text-2xl font-bold">
+                About
+              </h2>
 
               {/* Event Date */}
               <div className="mb-6">
@@ -679,7 +681,9 @@ export default function EventPage() {
             {/* Lineup / Attendees Section */}
             {goingCount > 0 && (
               <div className={"pt-4"}>
-                <h2 className="mb-4 text-2xl font-bold">Who&apos;s Going</h2>
+                <h2 className="font-space-grotesk mb-4 text-2xl font-bold">
+                  Who&apos;s Going
+                </h2>
                 <div className="grid grid-cols-2 gap-4 md:grid-cols-3">
                   {goingAttendees.slice(0, 9).map((attendee) => (
                     <div
@@ -709,7 +713,7 @@ export default function EventPage() {
 
             {interestedCount > 0 && (
               <div className={"pt-4"}>
-                <h2 className="mb-4 text-2xl font-bold">
+                <h2 className="font-space-grotesk mb-4 text-2xl font-bold">
                   Who&apos;s Interested
                 </h2>
                 <div className="grid grid-cols-2 gap-4 md:grid-cols-3">

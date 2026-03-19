@@ -147,7 +147,7 @@ function MainLayoutContent({ children }: { children: React.ReactNode }) {
               <Button
                 variant="ghost"
                 size="sm"
-                className={isHome ? "text-foreground" : "text-muted-foreground"}
+                className={isHome ? "text-neon-teal" : "text-muted-foreground"}
               >
                 Home
               </Button>
@@ -162,7 +162,7 @@ function MainLayoutContent({ children }: { children: React.ReactNode }) {
                 variant="ghost"
                 size="sm"
                 className={
-                  isPlaces ? "text-foreground" : "text-muted-foreground"
+                  isPlaces ? "text-neon-teal" : "text-muted-foreground"
                 }
               >
                 Venues & Organizers
@@ -177,7 +177,7 @@ function MainLayoutContent({ children }: { children: React.ReactNode }) {
                 size="sm"
                 className={
                   isFriends
-                    ? "gap-1 text-foreground"
+                    ? "gap-1 text-neon-teal"
                     : "gap-1 text-muted-foreground"
                 }
               >
@@ -356,7 +356,7 @@ function MainLayoutContent({ children }: { children: React.ReactNode }) {
                     >
                       <Button
                         variant="ghost"
-                        className={`w-full justify-start px-4 text-base ${isHome ? "text-foreground" : "text-muted-foreground"}`}
+                        className={`w-full justify-start px-4 text-base ${isHome ? "text-neon-teal" : "text-muted-foreground"}`}
                         size="lg"
                       >
                         <Home className="mr-3 h-5 w-5" />
@@ -376,7 +376,7 @@ function MainLayoutContent({ children }: { children: React.ReactNode }) {
                     >
                       <Button
                         variant="ghost"
-                        className={`w-full justify-start px-4 text-base ${isPlaces ? "text-foreground" : "text-muted-foreground"}`}
+                        className={`w-full justify-start px-4 text-base ${isPlaces ? "text-neon-teal" : "text-muted-foreground"}`}
                         size="lg"
                       >
                         <MapPin className="mr-3 h-5 w-5" />
@@ -392,7 +392,7 @@ function MainLayoutContent({ children }: { children: React.ReactNode }) {
                     >
                       <Button
                         variant="ghost"
-                        className={`w-full justify-start px-4 text-base ${isFriends ? "text-foreground" : "text-muted-foreground"}`}
+                        className={`w-full justify-start px-4 text-base ${isFriends ? "text-neon-teal" : "text-muted-foreground"}`}
                         size="lg"
                       >
                         <Users className="mr-3 h-5 w-5" />
@@ -415,7 +415,7 @@ function MainLayoutContent({ children }: { children: React.ReactNode }) {
                       >
                         <Button
                           variant="ghost"
-                          className={`w-full justify-start px-4 text-base ${isProfile ? "text-foreground" : "text-muted-foreground"}`}
+                          className={`w-full justify-start px-4 text-base ${isProfile ? "text-neon-teal" : "text-muted-foreground"}`}
                           size="lg"
                         >
                           <div className="mr-3 h-5 w-5 shrink-0">
@@ -431,10 +431,7 @@ function MainLayoutContent({ children }: { children: React.ReactNode }) {
                       <Link
                         href="/support"
                         onClick={() => {
-                          trackNavigationClick(
-                            "/support",
-                            "mobile_menu"
-                          );
+                          trackNavigationClick("/support", "mobile_menu");
                           closeMobileMenu();
                         }}
                       >
