@@ -380,26 +380,6 @@ export function PlaceEditForm({
         />
       </div>
 
-      {/* Banner Image */}
-      <div>
-        <Label>Banner Image (Optional)</Label>
-        <S3Uploader
-          folder={placeId ? `places/${placeId}` : "places"}
-          fileName="cover-image.png"
-          currentImageUrl={formData.coverImageUrl}
-          onUploadComplete={(url) =>
-            setFormData((prev) => ({ ...prev, coverImageUrl: url }))
-          }
-          onRemoveImage={() =>
-            setFormData((prev) => ({ ...prev, coverImageUrl: "" }))
-          }
-        />
-        <p className="mt-1 text-xs text-muted-foreground">
-          If no banner is set, the next upcoming event cover or profile image
-          will be used
-        </p>
-      </div>
-
       {/* Description */}
       <div>
         <Label htmlFor="place-description">Description</Label>

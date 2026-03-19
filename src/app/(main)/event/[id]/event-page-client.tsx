@@ -548,7 +548,13 @@ export default function EventPage() {
                     className="font-space-grotesk flex w-fit items-center gap-2 text-lg transition-colors hover:underline md:text-2xl"
                     href={`/venue/${event.venue?.slug}`}
                   >
-                    {/*<MapPin className="h-4 w-4" />*/}
+                    {event.venue.logoImageUrl ? (
+                      <UserAvatar
+                        src={event.venue.logoImageUrl}
+                        name={event.venue.name}
+                        className="h-6 w-6 rounded-md border border-background ring-1 ring-muted/20 md:h-7 md:w-7"
+                      />
+                    ) : null}
                     <span>{event.venue.name}</span>
                   </Link>
                 )}
@@ -557,12 +563,18 @@ export default function EventPage() {
 
             {event.organizer && (
               <div className="font-space-grotesk mt-1 flex w-fit items-center gap-2 text-lg text-muted-foreground md:text-2xl">
-                {/*<Users className="h-4 w-4" />*/}
                 <span>Organized by </span>
                 <Link
                   href={`/organizer/${event.organizer.slug}`}
-                  className="transition-colors hover:underline"
+                  className="flex items-center gap-2 transition-colors hover:underline"
                 >
+                  {event.organizer.logoImageUrl ? (
+                    <UserAvatar
+                      src={event.organizer.logoImageUrl}
+                      name={event.organizer.name}
+                      className="h-6 w-6 rounded-md border border-background ring-1 ring-muted/20 md:h-7 md:w-7"
+                    />
+                  ) : null}
                   {event.organizer.name}
                 </Link>
               </div>
