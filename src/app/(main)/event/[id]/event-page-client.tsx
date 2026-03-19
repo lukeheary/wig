@@ -519,7 +519,7 @@ export default function EventPage() {
 
           <div className="lg:flex-1 lg:pt-14">
             <div className="pt-4">
-              <h1 className="font-space-grotesk text-3xl font-bold md:text-6xl">
+              <h1 className="font-space-grotesk text-3xl/8 font-bold md:text-6xl">
                 {titleMain}
                 {trailingParenthetical ? (
                   <span className="whitespace-nowrap">
@@ -532,7 +532,7 @@ export default function EventPage() {
 
             <div
               className={cn(
-                "flex items-center gap-2 pt-1 text-lg text-neon-teal md:text-2xl",
+                "flex items-center gap-2 pt-1.5 text-lg text-neon-teal md:text-2xl",
                 isStatusFlagged && "text-muted-foreground line-through"
               )}
             >
@@ -550,7 +550,7 @@ export default function EventPage() {
             </div>
 
             {(event.venue?.name || (event.categories?.length ?? 0) > 0) && (
-              <div className="flex flex-wrap items-center gap-2 md:pt-1">
+              <div className="flex flex-wrap items-center gap-2 pt-1">
                 {event.venue?.name && (
                   <Link
                     className="font-space-grotesk flex w-fit items-center gap-2 text-lg transition-colors hover:underline md:text-2xl"
@@ -562,13 +562,13 @@ export default function EventPage() {
                 <CategoryPillList
                   categories={event.categories || []}
                   categoryLabelMap={categoryLabelMap}
-                  pillClassName={"py-1 px-2"}
+                  pillClassName={"py-1 px-2.5"}
                 />
               </div>
             )}
 
             {event.organizer && (
-              <div className="font-space-grotesk flex w-fit items-center gap-2 pt-1 text-base text-muted-foreground md:pt-1 md:text-2xl">
+              <div className="font-space-grotesk flex w-fit items-center gap-1.5 pt-1 text-base text-muted-foreground md:pt-1 md:text-2xl">
                 <span>Organized by </span>
                 <Link
                   href={`/organizer/${event.organizer.slug}`}
@@ -584,7 +584,7 @@ export default function EventPage() {
                 href={event.eventUrl}
                 target="_blank"
                 rel="noopener noreferrer"
-                className="flex w-fit items-center gap-2 text-muted-foreground transition-colors hover:underline md:pt-1 md:text-lg"
+                className="flex w-fit items-center gap-2 pt-1 text-muted-foreground transition-colors hover:underline md:pt-1 md:text-lg"
               >
                 <span>View on {sourceLabel}</span>
                 <ExternalLink className="h-4 w-4" />
@@ -594,7 +594,7 @@ export default function EventPage() {
             {!isCancelledEvent && (
               <>
                 {/* RSVP Buttons - Shared across mobile and desktop */}
-                <div className="flex gap-2 pb-2 pt-3">
+                <div className="flex gap-2 pb-2 pt-6">
                   <Button
                     variant="neon"
                     className={cn(
