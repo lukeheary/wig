@@ -1,13 +1,16 @@
 "use client";
 
 import { trpc } from "@/lib/trpc";
+import {
+  GoingActivityIcon,
+  InterestedActivityIcon,
+  NotGoingActivityIcon,
+} from "@/components/friends/activity-icons";
 import { UserAvatar } from "@/components/ui/user-avatar";
 import Image from "next/image";
 import {
   Loader2,
   Users,
-  Check,
-  Star,
   Building2,
   CalendarPlus,
   Circle,
@@ -81,11 +84,11 @@ export function ActivityItem({ activity }: ActivityItemProps) {
   const renderIcon = () => {
     switch (type) {
       case "rsvp_going":
-        return <Check className="h-4 w-4 text-green-500" />;
+        return <GoingActivityIcon className="h-4 w-4 text-neon-teal" />;
       case "rsvp_interested":
-        return <Star className="h-4 w-4 text-yellow-500" />;
+        return <InterestedActivityIcon className="h-4 w-4 text-yellow-400" />;
       case "rsvp_not_going":
-        return <X className="h-4 w-4 text-red-500" />;
+        return <NotGoingActivityIcon className="h-4 w-4 text-red-500" />;
       case "follow_venue":
         return <Building2 className="h-4 w-4 text-blue-500" />;
       case "follow_organizer":
@@ -427,7 +430,7 @@ export function ActivityItem({ activity }: ActivityItemProps) {
   const content = renderContent();
 
   return (
-    <div className="flex gap-4 pb-2 last:pb-0">
+    <div className="flex gap-3 pb-2 last:pb-0">
       <div className="relative flex flex-col items-center pt-1.5">
         <UserAvatar
           src={
@@ -442,11 +445,11 @@ export function ActivityItem({ activity }: ActivityItemProps) {
           }
           className={
             isEventStatusUpdate
-              ? "h-10 w-10 rounded-md border-2 border-background ring-2 ring-muted/20"
-              : "h-10 w-10 rounded-full border-2 border-background ring-2 ring-muted/20"
+              ? "h-11 w-11 rounded-md border-2 border-background ring-2 ring-muted/20"
+              : "-mt-1.5 h-11 w-11 rounded-full border-2 border-background ring-2 ring-muted/20"
           }
         />
-        <div className="absolute -right-[6px] -top-[0.5px] rounded-full bg-card p-0.5">
+        <div className="absolute -right-[4px] bottom-[16px] rounded-full bg-background p-0.5">
           {renderIcon()}
         </div>
       </div>
