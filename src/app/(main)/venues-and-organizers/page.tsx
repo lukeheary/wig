@@ -323,7 +323,7 @@ function PlacesPageContent() {
                         className={cn(
                           "inline-flex shrink-0 items-center gap-1 rounded-full px-3.5 py-1.5 text-xs font-medium transition-colors",
                           isSelected
-                            ? "bg-foreground text-background"
+                            ? "bg-neon-teal text-background"
                             : "bg-muted/50 text-muted-foreground md:hover:text-foreground"
                         )}
                       >
@@ -376,8 +376,8 @@ function PlacesPageContent() {
                         {item.name}
                       </h3>
                       {item.city && item.state && (
-                        <div className="flex items-center gap-1.5 text-sm text-muted-foreground">
-                          <MapPin className="h-3.5 w-3.5" />
+                        <div className="flex items-center gap-1.5 text-sm text-neon-teal">
+                          {/*<MapPin className="h-3.5 w-3.5" />*/}
                           <span>
                             {item.city}, {item.state}
                           </span>
@@ -391,7 +391,7 @@ function PlacesPageContent() {
                             : "text-muted-foreground"
                         )}
                       >
-                        <CalendarDays className="h-3.5 w-3.5" />
+                        {/*<CalendarDays className="h-3.5 w-3.5" />*/}
                         <span>
                           {item.eventCount} upcoming{" "}
                           {item.eventCount === 1 ? "event" : "events"}
