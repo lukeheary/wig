@@ -354,7 +354,7 @@ export default function EventPage() {
   const formattedTime = `${timeWithoutTz}`;
   const sourceLabel = event.source
     ? event.source.charAt(0).toUpperCase() + event.source.slice(1)
-    : "Event Site";
+    : "event site";
   const isStatusFlagged = event.status !== "active";
   const isCancelledEvent = event.status === "cancelled";
   const statusLabel = getEventStatusLabel(event.status);
