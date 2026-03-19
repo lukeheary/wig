@@ -11,7 +11,6 @@ import Image from "next/image";
 import { trpc } from "@/lib/trpc";
 import { Button } from "@/components/ui/button";
 import { UserAvatar } from "@/components/ui/user-avatar";
-import { Switch } from "@/components/ui/switch";
 import {
   Calendar,
   MapPin,
@@ -142,7 +141,7 @@ export default function EventPage() {
   const { data: myPartner } = trpc.partners.getMyPartner.useQuery(undefined, {
     enabled: Boolean(isSignedIn),
   });
-  const [includePartner, setIncludePartner] = useState(true);
+  const [includePartner, setIncludePartner] = useState(false);
   const { triggerHaptic } = useHaptics();
 
   // RSVP mutation
@@ -185,10 +184,6 @@ export default function EventPage() {
   });
 
   useEffect(() => {
-    setIncludePartner(true);
-  }, [eventId, myPartner?.partner?.id, myPartner?.status]);
-
-  useEffect(() => {
     if (!isShareCopied) return;
 
     const timeoutId = window.setTimeout(() => {
@@ -199,10 +194,40 @@ export default function EventPage() {
   }, [isShareCopied]);
 
   const hasActivePartner = myPartner?.status === "accepted";
-  const goingLabel =
-    hasActivePartner && includePartner ? "We're Going" : "I'm Going";
-  const interestedLabel =
-    hasActivePartner && includePartner ? "We're Interested" : "I'm Interested";
+  const isRsvpPending = rsvpMutation.isPending || deleteRsvpMutation.isPending;
+  const currentRsvpStatus = event?.userRsvp?.status;
+  const hasSelectableRsvp =
+    currentRsvpStatus === "going" || currentRsvpStatus === "interested";
+  const savedIncludePartner = useMemo(() => {
+    if (
+      !hasActivePartner ||
+      !hasSelectableRsvp ||
+      !userId ||
+      !myPartner?.partner?.id
+    ) {
+      return false;
+    }
+
+    return (
+      attendees?.some(
+        (attendee) =>
+          attendee.userId === myPartner.partner.id &&
+          attendee.partnerRsvpByUserId === userId &&
+          attendee.status === currentRsvpStatus
+      ) ?? false
+    );
+  }, [
+    attendees,
+    currentRsvpStatus,
+    hasActivePartner,
+    hasSelectableRsvp,
+    myPartner?.partner?.id,
+    userId,
+  ]);
+
+  useEffect(() => {
+    setIncludePartner(savedIncludePartner);
+  }, [savedIncludePartner]);
 
   const handleRsvp = (status: RsvpStatus) => {
     if (!isSignedIn) {
@@ -233,6 +258,21 @@ export default function EventPage() {
         includePartner: hasActivePartner && includePartner,
       });
     }
+  };
+
+  const handlePartnerToggle = () => {
+    if (currentRsvpStatus !== "going" && currentRsvpStatus !== "interested") {
+      return;
+    }
+
+    const nextIncludePartner = !includePartner;
+    setIncludePartner(nextIncludePartner);
+    void triggerHaptic(HapticPreset.Light);
+    rsvpMutation.mutate({
+      eventId,
+      status: currentRsvpStatus,
+      includePartner: nextIncludePartner,
+    });
   };
 
   const handleShare = async () => {
@@ -544,58 +584,52 @@ export default function EventPage() {
             {!isCancelledEvent && (
               <>
                 {/* RSVP Buttons - Shared across mobile and desktop */}
-                <div className="flex gap-2 py-4">
+                <div className="flex gap-2 pb-2 pt-3">
                   <Button
-                    variant={
-                      event.userRsvp?.status === "interested"
-                        ? "secondary"
-                        : "outline"
-                    }
-                    className="flex-1 py-6 text-base font-medium"
+                    variant="outline"
+                    className={cn(
+                      "font-space-grotesk flex-1 rounded-xl border border-neon-teal bg-transparent py-6 text-base font-medium hover:bg-transparent lg:text-lg",
+                      event.userRsvp?.status === "interested" &&
+                        "border-transparent bg-neon-teal text-black hover:bg-neon-teal-hover"
+                    )}
                     size="lg"
                     onClick={() => handleRsvp("interested")}
-                    disabled={
-                      rsvpMutation.isPending || deleteRsvpMutation.isPending
-                    }
+                    disabled={isRsvpPending}
                   >
-                    {interestedLabel}
+                    Interested
                   </Button>
                   <Button
-                    variant={
-                      event.userRsvp?.status === "going" ? "default" : "outline"
-                    }
+                    variant="outline"
                     className={cn(
-                      "flex-1 py-6 text-base font-medium transition-colors",
+                      "font-space-grotesk flex-1 rounded-xl border border-neon-teal bg-transparent py-6 text-base font-medium hover:bg-transparent lg:text-lg",
                       event.userRsvp?.status === "going" &&
-                        "hover:bg-neon-teal-hover border-transparent bg-neon-teal text-black"
+                        "border-transparent bg-neon-teal text-black hover:bg-neon-teal-hover"
                     )}
                     size="lg"
                     onClick={() => handleRsvp("going")}
-                    disabled={
-                      rsvpMutation.isPending || deleteRsvpMutation.isPending
-                    }
+                    disabled={isRsvpPending}
                   >
-                    {event.userRsvp?.status === "going" ? "Going" : goingLabel}
+                    Going
                   </Button>
                 </div>
-                {hasActivePartner && (
-                  <div className="mb-4 w-full text-sm text-muted-foreground sm:w-fit">
-                    <label
-                      htmlFor="include-partner"
-                      className="flex w-full cursor-pointer items-center justify-between gap-3 rounded-full border border-border px-4 py-2 sm:min-w-[220px]"
+
+                {hasActivePartner && hasSelectableRsvp && (
+                  <div className="mb-4">
+                    <Button
+                      type="button"
+                      variant="outline"
+                      className={cn(
+                        "font-space-grotesk w-full rounded-xl border border-neon-teal bg-transparent py-4 text-base font-medium hover:bg-transparent sm:w-auto sm:min-w-[220px]",
+                        includePartner &&
+                          "border-transparent bg-neon-teal text-black hover:bg-neon-teal-hover"
+                      )}
+                      onClick={handlePartnerToggle}
+                      disabled={isRsvpPending}
+                      aria-pressed={includePartner}
                     >
-                      <span className="text-foreground">
-                        Going with {myPartner.partner.firstName}
-                      </span>
-                      <Switch
-                        id="include-partner"
-                        checked={includePartner}
-                        onCheckedChange={setIncludePartner}
-                        disabled={
-                          rsvpMutation.isPending || deleteRsvpMutation.isPending
-                        }
-                      />
-                    </label>
+                      With {myPartner.partner.firstName}
+                      {includePartner ? "" : "?"}
+                    </Button>
                   </div>
                 )}
               </>

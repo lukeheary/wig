@@ -121,7 +121,7 @@ export function EventCard({ event }: EventCardProps) {
             </div>
 
             {/* Venue & Organizer */}
-            <div className="line-clamp-1 text-sm leading-tight text-primary/70 md:text-sm">
+            <div className="font-space-grotesk line-clamp-1 text-sm leading-tight text-primary/70 md:text-sm">
               {event.venue && `${event.venue.name}`}
               {/*{event.organizer &&*/}
               {/*  (event.venue*/}
