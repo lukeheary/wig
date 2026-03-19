@@ -204,7 +204,8 @@ export function PlacePage({ actionMenuType }: PlacePageProps) {
                 <CategoryPillList
                   categories={place.categories || []}
                   categoryLabelMap={(place as any).categoryLabels}
-                  className="pt-2"
+                  variant={"small"}
+                  className="pt-1.5"
                 />
               </div>
             </div>
@@ -252,7 +253,10 @@ export function PlacePage({ actionMenuType }: PlacePageProps) {
               <div className="flex items-center gap-2">
                 <MapPin className="h-4 w-4" />
                 <span>
-                  {place.city}, {place.state}
+                  {place.city}, {place.state}{" "}
+                  <span className={"text-muted-foreground/60"}>
+                    (Organizer)
+                  </span>
                 </span>
               </div>
             ) : null}

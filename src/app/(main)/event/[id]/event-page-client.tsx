@@ -562,7 +562,7 @@ export default function EventPage() {
                 <CategoryPillList
                   categories={event.categories || []}
                   categoryLabelMap={categoryLabelMap}
-                  pillClassName={"py-1 px-2.5"}
+                  variant={"small"}
                 />
               </div>
             )}
