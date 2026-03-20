@@ -236,15 +236,19 @@ export function NotificationsBell() {
     return null;
   };
 
-  const renderNotificationBody = (notification: {
-    body: string | null;
-    entityType: string;
-    actionUrl: string | null;
-    metadata: unknown;
-  }, options?: {
-    className?: string;
-  }) => {
-    const bodyClassName = options?.className ?? "mt-1 text-sm text-muted-foreground";
+  const renderNotificationBody = (
+    notification: {
+      body: string | null;
+      entityType: string;
+      actionUrl: string | null;
+      metadata: unknown;
+    },
+    options?: {
+      className?: string;
+    }
+  ) => {
+    const bodyClassName =
+      options?.className ?? "mt-1 text-sm text-muted-foreground";
 
     if (!notification.body) {
       return null;
@@ -287,9 +291,7 @@ export function NotificationsBell() {
       );
     }
 
-    return (
-      <p className={bodyClassName}>{notification.body}</p>
-    );
+    return <p className={bodyClassName}>{notification.body}</p>;
   };
 
   function isFriendRequestNotification(notification: {
@@ -638,7 +640,7 @@ export function NotificationsBell() {
                     </p>
                   </div>
                   {notification.actor ? (
-                    <div className="flex items-start gap-2.5">
+                    <div className="flex items-center gap-2.5">
                       <UserAvatar
                         src={notification.actor.avatarImageUrl}
                         name={notification.actor.firstName}
@@ -685,7 +687,7 @@ export function NotificationsBell() {
                     </p>
                   </div>
                   {notification.actor ? (
-                    <div className="flex items-start gap-2.5">
+                    <div className="flex items-center gap-2.5">
                       <UserAvatar
                         src={notification.actor.avatarImageUrl}
                         name={notification.actor.firstName}
