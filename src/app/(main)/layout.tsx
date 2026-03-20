@@ -96,7 +96,6 @@ function MainLayoutContent({ children }: { children: React.ReactNode }) {
   const isAdminPage = pathname?.startsWith("/admin");
   const isEventDetail =
     pathname?.startsWith("/event/") && !pathname?.includes("/edit");
-  const [isNavSolid, setIsNavSolid] = useState(false);
 
   const handleSignOut = async () => {
     await signOut();
@@ -118,15 +117,13 @@ function MainLayoutContent({ children }: { children: React.ReactNode }) {
   };
 
   return (
-    <div className="flex min-h-screen flex-col">
+    <div className="relative flex min-h-screen flex-col">
       {/* Navigation Bar */}
       <header
         className={cn(
           "sticky top-0 z-40 border-transparent bg-background transition-colors duration-150",
           isEventDetail
-            ? isNavSolid
-              ? "border-border bg-background/90 backdrop-blur"
-              : "border-border bg-background md:border-transparent md:bg-transparent md:backdrop-blur-0"
+            ? "border-transparent bg-black md:border-transparent md:bg-transparent"
             : (isHome || isPlaceDetail) && showNavbarSearch
               ? "border-transparent bg-background"
               : "border-border bg-background"
@@ -147,7 +144,7 @@ function MainLayoutContent({ children }: { children: React.ReactNode }) {
               <Button
                 variant="ghost"
                 size="sm"
-                className={isHome ? "text-neon-teal" : "text-muted-foreground"}
+                className={isHome ? "text-primary" : "text-muted-foreground"}
               >
                 Home
               </Button>
@@ -161,9 +158,7 @@ function MainLayoutContent({ children }: { children: React.ReactNode }) {
               <Button
                 variant="ghost"
                 size="sm"
-                className={
-                  isPlaces ? "text-neon-teal" : "text-muted-foreground"
-                }
+                className={isPlaces ? "text-primary" : "text-muted-foreground"}
               >
                 Venues & Organizers
               </Button>
@@ -177,7 +172,7 @@ function MainLayoutContent({ children }: { children: React.ReactNode }) {
                 size="sm"
                 className={
                   isFriends
-                    ? "gap-1 text-neon-teal"
+                    ? "gap-1 text-primary"
                     : "gap-1 text-muted-foreground"
                 }
               >
@@ -356,7 +351,7 @@ function MainLayoutContent({ children }: { children: React.ReactNode }) {
                     >
                       <Button
                         variant="ghost"
-                        className={`w-full justify-start px-4 text-base ${isHome ? "text-neon-teal" : "text-muted-foreground"}`}
+                        className={`w-full justify-start px-4 text-base ${isHome ? "text-primary" : "text-muted-foreground"}`}
                         size="lg"
                       >
                         <Home className="mr-3 h-5 w-5" />
@@ -376,7 +371,7 @@ function MainLayoutContent({ children }: { children: React.ReactNode }) {
                     >
                       <Button
                         variant="ghost"
-                        className={`w-full justify-start px-4 text-base ${isPlaces ? "text-neon-teal" : "text-muted-foreground"}`}
+                        className={`w-full justify-start px-4 text-base ${isPlaces ? "text-primary" : "text-muted-foreground"}`}
                         size="lg"
                       >
                         <MapPin className="mr-3 h-5 w-5" />
@@ -392,7 +387,7 @@ function MainLayoutContent({ children }: { children: React.ReactNode }) {
                     >
                       <Button
                         variant="ghost"
-                        className={`w-full justify-start px-4 text-base ${isFriends ? "text-neon-teal" : "text-muted-foreground"}`}
+                        className={`w-full justify-start px-4 text-base ${isFriends ? "text-primary" : "text-muted-foreground"}`}
                         size="lg"
                       >
                         <Users className="mr-3 h-5 w-5" />
@@ -415,7 +410,7 @@ function MainLayoutContent({ children }: { children: React.ReactNode }) {
                       >
                         <Button
                           variant="ghost"
-                          className={`w-full justify-start px-4 text-base ${isProfile ? "text-neon-teal" : "text-muted-foreground"}`}
+                          className={`w-full justify-start px-4 text-base ${isProfile ? "text-primary" : "text-muted-foreground"}`}
                           size="lg"
                         >
                           <div className="mr-3 h-5 w-5 shrink-0">
@@ -511,7 +506,7 @@ function MainLayoutContent({ children }: { children: React.ReactNode }) {
       </header>
 
       {/* Main Content */}
-      <main className="flex-1">{children}</main>
+      <main className="relative flex-1">{children}</main>
     </div>
   );
 }

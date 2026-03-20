@@ -49,11 +49,18 @@ type SocialAvatarUser = {
 
 function EventPageSkeleton() {
   return (
-    <div className="relative isolate -mt-16 min-h-screen bg-background pt-16">
+    <div className="relative isolate -mt-[57px] min-h-screen pt-14 md:-mt-16 md:pt-16">
+      <div className="absolute inset-0 -z-20 bg-background" />
+      <div className="pointer-events-none absolute inset-x-0 top-0 -z-10 h-[28rem] overflow-hidden">
+        <div className="absolute left-[-8rem] top-10 h-72 w-72 rounded-full bg-neon-pink/12 blur-3xl" />
+        <div className="absolute right-[-5rem] top-16 h-80 w-80 rounded-full bg-neon-teal/12 blur-3xl" />
+        <div className="absolute inset-x-0 top-0 h-full bg-gradient-to-b from-transparent via-background/30 to-background" />
+        <div className="absolute inset-x-0 top-0 h-28 bg-gradient-to-b from-black via-black/70 to-transparent md:hidden" />
+      </div>
       <div className="container w-full px-4 pb-6 md:pt-4">
         <div className="lg:flex lg:items-start lg:gap-10">
           <div className="lg:w-[360px] lg:flex-none">
-            <div className="relative aspect-square w-full overflow-hidden rounded-2xl bg-muted lg:aspect-auto lg:min-h-[360px]">
+            <div className="relative aspect-square w-full overflow-hidden rounded-2xl border border-white/8 bg-muted/90 shadow-[0_24px_80px_rgba(0,0,0,0.18)] lg:aspect-auto lg:min-h-[360px]">
               <div className="h-full w-full animate-pulse bg-muted" />
             </div>
           </div>
@@ -378,20 +385,32 @@ export default function EventPage() {
     isAdmin || (currentUser && event.createdByUserId === currentUser.id);
 
   return (
-    <div className="relative isolate -mt-16 min-h-screen bg-background pt-16">
-      {/*{eventImageUrl && (*/}
-      {/*  <div className="pointer-events-none absolute inset-0 -z-10 overflow-hidden">*/}
-      {/*    <Image*/}
-      {/*      src={eventImageUrl}*/}
-      {/*      alt=""*/}
-      {/*      fill*/}
-      {/*      className="scale-110 object-cover opacity-20 blur-2xl"*/}
-      {/*      sizes="100vw"*/}
-      {/*      priority*/}
-      {/*    />*/}
-      {/*    <div className="absolute inset-0 bg-[linear-gradient(to_bottom,hsl(var(--background))_0%,hsl(var(--background))_10%,hsl(var(--background)/0.85)_40%,hsl(var(--background)/0.3)_70%,hsl(var(--background)/0)_100%)] md:bg-gradient-to-b md:from-background/60 md:via-background/60 md:to-background" />*/}
-      {/*  </div>*/}
-      {/*)}*/}
+    <div className="relative isolate -mt-[57px] min-h-screen pt-14 md:-mt-16 md:pt-16">
+      <div className="absolute inset-0 -z-20 bg-background" />
+      <div className="pointer-events-none absolute inset-x-0 top-0 -z-10 h-[42rem] overflow-hidden">
+        {eventImageUrl ? (
+          <>
+            <div className="absolute inset-x-0 top-0 h-[30rem] overflow-hidden opacity-45 blur-3xl md:inset-x-[8%] md:top-8 md:h-[28rem] md:rounded-[3rem]">
+              <Image
+                src={eventImageUrl}
+                alt=""
+                fill
+                className="scale-110 object-cover"
+                sizes="100vw"
+                priority
+              />
+            </div>
+            {/* <div className="absolute inset-0 bg-[radial-gradient(circle_at_top_left,rgba(255,75,145,0.18),transparent_38%),radial-gradient(circle_at_top_right,rgba(0,229,214,0.2),transparent_34%)]" /> */}
+          </>
+        ) : (
+          <>
+            <div className="absolute left-[-8rem] top-10 h-80 w-80 rounded-full bg-neon-pink/14 blur-3xl" />
+            <div className="absolute right-[-6rem] top-16 h-96 w-96 rounded-full bg-neon-teal/14 blur-3xl" />
+          </>
+        )}
+        <div className="absolute inset-x-0 top-0 h-full bg-gradient-to-b from-background/10 via-background/35 to-background" />
+        <div className="absolute inset-x-0 top-0 h-32 bg-gradient-to-b from-black via-black/70 to-transparent md:hidden" />
+      </div>
       {/* Image Modal */}
       {isImageModalOpen && eventImageUrl && (
         <div
@@ -426,7 +445,21 @@ export default function EventPage() {
         <div className="lg:flex lg:items-start lg:gap-10">
           {/* Cover Image - Left column on desktop */}
           <div className="lg:w-[420px] lg:flex-none">
-            <div className="relative aspect-square w-full overflow-hidden rounded-2xl bg-muted lg:aspect-auto lg:min-h-[420px]">
+            <div className="relative aspect-square w-full overflow-hidden rounded-[2rem] border border-white/10 bg-muted/90 shadow-[0_28px_90px_rgba(0,0,0,0.24)] backdrop-blur-sm lg:aspect-auto lg:min-h-[420px]">
+              {eventImageUrl && (
+                <>
+                  {/* <div className="absolute inset-5 -z-10 rounded-[1.75rem] bg-gradient-to-br from-neon-pink/20 via-neon-teal/12 to-transparent blur-2xl" /> */}
+                  <Image
+                    src={eventImageUrl}
+                    alt=""
+                    fill
+                    className="scale-110 object-cover opacity-30 blur-3xl"
+                    sizes="420px"
+                    aria-hidden="true"
+                  />
+                  <div className="absolute inset-0 bg-gradient-to-t from-black/24 via-transparent to-white/10" />
+                </>
+              )}
               {eventImageUrl ? (
                 <div className="h-full w-full">
                   <Image
