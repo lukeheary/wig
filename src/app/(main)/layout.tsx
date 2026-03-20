@@ -123,7 +123,7 @@ function MainLayoutContent({ children }: { children: React.ReactNode }) {
         className={cn(
           "sticky top-0 z-40 border-transparent bg-background transition-colors duration-150",
           isEventDetail
-            ? "border-transparent bg-black md:border-transparent md:bg-transparent"
+            ? "border-transparent bg-background md:border-transparent md:bg-transparent"
             : (isHome || isPlaceDetail) && showNavbarSearch
               ? "border-transparent bg-background"
               : "border-border bg-background"
