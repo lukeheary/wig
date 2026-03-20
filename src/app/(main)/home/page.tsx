@@ -77,7 +77,7 @@ import { HOME_RECENT_ACTIVITY_SURFACE } from "@/lib/user-surface-state";
 type ViewMode = "week" | "month";
 const HOME_ADD_FRIENDS_BANNER_KEY_PREFIX =
   "wig:home:add-friends-banner-dismissed";
-const HOME_ACTIVITY_WINDOW_DAYS = 3;
+const HOME_ACTIVITY_WINDOW_DAYS = 2;
 
 function StickyDateHeader({
   dateHeader,
