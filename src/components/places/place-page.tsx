@@ -6,7 +6,6 @@ import Image from "next/image";
 import { useParams } from "next/navigation";
 import { trpc } from "@/lib/trpc";
 import { Button } from "@/components/ui/button";
-import { EventCardGrid } from "@/components/events/event-card-grid";
 import {
   MapPin,
   Globe,
@@ -334,18 +333,7 @@ export function PlacePage({ actionMenuType }: PlacePageProps) {
           )}
 
           {showPastEvents && (
-            <div className="pt-4">
-              <StickySectionHeader>
-                <span>Past Events</span>
-              </StickySectionHeader>
-              <div className="container mx-auto">
-                <EventCardGrid
-                  events={place.pastEvents as any}
-                  columns={{ mobile: 1, tablet: 3, desktop: 4 }}
-                  gap="md"
-                />
-              </div>
-            </div>
+            <PlaceUpcomingEvents events={place.pastEvents as any} mode="past" />
           )}
         </>
       )}

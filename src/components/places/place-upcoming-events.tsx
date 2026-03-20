@@ -6,6 +6,7 @@ import {
   startOfMonth,
   startOfWeek,
   compareAsc,
+  compareDesc,
 } from "date-fns";
 import { EventCardGrid } from "@/components/events/event-card-grid";
 import { EventsPlaceholder } from "@/components/shared/events-placeholder";
@@ -14,6 +15,7 @@ import { type EventCardItem } from "@/components/calendar/event-card";
 
 interface PlaceUpcomingEventsProps {
   events: EventCardItem[] | null | undefined;
+  mode?: "upcoming" | "past";
 }
 
 function getWeekLabel(weeksAway: number) {
@@ -27,7 +29,20 @@ function getMonthLabel(monthsAway: number) {
   return `In ${monthsAway} Months`;
 }
 
-export function PlaceUpcomingEvents({ events }: PlaceUpcomingEventsProps) {
+function getPastWeekLabel(weeksAgo: number) {
+  if (weeksAgo <= 1) return "1 Week Ago";
+  return `${weeksAgo} Weeks Ago`;
+}
+
+function getPastMonthLabel(monthsAgo: number) {
+  if (monthsAgo <= 1) return "Last Month";
+  return `${monthsAgo} Months Ago`;
+}
+
+export function PlaceUpcomingEvents({
+  events,
+  mode = "upcoming",
+}: PlaceUpcomingEventsProps) {
   if (!events || events.length === 0) {
     return (
       <div className="container mx-auto pt-4">
@@ -41,22 +56,34 @@ export function PlaceUpcomingEvents({ events }: PlaceUpcomingEventsProps) {
   const currentMonthStart = startOfMonth(now);
   const groupedEvents = events
     .slice()
-    .sort((left, right) =>
-      compareAsc(new Date(left.startAt), new Date(right.startAt))
-    )
+    .sort((left, right) => {
+      const leftDate = new Date(left.startAt);
+      const rightDate = new Date(right.startAt);
+      return mode === "past"
+        ? compareDesc(leftDate, rightDate)
+        : compareAsc(leftDate, rightDate);
+    })
     .reduce<Array<{ label: string; events: EventCardItem[] }>>(
       (groups, event) => {
         const eventDate = new Date(event.startAt);
-        const weeksAway = Math.max(
-          0,
-          differenceInCalendarWeeks(startOfWeek(eventDate), currentWeekStart)
+        const weekDifference = differenceInCalendarWeeks(
+          startOfWeek(eventDate),
+          currentWeekStart
         );
-        const monthsAway = Math.max(
-          0,
-          differenceInCalendarMonths(startOfMonth(eventDate), currentMonthStart)
+        const monthDifference = differenceInCalendarMonths(
+          startOfMonth(eventDate),
+          currentMonthStart
         );
+        const weeksFromNow = Math.abs(weekDifference);
+        const monthsFromNow = Math.abs(monthDifference);
         const label =
-          weeksAway <= 3 ? getWeekLabel(weeksAway) : getMonthLabel(monthsAway);
+          weeksFromNow <= 3
+            ? mode === "past"
+              ? getPastWeekLabel(weeksFromNow)
+              : getWeekLabel(weeksFromNow)
+            : mode === "past"
+              ? getPastMonthLabel(monthsFromNow)
+              : getMonthLabel(monthsFromNow);
         const currentGroup = groups.at(-1);
 
         if (!currentGroup || currentGroup.label !== label) {
