@@ -49,7 +49,7 @@ type SocialAvatarUser = {
 
 function EventPageSkeleton() {
   return (
-    <div className="relative isolate -mt-[57px] min-h-screen pt-14 md:-mt-16 md:pt-16">
+    <div className="relative isolate -mt-14 min-h-screen pt-14 md:-mt-16 md:pt-16">
       <div className="absolute inset-0 -z-20 bg-background" />
       <div className="pointer-events-none absolute inset-x-0 top-0 -z-10 h-[28rem] overflow-hidden">
         <div className="absolute left-[-8rem] top-10 h-72 w-72 rounded-full bg-neon-pink/12 blur-3xl" />
@@ -385,7 +385,7 @@ export default function EventPage() {
     isAdmin || (currentUser && event.createdByUserId === currentUser.id);
 
   return (
-    <div className="relative isolate -mt-[57px] min-h-screen pt-14 md:-mt-16 md:pt-16">
+    <div className="relative isolate -mt-14 min-h-screen pt-14 md:-mt-16 md:pt-16">
       <div className="absolute inset-0 -z-20 bg-background" />
       <div className="pointer-events-none absolute inset-x-0 top-0 -z-10 h-[42rem] overflow-hidden">
         {eventImageUrl ? (
@@ -409,7 +409,7 @@ export default function EventPage() {
           </>
         )}
         <div className="absolute inset-x-0 top-0 h-full bg-gradient-to-b from-background/10 via-background/35 to-background" />
-        <div className="absolute inset-x-0 top-0 h-32 bg-gradient-to-b from-background via-background/70 to-transparent md:hidden" />
+        <div className="absolute inset-x-0 top-0 h-40 bg-gradient-to-b from-background via-background/80 to-transparent md:hidden" />
       </div>
       {/* Image Modal */}
       {isImageModalOpen && eventImageUrl && (
@@ -445,7 +445,7 @@ export default function EventPage() {
         <div className="lg:flex lg:items-start lg:gap-10">
           {/* Cover Image - Left column on desktop */}
           <div className="lg:w-[420px] lg:flex-none">
-            <div className="relative aspect-square w-full overflow-hidden rounded-[2rem] border border-white/10 bg-muted/90 shadow-[0_28px_90px_rgba(0,0,0,0.24)] backdrop-blur-sm lg:aspect-auto lg:min-h-[420px]">
+            <div className="relative aspect-square w-full overflow-hidden rounded-[2rem] bg-muted/90 shadow-[0_28px_90px_rgba(0,0,0,0.24)] lg:aspect-auto lg:min-h-[420px]">
               {eventImageUrl && (
                 <>
                   {/* <div className="absolute inset-5 -z-10 rounded-[1.75rem] bg-gradient-to-br from-neon-pink/20 via-neon-teal/12 to-transparent blur-2xl" /> */}
