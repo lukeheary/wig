@@ -1,12 +1,11 @@
 "use client";
 
 import { useEffect } from "react";
-import { usePathname, useSearchParams } from "next/navigation";
+import { usePathname } from "next/navigation";
 import { getScrollRestoreKey } from "@/lib/navigation";
 
 export function ScrollRestoration() {
   const pathname = usePathname();
-  const searchParams = useSearchParams();
 
   useEffect(() => {
     // Disable browser's automatic scroll restoration
@@ -62,7 +61,7 @@ export function ScrollRestoration() {
       window.clearTimeout(timeoutId);
       cleanupRestore();
     };
-  }, [pathname, searchParams]);
+  }, [pathname]);
 
   return null;
 }
