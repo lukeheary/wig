@@ -12,7 +12,7 @@ interface User {
 interface AvatarStackProps {
   users: User[];
   maxDisplay?: number;
-  size?: "sm" | "md" | "lg";
+  size?: "sm" | "md" | "lg" | "xl";
   className?: string;
 }
 
@@ -35,12 +35,14 @@ export function AvatarStack({
     sm: "h-6 w-6",
     md: "h-8 w-8",
     lg: "h-10 w-10",
+    xl: "h-11 w-11",
   };
 
   const sizePixels = {
     sm: 24,
     md: 32,
     lg: 40,
+    xl: 44,
   };
 
   const sizeClass = sizeClasses[size];
@@ -50,9 +52,11 @@ export function AvatarStack({
     return null;
   }
 
+  const overlapClass = size === "xl" ? "-space-x-4" : "-space-x-2";
+
   return (
-    <div className={`flex items-center -space-x-2 ${className}`}>
-      <div className="flex -space-x-2">
+    <div className={`flex items-center ${overlapClass} ${className}`}>
+      <div className={`flex ${overlapClass}`}>
         {displayedUsers.map((user) => {
           const rsvpIndicatorClassName =
             user.rsvpStatus === "interested"

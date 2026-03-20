@@ -55,7 +55,10 @@ function EventPageSkeleton() {
         <div className="absolute left-[-8rem] top-10 h-72 w-72 rounded-full bg-neon-pink/12 blur-3xl" />
         <div className="absolute right-[-5rem] top-16 h-80 w-80 rounded-full bg-neon-teal/12 blur-3xl" />
         <div className="absolute inset-x-0 top-0 h-full bg-gradient-to-b from-transparent via-background/30 to-background" />
-        <div className="absolute inset-x-0 top-0 h-28 bg-gradient-to-b from-background via-background/70 to-transparent md:hidden" />
+        <div
+          className="absolute inset-x-0 top-0 md:hidden"
+          style={{ height: "160px", background: "linear-gradient(to bottom, hsl(var(--background)) 56px, transparent 160px)" }}
+        />
       </div>
       <div className="container w-full px-4 pb-6 md:pt-4">
         <div className="lg:flex lg:items-start lg:gap-10">
@@ -409,7 +412,10 @@ export default function EventPage() {
           </>
         )}
         <div className="absolute inset-x-0 top-0 h-full bg-gradient-to-b from-background/10 via-background/35 to-background" />
-        <div className="absolute inset-x-0 top-0 h-40 bg-gradient-to-b from-background via-background/80 to-transparent md:hidden" />
+        <div
+          className="absolute inset-x-0 top-0 md:hidden"
+          style={{ height: "160px", background: "linear-gradient(to bottom, hsl(var(--background)) 56px, transparent 160px)" }}
+        />
       </div>
       {/* Image Modal */}
       {isImageModalOpen && eventImageUrl && (
@@ -537,7 +543,7 @@ export default function EventPage() {
                   <AvatarStack
                     users={socialStackUsers}
                     maxDisplay={5}
-                    size="md"
+                    size="xl"
                   />
                 </div>
               )}
