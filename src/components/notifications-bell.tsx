@@ -61,17 +61,19 @@ export function NotificationsBell() {
     });
 
   const acceptMutation = trpc.friends.acceptFriendRequest.useMutation({
-      onSuccess: () => {
-        toast({
-          title: "Friend request accepted",
-          description: "You are now friends!",
-        });
-        Promise.all([
-          utils.notifications.listRecent.invalidate(),
-          utils.notifications.listUnread.invalidate(),
-          utils.notifications.getUnreadCount.invalidate(),
-        ]);
-      },
+    onSuccess: async () => {
+      toast({
+        title: "Friend request accepted",
+        description: "You are now friends!",
+      });
+      await Promise.all([
+        utils.notifications.listRecent.invalidate(),
+        utils.notifications.listUnread.invalidate(),
+        utils.notifications.getUnreadCount.invalidate(),
+        utils.friends.getPendingRequests.invalidate(),
+        utils.friends.listFriends.invalidate(),
+      ]);
+    },
     onError: (error) => {
       toast({
         title: "Error",
@@ -82,16 +84,17 @@ export function NotificationsBell() {
   });
 
   const rejectMutation = trpc.friends.rejectFriendRequest.useMutation({
-      onSuccess: () => {
-        toast({
-          title: "Friend request rejected",
-        });
-        Promise.all([
-          utils.notifications.listRecent.invalidate(),
-          utils.notifications.listUnread.invalidate(),
-          utils.notifications.getUnreadCount.invalidate(),
-        ]);
-      },
+    onSuccess: async () => {
+      toast({
+        title: "Friend request rejected",
+      });
+      await Promise.all([
+        utils.notifications.listRecent.invalidate(),
+        utils.notifications.listUnread.invalidate(),
+        utils.notifications.getUnreadCount.invalidate(),
+        utils.friends.getPendingRequests.invalidate(),
+      ]);
+    },
     onError: (error) => {
       toast({
         title: "Error",
@@ -102,16 +105,18 @@ export function NotificationsBell() {
   });
 
   const acceptPartnerMutation = trpc.partners.acceptPartnerRequest.useMutation({
-    onSuccess: () => {
+    onSuccess: async () => {
       toast({
         title: "Partner request accepted",
         description: "You are now partners!",
       });
-      Promise.all([
+      await Promise.all([
         utils.notifications.listRecent.invalidate(),
         utils.notifications.listUnread.invalidate(),
         utils.notifications.getUnreadCount.invalidate(),
         utils.partners.getMyPartner.invalidate(),
+        utils.partners.getPendingPartnerRequests.invalidate(),
+        utils.friends.listFriends.invalidate(),
       ]);
     },
     onError: (error) => {
@@ -125,15 +130,16 @@ export function NotificationsBell() {
 
   const declinePartnerMutation =
     trpc.partners.declinePartnerRequest.useMutation({
-      onSuccess: () => {
+      onSuccess: async () => {
         toast({
           title: "Partner request declined",
         });
-        Promise.all([
+        await Promise.all([
           utils.notifications.listRecent.invalidate(),
           utils.notifications.listUnread.invalidate(),
           utils.notifications.getUnreadCount.invalidate(),
           utils.partners.getMyPartner.invalidate(),
+          utils.partners.getPendingPartnerRequests.invalidate(),
         ]);
       },
       onError: (error) => {
@@ -166,16 +172,16 @@ export function NotificationsBell() {
   const newNotifications = notifications.filter(
     (notification) => !notification.readAt
   );
-  const oldNotifications = notifications.filter(
-    (notification) => Boolean(notification.readAt)
+  const oldNotifications = notifications.filter((notification) =>
+    Boolean(notification.readAt)
   );
   const notificationCount =
     unreadNotificationsCount +
     fallbackFriendRequests.length +
     fallbackPartnerRequests.length;
-  const hasStoredNotifications = notifications.length > 0;
   const hasInboxItems =
-    hasStoredNotifications ||
+    newNotifications.length > 0 ||
+    oldNotifications.length > 0 ||
     fallbackFriendRequests.length > 0 ||
     fallbackPartnerRequests.length > 0;
   const returnTo = buildReturnTo(pathname, searchParams);
@@ -235,13 +241,18 @@ export function NotificationsBell() {
     entityType: string;
     actionUrl: string | null;
     metadata: unknown;
+  }, options?: {
+    className?: string;
   }) => {
+    const bodyClassName = options?.className ?? "mt-1 text-sm text-muted-foreground";
+
     if (!notification.body) {
       return null;
     }
 
     if (notification.entityType === "event") {
-      const metadata = (notification.metadata as { eventTitle?: string } | null) ?? null;
+      const metadata =
+        (notification.metadata as { eventTitle?: string } | null) ?? null;
       const parsedBody = extractEventTitleFromBody(notification.body);
       const eventTitle = metadata?.eventTitle || parsedBody?.eventTitle;
       const prefix = parsedBody?.prefix ?? "";
@@ -249,7 +260,7 @@ export function NotificationsBell() {
 
       if (!eventTitle) {
         return (
-          <p className="mt-1 text-sm text-muted-foreground">
+          <p className={bodyClassName}>
             <Link
               href={withReturnTo(notification.actionUrl || "/home", returnTo)}
               className="hover:underline"
@@ -262,7 +273,7 @@ export function NotificationsBell() {
       }
 
       return (
-        <p className="mt-1 text-sm text-muted-foreground">
+        <p className={bodyClassName}>
           {prefix}
           <Link
             href={withReturnTo(notification.actionUrl || "/home", returnTo)}
@@ -276,7 +287,9 @@ export function NotificationsBell() {
       );
     }
 
-    return <p className="mt-1 text-sm text-muted-foreground">{notification.body}</p>;
+    return (
+      <p className={bodyClassName}>{notification.body}</p>
+    );
   };
 
   function isFriendRequestNotification(notification: {
@@ -311,7 +324,7 @@ export function NotificationsBell() {
           <Button
             size="sm"
             variant="outline"
-            className="h-8 flex-1 text-xs"
+            className="h-7 flex-1 text-xs"
             onClick={() => {
               sendGoogleAnalyticsEvent("friend_request_responded", userId, {
                 action: "rejected",
@@ -334,7 +347,7 @@ export function NotificationsBell() {
           </Button>
           <Button
             size="sm"
-            className="h-8 flex-1 text-xs"
+            className="h-7 flex-1 text-xs"
             onClick={() => {
               sendGoogleAnalyticsEvent("friend_request_responded", userId, {
                 action: "accepted",
@@ -361,11 +374,11 @@ export function NotificationsBell() {
 
     if (isPartnerRequestNotification(notification)) {
       return (
-        <div className="flex items-center gap-2 pt-1">
+        <div className="flex items-center gap-2 pt-0.5">
           <Button
             size="sm"
             variant="outline"
-            className="h-8 flex-1 text-xs"
+            className="h-7 flex-1 text-xs"
             onClick={() =>
               declinePartnerMutation.mutate({
                 partnerId: notification.entityId,
@@ -383,7 +396,7 @@ export function NotificationsBell() {
           </Button>
           <Button
             size="sm"
-            className="h-8 flex-1 text-xs"
+            className="h-7 flex-1 text-xs"
             onClick={() =>
               acceptPartnerMutation.mutate({
                 partnerId: notification.entityId,
@@ -438,8 +451,13 @@ export function NotificationsBell() {
     isFriendRequestNotification(notification) ||
     isPartnerRequestNotification(notification);
 
+  const formatNotificationTime = (createdAt: Date | string) =>
+    formatDistanceToNow(new Date(createdAt), {
+      addSuffix: true,
+    });
+
   const NotificationsContent = (
-    <div className="space-y-4">
+    <div className="space-y-3">
       <div className="flex items-start justify-between gap-4">
         <h4 className="text-xl font-semibold leading-tight">Notifications</h4>
         {/*{hasNotifications && (*/}
@@ -454,46 +472,39 @@ export function NotificationsBell() {
           No new notifications
         </div>
       ) : (
-        <div className="max-h-[400px] space-y-3 overflow-y-auto pr-1">
+        <div className="max-h-[400px] space-y-2.5 overflow-y-auto pr-1">
           {newNotifications.length > 0 && (
-            <div className="space-y-3">
+            <div className="space-y-2.5">
               <p className="text-xs font-medium uppercase tracking-wide text-muted-foreground">
                 New
               </p>
               {fallbackFriendRequests.map((request) => (
                 <div
                   key={request.id}
-                  className="flex items-start gap-4 rounded-xl border border-border/60 bg-muted/40 p-4 shadow-sm transition-colors hover:bg-muted/60"
+                  className="rounded-xl border border-border/60 bg-muted/40 p-3 shadow-sm transition-colors hover:bg-muted/60"
                 >
-                  <UserAvatar
-                    src={request.user.avatarImageUrl}
-                    name={request.user.firstName}
-                    className="h-10 w-10"
-                  />
-                  <div className="flex-1 space-y-3">
-                    <div>
-                      <p className="font-semibold leading-snug">
-                        {request.user.firstName} {request.user.lastName}
-                      </p>
-                      {request.user.username && (
-                        <p className="text-sm text-muted-foreground">
-                          @{request.user.username}
+                  <div className="flex-1 space-y-2">
+                    <div className="flex items-center justify-between gap-3">
+                      <div className="flex min-w-0 items-start gap-2.5">
+                        <UserAvatar
+                          src={request.user.avatarImageUrl}
+                          name={request.user.firstName}
+                          className="h-7 w-7"
+                        />
+                        <p className="text-sm leading-snug text-muted-foreground">
+                          {request.user.firstName} {request.user.lastName} sent
+                          you a friend request
                         </p>
-                      )}
-                      <p className="mt-1 text-sm text-muted-foreground">
-                        sent you a friend request
-                      </p>
-                      <p className="mt-1 text-xs text-muted-foreground">
-                        {formatDistanceToNow(new Date(request.createdAt), {
-                          addSuffix: true,
-                        })}
+                      </div>
+                      <p className="shrink-0 text-xs text-muted-foreground">
+                        {formatNotificationTime(request.createdAt)}
                       </p>
                     </div>
-                    <div className="flex items-center gap-2 pt-1">
+                    <div className="flex items-center gap-2">
                       <Button
                         size="sm"
                         variant="outline"
-                        className="h-8 flex-1 text-xs"
+                        className="h-7 flex-1 text-xs"
                         onClick={() => {
                           sendGoogleAnalyticsEvent(
                             "friend_request_responded",
@@ -520,7 +531,7 @@ export function NotificationsBell() {
                       </Button>
                       <Button
                         size="sm"
-                        className="h-8 flex-1 text-xs"
+                        className="h-7 flex-1 text-xs"
                         onClick={() => {
                           sendGoogleAnalyticsEvent(
                             "friend_request_responded",
@@ -552,37 +563,30 @@ export function NotificationsBell() {
               {fallbackPartnerRequests.map((request) => (
                 <div
                   key={request.id}
-                  className="flex items-start gap-4 rounded-xl border border-border/60 bg-muted/40 p-4 shadow-sm transition-colors hover:bg-muted/60"
+                  className="rounded-xl border border-border/60 bg-muted/40 p-3 shadow-sm transition-colors hover:bg-muted/60"
                 >
-                  <UserAvatar
-                    src={request.partner?.avatarImageUrl}
-                    name={request.partner?.firstName}
-                    className="h-10 w-10"
-                  />
-                  <div className="flex-1 space-y-3">
-                    <div>
-                      <p className="font-semibold leading-snug">
-                        {request.partner?.firstName} {request.partner?.lastName}
-                      </p>
-                      {request.partner?.username && (
-                        <p className="text-sm text-muted-foreground">
-                          @{request.partner.username}
+                  <div className="flex-1 space-y-2">
+                    <div className="flex items-center justify-between gap-3">
+                      <div className="flex min-w-0 items-start gap-2.5">
+                        <UserAvatar
+                          src={request.partner?.avatarImageUrl}
+                          name={request.partner?.firstName}
+                          className="h-7 w-7"
+                        />
+                        <p className="text-sm leading-snug text-muted-foreground">
+                          {request.partner?.firstName}{" "}
+                          {request.partner?.lastName} wants to be your partner
                         </p>
-                      )}
-                      <p className="mt-1 text-sm text-muted-foreground">
-                        wants to be your partner
-                      </p>
-                      <p className="mt-1 text-xs text-muted-foreground">
-                        {formatDistanceToNow(new Date(request.createdAt), {
-                          addSuffix: true,
-                        })}
+                      </div>
+                      <p className="shrink-0 text-xs text-muted-foreground">
+                        {formatNotificationTime(request.createdAt)}
                       </p>
                     </div>
-                    <div className="flex items-center gap-2 pt-1">
+                    <div className="flex items-center gap-2 pt-0.5">
                       <Button
                         size="sm"
                         variant="outline"
-                        className="h-8 flex-1 text-xs"
+                        className="h-7 flex-1 text-xs"
                         onClick={() =>
                           declinePartnerMutation.mutate({
                             partnerId: request.id,
@@ -600,7 +604,7 @@ export function NotificationsBell() {
                       </Button>
                       <Button
                         size="sm"
-                        className="h-8 flex-1 text-xs"
+                        className="h-7 flex-1 text-xs"
                         onClick={() =>
                           acceptPartnerMutation.mutate({
                             partnerId: request.id,
@@ -623,44 +627,33 @@ export function NotificationsBell() {
               {newNotifications.map((notification) => (
                 <div
                   key={notification.id}
-                  className="rounded-xl border border-border/60 bg-muted/40 p-4 shadow-sm transition-colors hover:bg-muted/60"
+                  className="rounded-xl border border-border/60 bg-muted/40 p-3 shadow-sm transition-colors hover:bg-muted/60"
                 >
-                  {shouldShowTitleAboveAvatar(notification) && (
-                    <p className="mb-3 text-sm leading-snug">
-                      {renderNotificationLink(notification)}
-                    </p>
-                  )}
-                  {notification.actor && (
-                    <div className="mb-3 flex items-center gap-3">
-                      <UserAvatar
-                        src={notification.actor.avatarImageUrl}
-                        name={notification.actor.firstName}
-                        className="h-10 w-10"
-                      />
-                      <div className="min-w-0">
-                        <p className="font-semibold leading-snug">
-                          {notification.actor.firstName} {notification.actor.lastName}
-                        </p>
-                        {notification.actor.username && (
-                          <p className="text-sm text-muted-foreground">
-                            @{notification.actor.username}
-                          </p>
-                        )}
-                      </div>
-                    </div>
-                  )}
-                  {!shouldShowTitleAboveAvatar(notification) && (
+                  <div className="mb-2 flex items-baseline justify-between gap-3">
                     <p className="text-sm leading-snug">
                       {renderNotificationLink(notification)}
                     </p>
+                    <p className="shrink-0 text-xs text-muted-foreground">
+                      {formatNotificationTime(notification.createdAt)}
+                    </p>
+                  </div>
+                  {notification.actor ? (
+                    <div className="flex items-start gap-2.5">
+                      <UserAvatar
+                        src={notification.actor.avatarImageUrl}
+                        name={notification.actor.firstName}
+                        className="h-7 w-7"
+                      />
+                      {renderNotificationBody(notification, {
+                        className: "text-sm leading-snug text-muted-foreground",
+                      })}
+                    </div>
+                  ) : (
+                    renderNotificationBody(notification, {
+                      className: "text-sm leading-snug text-muted-foreground",
+                    })
                   )}
-                  {renderNotificationBody(notification)}
                   {renderNotificationActions(notification)}
-                  <p className="mt-1 text-xs text-muted-foreground">
-                    {formatDistanceToNow(new Date(notification.createdAt), {
-                      addSuffix: true,
-                    })}
-                  </p>
                 </div>
               ))}
             </div>
@@ -674,51 +667,40 @@ export function NotificationsBell() {
             )}
 
           {oldNotifications.length > 0 && (
-            <div className="space-y-3">
+            <div className="space-y-2.5">
               <p className="text-xs font-medium uppercase tracking-wide text-muted-foreground">
                 Old
               </p>
               {oldNotifications.map((notification) => (
                 <div
                   key={notification.id}
-                  className="rounded-xl border border-border/60 bg-muted/40 p-4 shadow-sm transition-colors hover:bg-muted/60"
+                  className="rounded-xl border border-border/60 bg-muted/40 p-3 shadow-sm transition-colors hover:bg-muted/60"
                 >
-                  {shouldShowTitleAboveAvatar(notification) && (
-                    <p className="mb-3 text-sm leading-snug">
-                      {renderNotificationLink(notification)}
-                    </p>
-                  )}
-                  {notification.actor && (
-                    <div className="mb-3 flex items-center gap-3">
-                      <UserAvatar
-                        src={notification.actor.avatarImageUrl}
-                        name={notification.actor.firstName}
-                        className="h-10 w-10"
-                      />
-                      <div className="min-w-0">
-                        <p className="font-semibold leading-snug">
-                          {notification.actor.firstName} {notification.actor.lastName}
-                        </p>
-                        {notification.actor.username && (
-                          <p className="text-sm text-muted-foreground">
-                            @{notification.actor.username}
-                          </p>
-                        )}
-                      </div>
-                    </div>
-                  )}
-                  {!shouldShowTitleAboveAvatar(notification) && (
+                  <div className="mb-2 flex items-baseline justify-between gap-3">
                     <p className="text-sm leading-snug">
                       {renderNotificationLink(notification)}
                     </p>
+                    <p className="shrink-0 text-xs text-muted-foreground">
+                      {formatNotificationTime(notification.createdAt)}
+                    </p>
+                  </div>
+                  {notification.actor ? (
+                    <div className="flex items-start gap-2.5">
+                      <UserAvatar
+                        src={notification.actor.avatarImageUrl}
+                        name={notification.actor.firstName}
+                        className="h-7 w-7"
+                      />
+                      {renderNotificationBody(notification, {
+                        className: "text-sm leading-snug text-muted-foreground",
+                      })}
+                    </div>
+                  ) : (
+                    renderNotificationBody(notification, {
+                      className: "text-sm leading-snug text-muted-foreground",
+                    })
                   )}
-                  {renderNotificationBody(notification)}
                   {renderNotificationActions(notification)}
-                  <p className="mt-1 text-xs text-muted-foreground">
-                    {formatDistanceToNow(new Date(notification.createdAt), {
-                      addSuffix: true,
-                    })}
-                  </p>
                 </div>
               ))}
             </div>
@@ -761,7 +743,7 @@ export function NotificationsBell() {
             >
               <Bell className="h-5 w-5" />
               {notificationCount > 0 && (
-                <span className="absolute -right-1 -top-1 flex h-5 w-5 items-center justify-center rounded-full bg-primary text-[10px] font-semibold text-primary-foreground">
+                <span className="absolute -right-1 -top-1 flex h-5 w-5 items-center justify-center rounded-full bg-neon-teal text-[10px] font-semibold text-primary-foreground">
                   {notificationCount}
                 </span>
               )}

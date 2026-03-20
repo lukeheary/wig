@@ -34,7 +34,10 @@ import {
 } from "drizzle-orm";
 import { uploadImageFromUrl, deleteFromS3, BUCKET_NAME } from "@/lib/s3";
 import { TRPCError } from "@trpc/server";
-import { logActivity } from "../../utils/activity-logger";
+import {
+  logActivity,
+  updateLatestActivityMetadata,
+} from "../../utils/activity-logger";
 import { logEventActivity } from "../../utils/event-activity-logger";
 import {
   filterExistingCategoryKeys,
@@ -1737,16 +1740,43 @@ export const eventRouter = router({
       }
 
       if (rsvp && (input.status === "going" || input.status === "interested")) {
-        void logActivity({
-          actorUserId: ctx.auth.userId,
-          type: input.status === "going" ? "rsvp_going" : "rsvp_interested",
-          entityType: "event",
-          entityId: input.eventId,
-          metadata: {
-            status: input.status,
-            includePartner: shouldMirrorPartnerRsvp,
-          },
-        });
+        const activityType =
+          input.status === "going" ? "rsvp_going" : "rsvp_interested";
+        const activityMetadata = {
+          status: input.status,
+          includePartner: shouldMirrorPartnerRsvp,
+        };
+        const isSameStatusUpdate = existingUserRsvp?.status === input.status;
+
+        if (isSameStatusUpdate) {
+          void (async () => {
+            const updatedExistingActivity = await updateLatestActivityMetadata({
+              actorUserId: ctx.auth.userId,
+              type: activityType,
+              entityType: "event",
+              entityId: input.eventId,
+              metadata: activityMetadata,
+            });
+
+            if (!updatedExistingActivity) {
+              await logActivity({
+                actorUserId: ctx.auth.userId,
+                type: activityType,
+                entityType: "event",
+                entityId: input.eventId,
+                metadata: activityMetadata,
+              });
+            }
+          })();
+        } else {
+          void logActivity({
+            actorUserId: ctx.auth.userId,
+            type: activityType,
+            entityType: "event",
+            entityId: input.eventId,
+            metadata: activityMetadata,
+          });
+        }
       } else if (
         input.status === "not_going" &&
         existingUserRsvp?.status === "going"

@@ -82,7 +82,8 @@ import { useAuth } from "@clerk/nextjs";
 import { sendGoogleAnalyticsEvent } from "@/lib/google-analytics";
 
 type ViewMode = "week" | "month";
-const HOME_ADD_FRIENDS_BANNER_KEY = "wig:home:add-friends-banner-dismissed";
+const HOME_ADD_FRIENDS_BANNER_KEY_PREFIX =
+  "wig:home:add-friends-banner-dismissed";
 
 function StickyDateHeader({
   dateHeader,
@@ -124,6 +125,7 @@ function HomePageContent() {
   const { toast } = useToast();
   const { triggerHaptic } = useHaptics();
   const { userId } = useAuth();
+  const addFriendsBannerStorageKey = `${HOME_ADD_FRIENDS_BANNER_KEY_PREFIX}:${userId ?? "anonymous"}`;
   const [activeFilter, setActiveFilter] = useState<EventFilterTab>("all");
   const [selectedCategories, setSelectedCategories] = useState<string[]>([]);
   const [isAddFriendsBannerDismissed, setIsAddFriendsBannerDismissed] =
@@ -511,22 +513,22 @@ function HomePageContent() {
   useEffect(() => {
     if (typeof window === "undefined") return;
     setIsAddFriendsBannerDismissed(
-      window.localStorage.getItem(HOME_ADD_FRIENDS_BANNER_KEY) === "true"
+      window.localStorage.getItem(addFriendsBannerStorageKey) === "true"
     );
-  }, []);
+  }, [addFriendsBannerStorageKey]);
 
   useEffect(() => {
     if (!hasAcceptedFriends || typeof window === "undefined") return;
-    window.localStorage.removeItem(HOME_ADD_FRIENDS_BANNER_KEY);
+    window.localStorage.removeItem(addFriendsBannerStorageKey);
     setIsAddFriendsBannerDismissed(false);
-  }, [hasAcceptedFriends]);
+  }, [addFriendsBannerStorageKey, hasAcceptedFriends]);
 
   const handleAddFriendsBannerClick = useCallback(() => {
     if (typeof window !== "undefined") {
-      window.localStorage.setItem(HOME_ADD_FRIENDS_BANNER_KEY, "true");
+      window.localStorage.setItem(addFriendsBannerStorageKey, "true");
     }
     setIsAddFriendsBannerDismissed(true);
-  }, []);
+  }, [addFriendsBannerStorageKey]);
 
   const handlePrevious = async () => {
     if (isCurrentWeek) {

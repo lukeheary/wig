@@ -202,23 +202,32 @@ export default function EventPage() {
     if (
       !hasActivePartner ||
       !hasSelectableRsvp ||
-      !userId ||
       !myPartner?.partner?.id
     ) {
       return false;
     }
 
-    return (
-      attendees?.some(
+    const partnerId = myPartner.partner.id;
+    const currentUserRsvpIncludesPartner =
+      event?.userRsvp?.partnerRsvpByUserId === partnerId &&
+      event.userRsvp.status === currentRsvpStatus;
+    const partnerMirroredRsvpExists =
+      userId != null &&
+      (attendees?.some(
         (attendee) =>
-          attendee.userId === myPartner.partner.id &&
+          attendee.userId === partnerId &&
           attendee.partnerRsvpByUserId === userId &&
           attendee.status === currentRsvpStatus
-      ) ?? false
+      ) ?? false);
+
+    return (
+      currentUserRsvpIncludesPartner || partnerMirroredRsvpExists
     );
   }, [
     attendees,
     currentRsvpStatus,
+    event?.userRsvp?.partnerRsvpByUserId,
+    event?.userRsvp?.status,
     hasActivePartner,
     hasSelectableRsvp,
     myPartner?.partner?.id,
