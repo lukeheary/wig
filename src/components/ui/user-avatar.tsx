@@ -27,11 +27,11 @@ export function UserAvatar({
   return (
     <Avatar className={cn("shrink-0 overflow-hidden", className)}>
       <AvatarImage src={avatarSrc} className="h-full w-full object-cover" />
-      <AvatarFallback className="border-none bg-transparent p-0">
+      <AvatarFallback className="overflow-hidden rounded-full border-none bg-transparent p-0">
         <Facehash
           name={name || "User"}
           size={size}
-          className="block h-full w-full"
+          className="block h-full w-full overflow-hidden rounded-full"
           variant="solid"
           colors={[
             // Blues

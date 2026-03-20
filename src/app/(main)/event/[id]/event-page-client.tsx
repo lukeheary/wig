@@ -690,7 +690,7 @@ export default function EventPage() {
                       key={attendee.user.id}
                       className="flex items-center gap-3 rounded-lg border bg-card p-3"
                     >
-                      <div className="rounded-full bg-neon-teal p-[2px]">
+                      <div className="rounded-full bg-neon-teal p-px">
                         <UserAvatar
                           src={attendee.user.avatarImageUrl}
                           name={attendee.user.firstName}
@@ -724,7 +724,7 @@ export default function EventPage() {
                       key={attendee.user.id}
                       className="flex items-center gap-3 rounded-lg border bg-card p-3"
                     >
-                      <div className="rounded-full bg-yellow-400 p-[2px]">
+                      <div className="rounded-full bg-yellow-400 p-px">
                         <UserAvatar
                           src={attendee.user.avatarImageUrl}
                           name={attendee.user.firstName}

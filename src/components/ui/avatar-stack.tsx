@@ -71,7 +71,7 @@ export function AvatarStack({
               )}
               style={
                 user.rsvpStatus
-                  ? { width: avatarSize + 4, height: avatarSize + 4 }
+                  ? { width: avatarSize + 2, height: avatarSize + 2 }
                   : undefined
               }
             >
@@ -79,10 +79,7 @@ export function AvatarStack({
                 src={user.avatarImageUrl}
                 name={user.firstName}
                 size={avatarSize}
-                className={cn(
-                  "h-full w-full",
-                  "border border-background bg-background"
-                )}
+                className="h-full w-full border-0 bg-transparent"
               />
             </div>
           );
