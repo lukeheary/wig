@@ -364,6 +364,8 @@ export default function EventPage() {
       ? "tomorrow"
       : daysUntilEvent > 1
         ? `in ${daysUntilEvent} days`
+        : daysUntilEvent <= -7 && daysUntilEvent > -14
+          ? "Last Week"
         : null;
   const timezone =
     new Intl.DateTimeFormat("en-US", { timeZoneName: "short" })

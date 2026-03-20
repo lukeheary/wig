@@ -534,7 +534,7 @@ function selectHomePreviewActivities(
     lastVisitedAt,
     missedWindowStartAt,
     missedWindowExpiresAt,
-    staleAfterDays = 3,
+    staleAfterDays = 2,
   }: Required<
     Pick<HomeActivityPreviewOptions, "hidePastEvents" | "staleAfterDays">
   > &
@@ -733,7 +733,7 @@ export function useHomeActivityPreview({
   lastVisitedAt = null,
   missedWindowStartAt = null,
   missedWindowExpiresAt = null,
-  staleAfterDays = 3,
+  staleAfterDays = 2,
 }: HomeActivityPreviewOptions = {}) {
   const previewWindow = Math.min(50, Math.max(limit * 4, limit + 6));
   const { data: activities, isLoading } = trpc.friends.getFriendFeed.useQuery({
