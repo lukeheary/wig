@@ -44,16 +44,8 @@ import {
 } from "lucide-react";
 import { useToast } from "@/hooks/use-toast";
 import { SearchInput } from "@/components/ui/search-input";
-import {
-  Select,
-  SelectContent,
-  SelectItem,
-  SelectTrigger,
-  SelectValue,
-} from "@/components/ui/select";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent } from "@/components/ui/card";
-import { Tabs, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import {
   HoverCard,
   HoverCardContent,
@@ -65,11 +57,11 @@ import { ResponsiveSelect } from "@/components/ui/responsive-select";
 import { EventFilterTab } from "@/types/events";
 import { EmptyStateCard } from "@/components/shared/empty-state-card";
 import { EventsPlaceholder } from "@/components/shared/events-placeholder";
-import { useQueryState, parseAsString, parseAsIsoDate } from "nuqs";
+import { useQueryState } from "nuqs";
 import { parseISO, subDays } from "date-fns";
 import {
-  ActivityFeed,
-  useHasRecentActivity,
+  ActivityFeedList,
+  useHomeActivityPreview,
 } from "@/components/friends/activity-feed";
 import { useNavbarSearch } from "@/contexts/nav-search-context";
 import { getDistanceMiles, type Coordinates } from "@/lib/geo";
@@ -80,10 +72,12 @@ import { withReturnTo } from "@/lib/navigation";
 import { HapticPreset, useHaptics } from "@/hooks/use-haptics";
 import { useAuth } from "@clerk/nextjs";
 import { sendGoogleAnalyticsEvent } from "@/lib/google-analytics";
+import { HOME_RECENT_ACTIVITY_SURFACE } from "@/lib/user-surface-state";
 
 type ViewMode = "week" | "month";
 const HOME_ADD_FRIENDS_BANNER_KEY_PREFIX =
   "wig:home:add-friends-banner-dismissed";
+const HOME_ACTIVITY_WINDOW_DAYS = 3;
 
 function StickyDateHeader({
   dateHeader,
@@ -125,6 +119,7 @@ function HomePageContent() {
   const { toast } = useToast();
   const { triggerHaptic } = useHaptics();
   const { userId } = useAuth();
+  const utils = trpc.useUtils();
   const addFriendsBannerStorageKey = `${HOME_ADD_FRIENDS_BANNER_KEY_PREFIX}:${userId ?? "anonymous"}`;
   const [activeFilter, setActiveFilter] = useState<EventFilterTab>("all");
   const [selectedCategories, setSelectedCategories] = useState<string[]>([]);
@@ -133,6 +128,7 @@ function HomePageContent() {
   const [isSticky, setIsSticky] = useState(false);
   const [isDateNavigating, setIsDateNavigating] = useState(false);
   const stickySentinelRef = useRef<HTMLDivElement>(null);
+  const hasMarkedHomeActivitySeenRef = useRef(false);
   const searchInputRef = useRef<HTMLInputElement>(null);
   const [isSearchMode, setIsSearchMode] = useState(false);
   const [searchQuery, setSearchQuery] = useQueryState("search", {
@@ -183,9 +179,38 @@ function HomePageContent() {
   const { data: acceptedFriends } = trpc.friends.listFriends.useQuery({
     statusFilter: "accepted",
   });
+  const {
+    data: homeActivityState,
+    isLoading: isHomeActivityStateLoading,
+  } = trpc.user.getSurfaceState.useQuery({
+    surface: HOME_RECENT_ACTIVITY_SURFACE,
+  });
+  const markSurfaceVisitedMutation = trpc.user.markSurfaceVisited.useMutation({
+    onSuccess: (surfaceState) => {
+      utils.user.getSurfaceState.setData(
+        { surface: HOME_RECENT_ACTIVITY_SURFACE },
+        surfaceState
+      );
+    },
+    onError: () => {
+      hasMarkedHomeActivitySeenRef.current = false;
+    },
+  });
 
-  // Check if there's recent activity to show
-  const { hasActivity: hasRecentActivity } = useHasRecentActivity(3, true);
+  const {
+    activities: homeActivityPreview,
+    hasActivity: hasRecentActivity,
+    isLoading: isHomeActivityLoading,
+    shouldStartMissedWindow,
+  } = useHomeActivityPreview({
+    limit: 3,
+    hidePastEvents: true,
+    includeEventUpdates: false,
+    lastVisitedAt: homeActivityState?.lastVisitedAt ?? null,
+    missedWindowStartAt: homeActivityState?.missedWindowStartAt ?? null,
+    missedWindowExpiresAt: homeActivityState?.missedWindowExpiresAt ?? null,
+    staleAfterDays: HOME_ACTIVITY_WINDOW_DAYS,
+  });
 
   // Get available cities
   const { data: cities } = trpc.event.getAvailableCities.useQuery();
@@ -474,9 +499,12 @@ function HomePageContent() {
     return grouped;
   }, [filteredEvents]);
 
+  const isHomeActivityStateReady = !isHomeActivityStateLoading;
   const shouldShowRecentActivity =
     !isSearchView &&
     !showSkeletons &&
+    isHomeActivityStateReady &&
+    !isHomeActivityLoading &&
     hasRecentActivity &&
     isCurrentWeek &&
     isDefaultCalendarView &&
@@ -522,6 +550,36 @@ function HomePageContent() {
     window.localStorage.removeItem(addFriendsBannerStorageKey);
     setIsAddFriendsBannerDismissed(false);
   }, [addFriendsBannerStorageKey, hasAcceptedFriends]);
+
+  useEffect(() => {
+    hasMarkedHomeActivitySeenRef.current = false;
+  }, [userId]);
+
+  useEffect(() => {
+    if (
+      !isHomeActivityStateReady ||
+      isHomeActivityLoading ||
+      markSurfaceVisitedMutation.isPending ||
+      hasMarkedHomeActivitySeenRef.current
+    ) {
+      return;
+    }
+
+    hasMarkedHomeActivitySeenRef.current = true;
+    markSurfaceVisitedMutation.mutate({
+      surface: HOME_RECENT_ACTIVITY_SURFACE,
+      startMissedWindowAt: shouldStartMissedWindow
+        ? homeActivityState?.lastVisitedAt ?? null
+        : null,
+      windowDays: HOME_ACTIVITY_WINDOW_DAYS,
+    });
+  }, [
+    homeActivityState?.lastVisitedAt,
+    isHomeActivityLoading,
+    isHomeActivityStateReady,
+    markSurfaceVisitedMutation,
+    shouldStartMissedWindow,
+  ]);
 
   const handleAddFriendsBannerClick = useCallback(() => {
     if (typeof window !== "undefined") {
@@ -959,12 +1017,7 @@ function HomePageContent() {
             </Link>
           </StickySectionHeader>
           <div className="container mx-auto px-4">
-            <ActivityFeed
-              limit={3}
-              hideWhenEmpty
-              hidePastEvents
-              includeEventUpdates={false}
-            />
+            <ActivityFeedList activities={homeActivityPreview} />
           </div>
         </div>
       )}

@@ -1,9 +1,11 @@
 import { z } from "zod";
 import { TRPCError } from "@trpc/server";
 import { router, protectedProcedure } from "../init";
-import { users, placeMembers } from "@/server/db/schema";
+import { users, placeMembers, userSurfaceState } from "@/server/db/schema";
 import { eq, and, ne } from "drizzle-orm";
 import { clerkClient } from "@clerk/nextjs/server";
+import { addDays } from "date-fns";
+import { USER_SURFACE_VALUES } from "@/lib/user-surface-state";
 
 const RESERVED_USERNAMES = new Set(["luke"]);
 
@@ -212,6 +214,80 @@ export const userRouter = router({
 
     return user;
   }),
+
+  getSurfaceState: protectedProcedure
+    .input(
+      z.object({
+        surface: z.enum(USER_SURFACE_VALUES),
+      })
+    )
+    .query(async ({ ctx, input }) => {
+      const surfaceState = await ctx.db.query.userSurfaceState.findFirst({
+        where: and(
+          eq(userSurfaceState.userId, ctx.auth.userId),
+          eq(userSurfaceState.surface, input.surface)
+        ),
+      });
+
+      return surfaceState ?? null;
+    }),
+
+  markSurfaceVisited: protectedProcedure
+    .input(
+      z.object({
+        surface: z.enum(USER_SURFACE_VALUES),
+        startMissedWindowAt: z.date().nullable().optional(),
+        windowDays: z.number().int().min(1).max(14).default(3),
+      })
+    )
+    .mutation(async ({ ctx, input }) => {
+      const now = new Date();
+      const existingState = await ctx.db.query.userSurfaceState.findFirst({
+        where: and(
+          eq(userSurfaceState.userId, ctx.auth.userId),
+          eq(userSurfaceState.surface, input.surface)
+        ),
+      });
+
+      const activeMissedWindowExpiresAt =
+        existingState?.missedWindowExpiresAt?.getTime() ?? null;
+      const hasActiveMissedWindow =
+        existingState?.missedWindowStartAt != null &&
+        activeMissedWindowExpiresAt != null &&
+        activeMissedWindowExpiresAt > now.getTime();
+
+      const nextMissedWindowStartAt = hasActiveMissedWindow
+        ? existingState?.missedWindowStartAt ?? null
+        : input.startMissedWindowAt ?? null;
+      const nextMissedWindowExpiresAt = hasActiveMissedWindow
+        ? existingState?.missedWindowExpiresAt ?? null
+        : input.startMissedWindowAt
+          ? addDays(now, input.windowDays)
+          : null;
+
+      const [surfaceState] = await ctx.db
+        .insert(userSurfaceState)
+        .values({
+          userId: ctx.auth.userId,
+          surface: input.surface,
+          lastVisitedAt: now,
+          missedWindowStartAt: nextMissedWindowStartAt,
+          missedWindowExpiresAt: nextMissedWindowExpiresAt,
+          updatedAt: now,
+        })
+        .onConflictDoUpdate({
+          target: [userSurfaceState.userId, userSurfaceState.surface],
+          set: {
+            lastVisitedAt: now,
+            missedWindowStartAt: nextMissedWindowStartAt,
+            missedWindowExpiresAt: nextMissedWindowExpiresAt,
+            updatedAt: now,
+          },
+        })
+        .returning();
+
+      return surfaceState;
+    }),
 
   updateProfile: protectedProcedure
     .input(

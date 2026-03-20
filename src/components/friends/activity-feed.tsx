@@ -12,7 +12,6 @@ import {
   Loader2,
   Users,
   Building2,
-  CalendarPlus,
   Circle,
   X,
   BellDot,
@@ -26,6 +25,7 @@ import {
   isToday,
   isTomorrow,
   startOfDay,
+  subDays,
 } from "date-fns";
 import { usePathname, useSearchParams } from "next/navigation";
 import Link from "next/link";
@@ -481,6 +481,120 @@ interface ActivityFeedProps {
   includeEventUpdates?: boolean;
 }
 
+interface ActivityFeedListProps {
+  activities: any[];
+  groupByRecency?: boolean;
+  groupHeaderClassName?: string;
+}
+
+interface HomeActivityPreviewOptions {
+  limit?: number;
+  hidePastEvents?: boolean;
+  includeEventUpdates?: boolean;
+  lastVisitedAt?: Date | null;
+  missedWindowStartAt?: Date | null;
+  missedWindowExpiresAt?: Date | null;
+  staleAfterDays?: number;
+}
+
+interface HomeActivityPreviewResult {
+  activities: any[];
+  shouldStartMissedWindow: boolean;
+}
+
+function filterActivities(
+  rawActivities: any[] | undefined,
+  {
+    hidePastEvents = false,
+  }: {
+    hidePastEvents?: boolean;
+  } = {}
+) {
+  const visibleActivities = rawActivities?.filter(
+    (activity: any) =>
+      !EVENT_UPDATE_TYPES.has(activity.type) &&
+      !HIDDEN_ACTIVITY_TYPES.has(activity.type)
+  );
+
+  return hidePastEvents
+    ? visibleActivities?.filter((activity: any) => {
+        if (!activity.event?.startAt) return true;
+        const eventDate = startOfDay(new Date(activity.event.startAt));
+        const today = startOfDay(new Date());
+        return eventDate >= today;
+      })
+    : visibleActivities;
+}
+
+function selectHomePreviewActivities(
+  rawActivities: any[] | undefined,
+  {
+    limit,
+    hidePastEvents = true,
+    lastVisitedAt,
+    missedWindowStartAt,
+    missedWindowExpiresAt,
+    staleAfterDays = 3,
+  }: Required<
+    Pick<HomeActivityPreviewOptions, "hidePastEvents" | "staleAfterDays">
+  > &
+    Pick<
+      HomeActivityPreviewOptions,
+      "limit" | "lastVisitedAt" | "missedWindowStartAt" | "missedWindowExpiresAt"
+    >
+): HomeActivityPreviewResult {
+  const now = new Date();
+  const recentCutoff = subDays(now, staleAfterDays).getTime();
+  const activities = [...(filterActivities(rawActivities, { hidePastEvents }) ?? [])].sort(
+    (a: any, b: any) =>
+      new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime()
+  );
+
+  const recentActivities = activities.filter(
+    (activity) => new Date(activity.createdAt).getTime() >= recentCutoff
+  );
+
+  const activeMissedWindowExpiresAt = missedWindowExpiresAt?.getTime() ?? null;
+  const hasActiveMissedWindow =
+    missedWindowStartAt != null &&
+    activeMissedWindowExpiresAt != null &&
+    activeMissedWindowExpiresAt > now.getTime();
+  const activeMissedWindowStartAt = hasActiveMissedWindow
+    ? missedWindowStartAt.getTime()
+    : null;
+
+  const missedActivities = hasActiveMissedWindow
+    ? activities.filter((activity) => {
+        const createdAt = new Date(activity.createdAt).getTime();
+        return (
+          activeMissedWindowStartAt != null &&
+          createdAt > activeMissedWindowStartAt &&
+          createdAt < recentCutoff
+        );
+      })
+    : lastVisitedAt == null
+      ? []
+      : activities.filter((activity) => {
+          const createdAt = new Date(activity.createdAt).getTime();
+          return createdAt > lastVisitedAt.getTime() && createdAt < recentCutoff;
+        });
+
+  const previewActivities = [...recentActivities, ...missedActivities].filter(
+    (activity, index, collection) =>
+      collection.findIndex((candidate) => candidate.id === activity.id) === index
+  );
+
+  const limitedActivities =
+    typeof limit === "number"
+      ? previewActivities.slice(0, limit)
+      : previewActivities;
+
+  return {
+    activities: limitedActivities,
+    shouldStartMissedWindow: !hasActiveMissedWindow && missedActivities.length > 0,
+  };
+}
+
 function getRecencyLabel(createdAt: Date) {
   const daysAgo = Math.max(0, differenceInCalendarDays(new Date(), createdAt));
 
@@ -493,50 +607,11 @@ function getRecencyLabel(createdAt: Date) {
   return `${weeksAgo} Weeks ago`;
 }
 
-export function ActivityFeed({
-  limit = 50,
-  hideWhenEmpty = false,
-  hidePastEvents = false,
+export function ActivityFeedList({
+  activities,
   groupByRecency = false,
   groupHeaderClassName,
-  includeEventUpdates = true,
-}: ActivityFeedProps) {
-  const { data: rawActivities, isLoading } =
-    trpc.friends.getFriendFeed.useQuery({
-      limit,
-      includeEventUpdates,
-    });
-
-  const visibleActivities = rawActivities?.filter(
-    (activity: any) =>
-      !EVENT_UPDATE_TYPES.has(activity.type) &&
-      !HIDDEN_ACTIVITY_TYPES.has(activity.type)
-  );
-
-  const activities = hidePastEvents
-    ? visibleActivities?.filter((activity: any) => {
-        if (!activity.event?.startAt) return true;
-        const eventDate = startOfDay(new Date(activity.event.startAt));
-        const today = startOfDay(new Date());
-        return eventDate >= today;
-      })
-    : visibleActivities;
-
-  if (isLoading) {
-    return (
-      <div className="flex justify-center py-12">
-        <Loader2 className="h-8 w-8 animate-spin text-muted-foreground/40" />
-      </div>
-    );
-  }
-
-  if (!activities || activities.length === 0) {
-    if (hideWhenEmpty) {
-      return null;
-    }
-    return <EmptyStateCard icon={Users} title="No recent activity" />;
-  }
-
+}: ActivityFeedListProps) {
   if (groupByRecency) {
     const sortedActivities = [...activities].sort(
       (a: any, b: any) =>
@@ -593,6 +668,46 @@ export function ActivityFeed({
   );
 }
 
+export function ActivityFeed({
+  limit = 50,
+  hideWhenEmpty = false,
+  hidePastEvents = false,
+  groupByRecency = false,
+  groupHeaderClassName,
+  includeEventUpdates = true,
+}: ActivityFeedProps) {
+  const { data: rawActivities, isLoading } =
+    trpc.friends.getFriendFeed.useQuery({
+      limit,
+      includeEventUpdates,
+    });
+
+  const activities = filterActivities(rawActivities, { hidePastEvents });
+
+  if (isLoading) {
+    return (
+      <div className="flex justify-center py-12">
+        <Loader2 className="h-8 w-8 animate-spin text-muted-foreground/40" />
+      </div>
+    );
+  }
+
+  if (!activities || activities.length === 0) {
+    if (hideWhenEmpty) {
+      return null;
+    }
+    return <EmptyStateCard icon={Users} title="No recent activity" />;
+  }
+
+  return (
+    <ActivityFeedList
+      activities={activities}
+      groupByRecency={groupByRecency}
+      groupHeaderClassName={groupHeaderClassName}
+    />
+  );
+}
+
 // Hook to check if there are activities (for conditionally showing sections)
 export function useHasRecentActivity(
   limit: number = 50,
@@ -602,24 +717,43 @@ export function useHasRecentActivity(
     limit,
   });
 
-  const visibleActivities = activities?.filter(
-    (activity: any) =>
-      !EVENT_UPDATE_TYPES.has(activity.type) &&
-      !HIDDEN_ACTIVITY_TYPES.has(activity.type)
-  );
-
-  const filteredActivities = hidePastEvents
-    ? visibleActivities?.filter((activity: any) => {
-        if (!activity.event?.startAt) return true;
-        const eventDate = startOfDay(new Date(activity.event.startAt));
-        const today = startOfDay(new Date());
-        return eventDate >= today;
-      })
-    : visibleActivities;
+  const filteredActivities = filterActivities(activities, { hidePastEvents });
 
   return {
     hasActivity:
       !isLoading && !!filteredActivities && filteredActivities.length > 0,
     isLoading,
+  };
+}
+
+export function useHomeActivityPreview({
+  limit = 3,
+  hidePastEvents = true,
+  includeEventUpdates = false,
+  lastVisitedAt = null,
+  missedWindowStartAt = null,
+  missedWindowExpiresAt = null,
+  staleAfterDays = 3,
+}: HomeActivityPreviewOptions = {}) {
+  const previewWindow = Math.min(50, Math.max(limit * 4, limit + 6));
+  const { data: activities, isLoading } = trpc.friends.getFriendFeed.useQuery({
+    limit: previewWindow,
+    includeEventUpdates,
+  });
+
+  const preview = selectHomePreviewActivities(activities, {
+    limit,
+    hidePastEvents,
+    lastVisitedAt,
+    missedWindowStartAt,
+    missedWindowExpiresAt,
+    staleAfterDays,
+  });
+
+  return {
+    activities: preview.activities,
+    hasActivity: !isLoading && preview.activities.length > 0,
+    isLoading,
+    shouldStartMissedWindow: preview.shouldStartMissedWindow,
   };
 }

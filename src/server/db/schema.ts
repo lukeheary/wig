@@ -183,9 +183,46 @@ export const usersRelations = relations(users, ({ many }) => ({
   eventActivities: many(eventActivity),
   notifications: many(notifications, { relationName: "notificationRecipient" }),
   notificationActors: many(notifications, { relationName: "notificationActor" }),
+  surfaceStates: many(userSurfaceState),
   supportTickets: many(supportTickets),
   supportTicketActivities: many(supportTicketActivity),
 }));
+
+export const userSurfaceState = pgTable(
+  "user_surface_state",
+  {
+    id: uuid("id").defaultRandom().primaryKey(),
+    userId: text("user_id")
+      .notNull()
+      .references(() => users.id, { onDelete: "cascade" }),
+    surface: varchar("surface", { length: 100 }).notNull(),
+    lastVisitedAt: timestamp("last_visited_at"),
+    missedWindowStartAt: timestamp("missed_window_start_at"),
+    missedWindowExpiresAt: timestamp("missed_window_expires_at"),
+    createdAt: timestamp("created_at").defaultNow().notNull(),
+    updatedAt: timestamp("updated_at").defaultNow().notNull(),
+  },
+  (table) => ({
+    userSurfaceIdx: uniqueIndex("user_surface_state_user_surface_idx").on(
+      table.userId,
+      table.surface
+    ),
+    userUpdatedAtIdx: index("user_surface_state_user_updated_at_idx").on(
+      table.userId,
+      table.updatedAt
+    ),
+  })
+);
+
+export const userSurfaceStateRelations = relations(
+  userSurfaceState,
+  ({ one }) => ({
+    user: one(users, {
+      fields: [userSurfaceState.userId],
+      references: [users.id],
+    }),
+  })
+);
 
 // ============================================================================
 // CITIES TABLE
