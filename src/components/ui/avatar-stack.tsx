@@ -22,7 +22,13 @@ export function AvatarStack({
   size = "md",
   className = "",
 }: AvatarStackProps) {
-  const displayedUsers = users.slice(0, maxDisplay);
+  const displayedUsers = [...users]
+    .sort((a, b) => {
+      const aPriority = a.rsvpStatus === "going" ? 1 : 0;
+      const bPriority = b.rsvpStatus === "going" ? 1 : 0;
+      return aPriority - bPriority;
+    })
+    .slice(0, maxDisplay);
   const remainingCount = users.length - maxDisplay;
 
   const sizeClasses = {
@@ -48,18 +54,34 @@ export function AvatarStack({
     <div className={`flex items-center -space-x-2 ${className}`}>
       <div className="flex -space-x-2">
         {displayedUsers.map((user) => {
-          const isInterested = user.rsvpStatus === "interested";
+          const rsvpIndicatorClassName =
+            user.rsvpStatus === "interested"
+              ? "bg-yellow-400 p-[1px]"
+              : user.rsvpStatus === "going"
+                ? "bg-neon-teal p-[1px]"
+                : "";
 
           return (
-            <div key={user.id} className="relative">
+            <div
+              key={user.id}
+              className={cn(
+                "relative rounded-full",
+                sizeClass,
+                rsvpIndicatorClassName
+              )}
+              style={
+                user.rsvpStatus
+                  ? { width: avatarSize + 4, height: avatarSize + 4 }
+                  : undefined
+              }
+            >
               <UserAvatar
                 src={user.avatarImageUrl}
                 name={user.firstName}
                 size={avatarSize}
                 className={cn(
-                  sizeClass,
-                  "border border-background bg-background",
-                  isInterested && "opacity-50"
+                  "h-full w-full",
+                  "border border-background bg-background"
                 )}
               />
             </div>

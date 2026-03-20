@@ -568,11 +568,11 @@ export default function EventPage() {
             )}
 
             {event.organizer && (
-              <div className="flex w-fit items-center gap-1 pt-0.5 text-base text-muted-foreground md:pt-1 md:text-2xl">
+              <div className="font-space-grotesk flex w-fit items-center gap-1 pt-0.5 text-base text-muted-foreground md:pt-1 md:text-xl">
                 <span>Organized by </span>
                 <Link
                   href={`/organizer/${event.organizer.slug}`}
-                  className="font-space-grotesk flex items-center gap-2 transition-colors hover:underline"
+                  className="flex items-center gap-2 transition-colors hover:underline"
                 >
                   {event.organizer.name}
                 </Link>
@@ -584,7 +584,7 @@ export default function EventPage() {
                 href={event.eventUrl}
                 target="_blank"
                 rel="noopener noreferrer"
-                className="font-space-grotesk flex w-fit items-center gap-2 pt-0.5 text-muted-foreground transition-colors hover:underline md:pt-1 md:text-lg"
+                className="font-space-grotesk flex w-fit items-center gap-2 pt-0.5 text-muted-foreground transition-colors hover:underline md:pt-1 md:text-xl"
               >
                 <span>View on {sourceLabel}</span>
                 <ExternalLink className="h-4 w-4" />
@@ -690,11 +690,13 @@ export default function EventPage() {
                       key={attendee.user.id}
                       className="flex items-center gap-3 rounded-lg border bg-card p-3"
                     >
-                      <UserAvatar
-                        src={attendee.user.avatarImageUrl}
-                        name={attendee.user.firstName}
-                        className="h-10 w-10"
-                      />
+                      <div className="rounded-full bg-neon-teal p-[2px]">
+                        <UserAvatar
+                          src={attendee.user.avatarImageUrl}
+                          name={attendee.user.firstName}
+                          className="h-10 w-10"
+                        />
+                      </div>
                       <div className="text-sm">
                         <p className="font-medium">
                           {attendee.user.firstName} {attendee.user.lastName}
@@ -722,11 +724,13 @@ export default function EventPage() {
                       key={attendee.user.id}
                       className="flex items-center gap-3 rounded-lg border bg-card p-3"
                     >
-                      <UserAvatar
-                        src={attendee.user.avatarImageUrl}
-                        name={attendee.user.firstName}
-                        className="h-10 w-10 opacity-50"
-                      />
+                      <div className="rounded-full bg-yellow-400 p-[2px]">
+                        <UserAvatar
+                          src={attendee.user.avatarImageUrl}
+                          name={attendee.user.firstName}
+                          className="h-10 w-10"
+                        />
+                      </div>
                       <div className="text-sm">
                         <p className="font-medium">
                           {attendee.user.firstName} {attendee.user.lastName}
