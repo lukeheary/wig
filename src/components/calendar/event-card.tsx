@@ -10,7 +10,11 @@ import { format } from "date-fns";
 import { type EventListItem } from "@/types/trpc";
 import { AvatarStack } from "@/components/ui/avatar-stack";
 import { getEventStatusLabel } from "@/lib/event-status";
-import { buildReturnTo, withReturnTo } from "@/lib/navigation";
+import {
+  buildReturnTo,
+  getScrollRestoreKey,
+  withReturnTo,
+} from "@/lib/navigation";
 
 type SocialUser = {
   id: string;
@@ -65,9 +69,18 @@ export function EventCard({ event }: EventCardProps) {
     event.venue?.logoImageUrl ||
     event.organizer?.logoImageUrl ||
     null;
+  const handleClick = () => {
+    if (typeof window === "undefined") return;
+
+    const currentPath = `${window.location.pathname}${window.location.search}`;
+    window.sessionStorage.setItem(
+      getScrollRestoreKey(currentPath),
+      String(window.scrollY)
+    );
+  };
 
   return (
-    <Link href={eventHref} className="group">
+    <Link href={eventHref} className="group" onClick={handleClick}>
       <Card className="relative h-full cursor-pointer overflow-hidden !border-none bg-card p-2 transition-all duration-300 md:flex-col">
         {/* Container - horizontal on mobile, vertical on desktop */}
         <div className="flex md:block">

@@ -3,6 +3,8 @@ type SearchParamsLike =
   | null
   | undefined;
 
+const SCROLL_RESTORE_KEY_PREFIX = "wig:scroll-restore:";
+
 export function sanitizeReturnTo(returnTo: string | null | undefined) {
   if (!returnTo) return null;
   if (!returnTo.startsWith("/")) return null;
@@ -39,4 +41,8 @@ export function withReturnTo(href: string, returnTo?: string | null) {
   const nextQuery = params.toString();
 
   return `${pathname}${nextQuery ? `?${nextQuery}` : ""}${hash ? `#${hash}` : ""}`;
+}
+
+export function getScrollRestoreKey(path: string) {
+  return `${SCROLL_RESTORE_KEY_PREFIX}${path}`;
 }
