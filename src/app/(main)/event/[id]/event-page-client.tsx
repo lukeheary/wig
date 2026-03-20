@@ -451,7 +451,7 @@ export default function EventPage() {
         <div className="lg:flex lg:items-start lg:gap-10">
           {/* Cover Image - Left column on desktop */}
           <div className="lg:w-[420px] lg:flex-none">
-            <div className="relative aspect-square w-full overflow-hidden rounded-[2rem] bg-muted/90 shadow-[0_28px_90px_rgba(0,0,0,0.24)] lg:aspect-auto lg:min-h-[420px]">
+            <div className="relative aspect-square w-full overflow-hidden rounded-[1.5rem] bg-muted/90 shadow-[0_28px_90px_rgba(0,0,0,0.24)] lg:aspect-auto lg:min-h-[420px]">
               {eventImageUrl && (
                 <>
                   {/* <div className="absolute inset-5 -z-10 rounded-[1.75rem] bg-gradient-to-br from-neon-pink/20 via-neon-teal/12 to-transparent blur-2xl" /> */}
@@ -500,14 +500,14 @@ export default function EventPage() {
                 variant="ghost"
                 size="icon"
                 className={cn(
-                  "absolute left-3 top-3",
+                  "absolute left-2.5 top-2.5",
                   imageOverlayButtonClassName
                 )}
                 iconClassName="h-[18px] w-[18px]"
               />
 
               {/* Action Icons - Overlay on top right */}
-              <div className="absolute right-3 top-3 flex gap-2">
+              <div className="absolute right-2.5 top-2.5 flex gap-2">
                 {canEdit && (
                   <Link href={editHref}>
                     <Button
@@ -539,7 +539,7 @@ export default function EventPage() {
 
               {/* Avatars - Overlay on bottom right */}
               {socialStackUsers.length > 0 && (
-                <div className="absolute bottom-3 right-3">
+                <div className="absolute bottom-2.5 right-2.5">
                   <AvatarStack
                     users={socialStackUsers}
                     maxDisplay={5}
@@ -554,7 +554,7 @@ export default function EventPage() {
                   size="icon"
                   variant="ghost"
                   className={cn(
-                    "absolute bottom-3 left-3",
+                    "absolute bottom-2.5 left-2.5",
                     imageOverlayButtonClassName
                   )}
                   onClick={() => setIsImageModalOpen(true)}
