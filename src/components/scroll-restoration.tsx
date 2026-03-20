@@ -16,22 +16,28 @@ export function ScrollRestoration() {
     const shouldSkipScrollToTop = () => window.location.hash.length > 0;
     const currentPath = `${window.location.pathname}${window.location.search}`;
     const scrollRestoreKey = getScrollRestoreKey(currentPath);
-    const savedScrollY = window.sessionStorage.getItem(scrollRestoreKey);
+    let savedScrollY = window.sessionStorage.getItem(scrollRestoreKey);
+    let hasRestoredSavedScroll = false;
     const restoreSavedScroll = () => {
       if (!savedScrollY) return false;
 
       const parsedScrollY = Number(savedScrollY);
       if (Number.isNaN(parsedScrollY)) {
         window.sessionStorage.removeItem(scrollRestoreKey);
+        savedScrollY = null;
         return false;
       }
 
       window.scrollTo({ top: parsedScrollY, left: 0, behavior: "auto" });
+      window.sessionStorage.removeItem(scrollRestoreKey);
+      savedScrollY = null;
+      hasRestoredSavedScroll = true;
       return true;
     };
 
     const forceTop = () => {
       if (shouldSkipScrollToTop()) return;
+      if (hasRestoredSavedScroll) return;
       if (restoreSavedScroll()) return;
       window.scrollTo({ top: 0, left: 0, behavior: "auto" });
     };
@@ -44,22 +50,13 @@ export function ScrollRestoration() {
     });
 
     const timeoutId = window.setTimeout(forceTop, 120);
-    const cleanupRestore = () => {
-      if (savedScrollY) {
-        window.sessionStorage.removeItem(scrollRestoreKey);
-      }
-    };
-    const onPageShow = () => {
-      forceTop();
-      cleanupRestore();
-    };
+    const onPageShow = () => forceTop();
 
     window.addEventListener("pageshow", onPageShow);
 
     return () => {
       window.removeEventListener("pageshow", onPageShow);
       window.clearTimeout(timeoutId);
-      cleanupRestore();
     };
   }, [pathname]);
 
