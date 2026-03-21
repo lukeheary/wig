@@ -179,12 +179,10 @@ function HomePageContent() {
   const { data: acceptedFriends } = trpc.friends.listFriends.useQuery({
     statusFilter: "accepted",
   });
-  const {
-    data: homeActivityState,
-    isLoading: isHomeActivityStateLoading,
-  } = trpc.user.getSurfaceState.useQuery({
-    surface: HOME_RECENT_ACTIVITY_SURFACE,
-  });
+  const { data: homeActivityState, isLoading: isHomeActivityStateLoading } =
+    trpc.user.getSurfaceState.useQuery({
+      surface: HOME_RECENT_ACTIVITY_SURFACE,
+    });
   const markSurfaceVisitedMutation = trpc.user.markSurfaceVisited.useMutation({
     onSuccess: (surfaceState) => {
       utils.user.getSurfaceState.setData(
@@ -304,7 +302,7 @@ function HomePageContent() {
   };
 
   const handleBackFromSearchOrFilter = () => {
-    void triggerHaptic(HapticPreset.Light);
+    void triggerHaptic(HapticPreset.Soft);
 
     if (isFilteredFeedView) {
       setActiveFilter("all");
@@ -391,8 +389,7 @@ function HomePageContent() {
     }
   );
 
-  const showSkeletons =
-    !isReady || (!events && isLoading) || isDateNavigating;
+  const showSkeletons = !isReady || (!events && isLoading) || isDateNavigating;
 
   // Fetch upcoming events for focused-empty search state
   const { data: upcomingSearchEvents, isLoading: upcomingSearchLoading } =
@@ -571,7 +568,7 @@ function HomePageContent() {
     markSurfaceVisitedMutation.mutate({
       surface: HOME_RECENT_ACTIVITY_SURFACE,
       startMissedWindowAt: shouldStartMissedWindow
-        ? homeActivityState?.lastVisitedAt ?? null
+        ? (homeActivityState?.lastVisitedAt ?? null)
         : null,
       windowDays: HOME_ACTIVITY_WINDOW_DAYS,
     });
@@ -675,6 +672,7 @@ function HomePageContent() {
   };
 
   const handleToday = async () => {
+    void triggerHaptic(HapticPreset.Soft);
     setIsDateNavigating(true);
     await setDateParam(format(new Date(), "yyyy-MM-dd"), {
       scroll: false,
@@ -770,7 +768,7 @@ function HomePageContent() {
                     e.stopPropagation();
                     void handleToday();
                   }}
-                  className="flex h-10 w-10 shrink-0 items-center justify-center rounded-full text-muted-foreground transition-colors outline-none hover:bg-muted hover:text-foreground focus:outline-none focus-visible:outline-none"
+                  className="flex h-10 w-10 shrink-0 items-center justify-center rounded-full text-muted-foreground outline-none transition-colors hover:bg-muted hover:text-foreground focus:outline-none focus-visible:outline-none"
                   tabIndex={shouldShowReturnToCurrentWeekButton ? 0 : -1}
                   aria-label="Back to current week"
                 >
