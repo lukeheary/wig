@@ -30,7 +30,7 @@ function getMonthLabel(monthsAway: number) {
 }
 
 function getPastWeekLabel(weeksAgo: number) {
-  if (weeksAgo <= 1) return "1 Week Ago";
+  if (weeksAgo <= 1) return "Last Week";
   return `${weeksAgo} Weeks Ago`;
 }
 

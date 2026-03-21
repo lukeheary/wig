@@ -19,11 +19,11 @@ import { useToast } from "@/hooks/use-toast";
 import { VenueHoursDisplay } from "@/components/venue-hours-display";
 import { VenueHours } from "@/components/venue-hours-editor";
 import { cn } from "@/lib/utils";
-import { StickySectionHeader } from "@/components/ui/sticky-section-header";
 import { CategoryPillList } from "@/components/categories/category-pill";
 import { PlaceActionMenu } from "@/components/places/place-action-menu";
 import { PlacePageSkeleton } from "@/components/places/place-page-skeleton";
 import { PlaceUpcomingEvents } from "@/components/places/place-upcoming-events";
+import { Tabs, TabsList, TabsTrigger } from "@/components/ui/tabs";
 
 type PlacePageProps = {
   actionMenuType: "venue" | "organizer";
@@ -38,7 +38,7 @@ export function PlacePage({ actionMenuType }: PlacePageProps) {
     url: string;
     alt: string;
   } | null>(null);
-  const [showPastEvents, setShowPastEvents] = useState(false);
+  const [eventsTab, setEventsTab] = useState<"upcoming" | "past">("upcoming");
 
   const { data: place, isLoading } = trpc.place.getPlaceBySlug.useQuery({
     slug,
@@ -122,6 +122,9 @@ export function PlacePage({ actionMenuType }: PlacePageProps) {
       (member: { userId: string }) => member.userId === currentUser.id
     );
   const canEdit = isAdmin || Boolean(isMember);
+  const hasPastEvents = (place.pastEvents as any[] | undefined)?.length
+    ? (place.pastEvents as any[]).length > 0
+    : false;
   const followButtonClassName = cn(
     "font-space-grotesk rounded-xl py-6 text-base font-medium lg:text-lg",
     isFollowing &&
@@ -234,7 +237,7 @@ export function PlacePage({ actionMenuType }: PlacePageProps) {
           </div>
         </div>
 
-        <div className="mt-4 space-y-4">
+        <div className="mt-4">
           {place.description && (
             <div>
               <p className="whitespace-pre-wrap leading-normal">
@@ -294,7 +297,7 @@ export function PlacePage({ actionMenuType }: PlacePageProps) {
             )}
           </div>
 
-          <div className="flex items-center gap-2 md:hidden">
+          <div className="mt-4 flex items-center gap-2 md:hidden">
             <Button
               variant="neon"
               onClick={handleFollowToggle}
@@ -312,30 +315,39 @@ export function PlacePage({ actionMenuType }: PlacePageProps) {
               />
             )}
           </div>
+
+          {hasPastEvents && (
+            <div className="pt-4">
+              <Tabs
+                value={eventsTab}
+                onValueChange={(value) =>
+                  setEventsTab(value as "upcoming" | "past")
+                }
+              >
+                <TabsList className="grid h-auto w-full grid-cols-2 rounded-xl bg-muted p-1">
+                  <TabsTrigger
+                    value="upcoming"
+                    className="font-space-grotesk rounded-lg py-2 text-base"
+                  >
+                    Upcoming
+                  </TabsTrigger>
+                  <TabsTrigger
+                    value="past"
+                    className="font-space-grotesk rounded-lg py-2 text-base"
+                  >
+                    Past
+                  </TabsTrigger>
+                </TabsList>
+              </Tabs>
+            </div>
+          )}
         </div>
       </div>
 
-      <PlaceUpcomingEvents events={place.events} />
-
-      {place.pastEvents && (place.pastEvents as any[]).length > 0 && (
-        <>
-          {!showPastEvents && (
-            <div className="container mx-auto pt-6">
-              <Button
-                variant="neon"
-                size="lg"
-                className="w-full !py-5 font-space-grotesk rounded-xl text-base font-medium lg:text-lg"
-                onClick={() => setShowPastEvents(true)}
-              >
-                Show Past Events
-              </Button>
-            </div>
-          )}
-
-          {showPastEvents && (
-            <PlaceUpcomingEvents events={place.pastEvents as any} mode="past" />
-          )}
-        </>
+      {eventsTab === "past" && hasPastEvents ? (
+        <PlaceUpcomingEvents events={place.pastEvents as any} mode="past" />
+      ) : (
+        <PlaceUpcomingEvents events={place.events} />
       )}
     </div>
   );
