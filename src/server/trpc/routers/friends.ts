@@ -622,11 +622,15 @@ export const friendsRouter = router({
           )
         : [];
 
+      const getActivityTimestamp = (
+        activity: (typeof friendFeed)[number] | (typeof normalizedEventUpdates)[number]
+      ) => ("updatedAt" in activity ? activity.updatedAt : activity.createdAt);
+
       return [...friendFeed, ...normalizedEventUpdates]
         .sort(
           (a, b) =>
-            new Date((b.updatedAt ?? b.createdAt) as Date | string).getTime() -
-            new Date((a.updatedAt ?? a.createdAt) as Date | string).getTime()
+            new Date(getActivityTimestamp(b) as Date | string).getTime() -
+            new Date(getActivityTimestamp(a) as Date | string).getTime()
         )
         .slice(input.offset, input.offset + input.limit);
     }),
