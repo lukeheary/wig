@@ -24,6 +24,7 @@ import { PlaceActionMenu } from "@/components/places/place-action-menu";
 import { PlacePageSkeleton } from "@/components/places/place-page-skeleton";
 import { PlaceUpcomingEvents } from "@/components/places/place-upcoming-events";
 import { Tabs, TabsList, TabsTrigger } from "@/components/ui/tabs";
+import { HapticPreset, useHaptics } from "@/hooks/use-haptics";
 
 type PlacePageProps = {
   actionMenuType: "venue" | "organizer";
@@ -33,6 +34,7 @@ export function PlacePage({ actionMenuType }: PlacePageProps) {
   const params = useParams();
   const slug = params.slug as string;
   const { toast } = useToast();
+  const { triggerHaptic } = useHaptics();
   const utils = trpc.useUtils();
   const [expandedImage, setExpandedImage] = useState<{
     url: string;
@@ -320,9 +322,12 @@ export function PlacePage({ actionMenuType }: PlacePageProps) {
             <div className="pt-4">
               <Tabs
                 value={eventsTab}
-                onValueChange={(value) =>
-                  setEventsTab(value as "upcoming" | "past")
-                }
+                onValueChange={(value) => {
+                  if (value !== eventsTab) {
+                    void triggerHaptic(HapticPreset.Light);
+                  }
+                  setEventsTab(value as "upcoming" | "past");
+                }}
               >
                 <TabsList className="grid h-auto w-full grid-cols-2 rounded-xl bg-muted p-1">
                   <TabsTrigger

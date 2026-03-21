@@ -304,6 +304,8 @@ function HomePageContent() {
   };
 
   const handleBackFromSearchOrFilter = () => {
+    void triggerHaptic(HapticPreset.Light);
+
     if (isFilteredFeedView) {
       setActiveFilter("all");
       return;
