@@ -81,9 +81,6 @@ export function EventForm({
   const [selectedVenue, setSelectedVenue] = useState<VenueData | null>(null);
   const [isCreatingNewVenue, setIsCreatingNewVenue] = useState(false);
   const lastAutoAppliedKeyRef = useRef<string | null>(null);
-  const deferredUploadFolderRef = useRef(
-    `events/pending/${Date.now()}-${Math.random().toString(36).slice(2, 10)}`
-  );
   const [deferredCoverImageFile, setDeferredCoverImageFile] =
     useState<File | null>(null);
   const [isSubmittingImage, setIsSubmittingImage] = useState(false);
@@ -243,13 +240,6 @@ export function EventForm({
   const createVenueMutation = trpc.place.createPlace.useMutation();
 
   const createMutation = trpc.event.createEvent.useMutation({
-    onSuccess: (data) => {
-      // toast({
-      //   title: "Success",
-      //   description: "Event created successfully",
-      // });
-      onSuccess?.(data.id);
-    },
     onError: (error) => {
       toast({
         title: "Error",
@@ -260,16 +250,6 @@ export function EventForm({
   });
 
   const createRecurringMutation = trpc.event.createRecurringEvent.useMutation({
-    onSuccess: (data) => {
-      // toast({
-      //   title: "Success",
-      //   description:
-      //     data.createdEvents > 0
-      //       ? `Recurring series created with ${data.createdEvents} upcoming events`
-      //       : "Recurring series created",
-      // });
-      onSuccess?.(data.firstEventId ?? undefined);
-    },
     onError: (error) => {
       toast({
         title: "Error",
@@ -278,6 +258,28 @@ export function EventForm({
       });
     },
   });
+  const setEventCoverImageMutation = trpc.event.setEventCoverImage.useMutation();
+  const setEventSeriesCoverImageMutation =
+    trpc.event.setEventSeriesCoverImage.useMutation();
+
+  const uploadCoverImage = async (file: File, folder: string) => {
+    const uploadFormData = new FormData();
+    uploadFormData.append("file", file);
+    uploadFormData.append("folder", folder);
+    uploadFormData.append("filename", "cover-image.png");
+
+    const uploadResponse = await fetch("/api/upload", {
+      method: "POST",
+      body: uploadFormData,
+    });
+
+    const uploadData = await uploadResponse.json();
+    if (!uploadResponse.ok) {
+      throw new Error(uploadData.error || "Upload failed");
+    }
+
+    return uploadData.url as string;
+  };
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -371,47 +373,15 @@ export function EventForm({
         return;
       }
 
-      let resolvedCoverImageUrl = formData.coverImageUrl || undefined;
-      if (deferredCoverImageFile) {
-        setIsSubmittingImage(true);
-        try {
-          const uploadFormData = new FormData();
-          uploadFormData.append("file", deferredCoverImageFile);
-          uploadFormData.append("folder", deferredUploadFolderRef.current);
-          uploadFormData.append("filename", "cover-image.png");
-
-          const uploadResponse = await fetch("/api/upload", {
-            method: "POST",
-            body: uploadFormData,
-          });
-
-          const uploadData = await uploadResponse.json();
-          if (!uploadResponse.ok) {
-            throw new Error(uploadData.error || "Upload failed");
-          }
-
-          resolvedCoverImageUrl = uploadData.url;
-        } catch (error) {
-          toast({
-            title: "Image upload failed",
-            description:
-              error instanceof Error ? error.message : "Unknown upload error",
-            variant: "destructive",
-          });
-          setIsSubmittingImage(false);
-          return;
-        } finally {
-          setIsSubmittingImage(false);
-        }
-      }
-
       const payload = {
         venueId: finalVenueId,
         organizerId,
         title: formData.title,
         description: formData.description || undefined,
         eventUrl: formData.eventUrl || undefined,
-        coverImageUrl: resolvedCoverImageUrl,
+        coverImageUrl: deferredCoverImageFile
+          ? undefined
+          : formData.coverImageUrl || undefined,
         categories: formData.categories,
         status: formData.status,
         startAt: startDate,
@@ -422,7 +392,7 @@ export function EventForm({
       };
 
       if (isRecurringDefault) {
-        await createRecurringMutation.mutateAsync({
+        const createdSeries = await createRecurringMutation.mutateAsync({
           ...payload,
           timeZone:
             Intl.DateTimeFormat().resolvedOptions().timeZone || undefined,
@@ -440,10 +410,63 @@ export function EventForm({
               : undefined,
           },
         });
+        if (deferredCoverImageFile) {
+          setIsSubmittingImage(true);
+          try {
+            const uploadedCoverImageUrl = await uploadCoverImage(
+              deferredCoverImageFile,
+              `event-series/${createdSeries.seriesId}`
+            );
+
+            await setEventSeriesCoverImageMutation.mutateAsync({
+              seriesId: createdSeries.seriesId,
+              coverImageUrl: uploadedCoverImageUrl,
+            });
+          } catch (error) {
+            toast({
+              title: "Series created without image",
+              description:
+                error instanceof Error
+                  ? error.message
+                  : "The recurring series was created, but the image upload failed.",
+              variant: "destructive",
+            });
+          } finally {
+            setIsSubmittingImage(false);
+          }
+        }
+        onSuccess?.(createdSeries.firstEventId ?? undefined);
         return;
       }
 
-      await createMutation.mutateAsync(payload);
+      const createdEvent = await createMutation.mutateAsync(payload);
+      if (deferredCoverImageFile) {
+        setIsSubmittingImage(true);
+        try {
+          const uploadedCoverImageUrl = await uploadCoverImage(
+            deferredCoverImageFile,
+            `events/${createdEvent.id}`
+          );
+
+          await setEventCoverImageMutation.mutateAsync({
+            eventId: createdEvent.id,
+            coverImageUrl: uploadedCoverImageUrl,
+          });
+        } catch (error) {
+          toast({
+            title: "Event created without image",
+            description:
+              error instanceof Error
+                ? error.message
+                : "The event was created, but the image upload failed.",
+            variant: "destructive",
+          });
+        } finally {
+          setIsSubmittingImage(false);
+        }
+      }
+
+      onSuccess?.(createdEvent.id);
     } catch {
       // Mutation-specific toasts are handled in each mutation's onError callback.
     } finally {
@@ -606,14 +629,11 @@ export function EventForm({
             <div className="space-y-2">
               <Label htmlFor="image">Event Image</Label>
               <S3Uploader
-                folder={deferredUploadFolderRef.current}
                 fileName="cover-image.png"
                 currentImageUrl={formData.coverImageUrl}
                 deferUpload
                 onDeferredFileChange={setDeferredCoverImageFile}
-                onUploadComplete={(url: string) =>
-                  setFormData({ ...formData, coverImageUrl: url })
-                }
+                onUploadComplete={() => {}}
                 onRemoveImage={() => {
                   setDeferredCoverImageFile(null);
                   setFormData({ ...formData, coverImageUrl: "" });

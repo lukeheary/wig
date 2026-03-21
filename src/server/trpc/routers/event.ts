@@ -26,6 +26,7 @@ import {
   desc,
   eq,
   gte,
+  isNull,
   ilike,
   inArray,
   lte,
@@ -570,6 +571,58 @@ export const eventRouter = router({
       };
     }),
 
+  setEventCoverImage: protectedProcedure
+    .input(
+      z.object({
+        eventId: z.string().uuid(),
+        coverImageUrl: z.string().url().or(z.literal("")),
+      })
+    )
+    .mutation(async ({ ctx, input }) => {
+      const event = await ctx.db.query.events.findFirst({
+        where: eq(events.id, input.eventId),
+      });
+
+      if (!event) {
+        throw new TRPCError({
+          code: "NOT_FOUND",
+          message: "Event not found",
+        });
+      }
+
+      const user = await ctx.db.query.users.findFirst({
+        where: eq(users.id, ctx.auth.userId),
+      });
+
+      const isAdmin = user?.role === "admin";
+      const isCreator = event.createdByUserId === ctx.auth.userId;
+
+      if (!isAdmin && !isCreator) {
+        throw new TRPCError({
+          code: "FORBIDDEN",
+          message: "You do not have permission to edit this event",
+        });
+      }
+
+      const [updatedEvent] = await ctx.db
+        .update(events)
+        .set({
+          coverImageUrl: input.coverImageUrl === "" ? null : input.coverImageUrl,
+          updatedAt: new Date(),
+        })
+        .where(eq(events.id, input.eventId))
+        .returning({ id: events.id, coverImageUrl: events.coverImageUrl });
+
+      if (!updatedEvent) {
+        throw new TRPCError({
+          code: "INTERNAL_SERVER_ERROR",
+          message: "Failed to update event cover image",
+        });
+      }
+
+      return updatedEvent;
+    }),
+
   getEventSeriesById: protectedProcedure
     .input(z.object({ seriesId: z.string().uuid() }))
     .query(async ({ ctx, input }) => {
@@ -846,6 +899,69 @@ export const eventRouter = router({
         createdEvents: generated.createdEvents,
         firstEventId: nextEvent?.id ?? generated.firstCreatedEventId,
       };
+    }),
+
+  setEventSeriesCoverImage: protectedProcedure
+    .input(
+      z.object({
+        seriesId: z.string().uuid(),
+        coverImageUrl: z.string().url().or(z.literal("")),
+      })
+    )
+    .mutation(async ({ ctx, input }) => {
+      const existingSeries = await ctx.db.query.eventSeries.findFirst({
+        where: eq(eventSeries.id, input.seriesId),
+      });
+
+      if (!existingSeries) {
+        throw new TRPCError({
+          code: "NOT_FOUND",
+          message: "Recurring event series not found",
+        });
+      }
+
+      await assertCanManageSeries(ctx, existingSeries);
+
+      const nextCoverImageUrl =
+        input.coverImageUrl === "" ? null : input.coverImageUrl;
+      const inheritedImageCondition =
+        existingSeries.coverImageUrl === null
+          ? isNull(events.coverImageUrl)
+          : or(
+              isNull(events.coverImageUrl),
+              eq(events.coverImageUrl, existingSeries.coverImageUrl)
+            );
+
+      const [updatedSeries] = await ctx.db
+        .update(eventSeries)
+        .set({
+          coverImageUrl: nextCoverImageUrl,
+          updatedAt: new Date(),
+        })
+        .where(eq(eventSeries.id, input.seriesId))
+        .returning({ id: eventSeries.id, coverImageUrl: eventSeries.coverImageUrl });
+
+      if (!updatedSeries) {
+        throw new TRPCError({
+          code: "INTERNAL_SERVER_ERROR",
+          message: "Failed to update recurring event series cover image",
+        });
+      }
+
+      await ctx.db
+        .update(events)
+        .set({
+          coverImageUrl: nextCoverImageUrl,
+          updatedAt: new Date(),
+        })
+        .where(
+          and(
+            eq(events.seriesId, input.seriesId),
+            inheritedImageCondition
+          )
+        );
+
+      return updatedSeries;
     }),
 
   deleteEventSeries: protectedProcedure
