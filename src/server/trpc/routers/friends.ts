@@ -468,7 +468,7 @@ export const friendsRouter = router({
         friendIds.length > 0
           ? await ctx.db.query.userActivity.findMany({
               where: inArray(userActivity.actorUserId, friendIds),
-              orderBy: [desc(userActivity.createdAt)],
+              orderBy: [desc(userActivity.updatedAt), desc(userActivity.createdAt)],
               limit: feedWindow,
               with: {
                 actor: true,
@@ -625,7 +625,8 @@ export const friendsRouter = router({
       return [...friendFeed, ...normalizedEventUpdates]
         .sort(
           (a, b) =>
-            new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime()
+            new Date((b.updatedAt ?? b.createdAt) as Date | string).getTime() -
+            new Date((a.updatedAt ?? a.createdAt) as Date | string).getTime()
         )
         .slice(input.offset, input.offset + input.limit);
     }),

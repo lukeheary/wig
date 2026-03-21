@@ -36,7 +36,7 @@ import { uploadImageFromUrl, deleteFromS3, BUCKET_NAME } from "@/lib/s3";
 import { TRPCError } from "@trpc/server";
 import {
   logActivity,
-  updateLatestActivityMetadata,
+  upsertRsvpActivity,
 } from "../../utils/activity-logger";
 import { logEventActivity } from "../../utils/event-activity-logger";
 import {
@@ -1746,46 +1746,20 @@ export const eventRouter = router({
           status: input.status,
           includePartner: shouldMirrorPartnerRsvp,
         };
-        const isSameStatusUpdate = existingUserRsvp?.status === input.status;
-
-        if (isSameStatusUpdate) {
-          void (async () => {
-            const updatedExistingActivity = await updateLatestActivityMetadata({
-              actorUserId: ctx.auth.userId,
-              type: activityType,
-              entityType: "event",
-              entityId: input.eventId,
-              metadata: activityMetadata,
-            });
-
-            if (!updatedExistingActivity) {
-              await logActivity({
-                actorUserId: ctx.auth.userId,
-                type: activityType,
-                entityType: "event",
-                entityId: input.eventId,
-                metadata: activityMetadata,
-              });
-            }
-          })();
-        } else {
-          void logActivity({
-            actorUserId: ctx.auth.userId,
-            type: activityType,
-            entityType: "event",
-            entityId: input.eventId,
-            metadata: activityMetadata,
-          });
-        }
+        void upsertRsvpActivity({
+          actorUserId: ctx.auth.userId,
+          entityId: input.eventId,
+          type: activityType,
+          metadata: activityMetadata,
+        });
       } else if (
         input.status === "not_going" &&
         existingUserRsvp?.status === "going"
       ) {
-        void logActivity({
+        void upsertRsvpActivity({
           actorUserId: ctx.auth.userId,
-          type: "rsvp_not_going",
-          entityType: "event",
           entityId: input.eventId,
+          type: "rsvp_not_going",
           metadata: {
             includePartner: Boolean(
               existingMirroredPartnerRsvp &&

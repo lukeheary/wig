@@ -281,6 +281,13 @@
       "when": 1774000000000,
       "tag": "0039_add_user_surface_state",
       "breakpoints": true
+    },
+    {
+      "idx": 40,
+      "version": "7",
+      "when": 1774100000000,
+      "tag": "0040_dedupe_rsvp_activity_and_add_updated_at",
+      "breakpoints": true
     }
   ]
 }

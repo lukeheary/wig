@@ -812,7 +812,7 @@ export const userFriendsRelations = relations(userFriends, ({ one }) => ({
 }));
 
 // ============================================================================
-// ACTIVITY TABLE (Append-only)
+// ACTIVITY TABLE (Feed projection)
 // ============================================================================
 export const userActivity = pgTable(
   "user_activity",
@@ -826,11 +826,16 @@ export const userActivity = pgTable(
     entityId: uuid("entity_id").notNull(),
     metadata: jsonb("metadata"),
     createdAt: timestamp("created_at").defaultNow().notNull(),
+    updatedAt: timestamp("updated_at").defaultNow().notNull(),
   },
   (table) => ({
     actorCreatedAtIdx: index("activity_actor_created_at_idx").on(
       table.actorUserId,
       table.createdAt
+    ),
+    actorUpdatedAtIdx: index("activity_actor_updated_at_idx").on(
+      table.actorUserId,
+      table.updatedAt
     ),
   })
 );

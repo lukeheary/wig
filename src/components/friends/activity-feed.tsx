@@ -38,6 +38,10 @@ interface ActivityItemProps {
   activity: any;
 }
 
+function getActivityTimestamp(activity: any) {
+  return new Date(activity.updatedAt ?? activity.createdAt);
+}
+
 const EVENT_UPDATE_TYPES = new Set([
   "cancelled",
   "postponed",
@@ -51,7 +55,7 @@ const HIDDEN_ACTIVITY_TYPES = new Set(["created", "created_event"]);
 export function ActivityItem({ activity }: ActivityItemProps) {
   const pathname = usePathname();
   const searchParams = useSearchParams();
-  const { actor, type, entityId, metadata, createdAt, event } = activity;
+  const { actor, type, entityId, metadata, event } = activity;
   const place = activity.place;
   const isEventStatusUpdate = EVENT_UPDATE_TYPES.has(type);
   const returnTo = buildReturnTo(pathname, searchParams);
@@ -465,7 +469,9 @@ export function ActivityItem({ activity }: ActivityItemProps) {
           )}
         </p>
         <p className="text-xs text-muted-foreground/60 md:text-sm">
-          {formatDistanceToNow(new Date(createdAt), { addSuffix: true })}
+          {formatDistanceToNow(getActivityTimestamp(activity), {
+            addSuffix: true,
+          })}
         </p>
       </div>
     </div>
@@ -547,11 +553,11 @@ function selectHomePreviewActivities(
   const recentCutoff = subDays(now, staleAfterDays).getTime();
   const activities = [...(filterActivities(rawActivities, { hidePastEvents }) ?? [])].sort(
     (a: any, b: any) =>
-      new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime()
+      getActivityTimestamp(b).getTime() - getActivityTimestamp(a).getTime()
   );
 
   const recentActivities = activities.filter(
-    (activity) => new Date(activity.createdAt).getTime() >= recentCutoff
+    (activity) => getActivityTimestamp(activity).getTime() >= recentCutoff
   );
 
   const activeMissedWindowExpiresAt = missedWindowExpiresAt?.getTime() ?? null;
@@ -564,18 +570,18 @@ function selectHomePreviewActivities(
     : null;
 
   const missedActivities = hasActiveMissedWindow
-    ? activities.filter((activity) => {
-        const createdAt = new Date(activity.createdAt).getTime();
+      ? activities.filter((activity) => {
+        const createdAt = getActivityTimestamp(activity).getTime();
         return (
           activeMissedWindowStartAt != null &&
           createdAt > activeMissedWindowStartAt &&
           createdAt < recentCutoff
         );
       })
-    : lastVisitedAt == null
+      : lastVisitedAt == null
       ? []
       : activities.filter((activity) => {
-          const createdAt = new Date(activity.createdAt).getTime();
+          const createdAt = getActivityTimestamp(activity).getTime();
           return createdAt > lastVisitedAt.getTime() && createdAt < recentCutoff;
         });
 
@@ -615,12 +621,12 @@ export function ActivityFeedList({
   if (groupByRecency) {
     const sortedActivities = [...activities].sort(
       (a: any, b: any) =>
-        new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime()
+        getActivityTimestamp(b).getTime() - getActivityTimestamp(a).getTime()
     );
 
     const groups = sortedActivities.reduce(
       (acc: Array<{ label: string; items: any[] }>, activity: any) => {
-        const label = getRecencyLabel(new Date(activity.createdAt));
+        const label = getRecencyLabel(getActivityTimestamp(activity));
         const lastGroup = acc[acc.length - 1];
         if (!lastGroup || lastGroup.label !== label) {
           acc.push({ label, items: [activity] });
