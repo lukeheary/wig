@@ -392,7 +392,7 @@ export default function EventPage() {
   return (
     <div className="relative isolate -mt-14 min-h-screen pt-14 md:-mt-16 md:pt-16">
       <div className="absolute inset-0 -z-20 bg-background" />
-      <div className="pointer-events-none absolute inset-x-0 top-0 -z-10 h-[42rem] overflow-hidden">
+      <div className="pointer-events-none absolute inset-x-0 top-0 -z-10 h-[max(42rem,100dvh)] overflow-hidden">
         {eventImageUrl ? (
           <>
             <div className="absolute inset-x-0 top-0 h-[30rem] overflow-hidden opacity-45 blur-3xl md:inset-x-[8%] md:top-8 md:h-[28rem] md:rounded-[3rem]">
