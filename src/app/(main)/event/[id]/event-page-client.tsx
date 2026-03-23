@@ -393,7 +393,7 @@ export default function EventPage() {
     <div className="relative isolate -mt-14 min-h-screen pt-14 md:-mt-16 md:pt-16">
       <div className="absolute inset-0 -z-20 bg-background" />
       <div
-        className="pointer-events-none absolute inset-x-0 top-0 -z-10 h-[max(42rem,100dvh)]"
+        className="pointer-events-none absolute inset-x-0 top-0 -z-10 h-[max(42rem,100vh)] supports-[height:100lvh]:h-[max(42rem,100lvh)] md:h-[42rem]"
         style={{
           WebkitMaskImage: "linear-gradient(to bottom, black 50%, transparent 85%)",
           maskImage: "linear-gradient(to bottom, black 50%, transparent 85%)",
@@ -401,7 +401,7 @@ export default function EventPage() {
       >
         {eventImageUrl ? (
           <>
-            <div className="absolute inset-x-0 top-0 h-[30rem] overflow-hidden opacity-30 blur-3xl md:inset-x-[8%] md:top-8 md:h-[28rem] md:rounded-[3rem]">
+            <div className="absolute inset-x-0 top-0 h-[30rem] overflow-hidden opacity-20 blur-3xl md:inset-x-[8%] md:top-8 md:h-[28rem] md:rounded-[3rem]">
               <Image
                 src={eventImageUrl}
                 alt=""
@@ -414,8 +414,8 @@ export default function EventPage() {
           </>
         ) : (
           <>
-            <div className="absolute left-[-8rem] top-10 h-80 w-80 rounded-full bg-neon-pink/14 blur-3xl" />
-            <div className="absolute right-[-6rem] top-16 h-96 w-96 rounded-full bg-neon-teal/14 blur-3xl" />
+            <div className="absolute left-[-8rem] top-10 h-80 w-80 rounded-full bg-neon-pink/10 blur-3xl" />
+            <div className="absolute right-[-6rem] top-16 h-96 w-96 rounded-full bg-neon-teal/10 blur-3xl" />
           </>
         )}
         <div
