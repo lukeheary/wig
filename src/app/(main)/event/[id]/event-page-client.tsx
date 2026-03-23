@@ -392,10 +392,16 @@ export default function EventPage() {
   return (
     <div className="relative isolate -mt-14 min-h-screen pt-14 md:-mt-16 md:pt-16">
       <div className="absolute inset-0 -z-20 bg-background" />
-      <div className="pointer-events-none absolute inset-x-0 top-0 -z-10 h-[max(42rem,100dvh)] overflow-hidden">
+      <div
+        className="pointer-events-none absolute inset-x-0 top-0 -z-10 h-[max(42rem,100dvh)]"
+        style={{
+          WebkitMaskImage: "linear-gradient(to bottom, black 50%, transparent 85%)",
+          maskImage: "linear-gradient(to bottom, black 50%, transparent 85%)",
+        }}
+      >
         {eventImageUrl ? (
           <>
-            <div className="absolute inset-x-0 top-0 h-[30rem] overflow-hidden opacity-45 blur-3xl md:inset-x-[8%] md:top-8 md:h-[28rem] md:rounded-[3rem]">
+            <div className="absolute inset-x-0 top-0 h-[30rem] overflow-hidden opacity-30 blur-3xl md:inset-x-[8%] md:top-8 md:h-[28rem] md:rounded-[3rem]">
               <Image
                 src={eventImageUrl}
                 alt=""
@@ -405,7 +411,6 @@ export default function EventPage() {
                 priority
               />
             </div>
-            {/* <div className="absolute inset-0 bg-[radial-gradient(circle_at_top_left,rgba(255,75,145,0.18),transparent_38%),radial-gradient(circle_at_top_right,rgba(0,229,214,0.2),transparent_34%)]" /> */}
           </>
         ) : (
           <>
@@ -413,7 +418,6 @@ export default function EventPage() {
             <div className="absolute right-[-6rem] top-16 h-96 w-96 rounded-full bg-neon-teal/14 blur-3xl" />
           </>
         )}
-        <div className="absolute inset-x-0 top-0 h-full bg-gradient-to-b from-background/10 via-background/35 to-background" />
         <div
           className="absolute inset-x-0 top-0 md:hidden"
           style={{ height: "160px", background: "linear-gradient(to bottom, hsl(var(--background)) 56px, transparent 160px)" }}
