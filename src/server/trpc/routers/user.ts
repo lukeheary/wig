@@ -237,7 +237,7 @@ export const userRouter = router({
       z.object({
         surface: z.enum(USER_SURFACE_VALUES),
         startMissedWindowAt: z.date().nullable().optional(),
-        windowDays: z.number().int().min(1).max(14).default(2),
+        windowDays: z.number().int().min(1).max(14).default(1),
       })
     )
     .mutation(async ({ ctx, input }) => {
