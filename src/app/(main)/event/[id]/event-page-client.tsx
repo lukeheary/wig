@@ -401,16 +401,15 @@ export default function EventPage() {
       >
         {eventImageUrl ? (
           <>
-            <div className="absolute inset-x-0 top-0 h-[30rem] overflow-hidden opacity-20 blur-3xl md:inset-x-[8%] md:top-8 md:h-[28rem] md:rounded-[3rem]">
-              <Image
-                src={eventImageUrl}
-                alt=""
-                fill
-                className="scale-110 object-cover"
-                sizes="100vw"
-                priority
-              />
-            </div>
+            <div
+              className="absolute inset-x-0 top-0 h-[30rem] overflow-hidden opacity-20 blur-3xl md:inset-x-[8%] md:top-8 md:h-[28rem] md:rounded-[3rem]"
+              style={{
+                backgroundImage: `url(${eventImageUrl})`,
+                backgroundPosition: "center",
+                backgroundRepeat: "no-repeat",
+                backgroundSize: "115%",
+              }}
+            />
           </>
         ) : (
           <>
