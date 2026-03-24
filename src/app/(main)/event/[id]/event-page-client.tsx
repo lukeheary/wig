@@ -392,17 +392,12 @@ export default function EventPage() {
     <div className="relative isolate -mt-14 min-h-screen pt-14 md:-mt-16 md:pt-16">
       <div className="absolute inset-0 -z-20 bg-background" />
       <div
-        className="pointer-events-none absolute inset-x-0 top-0 -z-10 h-[max(42rem,100vh)] supports-[height:100lvh]:h-[max(42rem,100lvh)] md:h-[42rem]"
-        style={{
-          WebkitMaskImage:
-            "linear-gradient(to bottom, black 50%, transparent 85%)",
-          maskImage: "linear-gradient(to bottom, black 50%, transparent 85%)",
-        }}
+        className="pointer-events-none absolute inset-x-0 top-0 -z-10 h-[max(42rem,100vh)] overflow-hidden supports-[height:100lvh]:h-[max(42rem,100lvh)] md:h-[42rem]"
       >
         {eventImageUrl ? (
           <>
             <div
-              className="absolute inset-x-0 top-0 h-[30rem] overflow-hidden opacity-20 blur-3xl md:inset-x-[8%] md:top-8 md:h-[28rem] md:rounded-[3rem]"
+              className="absolute inset-x-0 top-0 h-[30rem] overflow-hidden md:opacity-30 opacity-60 blur-3xl md:inset-x-[8%] md:top-8 md:h-[28rem] md:rounded-[3rem]"
               style={{
                 backgroundImage: `url(${eventImageUrl})`,
                 backgroundPosition: "center",
@@ -417,6 +412,13 @@ export default function EventPage() {
             <div className="absolute right-[-6rem] top-16 h-96 w-96 rounded-full bg-neon-teal/10 blur-3xl" />
           </>
         )}
+        <div
+          className="absolute inset-x-0 top-0 h-full"
+          style={{
+            background:
+              "linear-gradient(to bottom, transparent 0%, transparent 52%, hsl(var(--background) / 0.4) 76%, hsl(var(--background)) 100%)",
+          }}
+        />
         <div
           className="absolute inset-x-0 top-0 md:hidden"
           style={{
