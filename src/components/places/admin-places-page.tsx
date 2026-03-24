@@ -30,6 +30,8 @@ export function AdminPlacesPage({ placeType }: AdminPlacesPageProps) {
 
   const [viewMode, setViewMode] = useState<ViewMode>("list");
   const [searchQuery, setSearchQuery] = useState("");
+  const [deferredLogoFile, setDeferredLogoFile] = useState<File | null>(null);
+  const [isUploadingLogo, setIsUploadingLogo] = useState(false);
 
   useEffect(() => {
     if (didInitFromParams.current) return;
@@ -50,10 +52,32 @@ export function AdminPlacesPage({ placeType }: AdminPlacesPageProps) {
   });
 
   const createPlaceMutation = trpc.admin.createPlace.useMutation();
-  const upsertPlaceScraperMutation = trpc.admin.upsertPlaceScraper.useMutation();
+  const updatePlaceMutation = trpc.place.updatePlace.useMutation();
+  const upsertPlaceScraperMutation =
+    trpc.admin.upsertPlaceScraper.useMutation();
+
+  const uploadPlaceLogo = async (placeId: string, file: File) => {
+    const uploadFormData = new FormData();
+    uploadFormData.append("file", file);
+    uploadFormData.append("folder", `places/${placeId}`);
+    uploadFormData.append("filename", "logo-image.png");
+
+    const response = await fetch("/api/upload", {
+      method: "POST",
+      body: uploadFormData,
+    });
+
+    const data = await response.json();
+    if (!response.ok) {
+      throw new Error(data.error || "Failed to upload logo");
+    }
+
+    return data.url as string;
+  };
 
   const handleBack = () => {
     setViewMode("list");
+    setDeferredLogoFile(null);
   };
 
   const handleCreateSubmit = async (formData: PlaceFormData) => {
@@ -67,9 +91,30 @@ export function AdminPlacesPage({ placeType }: AdminPlacesPageProps) {
 
       const createdPlace = await createPlaceMutation.mutateAsync({
         ...placeData,
+        logoImageUrl: "",
         latitude: placeData.latitude ?? undefined,
         longitude: placeData.longitude ?? undefined,
       });
+
+      let logoWarning: string | null = null;
+      if (deferredLogoFile) {
+        setIsUploadingLogo(true);
+        try {
+          const logoImageUrl = await uploadPlaceLogo(
+            createdPlace.id,
+            deferredLogoFile
+          );
+          await updatePlaceMutation.mutateAsync({
+            placeId: createdPlace.id,
+            logoImageUrl,
+          });
+        } catch (error) {
+          logoWarning =
+            error instanceof Error ? error.message : "Failed to upload logo";
+        } finally {
+          setIsUploadingLogo(false);
+        }
+      }
 
       let scraperWarning: string | null = null;
       try {
@@ -85,17 +130,25 @@ export function AdminPlacesPage({ placeType }: AdminPlacesPageProps) {
       }
 
       const placeLabel = placeType === "venue" ? "Venue" : "Organizer";
+      const warnings = [
+        logoWarning && `logo upload failed: ${logoWarning}`,
+        scraperWarning && `scraper setup failed: ${scraperWarning}`,
+      ].filter(Boolean);
+
       toast({
         title: "Success",
-        description: scraperWarning
-          ? `${placeLabel} created, but scraper setup failed: ${scraperWarning}`
-          : `${placeLabel} created successfully`,
+        description:
+          warnings.length > 0
+            ? `${placeLabel} created, but ${warnings.join("; ")}`
+            : `${placeLabel} created successfully`,
       });
 
+      setDeferredLogoFile(null);
       setViewMode("list");
       await utils.admin.listAllPlaces.invalidate({ type: placeType });
       await utils.admin.listScrapers.invalidate();
     } catch (error) {
+      setIsUploadingLogo(false);
       toast({
         title: "Error",
         description: error instanceof Error ? error.message : "Create failed",
@@ -111,7 +164,9 @@ export function AdminPlacesPage({ placeType }: AdminPlacesPageProps) {
         (place.city &&
           place.city.toLowerCase().includes(searchQuery.toLowerCase()))
     )
-    .sort((a, b) => a.name.localeCompare(b.name, undefined, { sensitivity: "base" }));
+    .sort((a, b) =>
+      a.name.localeCompare(b.name, undefined, { sensitivity: "base" })
+    );
 
   const isVenue = placeType === "venue";
   const title = isVenue ? "Venues" : "Organizers";
@@ -121,17 +176,24 @@ export function AdminPlacesPage({ placeType }: AdminPlacesPageProps) {
   if (viewMode === "create") {
     return (
       <div className="space-y-6">
-        <BackButtonHeader onBack={handleBack} title={`Create ${isVenue ? "Venue" : "Organizer"}`} />
+        <BackButtonHeader
+          onBack={handleBack}
+          title={`Create ${isVenue ? "Venue" : "Organizer"}`}
+        />
 
         <PlaceEditForm
           initialData={{ type: placeType }}
           placeType={placeType}
           mode="create"
+          onDeferredLogoFileChange={setDeferredLogoFile}
           showScraperFields
           onSubmit={handleCreateSubmit}
           onCancel={handleBack}
           isSubmitting={
-            createPlaceMutation.isPending || upsertPlaceScraperMutation.isPending
+            createPlaceMutation.isPending ||
+            updatePlaceMutation.isPending ||
+            upsertPlaceScraperMutation.isPending ||
+            isUploadingLogo
           }
         />
       </div>
@@ -142,10 +204,17 @@ export function AdminPlacesPage({ placeType }: AdminPlacesPageProps) {
     <div className="space-y-6">
       <div className="flex items-center justify-between gap-3">
         <BackButtonHeader backHref="/admin" title={title} className="min-w-0" />
-        <Button onClick={() => setViewMode("create")}>
+        <Button
+          onClick={() => {
+            setDeferredLogoFile(null);
+            setViewMode("create");
+          }}
+        >
           <Plus className="mr-2 h-4 w-4" />
           <span className="sm:hidden">Add</span>
-          <span className="hidden sm:inline">Add {isVenue ? "Venue" : "Organizer"}</span>
+          <span className="hidden sm:inline">
+            Add {isVenue ? "Venue" : "Organizer"}
+          </span>
         </Button>
       </div>
 

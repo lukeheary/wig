@@ -52,6 +52,7 @@ interface PlaceEditFormProps {
   placeType: PlaceType;
   placeId?: string; // Required for edit mode to upload to correct S3 path
   mode: "create" | "edit";
+  onDeferredLogoFileChange?: (file: File | null) => void;
   onSubmit: (data: PlaceFormData) => void;
   onCancel: () => void;
   isSubmitting: boolean;
@@ -85,6 +86,7 @@ export function PlaceEditForm({
   placeType,
   placeId,
   mode,
+  onDeferredLogoFileChange,
   onSubmit,
   onCancel,
   isSubmitting,
@@ -111,8 +113,7 @@ export function PlaceEditForm({
         categories: initialData?.categories ?? [],
         scraper: initialData?.scraper ?? null,
         scraperSearchString: initialData?.scraperSearchString ?? "",
-        scraperClassificationName:
-          initialData?.scraperClassificationName ?? "",
+        scraperClassificationName: initialData?.scraperClassificationName ?? "",
       }),
     [initialData, placeType]
   );
@@ -124,7 +125,9 @@ export function PlaceEditForm({
   });
 
   const [placeSearch, setPlaceSearch] = useState(initialData?.name || "");
-  const [googlePlaceName, setGooglePlaceName] = useState(initialData?.name || "");
+  const [googlePlaceName, setGooglePlaceName] = useState(
+    initialData?.name || ""
+  );
   const [nameOverride, setNameOverride] = useState("");
   const [isSlugSynced, setIsSlugSynced] = useState(
     (initialData?.slug || "") === (initialData?.instagram || "")
@@ -293,6 +296,7 @@ export function PlaceEditForm({
 
   const isVenue = placeType === "venue";
   const typeLabel = isVenue ? "Venue" : "Organizer";
+  const shouldDeferLogoUpload = mode === "create" || !placeId;
 
   const isFormValid =
     formData.slug &&
@@ -319,7 +323,9 @@ export function PlaceEditForm({
             Start typing the {typeLabel.toLowerCase()} name to auto-fill details
           </p>
           <div className="mt-3">
-            <Label htmlFor="place-name-override">Name Override (Optional)</Label>
+            <Label htmlFor="place-name-override">
+              Name Override (Optional)
+            </Label>
             <Input
               id="place-name-override"
               placeholder="House of Blues"
@@ -373,6 +379,8 @@ export function PlaceEditForm({
           folder={placeId ? `places/${placeId}` : "places"}
           fileName="logo-image.png"
           currentImageUrl={formData.logoImageUrl}
+          deferUpload={shouldDeferLogoUpload}
+          onDeferredFileChange={onDeferredLogoFileChange}
           onUploadComplete={(url) =>
             setFormData((prev) => ({ ...prev, logoImageUrl: url }))
           }
