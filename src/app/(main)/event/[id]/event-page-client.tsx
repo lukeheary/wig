@@ -391,28 +391,6 @@ export default function EventPage() {
   return (
     <div className="relative isolate -mt-14 min-h-screen pt-14 md:-mt-16 md:pt-16">
       <div className="absolute inset-0 -z-20 bg-background" />
-      <div className="pointer-events-none absolute inset-x-0 top-0 -z-10 h-[max(42rem,100vh)] overflow-hidden supports-[height:100lvh]:h-[max(42rem,100lvh)] md:hidden">
-        {eventImageUrl && (
-          <div
-            className="absolute -inset-6"
-            style={{
-              backgroundImage: `linear-gradient(to bottom, rgba(20, 20, 22, 0) 0%, rgba(20, 20, 22, 0.08) 40%, rgba(20, 20, 22, 0.7) 50%, rgba(20, 20, 22, 1) 100%), url(${eventImageUrl})`,
-              backgroundPosition: "center top",
-              backgroundRepeat: "no-repeat",
-              backgroundSize: "180%",
-              opacity: 0.24,
-              filter: "blur(12px)",
-            }}
-          />)}
-        <div
-          className="absolute inset-x-0 top-0"
-          style={{
-            height: "160px",
-            background:
-              "linear-gradient(to bottom, hsl(var(--background)) 56px, transparent 160px)",
-          }}
-        />
-      </div>
       <div className="pointer-events-none absolute inset-x-0 top-0 -z-10 hidden h-[42rem] overflow-hidden md:block">
         {eventImageUrl ? (
           <div
