@@ -32,7 +32,10 @@ import {
   isSameWeek,
 } from "date-fns";
 import { trpc } from "@/lib/trpc";
-import { EventCardGrid } from "@/components/events/event-card-grid";
+import {
+  HOME_MOBILE_EVENT_CARD_WIDTH,
+  HomeMobileEventRail,
+} from "@/components/events/home-mobile-event-rail";
 import {
   Loader2,
   CalendarIcon,
@@ -95,23 +98,47 @@ function StickyDateHeader({
 
 function EventSkeletonGrid({ count = 8 }: { count?: number }) {
   return (
-    <div className="grid grid-cols-1 gap-4 md:grid-cols-3 lg:grid-cols-4">
-      {Array.from({ length: count }).map((_, index) => (
-        <div
-          key={`event-skeleton-${index}`}
-          className="rounded-2xl bg-card p-2 shadow-sm"
-        >
-          <div className="flex animate-pulse md:block">
-            <div className="h-24 w-24 shrink-0 rounded-2xl bg-muted md:aspect-square md:h-auto md:w-full lg:max-w-[274px]" />
-            <div className="flex-1 space-y-2 py-2 pl-3 pr-1 md:px-3 md:py-3">
-              <div className="h-4 w-3/4 rounded-full bg-muted" />
-              <div className="h-3 w-1/2 rounded-full bg-muted" />
-              <div className="h-3 w-2/3 rounded-full bg-muted" />
+    <>
+      <div className="-mx-4 overflow-x-auto [scrollbar-width:none] md:hidden [&::-webkit-scrollbar]:hidden">
+        <div className="flex items-stretch gap-3 px-4 pb-1 pr-6">
+          {Array.from({ length: Math.max(6, count) }).map((_, index) => (
+            <div
+              key={`event-mobile-skeleton-${index}`}
+              className="shrink-0 self-stretch rounded-2xl bg-card p-2 shadow-sm"
+              style={{ width: `${HOME_MOBILE_EVENT_CARD_WIDTH}px` }}
+            >
+              <div className="animate-pulse">
+                <div className="aspect-[0.98] rounded-2xl bg-muted" />
+                <div className="space-y-2 px-1 pb-1 pt-3">
+                  <div className="h-4 w-4/5 rounded-full bg-muted" />
+                  <div className="h-3 w-3/5 rounded-full bg-muted" />
+                  <div className="h-3 w-2/3 rounded-full bg-muted" />
+                  <div className="h-6 w-16 rounded-full bg-muted" />
+                </div>
+              </div>
+            </div>
+          ))}
+        </div>
+      </div>
+
+      <div className="hidden grid-cols-1 gap-4 md:grid md:grid-cols-3 lg:grid-cols-4">
+        {Array.from({ length: count }).map((_, index) => (
+          <div
+            key={`event-skeleton-${index}`}
+            className="rounded-2xl bg-card p-2 shadow-sm"
+          >
+            <div className="flex animate-pulse md:block">
+              <div className="h-24 w-24 shrink-0 rounded-2xl bg-muted md:aspect-square md:h-auto md:w-full lg:max-w-[274px]" />
+              <div className="flex-1 space-y-2 py-2 pl-3 pr-1 md:px-3 md:py-3">
+                <div className="h-4 w-3/4 rounded-full bg-muted" />
+                <div className="h-3 w-1/2 rounded-full bg-muted" />
+                <div className="h-3 w-2/3 rounded-full bg-muted" />
+              </div>
             </div>
           </div>
-        </div>
-      ))}
-    </div>
+        ))}
+      </div>
+    </>
   );
 }
 
@@ -958,11 +985,7 @@ function HomePageContent() {
                 title="No upcoming events to show"
               />
             ) : (
-              <EventCardGrid
-                events={filteredUpcomingSearchEvents}
-                columns={{ mobile: 1, tablet: 3, desktop: 4 }}
-                gap="md"
-              />
+              <HomeMobileEventRail events={filteredUpcomingSearchEvents} />
             )}
           </div>
         )}
@@ -977,11 +1000,7 @@ function HomePageContent() {
                 description="Try adjusting your search or filters"
               />
             ) : (
-              <EventCardGrid
-                events={filteredEvents}
-                columns={{ mobile: 1, tablet: 3, desktop: 4 }}
-                gap="md"
-              />
+              <HomeMobileEventRail events={filteredEvents} />
             )}
           </div>
         )}
@@ -1030,11 +1049,7 @@ function HomePageContent() {
             {filteredEvents.length === 0 ? (
               <EventsPlaceholder />
             ) : (
-              <EventCardGrid
-                events={filteredEvents}
-                columns={{ mobile: 1, tablet: 3, desktop: 4 }}
-                gap="md"
-              />
+              <HomeMobileEventRail events={filteredEvents} />
             )}
           </div>
         </div>
@@ -1078,11 +1093,7 @@ function HomePageContent() {
                     {dayEvents.length === 0 ? (
                       <EventsPlaceholder message="No events scheduled" />
                     ) : (
-                      <EventCardGrid
-                        events={dayEvents}
-                        columns={{ mobile: 1, tablet: 3, desktop: 4 }}
-                        gap="md"
-                      />
+                      <HomeMobileEventRail events={dayEvents} />
                     )}
                   </div>
                 </div>
