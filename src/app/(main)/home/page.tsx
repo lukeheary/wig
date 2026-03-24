@@ -96,12 +96,44 @@ function StickyDateHeader({
   );
 }
 
-function EventSkeletonGrid({ count = 8 }: { count?: number }) {
+function getWeekSectionMeta(date: Date, isCurrentWeek: boolean) {
+  const now = new Date();
+  const isEarlyMorning = now.getHours() < 6;
+  const yesterday = startOfDay(subDays(now, 1));
+  const isToday = isSameDay(date, now);
+  const isLastNightSection =
+    isCurrentWeek && isEarlyMorning && isSameDay(date, yesterday);
+  const isEvening = now.getHours() >= 17;
+
+  const dateHeader = isLastNightSection
+    ? "Last Night's Events"
+    : isToday
+      ? isEvening
+        ? "Tonight's Events"
+        : "Today's Events"
+      : format(date, "EEE, MMM d");
+
+  return {
+    dateHeader,
+    isToday,
+    isLastNightSection,
+  };
+}
+
+function EventSkeletonGrid({
+  count = 8,
+  mobileCount,
+}: {
+  count?: number;
+  mobileCount?: number;
+}) {
+  const renderedMobileCount = mobileCount ?? Math.max(6, count);
+
   return (
     <>
       <div className="-mx-4 overflow-x-auto [scrollbar-width:none] md:hidden [&::-webkit-scrollbar]:hidden">
         <div className="flex items-stretch gap-3 px-4 pb-1 pr-6">
-          {Array.from({ length: Math.max(6, count) }).map((_, index) => (
+          {Array.from({ length: renderedMobileCount }).map((_, index) => (
             <div
               key={`event-mobile-skeleton-${index}`}
               className="shrink-0 self-stretch rounded-2xl bg-card p-2 shadow-sm"
@@ -547,6 +579,11 @@ function HomePageContent() {
     viewMode === "week" &&
     !isCurrentWeek &&
     !isSearchView &&
+    !isFilteredFeedView;
+  const shouldShowWeekSectionSkeletons =
+    !isSearchView &&
+    isDefaultCalendarView &&
+    viewMode === "week" &&
     !isFilteredFeedView;
   const skeletonDateHeader = useMemo(() => {
     if (isSearchView) return null;
@@ -1007,19 +1044,41 @@ function HomePageContent() {
       </div>
 
       {/* Initial / Transition Loading State */}
-      {showSkeletons && (
-        <div>
-          {skeletonDateHeader && (
-            <StickyDateHeader
-              dateHeader={skeletonDateHeader}
-              isToday={isCurrentWeek}
-            />
-          )}
-          <div className="container mx-auto px-4">
-            <EventSkeletonGrid count={8} />
+      {showSkeletons &&
+        (shouldShowWeekSectionSkeletons ? (
+          <div className="space-y-4">
+            {daysToDisplay.map((date, index) => {
+              const { dateHeader, isToday } = getWeekSectionMeta(
+                date,
+                isCurrentWeek
+              );
+
+              return (
+                <div key={`skeleton-${format(date, "yyyy-MM-dd")}`}>
+                  <StickyDateHeader dateHeader={dateHeader} isToday={isToday} />
+                  <div className="container mx-auto px-4">
+                    <EventSkeletonGrid
+                      count={Math.min(4 + (index % 2), 5)}
+                      mobileCount={3 + (index % 2)}
+                    />
+                  </div>
+                </div>
+              );
+            })}
           </div>
-        </div>
-      )}
+        ) : (
+          <div>
+            {skeletonDateHeader && (
+              <StickyDateHeader
+                dateHeader={skeletonDateHeader}
+                isToday={isCurrentWeek}
+              />
+            )}
+            <div className="container mx-auto px-4">
+              <EventSkeletonGrid count={8} />
+            </div>
+          </div>
+        ))}
 
       {/* Friend Activity Feed - only show in the default home view */}
       {shouldShowRecentActivity && (
@@ -1065,26 +1124,12 @@ function HomePageContent() {
             {daysToDisplay.map((date) => {
               const dateKey = format(date, "yyyy-MM-dd");
               const dayEvents = eventsByDay[dateKey] || [];
-              const now = new Date();
-              const isEarlyMorning = now.getHours() < 6;
-              const yesterday = startOfDay(subDays(now, 1));
-              const isToday = isSameDay(date, new Date());
-              const isLastNightSection =
-                isCurrentWeek && isEarlyMorning && isSameDay(date, yesterday);
-              const currentHour = new Date().getHours();
-              const isEvening = currentHour >= 17;
+              const { dateHeader, isToday, isLastNightSection } =
+                getWeekSectionMeta(date, isCurrentWeek);
 
               if (isLastNightSection && dayEvents.length === 0) {
                 return null;
               }
-
-              const dateHeader = isLastNightSection
-                ? "Last Night's Events"
-                : isToday
-                  ? isEvening
-                    ? "Tonight's Events"
-                    : "Today's Events"
-                  : format(date, "EEE, MMM d");
 
               return (
                 <div key={dateKey}>
