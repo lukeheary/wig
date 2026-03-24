@@ -8,7 +8,7 @@ import {
   compareAsc,
   compareDesc,
 } from "date-fns";
-import { EventCardGrid } from "@/components/events/event-card-grid";
+import { HomeMobileEventRail } from "@/components/events/home-mobile-event-rail";
 import { EventsPlaceholder } from "@/components/shared/events-placeholder";
 import { StickySectionHeader } from "@/components/ui/sticky-section-header";
 import { type EventCardItem } from "@/components/calendar/event-card";
@@ -105,11 +105,7 @@ export function PlaceUpcomingEvents({
             <span>{group.label}</span>
           </StickySectionHeader>
           <div className="container mx-auto">
-            <EventCardGrid
-              events={group.events}
-              columns={{ mobile: 1, tablet: 3, desktop: 4 }}
-              gap="md"
-            />
+            <HomeMobileEventRail events={group.events} />
           </div>
         </div>
       ))}
