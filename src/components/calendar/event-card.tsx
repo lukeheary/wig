@@ -108,6 +108,12 @@ export function EventCard({ event }: EventCardProps) {
                 </span>
               </div>
             )}
+
+            {socialUsers.length > 0 && (
+              <div className="absolute bottom-2 right-2 hidden md:block">
+                <AvatarStack users={socialUsers} maxDisplay={3} size="lg" />
+              </div>
+            )}
           </div>
 
           {/* Event Information - to the right on mobile, below on desktop */}
@@ -147,7 +153,9 @@ export function EventCard({ event }: EventCardProps) {
         {/* Friends Going - pinned to bottom right of the full card */}
         {socialUsers.length > 0 && (
           <div className="absolute bottom-2 right-2">
-            <AvatarStack users={socialUsers} maxDisplay={3} size="sm" />
+            <div className="md:hidden">
+              <AvatarStack users={socialUsers} maxDisplay={3} size="sm" />
+            </div>
           </div>
         )}
       </Card>

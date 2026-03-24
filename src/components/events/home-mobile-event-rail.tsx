@@ -103,6 +103,12 @@ function HomeMiniEventCard({ event }: { event: EventCardItem }) {
               </span>
             </div>
           )}
+
+          {socialUsers.length > 0 && (
+            <div className="absolute bottom-2 right-2">
+              <AvatarStack users={socialUsers} maxDisplay={3} size="md" />
+            </div>
+          )}
         </div>
 
         <div className="font-space-grotesk flex flex-1 flex-col px-1 pb-1 pt-3">
@@ -118,7 +124,7 @@ function HomeMiniEventCard({ event }: { event: EventCardItem }) {
 
           <div
             className={cn(
-              "pt-1 text-xs font-medium leading-tight text-neon-teal",
+              "pt-1 text-[13px] font-medium leading-tight text-neon-teal",
               hasInactiveStatus && "line-through"
             )}
           >
@@ -128,12 +134,6 @@ function HomeMiniEventCard({ event }: { event: EventCardItem }) {
           <div className="pt-1 text-xs text-primary/70">
             <span className="line-clamp-1">{subtitle}</span>
           </div>
-
-          {socialUsers.length > 0 && (
-            <div className="mt-auto pt-3">
-              <AvatarStack users={socialUsers} maxDisplay={3} size="sm" />
-            </div>
-          )}
         </div>
       </Card>
     </Link>

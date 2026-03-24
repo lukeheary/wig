@@ -52,18 +52,22 @@ function EventPageSkeleton() {
     <div className="relative isolate -mt-14 min-h-screen pt-14 md:-mt-16 md:pt-16">
       <div className="absolute inset-0 -z-20 bg-background" />
       <div className="pointer-events-none absolute inset-x-0 top-0 -z-10 h-[28rem] overflow-hidden">
-        <div className="absolute left-[-8rem] top-10 h-72 w-72 rounded-full bg-neon-pink/12 blur-3xl" />
-        <div className="absolute right-[-5rem] top-16 h-80 w-80 rounded-full bg-neon-teal/12 blur-3xl" />
+        <div className="bg-neon-pink/12 absolute left-[-8rem] top-10 h-72 w-72 rounded-full blur-3xl" />
+        <div className="bg-neon-teal/12 absolute right-[-5rem] top-16 h-80 w-80 rounded-full blur-3xl" />
         <div className="absolute inset-x-0 top-0 h-full bg-gradient-to-b from-transparent via-background/30 to-background" />
         <div
           className="absolute inset-x-0 top-0 md:hidden"
-          style={{ height: "160px", background: "linear-gradient(to bottom, hsl(var(--background)) 56px, transparent 160px)" }}
+          style={{
+            height: "160px",
+            background:
+              "linear-gradient(to bottom, hsl(var(--background)) 56px, transparent 160px)",
+          }}
         />
       </div>
       <div className="container w-full px-4 pb-6 md:pt-4">
         <div className="lg:flex lg:items-start lg:gap-10">
           <div className="lg:w-[360px] lg:flex-none">
-            <div className="relative aspect-square w-full overflow-hidden rounded-2xl border border-white/8 bg-muted/90 shadow-[0_24px_80px_rgba(0,0,0,0.18)] lg:aspect-auto lg:min-h-[360px]">
+            <div className="border-white/8 relative aspect-square w-full overflow-hidden rounded-2xl border bg-muted/90 shadow-[0_24px_80px_rgba(0,0,0,0.18)] lg:aspect-auto lg:min-h-[360px]">
               <div className="h-full w-full animate-pulse bg-muted" />
             </div>
           </div>
@@ -209,11 +213,7 @@ export default function EventPage() {
   const hasSelectableRsvp =
     currentRsvpStatus === "going" || currentRsvpStatus === "interested";
   const savedIncludePartner = useMemo(() => {
-    if (
-      !hasActivePartner ||
-      !hasSelectableRsvp ||
-      !myPartner?.partner?.id
-    ) {
+    if (!hasActivePartner || !hasSelectableRsvp || !myPartner?.partner?.id) {
       return false;
     }
 
@@ -228,11 +228,10 @@ export default function EventPage() {
           attendee.userId === partnerId &&
           attendee.partnerRsvpByUserId === userId &&
           attendee.status === currentRsvpStatus
-      ) ?? false);
+      ) ??
+        false);
 
-    return (
-      currentUserRsvpIncludesPartner || partnerMirroredRsvpExists
-    );
+    return currentUserRsvpIncludesPartner || partnerMirroredRsvpExists;
   }, [
     attendees,
     currentRsvpStatus,
@@ -366,7 +365,7 @@ export default function EventPage() {
         ? `in ${daysUntilEvent} days`
         : daysUntilEvent <= -7 && daysUntilEvent > -14
           ? "Last Week"
-        : null;
+          : null;
   const timezone =
     new Intl.DateTimeFormat("en-US", { timeZoneName: "short" })
       .formatToParts(eventDate)
@@ -395,7 +394,8 @@ export default function EventPage() {
       <div
         className="pointer-events-none absolute inset-x-0 top-0 -z-10 h-[max(42rem,100vh)] supports-[height:100lvh]:h-[max(42rem,100lvh)] md:h-[42rem]"
         style={{
-          WebkitMaskImage: "linear-gradient(to bottom, black 50%, transparent 85%)",
+          WebkitMaskImage:
+            "linear-gradient(to bottom, black 50%, transparent 85%)",
           maskImage: "linear-gradient(to bottom, black 50%, transparent 85%)",
         }}
       >
@@ -413,13 +413,17 @@ export default function EventPage() {
           </>
         ) : (
           <>
-            <div className="absolute left-[-8rem] top-10 h-80 w-80 rounded-full bg-neon-pink/10 blur-3xl" />
+            <div className="bg-neon-pink/10 absolute left-[-8rem] top-10 h-80 w-80 rounded-full blur-3xl" />
             <div className="absolute right-[-6rem] top-16 h-96 w-96 rounded-full bg-neon-teal/10 blur-3xl" />
           </>
         )}
         <div
           className="absolute inset-x-0 top-0 md:hidden"
-          style={{ height: "160px", background: "linear-gradient(to bottom, hsl(var(--background)) 56px, transparent 160px)" }}
+          style={{
+            height: "160px",
+            background:
+              "linear-gradient(to bottom, hsl(var(--background)) 56px, transparent 160px)",
+          }}
         />
       </div>
       {/* Image Modal */}
@@ -468,7 +472,7 @@ export default function EventPage() {
                     sizes="420px"
                     aria-hidden="true"
                   />
-                  <div className="absolute inset-0 bg-gradient-to-t from-black/24 via-transparent to-white/10" />
+                  <div className="from-black/24 absolute inset-0 bg-gradient-to-t via-transparent to-white/10" />
                 </>
               )}
               {eventImageUrl ? (
@@ -743,7 +747,7 @@ export default function EventPage() {
                       key={attendee.user.id}
                       className="flex items-center gap-3 rounded-lg border bg-card p-3"
                     >
-                      <div className="rounded-full bg-neon-teal p-px">
+                      <div className="rounded-full p-px">
                         <UserAvatar
                           src={attendee.user.avatarImageUrl}
                           name={attendee.user.firstName}
@@ -777,7 +781,7 @@ export default function EventPage() {
                       key={attendee.user.id}
                       className="flex items-center gap-3 rounded-lg border bg-card p-3"
                     >
-                      <div className="rounded-full bg-yellow-400 p-px">
+                      <div className="rounded-full p-px">
                         <UserAvatar
                           src={attendee.user.avatarImageUrl}
                           name={attendee.user.firstName}

@@ -60,9 +60,9 @@ export function AvatarStack({
         {displayedUsers.map((user) => {
           const rsvpIndicatorClassName =
             user.rsvpStatus === "interested"
-              ? "bg-yellow-400 p-[1px]"
+              ? "bg-yellow-400 p-[2px]"
               : user.rsvpStatus === "going"
-                ? "bg-neon-teal p-[1px]"
+                ? "bg-neon-teal p-[2px]"
                 : "";
 
           return (
