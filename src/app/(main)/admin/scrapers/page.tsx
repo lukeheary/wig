@@ -47,6 +47,7 @@ interface ScraperRow {
   placeId: string;
   scraper: ScraperType;
   searchString: string;
+  classificationName: string | null;
   createdAt: Date;
   updatedAt: Date;
   place: {
@@ -569,6 +570,7 @@ export default function AdminScrapersPage() {
         payload = {
           venueName: selectedRow.searchString,
           stateCode: selectedRow.place.state,
+          classificationName: selectedRow.classificationName ?? undefined,
         };
       }
 

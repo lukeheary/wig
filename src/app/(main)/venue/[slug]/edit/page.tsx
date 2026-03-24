@@ -96,6 +96,7 @@ export default function EditPlacePage() {
           placeId: place.id,
           scraper: formData.scraper,
           searchString: formData.scraperSearchString,
+          classificationName: formData.scraperClassificationName,
         });
       }
 
@@ -169,6 +170,7 @@ export default function EditPlacePage() {
     categories: place.categories || [],
     scraper: scraperConfig?.scraper ?? null,
     scraperSearchString: scraperConfig?.searchString ?? "",
+    scraperClassificationName: scraperConfig?.classificationName ?? "",
   };
 
   return (

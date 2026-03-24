@@ -453,6 +453,7 @@ export const adminRouter = router({
         placeId: z.string().uuid(),
         scraper: scraperTypeSchema.optional().nullable(),
         searchString: z.string().optional().nullable(),
+        classificationName: z.string().optional().nullable(),
       })
     )
     .mutation(async ({ ctx, input }) => {
@@ -468,6 +469,7 @@ export const adminRouter = router({
       }
 
       const trimmedSearchString = input.searchString?.trim() ?? "";
+      const trimmedClassificationName = input.classificationName?.trim() ?? "";
       const shouldClear = !input.scraper || trimmedSearchString.length === 0;
 
       if (shouldClear) {
@@ -480,6 +482,10 @@ export const adminRouter = router({
       }
 
       const scraper = input.scraper;
+      const classificationName =
+        scraper === "ticketmaster" && trimmedClassificationName.length > 0
+          ? trimmedClassificationName
+          : null;
       if (!scraper) {
         throw new TRPCError({
           code: "BAD_REQUEST",
@@ -497,6 +503,7 @@ export const adminRouter = router({
           .set({
             scraper,
             searchString: trimmedSearchString,
+            classificationName,
             updatedAt: new Date(),
           })
           .where(eq(scrapers.id, existing.id))
@@ -511,6 +518,7 @@ export const adminRouter = router({
           placeId: input.placeId,
           scraper,
           searchString: trimmedSearchString,
+          classificationName,
         })
         .returning();
 

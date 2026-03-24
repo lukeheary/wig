@@ -355,6 +355,7 @@ export const scrapers = pgTable(
       .references(() => places.id, { onDelete: "cascade" }),
     scraper: scraperTypeEnum("scraper").notNull(),
     searchString: text("search_string").notNull(),
+    classificationName: text("classification_name"),
     createdAt: timestamp("created_at").defaultNow().notNull(),
     updatedAt: timestamp("updated_at").defaultNow().notNull(),
   },

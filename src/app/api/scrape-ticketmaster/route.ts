@@ -113,7 +113,7 @@ function mapCategories(event: TicketmasterEvent) {
 
 export async function POST(request: NextRequest) {
   try {
-    const { venueName, stateCode } = await request.json();
+    const { venueName, stateCode, classificationName } = await request.json();
 
     if (!venueName || typeof venueName !== "string") {
       return NextResponse.json(
@@ -139,6 +139,10 @@ export async function POST(request: NextRequest) {
 
     const normalizedState = stateCode.trim().toUpperCase();
     const normalizedVenueName = venueName.trim();
+    const normalizedClassificationName =
+      typeof classificationName === "string" && classificationName.trim()
+        ? classificationName.trim()
+        : undefined;
 
     const venueSearchUrl = buildTicketmasterUrl("venues.json", {
       apikey: apiKey,
@@ -196,8 +200,9 @@ export async function POST(request: NextRequest) {
     const eventsUrl = buildTicketmasterUrl("events.json", {
       apikey: apiKey,
       venueId: matchedVenue.id,
+      classificationName: normalizedClassificationName,
       sort: "date,asc",
-      size: "200",
+      size: "100",
     });
 
     const eventsResponse = await fetch(eventsUrl, {

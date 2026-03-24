@@ -58,7 +58,12 @@ export function AdminPlacesPage({ placeType }: AdminPlacesPageProps) {
 
   const handleCreateSubmit = async (formData: PlaceFormData) => {
     try {
-      const { scraper, scraperSearchString, ...placeData } = formData;
+      const {
+        scraper,
+        scraperSearchString,
+        scraperClassificationName,
+        ...placeData
+      } = formData;
 
       const createdPlace = await createPlaceMutation.mutateAsync({
         ...placeData,
@@ -72,6 +77,7 @@ export function AdminPlacesPage({ placeType }: AdminPlacesPageProps) {
           placeId: createdPlace.id,
           scraper,
           searchString: scraperSearchString,
+          classificationName: scraperClassificationName,
         });
       } catch (error) {
         scraperWarning =

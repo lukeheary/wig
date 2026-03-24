@@ -44,6 +44,7 @@ export interface PlaceFormData {
   categories: string[];
   scraper: ScraperType | null;
   scraperSearchString: string;
+  scraperClassificationName: string;
 }
 
 interface PlaceEditFormProps {
@@ -76,6 +77,7 @@ const emptyFormData: PlaceFormData = {
   categories: [],
   scraper: null,
   scraperSearchString: "",
+  scraperClassificationName: "",
 };
 
 export function PlaceEditForm({
@@ -109,6 +111,8 @@ export function PlaceEditForm({
         categories: initialData?.categories ?? [],
         scraper: initialData?.scraper ?? null,
         scraperSearchString: initialData?.scraperSearchString ?? "",
+        scraperClassificationName:
+          initialData?.scraperClassificationName ?? "",
       }),
     [initialData, placeType]
   );
@@ -504,6 +508,10 @@ export function PlaceEditForm({
                 setFormData({
                   ...formData,
                   scraper: value === "none" ? null : (value as ScraperType),
+                  scraperClassificationName:
+                    value === "ticketmaster"
+                      ? formData.scraperClassificationName
+                      : "",
                 })
               }
             >
@@ -542,6 +550,28 @@ export function PlaceEditForm({
               <p className="mt-1 text-xs text-muted-foreground">
                 Use a URL for URL-based scrapers, or plain text for text-based
                 scrapers.
+              </p>
+            </div>
+          )}
+          {formData.scraper === "ticketmaster" && (
+            <div>
+              <Label htmlFor="place-scraper-classification-name">
+                Classification Name
+              </Label>
+              <Input
+                id="place-scraper-classification-name"
+                value={formData.scraperClassificationName}
+                onChange={(e) =>
+                  setFormData({
+                    ...formData,
+                    scraperClassificationName: e.target.value,
+                  })
+                }
+                placeholder="music"
+              />
+              <p className="mt-1 text-xs text-muted-foreground">
+                Optional Ticketmaster classification filter, like
+                <span className="font-mono"> music</span>.
               </p>
             </div>
           )}
