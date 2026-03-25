@@ -36,6 +36,106 @@ const categoryKeySchema = z
   .max(64)
   .regex(/^[a-z0-9-]+$/, "Key must be lowercase alphanumeric with hyphens");
 
+function normalizeMatchText(value: string | null | undefined) {
+  return (value ?? "")
+    .toLowerCase()
+    .replace(/[^a-z0-9]+/g, " ")
+    .replace(/\s+/g, " ")
+    .trim();
+}
+
+function getWordSet(...values: Array<string | null | undefined>) {
+  return new Set(
+    values
+      .flatMap((value) => normalizeMatchText(value).split(" "))
+      .map((value) => value.trim())
+      .filter((value) => value.length > 1)
+  );
+}
+
+function scoreScrapedVenueMatch(
+  scraped: { venueName: string; city?: string | null; state?: string | null; address?: string | null },
+  place: {
+    id: string;
+    name: string;
+    city: string | null;
+    state: string | null;
+    address: string | null;
+    website: string | null;
+  }
+) {
+  const scrapedName = normalizeMatchText(scraped.venueName);
+  const placeName = normalizeMatchText(place.name);
+
+  if (!scrapedName || !placeName) {
+    return -1;
+  }
+
+  const scrapedCity = normalizeMatchText(scraped.city);
+  const scrapedState = normalizeMatchText(scraped.state);
+  const placeCity = normalizeMatchText(place.city);
+  const placeState = normalizeMatchText(place.state);
+
+  if (scrapedState && placeState && scrapedState !== placeState) {
+    return -1;
+  }
+
+  const locationWords = getWordSet(
+    scraped.city,
+    scraped.state,
+    scraped.address,
+    place.city,
+    place.state,
+    place.address
+  );
+
+  const stripLocationWords = (value: string) =>
+    value
+      .split(" ")
+      .filter((word) => !locationWords.has(word))
+      .join(" ")
+      .trim();
+
+  const scrapedCore = stripLocationWords(scrapedName);
+  const placeCore = stripLocationWords(placeName);
+
+  let score = -1;
+
+  if (scrapedName === placeName) {
+    score = 1000;
+  } else if (scrapedCore && scrapedCore === placeName) {
+    score = 950;
+  } else if (placeCore && scrapedName === placeCore) {
+    score = 945;
+  } else if (scrapedCore && placeCore && scrapedCore === placeCore) {
+    score = 920;
+  } else if (
+    scrapedName.startsWith(`${placeName} `) &&
+    stripLocationWords(scrapedName.slice(placeName.length)).length === 0
+  ) {
+    score = 900;
+  } else if (
+    placeName.startsWith(`${scrapedName} `) &&
+    stripLocationWords(placeName.slice(scrapedName.length)).length === 0
+  ) {
+    score = 890;
+  }
+
+  if (score < 0) {
+    return -1;
+  }
+
+  if (scrapedCity && placeCity && scrapedCity === placeCity) {
+    score += 20;
+  }
+
+  if (scrapedState && placeState && scrapedState === placeState) {
+    score += 10;
+  }
+
+  return score;
+}
+
 export const adminRouter = router({
   // ============================================================================
   // SUPPORT TICKETS
@@ -383,6 +483,61 @@ export const adminRouter = router({
       });
 
       return results.map(mapPlaceCategoryData);
+    }),
+
+  matchVenuesForScrapedEvents: adminProcedure
+    .input(
+      z.object({
+        events: z.array(
+          z.object({
+            venueName: z.string(),
+            city: z.string().nullable().optional(),
+            state: z.string().nullable().optional(),
+            address: z.string().nullable().optional(),
+          })
+        ).max(100),
+      })
+    )
+    .query(async ({ ctx, input }) => {
+      if (input.events.length === 0) {
+        return [];
+      }
+
+      const venuePlaces = await ctx.db
+        .select({
+          id: places.id,
+          name: places.name,
+          city: places.city,
+          state: places.state,
+          address: places.address,
+          website: places.website,
+        })
+        .from(places)
+        .where(eq(places.type, "venue"));
+
+      return input.events.map((event) => {
+        const scoredMatches = venuePlaces
+          .map((place) => ({
+            place,
+            score: scoreScrapedVenueMatch(event, place),
+          }))
+          .filter((item) => item.score >= 0)
+          .sort((a, b) => b.score - a.score);
+
+        const bestMatch = scoredMatches[0];
+        const secondMatch = scoredMatches[1];
+        const match =
+          bestMatch &&
+          bestMatch.score >= 900 &&
+          (!secondMatch || secondMatch.score < bestMatch.score)
+            ? bestMatch.place
+            : null;
+
+        return {
+          venueName: event.venueName,
+          match,
+        };
+      });
     }),
 
   // ============================================================================

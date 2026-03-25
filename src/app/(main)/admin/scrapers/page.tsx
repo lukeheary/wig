@@ -486,6 +486,7 @@ export default function AdminScrapersPage() {
   const [defaultVenue, setDefaultVenue] = useState<SelectedVenue | null>(null);
   const [importedCount, setImportedCount] = useState<number | null>(null);
   const [overrideExisting, setOverrideExisting] = useState(false);
+  const [scrapeSessionId, setScrapeSessionId] = useState(0);
 
   const resetScrapeSession = () => {
     setError(null);
@@ -529,6 +530,58 @@ export default function AdminScrapersPage() {
         | undefined,
     [scraperRows, selectedScraperId]
   );
+  const isOrganizerImport = selectedRow?.place.type === "organizer";
+  const scrapedVenueInputs = useMemo(() => {
+    if (!isOrganizerImport) return [];
+
+    return editableEvents
+      .map((event) => ({
+        venueName: event.venueName,
+        city: event.city,
+        state: event.state,
+        address: event.address,
+      }))
+      .filter((event) => event.venueName.trim().length > 0);
+  }, [editableEvents, isOrganizerImport]);
+
+  const { data: venueMatches = [] } = trpc.admin.matchVenuesForScrapedEvents.useQuery(
+    {
+      events: scrapedVenueInputs,
+    },
+    {
+      enabled: isOrganizerImport && scrapedVenueInputs.length > 0,
+    }
+  );
+
+  useEffect(() => {
+    if (!isOrganizerImport || venueMatches.length === 0 || scrapeSessionId === 0) {
+      return;
+    }
+
+    setEditableEvents((prev) => {
+      let changed = false;
+
+      const next = prev.map((event, index) => {
+        if (event.venueId || event.linkedVenue) {
+          return event;
+        }
+
+        const matchedVenue = venueMatches[index]?.match;
+        if (!matchedVenue) {
+          return event;
+        }
+
+        changed = true;
+        return {
+          ...event,
+          venueId: matchedVenue.id,
+          linkedVenue: matchedVenue,
+        };
+      });
+
+      return changed ? next : prev;
+    });
+  }, [isOrganizerImport, scrapeSessionId, venueMatches]);
 
   const runScraper = async () => {
     if (!selectedRow) return;
@@ -598,6 +651,7 @@ export default function AdminScrapersPage() {
           linkedVenue: null,
         }))
       );
+      setScrapeSessionId((prev) => prev + 1);
     } catch (err) {
       setError(err instanceof Error ? err.message : "Network error");
     } finally {
