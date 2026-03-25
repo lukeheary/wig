@@ -87,7 +87,7 @@ export function EventCard({ event }: EventCardProps) {
             {/* Date */}
             <div
               className={cn(
-                "text-sm font-medium leading-tight text-neon-teal md:text-sm",
+                "text-sm font-medium leading-tight text-neon-teal",
                 hasInactiveStatus && "line-through"
               )}
             >
@@ -95,7 +95,7 @@ export function EventCard({ event }: EventCardProps) {
             </div>
 
             {/* Venue & Organizer */}
-            <div className="line-clamp-1 text-sm leading-tight text-primary/70 md:text-sm">
+            <div className="line-clamp-1 text-sm leading-tight text-primary/70">
               {event.venue && `${event.venue.name}`}
               {/*{event.organizer &&*/}
               {/*  (event.venue*/}

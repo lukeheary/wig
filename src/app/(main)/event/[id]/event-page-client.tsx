@@ -54,7 +54,13 @@ function EventPageSkeleton() {
       <div className="pointer-events-none absolute inset-x-0 top-0 -z-10 h-[28rem] overflow-hidden">
         <div className="bg-neon-pink/12 absolute left-[-8rem] top-10 h-72 w-72 rounded-full blur-3xl" />
         <div className="bg-neon-teal/12 absolute right-[-5rem] top-16 h-80 w-80 rounded-full blur-3xl" />
-        <div className="absolute inset-x-0 top-0 h-full bg-gradient-to-b from-transparent via-background/30 to-background" />
+        <div
+          className="absolute inset-x-0 top-0 h-full"
+          style={{
+            background:
+              "linear-gradient(to bottom, hsl(var(--background)) 0%, hsl(var(--background) / 0.6) 8%, transparent 18%, hsl(var(--background) / 0.3) 70%, hsl(var(--background)) 100%)",
+          }}
+        />
         <div
           className="absolute inset-x-0 top-0 md:hidden"
           style={{
@@ -383,6 +389,7 @@ export default function EventPage() {
   );
   const imageOverlayButtonClassName =
     "h-11 w-11 rounded-full bg-black/55 text-white shadow-[0_10px_28px_rgba(0,0,0,0.45)] backdrop-blur-sm transition-all hover:scale-[1.02] hover:bg-black/72 hover:text-white";
+  const shouldShowAttendeeIdentities = Boolean(isSignedIn);
 
   // Check if user can edit this event
   const canEdit =
@@ -391,30 +398,36 @@ export default function EventPage() {
   return (
     <div className="relative isolate -mt-14 min-h-screen pt-14 md:-mt-16 md:pt-16">
       <div className="absolute inset-0 -z-20 bg-background" />
-      <div className="pointer-events-none absolute inset-x-0 top-0 -z-10 hidden h-[42rem] overflow-hidden md:block">
+      <div className="pointer-events-none absolute inset-x-0 top-0 -z-10 h-[42rem] overflow-hidden">
         {eventImageUrl ? (
-          <div
-            className="absolute inset-x-[8%] top-8 h-[28rem] rounded-[3rem] opacity-20 blur-3xl"
-            style={{
-              backgroundImage: `url(${eventImageUrl})`,
-              backgroundPosition: "center",
-              backgroundRepeat: "no-repeat",
-              backgroundSize: "115%",
-            }}
-          />
+          <div className="absolute inset-x-[-4%] top-[-2rem] h-[34rem] opacity-25 blur-3xl">
+            <Image
+              src={eventImageUrl}
+              alt=""
+              fill
+              priority
+              fetchPriority="high"
+              sizes="110vw"
+              className="scale-125 object-cover"
+              aria-hidden="true"
+            />
+          </div>
         ) : (
           <>
             <div className="bg-neon-pink/10 absolute left-[-8rem] top-10 h-80 w-80 rounded-full blur-3xl" />
             <div className="absolute right-[-6rem] top-16 h-96 w-96 rounded-full bg-neon-teal/10 blur-3xl" />
           </>
         )}
+        {/* Top fade — always present, blends navbar into image regardless of load state */}
         <div
-          className="absolute inset-x-0 top-0 h-full"
+          className="absolute inset-x-0 top-0 h-[45%]"
           style={{
             background:
-              "linear-gradient(to bottom, transparent 0%, transparent 52%, hsl(var(--background) / 0.4) 76%, hsl(var(--background)) 100%)",
+              "linear-gradient(to bottom, hsl(var(--background)) 0%, hsl(var(--background) / 0.85) 10%, hsl(var(--background) / 0.5) 30%, hsl(var(--background) / 0.1) 70%, transparent 100%)",
           }}
         />
+        {/* Bottom fade — always present, ensures image never hard-clips into page background */}
+        <div className="absolute inset-x-0 bottom-0 h-[55%] bg-gradient-to-t from-background via-background/60 to-transparent" />
       </div>
       {/* Image Modal */}
       {isImageModalOpen && eventImageUrl && (
@@ -537,7 +550,7 @@ export default function EventPage() {
               </div>
 
               {/* Avatars - Overlay on bottom right */}
-              {socialStackUsers.length > 0 && (
+              {shouldShowAttendeeIdentities && socialStackUsers.length > 0 && (
                 <div className="absolute bottom-2.5 right-2.5">
                   <AvatarStack
                     users={socialStackUsers}
@@ -726,7 +739,7 @@ export default function EventPage() {
             </div>
 
             {/* Lineup / Attendees Section */}
-            {goingCount > 0 && (
+            {shouldShowAttendeeIdentities && goingCount > 0 && (
               <div className={"pt-4"}>
                 <h2 className="font-space-grotesk mb-4 text-2xl font-bold">
                   Who&apos;s Going
@@ -760,7 +773,7 @@ export default function EventPage() {
               </div>
             )}
 
-            {interestedCount > 0 && (
+            {shouldShowAttendeeIdentities && interestedCount > 0 && (
               <div className={"pt-4"}>
                 <h2 className="font-space-grotesk mb-4 text-2xl font-bold">
                   Who&apos;s Interested

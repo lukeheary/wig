@@ -96,7 +96,7 @@ export default async function LandingPage() {
                     <LandingGetStartedLink
                       location="hero"
                       className="block"
-                      buttonClassName="min-w-[200px] px-10 text-base md:min-w-[228px] md:h-12"
+                      buttonClassName="min-w-[160px] text-base md:min-w-[228px] h-14"
                     />
                   </div>
                 </div>

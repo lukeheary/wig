@@ -138,55 +138,54 @@ function MainLayoutContent({ children }: { children: React.ReactNode }) {
           </div>
 
           {/* Center - Desktop Navigation */}
-          <nav className="absolute left-1/2 hidden -translate-x-1/2 items-center gap-2 md:flex">
-            <Link
-              href="/home"
-              onClick={() => trackNavigationClick("/home", "desktop_nav")}
-            >
-              <Button
-                variant="ghost"
-                size="sm"
-                className={isHome ? "text-primary" : "text-muted-foreground"}
+          {isSignedIn ? (
+            <nav className="absolute left-1/2 hidden -translate-x-1/2 items-center gap-2 md:flex">
+              <Link
+                href="/home"
+                onClick={() => trackNavigationClick("/home", "desktop_nav")}
               >
-                Home
-              </Button>
-            </Link>
-            <Link
-              href="/venues-and-organizers"
-              onClick={() =>
-                trackNavigationClick("/venues-and-organizers", "desktop_nav")
-              }
-            >
-              <Button
-                variant="ghost"
-                size="sm"
-                className={isPlaces ? "text-primary" : "text-muted-foreground"}
-              >
-                Venues & Organizers
-              </Button>
-            </Link>
-            <Link
-              href="/friends"
-              onClick={() => trackNavigationClick("/friends", "desktop_nav")}
-            >
-              <Button
-                variant="ghost"
-                size="sm"
-                className={
-                  isFriends
-                    ? "gap-1 text-primary"
-                    : "gap-1 text-muted-foreground"
+                <Button
+                  variant="ghost"
+                  size="sm"
+                  className={isHome ? "text-primary" : "text-muted-foreground"}
+                >
+                  Home
+                </Button>
+              </Link>
+              <Link
+                href="/venues-and-organizers"
+                onClick={() =>
+                  trackNavigationClick("/venues-and-organizers", "desktop_nav")
                 }
               >
-                Friends
-                {/*{receivedRequestsCount > 0 && (*/}
-                {/*  <span className="flex h-4 w-4 items-center justify-center rounded-full bg-primary text-[10px] text-primary-foreground">*/}
-                {/*    {receivedRequestsCount}*/}
-                {/*  </span>*/}
-                {/*)}*/}
-              </Button>
-            </Link>
-          </nav>
+                <Button
+                  variant="ghost"
+                  size="sm"
+                  className={
+                    isPlaces ? "text-primary" : "text-muted-foreground"
+                  }
+                >
+                  Venues & Organizers
+                </Button>
+              </Link>
+              <Link
+                href="/friends"
+                onClick={() => trackNavigationClick("/friends", "desktop_nav")}
+              >
+                <Button
+                  variant="ghost"
+                  size="sm"
+                  className={
+                    isFriends
+                      ? "gap-1 text-primary"
+                      : "gap-1 text-muted-foreground"
+                  }
+                >
+                  Friends
+                </Button>
+              </Link>
+            </nav>
+          ) : null}
 
           {/* Right Side - Spacer for mobile */}
           <div className="flex-1" />

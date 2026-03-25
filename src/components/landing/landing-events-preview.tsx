@@ -75,7 +75,19 @@ const MOCK_EVENT_ATTENDEES = [
 
 function withMockFriendsGoing(events: EventListItem[]): EventListItem[] {
   return events.map((event, index) => {
-    const attendeeCount = ((event.title.length + index) % 4) + 1;
+    const socialSeed = [...`${event.id}-${event.title}`].reduce(
+      (total, char) => total + char.charCodeAt(0),
+      index * 17
+    );
+    const socialPattern = socialSeed % 10;
+    const attendeeCount =
+      socialPattern < 4
+        ? 0
+        : socialPattern < 7
+          ? 1
+          : socialPattern < 9
+            ? 2
+            : 3;
     const startIndex = index % MOCK_EVENT_ATTENDEES.length;
     const friendsGoing = Array.from({ length: attendeeCount }, (_, offset) => ({
       status:

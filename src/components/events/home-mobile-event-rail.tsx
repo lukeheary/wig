@@ -60,10 +60,7 @@ function HomeMiniEventCard({ event }: { event: EventCardItem }) {
             </div>
           )}
 
-          <EventSocialOverlay
-            users={socialUsers}
-            size="md"
-          />
+          <EventSocialOverlay users={socialUsers} size="md" />
         </div>
 
         <div className="font-space-grotesk flex flex-1 flex-col px-1 pb-1 pt-3">
@@ -86,7 +83,7 @@ function HomeMiniEventCard({ event }: { event: EventCardItem }) {
             {month} {day} at {startTime}
           </div>
 
-          <div className="pt-1 text-xs text-primary/70">
+          <div className="pt-1 text-[13px] text-primary/70">
             <span className="line-clamp-1">{subtitle}</span>
           </div>
         </div>
