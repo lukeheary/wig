@@ -7,6 +7,7 @@ interface EventFilterSelectProps {
   value: EventFilterTab;
   onValueChange: (value: EventFilterTab) => void;
   className?: string;
+  allowPersonalFilters?: boolean;
 }
 
 const OPTIONS = [
@@ -19,12 +20,15 @@ export function EventFilterSelect({
   value,
   onValueChange,
   className,
+  allowPersonalFilters = true,
 }: EventFilterSelectProps) {
+  const options = allowPersonalFilters ? OPTIONS : [OPTIONS[0]];
+
   return (
     <ResponsiveSelect
       value={value}
       onValueChange={(val) => onValueChange(val as EventFilterTab)}
-      options={OPTIONS}
+      options={options}
       placeholder="Filter events"
       title="Filter Events"
       className={className}

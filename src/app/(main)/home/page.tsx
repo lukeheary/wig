@@ -21,158 +21,45 @@ import {
   isSameMonth,
   isSameDay,
   eachDayOfInterval,
-  nextSunday,
-  getDay,
   startOfWeek,
   endOfWeek,
-  isAfter,
   isBefore,
-  startOfISOWeek,
-  endOfISOWeek,
   isSameWeek,
+  parseISO,
+  subDays,
 } from "date-fns";
+import { useAuth } from "@clerk/nextjs";
+import { useQueryState } from "nuqs";
+import { CalendarIcon, Clock, ChevronRight, MapPin } from "lucide-react";
 import { trpc } from "@/lib/trpc";
-import {
-  HOME_MOBILE_EVENT_CARD_WIDTH,
-  HomeMobileEventRail,
-} from "@/components/events/home-mobile-event-rail";
-import {
-  Loader2,
-  CalendarIcon,
-  ChevronLeft,
-  ChevronRight,
-  MapPin,
-  Clock,
-  X,
-} from "lucide-react";
-import { useToast } from "@/hooks/use-toast";
-import { SearchInput } from "@/components/ui/search-input";
-import { Button } from "@/components/ui/button";
+import { EventBrowserSurface } from "@/components/events/event-browser-surface";
 import { Card, CardContent } from "@/components/ui/card";
 import {
   HoverCard,
   HoverCardContent,
   HoverCardTrigger,
 } from "@/components/ui/hover-card";
-import { cn, formatTime } from "@/lib/utils";
-import { EventFilterSelect } from "@/components/events/event-filter-select";
-import { ResponsiveSelect } from "@/components/ui/responsive-select";
-import { EventFilterTab } from "@/types/events";
-import { EmptyStateCard } from "@/components/shared/empty-state-card";
-import { EventsPlaceholder } from "@/components/shared/events-placeholder";
-import { useQueryState } from "nuqs";
-import { parseISO, subDays } from "date-fns";
 import {
   ActivityFeedList,
   useHomeActivityPreview,
 } from "@/components/friends/activity-feed";
+import { EmptyStateCard } from "@/components/shared/empty-state-card";
+import { EventsPlaceholder } from "@/components/shared/events-placeholder";
 import { useNavbarSearch } from "@/contexts/nav-search-context";
 import { getDistanceMiles, type Coordinates } from "@/lib/geo";
-import { resolveMetroArea } from "@/lib/metro-areas";
-import { StickySearchBar } from "@/components/ui/sticky-search-bar";
-import { StickySectionHeader } from "@/components/ui/sticky-section-header";
-import { withReturnTo } from "@/lib/navigation";
-import { HapticPreset, useHaptics } from "@/hooks/use-haptics";
-import { useAuth } from "@clerk/nextjs";
 import { sendGoogleAnalyticsEvent } from "@/lib/google-analytics";
+import { HapticPreset, useHaptics } from "@/hooks/use-haptics";
+import { resolveMetroArea } from "@/lib/metro-areas";
+import { withReturnTo } from "@/lib/navigation";
 import { HOME_RECENT_ACTIVITY_SURFACE } from "@/lib/user-surface-state";
+import { cn, formatTime } from "@/lib/utils";
+import { useToast } from "@/hooks/use-toast";
+import { type EventFilterTab } from "@/types/events";
 
 type ViewMode = "week" | "month";
 const HOME_ADD_FRIENDS_BANNER_KEY_PREFIX =
   "wig:home:add-friends-banner-dismissed";
 const HOME_ACTIVITY_WINDOW_DAYS = 1;
-
-function StickyDateHeader({
-  dateHeader,
-  isToday,
-}: {
-  dateHeader: string;
-  isToday: boolean;
-}) {
-  return (
-    <StickySectionHeader>
-      <span className={cn(isToday && "text-primary")}>{dateHeader}</span>
-    </StickySectionHeader>
-  );
-}
-
-function getWeekSectionMeta(date: Date, isCurrentWeek: boolean) {
-  const now = new Date();
-  const isEarlyMorning = now.getHours() < 6;
-  const yesterday = startOfDay(subDays(now, 1));
-  const isToday = isSameDay(date, now);
-  const isLastNightSection =
-    isCurrentWeek && isEarlyMorning && isSameDay(date, yesterday);
-  const isEvening = now.getHours() >= 17;
-
-  const dateHeader = isLastNightSection
-    ? "Last Night's Events"
-    : isToday
-      ? isEvening
-        ? "Tonight's Events"
-        : "Today's Events"
-      : format(date, "EEE, MMM d");
-
-  return {
-    dateHeader,
-    isToday,
-    isLastNightSection,
-  };
-}
-
-function EventSkeletonGrid({
-  count = 8,
-  mobileCount,
-}: {
-  count?: number;
-  mobileCount?: number;
-}) {
-  const renderedMobileCount = mobileCount ?? Math.max(6, count);
-
-  return (
-    <>
-      <div className="-mx-4 overflow-x-auto [scrollbar-width:none] md:hidden [&::-webkit-scrollbar]:hidden">
-        <div className="flex w-max items-stretch gap-3 px-4 pb-1">
-          {Array.from({ length: renderedMobileCount }).map((_, index) => (
-            <div
-              key={`event-mobile-skeleton-${index}`}
-              className="shrink-0 self-stretch rounded-2xl bg-card p-2 shadow-sm"
-              style={{ width: `${HOME_MOBILE_EVENT_CARD_WIDTH}px` }}
-            >
-              <div className="animate-pulse">
-                <div className="aspect-[0.98] rounded-2xl bg-muted" />
-                <div className="space-y-2 px-1 pb-1 pt-3">
-                  <div className="h-4 w-4/5 rounded-full bg-muted" />
-                  <div className="h-3 w-3/5 rounded-full bg-muted" />
-                  <div className="h-3 w-2/3 rounded-full bg-muted" />
-                  <div className="h-6 w-16 rounded-full bg-muted" />
-                </div>
-              </div>
-            </div>
-          ))}
-        </div>
-      </div>
-
-      <div className="hidden grid-cols-1 gap-4 md:grid md:grid-cols-3 lg:grid-cols-4">
-        {Array.from({ length: count }).map((_, index) => (
-          <div
-            key={`event-skeleton-${index}`}
-            className="rounded-2xl bg-card p-2 shadow-sm"
-          >
-            <div className="flex animate-pulse md:block">
-              <div className="h-24 w-24 shrink-0 rounded-2xl bg-muted md:aspect-square md:h-auto md:w-full lg:max-w-[274px]" />
-              <div className="flex-1 space-y-2 py-2 pl-3 pr-1 md:px-3 md:py-3">
-                <div className="h-4 w-3/4 rounded-full bg-muted" />
-                <div className="h-3 w-1/2 rounded-full bg-muted" />
-                <div className="h-3 w-2/3 rounded-full bg-muted" />
-              </div>
-            </div>
-          </div>
-        ))}
-      </div>
-    </>
-  );
-}
 
 function HomePageContent() {
   const { toast } = useToast();
@@ -202,7 +89,7 @@ function HomePageContent() {
     scroll: false,
     shallow: true,
   });
-  const [viewMode, setViewMode] = useQueryState<ViewMode>("view", {
+  const [viewMode] = useQueryState<ViewMode>("view", {
     defaultValue: "week",
     parse: (value) => (value === "month" ? "month" : "week"),
     serialize: (value) => value,
@@ -218,7 +105,7 @@ function HomePageContent() {
   const currentDate = useMemo(() => {
     try {
       return startOfDay(parseISO(dateParam));
-    } catch (e) {
+    } catch {
       return startOfDay(new Date());
     }
   }, [dateParam]);
@@ -232,7 +119,6 @@ function HomePageContent() {
     );
   }, [viewMode, currentDate]);
 
-  // Get current user to show their city
   const { data: currentUser, isLoading: isLoadingUser } =
     trpc.user.getCurrentUser.useQuery();
   const { data: acceptedFriends } = trpc.friends.listFriends.useQuery({
@@ -269,7 +155,6 @@ function HomePageContent() {
     staleAfterDays: HOME_ACTIVITY_WINDOW_DAYS,
   });
 
-  // Get available cities
   const { data: cities } = trpc.event.getAvailableCities.useQuery();
   const { data: activeCategories } = trpc.category.listActive.useQuery();
   const categoryLabelMap = useMemo(
@@ -283,15 +168,12 @@ function HomePageContent() {
     [activeCategories]
   );
 
-  // Navbar search context for navbar search button
   const { setShowNavbarSearch, registerScrollToSearch } = useNavbarSearch();
 
-  // Determine the effective city: use URL param if set, otherwise resolve user's city to metro
   const effectiveCity = useMemo(() => {
     if (selectedCity) return selectedCity;
     if (!currentUser?.city) return null;
     if (!cities) return currentUser.city;
-    // Resolve user's profile city (e.g. "Cambridge") to its metro area (e.g. "Boston")
     const metro = resolveMetroArea(currentUser.city, currentUser.state, cities);
     return metro?.city ?? currentUser.city;
   }, [selectedCity, currentUser?.city, currentUser?.state, cities]);
@@ -321,6 +203,7 @@ function HomePageContent() {
     ) {
       return null;
     }
+
     return {
       latitude: referenceCityRecord.latitude,
       longitude: referenceCityRecord.longitude,
@@ -345,22 +228,19 @@ function HomePageContent() {
     return map;
   }, [cities, referenceCoords]);
 
-  // Don't run queries until we know the user's city (to avoid flash of "all cities")
   const isReady = !isLoadingUser;
-
-  // Determine if we're actively searching (has query text)
   const isSearching = Boolean(searchQuery && searchQuery.trim().length > 0);
   const isSearchView = isSearchMode || isSearching;
   const isDefaultCalendarView = activeFilter === "all";
   const isFilteredFeedView = !isSearching && !isDefaultCalendarView;
 
-  const handleExitSearch = () => {
+  const handleExitSearch = useCallback(() => {
     setIsSearchMode(false);
     setSearchQuery("");
     searchInputRef.current?.blur();
-  };
+  }, [setSearchQuery]);
 
-  const handleBackFromSearchOrFilter = () => {
+  const handleBackFromSearchOrFilter = useCallback(() => {
     void triggerHaptic(HapticPreset.Soft);
 
     if (isFilteredFeedView) {
@@ -369,64 +249,46 @@ function HomePageContent() {
     }
 
     handleExitSearch();
-  };
+  }, [handleExitSearch, isFilteredFeedView, triggerHaptic]);
 
-  const toggleCategory = useCallback((categoryKey: string) => {
-    setSelectedCategories((prev) =>
-      prev.includes(categoryKey)
-        ? prev.filter((key) => key !== categoryKey)
-        : [...prev, categoryKey]
-    );
-  }, []);
-
-  // Scroll to search and focus callback for navbar search button
   const scrollToSearchAndFocus = useCallback(() => {
-    // Jump to top instantly
     window.scrollTo({ top: 0, left: 0, behavior: "auto" });
-    // Focus the search input immediately
     searchInputRef.current?.focus();
   }, []);
 
-  // Register the scroll callback with the context
   useEffect(() => {
     registerScrollToSearch(scrollToSearchAndFocus);
   }, [registerScrollToSearch, scrollToSearchAndFocus]);
 
-  // Update navbar search visibility based on sticky state
   useEffect(() => {
     setShowNavbarSearch(isSticky);
   }, [isSticky, setShowNavbarSearch]);
 
-  // Calculate date range based on view mode (or search mode)
   const dateRange = useMemo(() => {
     const today = startOfDay(new Date());
     const isLastNightWindow = isCurrentWeek && new Date().getHours() < 6;
 
-    // When searching, search all future events (1 year ahead)
     if (isSearching || isFilteredFeedView) {
       return { startDate: today, endDate: addDays(today, 365) };
     }
 
     if (viewMode === "week") {
       if (isCurrentWeek) {
-        // Current week: keep last night's events visible until 6am.
         const start = isLastNightWindow ? subDays(today, 1) : today;
         const end = endOfWeek(today, { weekStartsOn: 1 });
         return { startDate: start, endDate: end };
-      } else {
-        // Any other week: show full week from Monday to Sunday
-        const start = startOfWeek(currentDate, { weekStartsOn: 1 });
-        const end = endOfWeek(start, { weekStartsOn: 1 });
-        return { startDate: start, endDate: end };
       }
-    } else {
-      const start = startOfMonth(currentDate);
-      const end = endOfMonth(currentDate);
+
+      const start = startOfWeek(currentDate, { weekStartsOn: 1 });
+      const end = endOfWeek(start, { weekStartsOn: 1 });
       return { startDate: start, endDate: end };
     }
+
+    const start = startOfMonth(currentDate);
+    const end = endOfMonth(currentDate);
+    return { startDate: start, endDate: end };
   }, [viewMode, currentDate, isCurrentWeek, isSearching, isFilteredFeedView]);
 
-  // Fetch events with current filters
   const {
     data: events,
     isLoading,
@@ -450,7 +312,6 @@ function HomePageContent() {
 
   const showSkeletons = !isReady || (!events && isLoading) || isDateNavigating;
 
-  // Fetch upcoming events for focused-empty search state
   const { data: upcomingSearchEvents, isLoading: upcomingSearchLoading } =
     trpc.event.listEventsByRange.useQuery(
       {
@@ -467,7 +328,6 @@ function HomePageContent() {
       }
     );
 
-  // Group events by day
   const sortedEvents = useMemo(() => {
     if (!events || !referenceCoords) return events ?? [];
 
@@ -479,7 +339,6 @@ function HomePageContent() {
         cityDistanceMap.get(`${b.city}|${b.state}`) ?? Number.POSITIVE_INFINITY;
 
       if (aDistance !== bDistance) return aDistance - bDistance;
-
       return new Date(a.startAt).getTime() - new Date(b.startAt).getTime();
     });
 
@@ -498,28 +357,22 @@ function HomePageContent() {
         cityDistanceMap.get(`${b.city}|${b.state}`) ?? Number.POSITIVE_INFINITY;
 
       if (aDistance !== bDistance) return aDistance - bDistance;
-
       return new Date(a.startAt).getTime() - new Date(b.startAt).getTime();
     });
 
     return nextEvents;
   }, [upcomingSearchEvents, referenceCoords, cityDistanceMap]);
 
-  // Only show categories that appear in the current event set
-  const availableCategoryKeys = useMemo(() => {
-    if (!sortedEvents.length) return new Set<string>();
-    const keys = new Set<string>();
+  const visibleCategories = useMemo(() => {
+    const availableCategoryKeys = new Set<string>();
     sortedEvents.forEach((event) =>
-      event.categories?.forEach((key) => keys.add(key))
+      event.categories?.forEach((key) => availableCategoryKeys.add(key))
     );
-    return keys;
-  }, [sortedEvents]);
 
-  const visibleCategories = useMemo(
-    () =>
-      (activeCategories ?? []).filter((c) => availableCategoryKeys.has(c.key)),
-    [activeCategories, availableCategoryKeys]
-  );
+    return (activeCategories ?? []).filter((category) =>
+      availableCategoryKeys.has(category.key)
+    );
+  }, [activeCategories, sortedEvents]);
 
   const filteredEvents = useMemo(() => {
     if (selectedCategories.length === 0) return sortedEvents;
@@ -541,21 +394,21 @@ function HomePageContent() {
     );
   }, [sortedUpcomingSearchEvents, selectedCategories]);
 
-  const eventsByDay = useMemo(() => {
-    if (!filteredEvents.length) return {};
-
-    const grouped: Record<string, typeof events> = {};
-
-    filteredEvents.forEach((event) => {
-      const dateKey = format(new Date(event.startAt), "yyyy-MM-dd");
-      if (!grouped[dateKey]) {
-        grouped[dateKey] = [];
-      }
-      grouped[dateKey].push(event);
-    });
-
-    return grouped;
-  }, [filteredEvents]);
+  const eventsByDay = useMemo(
+    () =>
+      filteredEvents.reduce<Record<string, typeof filteredEvents>>(
+        (groups, event) => {
+          const dateKey = format(new Date(event.startAt), "yyyy-MM-dd");
+          if (!groups[dateKey]) {
+            groups[dateKey] = [];
+          }
+          groups[dateKey].push(event);
+          return groups;
+        },
+        {}
+      ),
+    [filteredEvents]
+  );
 
   const isHomeActivityStateReady = !isHomeActivityStateLoading;
   const shouldShowRecentActivity =
@@ -651,7 +504,7 @@ function HomePageContent() {
     setIsAddFriendsBannerDismissed(true);
   }, [addFriendsBannerStorageKey]);
 
-  const handlePrevious = async () => {
+  const handlePrevious = useCallback(async () => {
     if (isCurrentWeek) {
       void triggerHaptic(HapticPreset.Warning);
       return;
@@ -663,9 +516,8 @@ function HomePageContent() {
 
     if (viewMode === "week") {
       const today = startOfDay(new Date());
-
       const prevWeekStart = addDays(currentDate, -7);
-      // If going back takes us into the current week (or before it), jump to today
+
       if (
         isSameWeek(prevWeekStart, today, { weekStartsOn: 1 }) ||
         isBefore(prevWeekStart, today)
@@ -696,24 +548,26 @@ function HomePageContent() {
       from_date: format(currentDate, "yyyy-MM-dd"),
       to_date: nextDateParam,
     });
-  };
+  }, [
+    currentDate,
+    isCurrentWeek,
+    setDateParam,
+    triggerHaptic,
+    userId,
+    viewMode,
+  ]);
 
-  const handleNext = async () => {
+  const handleNext = useCallback(async () => {
     void triggerHaptic(HapticPreset.Light);
     setIsDateNavigating(true);
     let nextDateParam: string;
 
     if (viewMode === "week") {
       const today = startOfDay(new Date());
-      let nextDate: Date;
+      const nextDate = isCurrentWeek
+        ? startOfWeek(addDays(today, 7), { weekStartsOn: 1 })
+        : addDays(startOfWeek(currentDate, { weekStartsOn: 1 }), 7);
 
-      if (isCurrentWeek) {
-        // From current week, go to next Monday
-        nextDate = startOfWeek(addDays(today, 7), { weekStartsOn: 1 });
-      } else {
-        // From any other week, go to next Monday
-        nextDate = addDays(startOfWeek(currentDate, { weekStartsOn: 1 }), 7);
-      }
       nextDateParam = format(nextDate, "yyyy-MM-dd");
       await setDateParam(nextDateParam, {
         scroll: false,
@@ -733,32 +587,38 @@ function HomePageContent() {
       from_date: format(currentDate, "yyyy-MM-dd"),
       to_date: nextDateParam,
     });
-  };
+  }, [
+    currentDate,
+    isCurrentWeek,
+    setDateParam,
+    triggerHaptic,
+    userId,
+    viewMode,
+  ]);
 
-  const handleToday = async () => {
+  const handleToday = useCallback(async () => {
     void triggerHaptic(HapticPreset.Soft);
     setIsDateNavigating(true);
     await setDateParam(format(new Date(), "yyyy-MM-dd"), {
       scroll: false,
       shallow: true,
     });
-  };
+  }, [setDateParam, triggerHaptic]);
 
-  // Get days to display based on view mode
   const daysToDisplay = useMemo(() => {
     if (viewMode === "week") {
       return eachDayOfInterval({
         start: dateRange.startDate,
         end: dateRange.endDate,
       });
-    } else {
-      const start = startOfMonth(currentDate);
-      const end = endOfMonth(currentDate);
-      return eachDayOfInterval({ start, end });
     }
+
+    return eachDayOfInterval({
+      start: startOfMonth(currentDate),
+      end: endOfMonth(currentDate),
+    });
   }, [viewMode, currentDate, dateRange]);
 
-  // Show error toast in useEffect to avoid rendering issues
   useEffect(() => {
     if (error) {
       toast({
@@ -782,8 +642,6 @@ function HomePageContent() {
       },
       {
         threshold: [1],
-        // Root margin needs to account for the sticky offset (top-0 on mobile, top-16 on md)
-        // But since we want to know when it hits the top, we can use a sentinel just above it.
         rootMargin: "-1px 0px 0px 0px",
       }
     );
@@ -800,192 +658,220 @@ function HomePageContent() {
     };
   }, []);
 
-  return (
-    <div className="relative min-h-screen pb-6">
-      <div className="container relative mx-auto pt-4">
-        {/* Sentinel for sticky detection */}
-        <div ref={stickySentinelRef} className="h-px w-full" />
+  const cityOptions = useMemo(
+    () => [
+      { value: "all", label: "All Cities" },
+      ...(cities?.map((city) => ({
+        value: city.city,
+        label: `${city.city}, ${city.state}`,
+      })) || []),
+    ],
+    [cities]
+  );
 
-        {/* Search and Filters */}
-        <StickySearchBar innerClassName="w-full flex-col items-stretch sm:flex-col sm:items-stretch">
-          <div className="flex w-full flex-col gap-2 sm:flex-row sm:items-center">
-            {/* Search Input */}
-            <div className="flex w-full flex-row items-center">
-              <div
-                className={cn(
-                  "overflow-hidden transition-all duration-200 ease-out",
-                  shouldShowReturnToCurrentWeekButton
-                    ? "mr-2 w-12 opacity-100"
-                    : "mr-0 w-0 opacity-0"
-                )}
-              >
-                <button
-                  type="button"
-                  onMouseDown={(e) => {
-                    e.preventDefault();
-                  }}
-                  onPointerDown={(e) => {
-                    e.preventDefault();
-                  }}
-                  onClick={(e) => {
-                    e.preventDefault();
-                    e.stopPropagation();
-                    void handleToday();
-                  }}
-                  className="flex h-10 w-10 shrink-0 items-center justify-center rounded-full text-muted-foreground outline-none transition-colors hover:bg-muted hover:text-foreground focus:outline-none focus-visible:outline-none"
-                  tabIndex={shouldShowReturnToCurrentWeekButton ? 0 : -1}
-                  aria-label="Back to current week"
+  const monthContent =
+    !isSearchView &&
+    isDefaultCalendarView &&
+    viewMode === "month" &&
+    events &&
+    !showSkeletons ? (
+      <div className="container mx-auto px-4">
+        <Card>
+          <CardContent className="p-4">
+            <div className="mb-2 grid grid-cols-7 gap-2">
+              {["Sun", "Mon", "Tue", "Wed", "Thu", "Fri", "Sat"].map((day) => (
+                <div
+                  key={day}
+                  className="py-2 text-center text-sm font-medium text-muted-foreground"
                 >
-                  <ChevronLeft className="h-5 w-5" />
-                </button>
-              </div>
-              <Suspense fallback={null}>
-                <SearchInput
-                  ref={searchInputRef}
-                  placeholder="Search events..."
-                  value={searchQuery}
-                  onChange={setSearchQuery}
-                  onFocus={() => setIsSearchMode(true)}
-                  showBack={isSearchView || isFilteredFeedView}
-                  onBack={handleBackFromSearchOrFilter}
-                  className="min-w-0 flex-1"
-                />
-              </Suspense>
-              <div
-                className={cn(
-                  "shrink-0 overflow-hidden transition-all duration-200 ease-out md:hidden",
-                  isSearchView || isFilteredFeedView
-                    ? "ml-0 w-0 opacity-0"
-                    : "ml-2 opacity-100"
-                )}
-              >
-                <div className="flex h-12 items-center overflow-hidden rounded-full border border-input bg-background shadow-sm">
-                  <Button
-                    variant="ghost"
-                    size="icon"
-                    className={cn(
-                      "h-full w-10 rounded-none border-r bg-muted px-0 active:bg-muted/80",
-                      isCurrentWeek &&
-                        "cursor-not-allowed opacity-50 hover:bg-muted"
-                    )}
-                    onClick={handlePrevious}
-                    aria-disabled={isCurrentWeek}
-                  >
-                    <ChevronLeft className="h-4 w-4" />
-                  </Button>
-                  <Button
-                    variant="ghost"
-                    size="icon"
-                    className="h-full w-10 rounded-none bg-muted px-0 focus:bg-muted/80 active:bg-muted/80"
-                    onClick={handleNext}
-                  >
-                    <ChevronRight className="h-4 w-4" />
-                  </Button>
+                  {day}
                 </div>
-              </div>
+              ))}
             </div>
 
-            <div className="flex w-full gap-2 sm:w-fit">
-              {/* City Filter */}
-              <ResponsiveSelect
-                value={effectiveCity ?? "all"}
-                onValueChange={setSelectedCity}
-                options={[
-                  { value: "all", label: "All Cities" },
-                  ...(cities?.map((city) => ({
-                    value: city.city,
-                    label: `${city.city}, ${city.state}`,
-                  })) || []),
-                ]}
-                placeholder="Select city"
-                title="Select City"
-                className="min-w-0 flex-1 sm:w-[180px] sm:flex-none"
-              />
+            <div className="grid grid-cols-7 gap-2">
+              {daysToDisplay.map((date) => {
+                const dateKey = format(date, "yyyy-MM-dd");
+                const dayEvents = eventsByDay[dateKey] || [];
+                const isToday = isSameDay(date, new Date());
+                const isCurrentMonth = isSameMonth(date, currentDate);
 
-              <EventFilterSelect
-                value={activeFilter}
-                onValueChange={setActiveFilter}
-                className="min-w-0 flex-1 sm:w-[180px] sm:flex-none"
-              />
-
-              {/* Navigation Controls - fixed width wrapper for smooth transition */}
-              <div
-                className={cn(
-                  "hidden shrink-0 overflow-hidden transition-all duration-200 ease-out md:block",
-                  isSearchView || isFilteredFeedView
-                    ? "w-0 opacity-0"
-                    : "w-[82px] opacity-100"
-                )}
-              >
-                <div className="flex h-12 items-center overflow-hidden rounded-full border border-input bg-background shadow-sm">
-                  <Button
-                    variant="ghost"
-                    size="icon"
+                return (
+                  <div
+                    key={dateKey}
                     className={cn(
-                      "h-full w-10 shrink-0 rounded-none border-r bg-muted px-0 hover:bg-muted/60",
-                      isCurrentWeek &&
-                        "cursor-not-allowed opacity-50 hover:bg-muted"
+                      "min-h-[120px] rounded-lg border p-2",
+                      !isCurrentMonth && "bg-muted/50 text-muted-foreground",
+                      isToday && "border-primary bg-primary/5"
                     )}
-                    onClick={handlePrevious}
-                    aria-disabled={isCurrentWeek}
                   >
-                    <ChevronLeft className="h-4 w-4" />
-                  </Button>
-                  <Button
-                    variant="ghost"
-                    size="icon"
-                    className="h-full w-10 shrink-0 rounded-none bg-muted px-0 hover:bg-muted/80"
-                    onClick={handleNext}
-                  >
-                    <ChevronRight className="h-4 w-4" />
-                  </Button>
-                </div>
-              </div>
-            </div>
-          </div>
+                    <div
+                      className={cn(
+                        "mb-1 text-sm font-medium",
+                        isToday && "text-primary"
+                      )}
+                    >
+                      {format(date, "d")}
+                    </div>
+                    <div className="space-y-1">
+                      {dayEvents.slice(0, 3).map((event) => {
+                        const eventImageUrl =
+                          event.coverImageUrl ||
+                          event.venue?.logoImageUrl ||
+                          event.organizer?.logoImageUrl ||
+                          null;
 
-          {(showSkeletons || visibleCategories.length > 0) && (
-            <div className="-mx-4 overflow-x-auto pt-1 [scrollbar-width:none] md:-mx-8 [&::-webkit-scrollbar]:hidden">
-              <div className="flex gap-1.5 px-4 md:px-8">
-                {showSkeletons
-                  ? [64, 80, 56, 72].map((width, i) => (
-                      <div
-                        key={`pill-skeleton-${i}`}
-                        className="h-7 animate-pulse rounded-full bg-muted/50"
-                        style={{ width: `${width}px` }}
-                      />
-                    ))
-                  : visibleCategories.map((category) => {
-                      const isSelected = selectedCategories.includes(
-                        category.key
-                      );
-                      return (
-                        <button
-                          key={category.id}
-                          type="button"
-                          aria-pressed={isSelected}
-                          onClick={() => {
-                            void triggerHaptic(HapticPreset.Selection);
-                            toggleCategory(category.key);
-                          }}
-                          className={cn(
-                            "inline-flex shrink-0 items-center gap-1 rounded-full px-3.5 py-1.5 text-xs font-medium transition-colors",
-                            isSelected
-                              ? "bg-neon-teal text-background"
-                              : "bg-muted/50 text-muted-foreground md:hover:text-foreground"
-                          )}
-                        >
-                          {category.label}
-                          {isSelected && <X className="h-3 w-3" />}
-                        </button>
-                      );
-                    })}
-              </div>
-            </div>
-          )}
-        </StickySearchBar>
+                        return (
+                          <HoverCard
+                            key={event.id}
+                            openDelay={200}
+                            closeDelay={100}
+                          >
+                            <HoverCardTrigger asChild>
+                              <div
+                                className="cursor-pointer truncate rounded bg-primary/10 p-1 text-xs text-primary hover:bg-primary/20"
+                                onClick={() => {
+                                  const returnTo = `${window.location.pathname}${window.location.search}`;
+                                  window.location.href = withReturnTo(
+                                    `/event/${event.id}`,
+                                    returnTo
+                                  );
+                                }}
+                              >
+                                {event.title}
+                              </div>
+                            </HoverCardTrigger>
+                            <HoverCardContent
+                              className="w-80"
+                              side="right"
+                              align="start"
+                            >
+                              <div className="space-y-3">
+                                {eventImageUrl ? (
+                                  <div className="relative h-32 w-full overflow-hidden rounded-md">
+                                    <Image
+                                      src={eventImageUrl}
+                                      alt={event.title}
+                                      fill
+                                      className="object-cover"
+                                    />
+                                  </div>
+                                ) : null}
 
-        {shouldShowAddFriendsBanner && (
+                                <div>
+                                  <h4 className="mb-1 text-base font-semibold leading-tight">
+                                    {event.title}
+                                  </h4>
+                                  <div className="flex flex-wrap gap-1">
+                                    {event.categories
+                                      ?.slice(0, 2)
+                                      .map((cat) => (
+                                        <span
+                                          key={cat}
+                                          className="rounded-full bg-primary/10 px-2 py-0.5 text-xs capitalize text-primary"
+                                        >
+                                          {categoryLabelMap[cat] || cat}
+                                        </span>
+                                      ))}
+                                  </div>
+                                </div>
+
+                                <div className="flex items-start gap-2 text-sm">
+                                  <Clock className="mt-0.5 h-4 w-4 flex-shrink-0 text-muted-foreground" />
+                                  <div>
+                                    <div className="font-medium">
+                                      {format(
+                                        new Date(event.startAt),
+                                        "EEEE, MMMM d"
+                                      )}
+                                    </div>
+                                    <div className="text-muted-foreground">
+                                      {formatTime(event.startAt)}
+                                      {event.endAt &&
+                                        ` - ${formatTime(event.endAt)}`}
+                                    </div>
+                                  </div>
+                                </div>
+
+                                {event.venue?.name || event.city ? (
+                                  <div className="flex items-start gap-2 text-sm">
+                                    <MapPin className="mt-0.5 h-4 w-4 flex-shrink-0 text-muted-foreground" />
+                                    <div>
+                                      {event.venue?.name ? (
+                                        <div className="font-medium">
+                                          {event.venue.name}
+                                        </div>
+                                      ) : null}
+                                      <div className="text-muted-foreground">
+                                        {event.city}, {event.state}
+                                      </div>
+                                    </div>
+                                  </div>
+                                ) : null}
+
+                                {event.organizer ? (
+                                  <div className="border-t pt-2 text-xs text-muted-foreground">
+                                    Hosted by {event.organizer.name}
+                                  </div>
+                                ) : null}
+
+                                <div className="pt-1 text-center text-xs text-muted-foreground">
+                                  Click to view full details
+                                </div>
+                              </div>
+                            </HoverCardContent>
+                          </HoverCard>
+                        );
+                      })}
+                      {dayEvents.length > 3 ? (
+                        <div className="text-xs text-muted-foreground">
+                          +{dayEvents.length - 3} more
+                        </div>
+                      ) : null}
+                    </div>
+                  </div>
+                );
+              })}
+            </div>
+          </CardContent>
+        </Card>
+      </div>
+    ) : undefined;
+
+  return (
+    <EventBrowserSurface
+      rootClassName="min-h-screen"
+      topSlot={<div ref={stickySentinelRef} className="h-px w-full" />}
+      searchInputRef={searchInputRef}
+      searchQuery={searchQuery}
+      onSearchQueryChange={setSearchQuery}
+      onSearchFocus={() => setIsSearchMode(true)}
+      showSearchBack={isSearchView || isFilteredFeedView}
+      onSearchBack={handleBackFromSearchOrFilter}
+      shouldShowReturnToCurrentWeekButton={shouldShowReturnToCurrentWeekButton}
+      onToday={handleToday}
+      onPrevious={handlePrevious}
+      onNext={handleNext}
+      isPreviousDisabled={isCurrentWeek}
+      hideNavigationControls={isSearchView || isFilteredFeedView}
+      cityValue={effectiveCity ?? "all"}
+      onCityChange={setSelectedCity}
+      cityOptions={cityOptions}
+      filterValue={activeFilter}
+      onFilterChange={setActiveFilter}
+      showSkeletons={showSkeletons}
+      visibleCategories={visibleCategories}
+      selectedCategories={selectedCategories}
+      onToggleCategory={(categoryKey) => {
+        void triggerHaptic(HapticPreset.Selection);
+        setSelectedCategories((current) =>
+          current.includes(categoryKey)
+            ? current.filter((key) => key !== categoryKey)
+            : [...current, categoryKey]
+        );
+      }}
+      topBanner={
+        shouldShowAddFriendsBanner ? (
           <Card className="mb-4 bg-primary/5">
             <Link
               href="/friends"
@@ -1007,325 +893,49 @@ function HomePageContent() {
               </CardContent>
             </Link>
           </Card>
-        )}
-
-        {/* Recently Added Events (when search focused but no query) */}
-        {isSearchView && !isSearching && !showSkeletons && (
-          <div className="space-y-4">
-            {upcomingSearchLoading ? (
-              <div className="flex justify-center py-12">
-                <Loader2 className="h-8 w-8 animate-spin text-muted-foreground" />
-              </div>
-            ) : filteredUpcomingSearchEvents.length === 0 ? (
-              <EmptyStateCard
-                icon={CalendarIcon}
-                title="No upcoming events to show"
-              />
-            ) : (
-              <HomeMobileEventRail events={filteredUpcomingSearchEvents} />
-            )}
-          </div>
-        )}
-
-        {/* Search Results - flat list, no date headers */}
-        {isSearching && events && !showSkeletons && (
-          <div className="space-y-4">
-            {filteredEvents.length === 0 ? (
-              <EmptyStateCard
-                icon={CalendarIcon}
-                title="No events found"
-                description="Try adjusting your search or filters"
-              />
-            ) : (
-              <HomeMobileEventRail events={filteredEvents} />
-            )}
-          </div>
-        )}
-      </div>
-
-      {/* Initial / Transition Loading State */}
-      {showSkeletons &&
-        (shouldShowWeekSectionSkeletons ? (
-          <div className="space-y-4">
-            {daysToDisplay.map((date, index) => {
-              const { dateHeader, isToday } = getWeekSectionMeta(
-                date,
-                isCurrentWeek
-              );
-
-              return (
-                <div key={`skeleton-${format(date, "yyyy-MM-dd")}`}>
-                  <StickyDateHeader dateHeader={dateHeader} isToday={isToday} />
-                  <div className="container mx-auto px-4">
-                    <EventSkeletonGrid
-                      count={Math.min(4 + (index % 2), 5)}
-                      mobileCount={3 + (index % 2)}
-                    />
-                  </div>
-                </div>
-              );
-            })}
-          </div>
-        ) : (
-          <div>
-            {skeletonDateHeader && (
-              <StickyDateHeader
-                dateHeader={skeletonDateHeader}
-                isToday={isCurrentWeek}
-              />
-            )}
-            <div className="container mx-auto px-4">
-              <EventSkeletonGrid count={8} />
-            </div>
-          </div>
-        ))}
-
-      {/* Friend Activity Feed - only show in the default home view */}
-      {shouldShowRecentActivity && (
-        <div className="mb-4">
-          <StickySectionHeader>
-            <Link
-              href="/friends"
-              className="flex items-center gap-1 transition-colors hover:text-primary"
-            >
-              <h1 className="text-xl font-bold tracking-tight">
-                Recent Activity
-              </h1>
-              <ChevronRight className="h-4 w-4" />
-            </Link>
-          </StickySectionHeader>
-          <div className="container mx-auto px-4">
-            <ActivityFeedList activities={homeActivityPreview} />
-          </div>
-        </div>
-      )}
-
-      {/* Week View - outside container for full-width sticky headers */}
-      {isFilteredFeedView && events && !showSkeletons && (
-        <div>
-          <StickyDateHeader dateHeader="Upcoming Events" isToday={false} />
-          <div className="container mx-auto px-4">
-            {filteredEvents.length === 0 ? (
-              <EventsPlaceholder />
-            ) : (
-              <HomeMobileEventRail events={filteredEvents} />
-            )}
-          </div>
-        </div>
-      )}
-
-      {/* Week View - outside container for full-width sticky headers */}
-      {!isSearchView &&
-        isDefaultCalendarView &&
-        viewMode === "week" &&
-        events &&
-        !showSkeletons && (
-          <div className="space-y-4">
-            {daysToDisplay.map((date) => {
-              const dateKey = format(date, "yyyy-MM-dd");
-              const dayEvents = eventsByDay[dateKey] || [];
-              const { dateHeader, isToday, isLastNightSection } =
-                getWeekSectionMeta(date, isCurrentWeek);
-
-              if (isLastNightSection && dayEvents.length === 0) {
-                return null;
-              }
-
-              return (
-                <div key={dateKey}>
-                  <StickyDateHeader dateHeader={dateHeader} isToday={isToday} />
-                  <div className="container mx-auto px-4">
-                    {dayEvents.length === 0 ? (
-                      <EventsPlaceholder message="No events scheduled" />
-                    ) : (
-                      <HomeMobileEventRail events={dayEvents} />
-                    )}
-                  </div>
-                </div>
-              );
-            })}
-          </div>
-        )}
-
-      <div className="container mx-auto px-4">
-        {/* Month View - only show when not in search mode */}
-        {!isSearchView &&
-          isDefaultCalendarView &&
-          viewMode === "month" &&
-          events &&
-          !showSkeletons && (
-            <Card>
-              <CardContent className="p-4">
-                {/* Day of week headers */}
-                <div className="mb-2 grid grid-cols-7 gap-2">
-                  {["Sun", "Mon", "Tue", "Wed", "Thu", "Fri", "Sat"].map(
-                    (day) => (
-                      <div
-                        key={day}
-                        className="py-2 text-center text-sm font-medium text-muted-foreground"
-                      >
-                        {day}
-                      </div>
-                    )
-                  )}
-                </div>
-
-                {/* Calendar grid */}
-                <div className="grid grid-cols-7 gap-2">
-                  {daysToDisplay.map((date) => {
-                    const dateKey = format(date, "yyyy-MM-dd");
-                    const dayEvents = eventsByDay[dateKey] || [];
-                    const isToday = isSameDay(date, new Date());
-                    const isCurrentMonth = isSameMonth(date, currentDate);
-
-                    return (
-                      <div
-                        key={dateKey}
-                        className={cn(
-                          "min-h-[120px] rounded-lg border p-2",
-                          !isCurrentMonth &&
-                            "bg-muted/50 text-muted-foreground",
-                          isToday && "border-primary bg-primary/5"
-                        )}
-                      >
-                        <div
-                          className={cn(
-                            "mb-1 text-sm font-medium",
-                            isToday && "text-primary"
-                          )}
-                        >
-                          {format(date, "d")}
-                        </div>
-                        <div className="space-y-1">
-                          {dayEvents.slice(0, 3).map((event) => {
-                            const eventImageUrl =
-                              event.coverImageUrl ||
-                              event.venue?.logoImageUrl ||
-                              event.organizer?.logoImageUrl ||
-                              null;
-
-                            return (
-                              <HoverCard
-                                key={event.id}
-                                openDelay={200}
-                                closeDelay={100}
-                              >
-                                <HoverCardTrigger asChild>
-                                  <div
-                                    className="cursor-pointer truncate rounded bg-primary/10 p-1 text-xs text-primary hover:bg-primary/20"
-                                    onClick={() => {
-                                      const returnTo = `${window.location.pathname}${window.location.search}`;
-                                      window.location.href = withReturnTo(
-                                        `/event/${event.id}`,
-                                        returnTo
-                                      );
-                                    }}
-                                  >
-                                    {event.title}
-                                  </div>
-                                </HoverCardTrigger>
-                                <HoverCardContent
-                                  className="w-80"
-                                  side="right"
-                                  align="start"
-                                >
-                                  <div className="space-y-3">
-                                    {/* Event Image */}
-                                    {eventImageUrl && (
-                                      <div className="relative h-32 w-full overflow-hidden rounded-md">
-                                        <Image
-                                          src={eventImageUrl}
-                                          alt={event.title}
-                                          fill
-                                          className="object-cover"
-                                        />
-                                      </div>
-                                    )}
-
-                                    {/* Title */}
-                                    <div>
-                                      <h4 className="mb-1 text-base font-semibold leading-tight">
-                                        {event.title}
-                                      </h4>
-                                      <div className="flex flex-wrap gap-1">
-                                        {event.categories
-                                          ?.slice(0, 2)
-                                          .map((cat) => (
-                                            <span
-                                              key={cat}
-                                              className="rounded-full bg-primary/10 px-2 py-0.5 text-xs capitalize text-primary"
-                                            >
-                                              {categoryLabelMap[cat] || cat}
-                                            </span>
-                                          ))}
-                                      </div>
-                                    </div>
-
-                                    {/* Date & Time */}
-                                    <div className="flex items-start gap-2 text-sm">
-                                      <Clock className="mt-0.5 h-4 w-4 flex-shrink-0 text-muted-foreground" />
-                                      <div>
-                                        <div className="font-medium">
-                                          {format(
-                                            new Date(event.startAt),
-                                            "EEEE, MMMM d"
-                                          )}
-                                        </div>
-                                        <div className="text-muted-foreground">
-                                          {formatTime(event.startAt)}
-                                          {event.endAt &&
-                                            ` - ${formatTime(event.endAt)}`}
-                                        </div>
-                                      </div>
-                                    </div>
-
-                                    {/* Location */}
-                                    {(event.venue?.name || event.city) && (
-                                      <div className="flex items-start gap-2 text-sm">
-                                        <MapPin className="mt-0.5 h-4 w-4 flex-shrink-0 text-muted-foreground" />
-                                        <div>
-                                          {event.venue?.name && (
-                                            <div className="font-medium">
-                                              {event.venue.name}
-                                            </div>
-                                          )}
-                                          <div className="text-muted-foreground">
-                                            {event.city}, {event.state}
-                                          </div>
-                                        </div>
-                                      </div>
-                                    )}
-
-                                    {event.organizer && (
-                                      <div className="border-t pt-2 text-xs text-muted-foreground">
-                                        Hosted by {event.organizer.name}
-                                      </div>
-                                    )}
-
-                                    {/* Click to view */}
-                                    <div className="pt-1 text-center text-xs text-muted-foreground">
-                                      Click to view full details
-                                    </div>
-                                  </div>
-                                </HoverCardContent>
-                              </HoverCard>
-                            );
-                          })}
-                          {dayEvents.length > 3 && (
-                            <div className="text-xs text-muted-foreground">
-                              +{dayEvents.length - 3} more
-                            </div>
-                          )}
-                        </div>
-                      </div>
-                    );
-                  })}
-                </div>
-              </CardContent>
-            </Card>
-          )}
-      </div>
-    </div>
+        ) : null
+      }
+      showRecentActivity={shouldShowRecentActivity}
+      recentActivityTitle={
+        <Link
+          href="/friends"
+          className="flex items-center gap-1 transition-colors hover:text-primary"
+        >
+          <h1 className="text-xl font-bold tracking-tight">Recent Activity</h1>
+          <ChevronRight className="h-4 w-4" />
+        </Link>
+      }
+      recentActivityContent={
+        <ActivityFeedList activities={homeActivityPreview} />
+      }
+      isSearchView={isSearchView}
+      isSearching={isSearching}
+      upcomingEventsLoading={upcomingSearchLoading}
+      upcomingEvents={filteredUpcomingSearchEvents}
+      filteredEvents={filteredEvents}
+      flatListTitle={isFilteredFeedView ? "Upcoming Events" : null}
+      flatListEmptyState={<EventsPlaceholder />}
+      searchEmptyState={
+        <EmptyStateCard
+          icon={CalendarIcon}
+          title="No events found"
+          description="Try adjusting your search or filters"
+        />
+      }
+      upcomingEmptyState={
+        <EmptyStateCard
+          icon={CalendarIcon}
+          title="No upcoming events to show"
+        />
+      }
+      dayEmptyState={<EventsPlaceholder message="No events scheduled" />}
+      daysToDisplay={daysToDisplay}
+      isCurrentWeek={isCurrentWeek}
+      eventsByDay={eventsByDay}
+      showWeekSkeletons={shouldShowWeekSectionSkeletons}
+      skeletonDateHeader={skeletonDateHeader}
+      defaultContent={monthContent}
+    />
   );
 }
 

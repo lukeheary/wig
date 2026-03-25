@@ -5,10 +5,30 @@ import type { Viewport } from "next";
 import { Button } from "@/components/ui/button";
 import { truculenta } from "@/lib/fonts";
 import { WigLogo } from "@/components/ui/wig-logo";
+import { LandingExplainerCards } from "@/components/landing/landing-explainer-cards";
 import { LandingPageRedirect } from "@/components/landing-page-redirect";
 import { LandingEventsPreview } from "@/components/landing/landing-events-preview";
-import { LandingRecentActivity } from "@/components/landing/landing-recent-activity";
 import { LandingGetStartedLink } from "@/components/landing/landing-get-started-link";
+
+const LANDING_EXPLAINERS = [
+  {
+    title: "See What Is Happening",
+    description:
+      "Browse upcoming events happening that are happening near you.",
+    icon: "calendar" as const,
+  },
+  {
+    title: "See Who Is Going",
+    description:
+      "Find out which of your friends are going, interested, or already have plans.",
+    icon: "users" as const,
+  },
+  {
+    title: "Decide Faster",
+    description: "Less group chat back-and-forth, more spontaneous plans.",
+    icon: "compass" as const,
+  },
+];
 
 export const viewport: Viewport = {
   colorScheme: "dark",
@@ -139,31 +159,48 @@ export default async function LandingPage() {
           {/* Fake hero events are parked for now in favor of a live recent-activity demo. */}
           {/* <AnimatedLandingEvents events={fakeEvents} /> */}
 
-          <section className="container mx-auto px-4 pb-6 md:py-8">
-            <LandingRecentActivity />
+          <section className="container mx-auto px-4 pb-8 pt-2 md:pb-14 md:pt-10">
+            <LandingExplainerCards items={LANDING_EXPLAINERS} />
           </section>
 
           <section className="mx-auto pb-10 md:pb-16">
             <LandingEventsPreview />
           </section>
 
-          {/* Final CTA */}
-          <section className="pb-12">
-            <div className="container mx-auto flex flex-col items-center gap-2 px-4 text-center">
-              <h2 className="text-4xl font-semibold md:text-4xl">
-                <span className={truculenta.className}>See who is going.</span>
-              </h2>
+          <footer className="border-t border-white/10 bg-card/40 py-12">
+            <div className="container mx-auto px-4">
+              <div className="flex flex-col gap-6 md:flex-row md:items-end md:justify-between md:gap-8">
+                <div className="space-y-3">
+                  <div className="inline-flex">
+                    <WigLogo asLink={false} />
+                  </div>
+                  <h2 className="text-3xl font-semibold leading-[0.98] tracking-tight md:text-4xl">
+                    <span className={truculenta.className}>
+                      See who is going.
+                    </span>
+                  </h2>
+                </div>
 
-              <div className="flex flex-wrap items-center justify-center gap-3 pt-4">
-                <LandingGetStartedLink location="footer" />
-                <Link href="/sign-in">
-                  <Button size="lg" variant="outline">
-                    Sign In
-                  </Button>
-                </Link>
+                <div className="flex w-full flex-row gap-3 md:ml-auto md:w-auto md:flex-none">
+                  <div className="min-w-0 flex-1 md:min-w-[168px] md:flex-none">
+                    <LandingGetStartedLink
+                      location="footer"
+                      className="block"
+                      buttonClassName="w-full"
+                    />
+                  </div>
+                  <Link
+                    href="/sign-in"
+                    className="min-w-0 flex-1 md:min-w-[168px] md:flex-none"
+                  >
+                    <Button size="lg" variant="outline" className="w-full">
+                      Sign In
+                    </Button>
+                  </Link>
+                </div>
               </div>
             </div>
-          </section>
+          </footer>
         </main>
       </div>
     </>

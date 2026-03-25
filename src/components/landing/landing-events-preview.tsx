@@ -1,12 +1,25 @@
 "use client";
 
-import { useMemo } from "react";
+import { useMemo, useRef, useState } from "react";
+import {
+  addDays,
+  eachDayOfInterval,
+  endOfWeek,
+  format,
+  isBefore,
+  isSameWeek,
+  parseISO,
+  startOfDay,
+  startOfWeek,
+  subDays,
+} from "date-fns";
+import { useQueryState } from "nuqs";
+import { EventBrowserSurface } from "@/components/events/event-browser-surface";
+import { LandingRecentActivity } from "@/components/landing/landing-recent-activity";
+import { EventsPlaceholder } from "@/components/shared/events-placeholder";
 import { trpc } from "@/lib/trpc";
-import { HomeMobileEventRail } from "@/components/events/home-mobile-event-rail";
-import { StickySectionHeader } from "@/components/ui/sticky-section-header";
-import { Loader2, CalendarIcon } from "lucide-react";
+import { type EventFilterTab } from "@/types/events";
 import { type EventListItem } from "@/types/trpc";
-import { endOfWeek, format, isSameDay } from "date-fns";
 
 const MOCK_EVENT_ATTENDEES = [
   {
@@ -84,110 +97,279 @@ function withMockFriendsGoing(events: EventListItem[]): EventListItem[] {
 }
 
 export function LandingEventsPreview() {
-  const now = useMemo(() => new Date(), []);
-  const weekEnd = useMemo(() => endOfWeek(now, { weekStartsOn: 1 }), [now]);
+  const searchInputRef = useRef<HTMLInputElement>(null);
+  const [activeFilter, setActiveFilter] = useState<EventFilterTab>("all");
+  const [selectedCategories, setSelectedCategories] = useState<string[]>([]);
+  const [isSearchMode, setIsSearchMode] = useState(false);
+  const [searchQuery, setSearchQuery] = useQueryState("search", {
+    defaultValue: "",
+    scroll: false,
+    shallow: true,
+  });
+  const [selectedCity, setSelectedCity] = useQueryState<string | null>("city", {
+    defaultValue: null,
+    parse: (value) => value || null,
+    serialize: (value) => value || "",
+    scroll: false,
+    shallow: true,
+  });
+  const [dateParam, setDateParam] = useQueryState("date", {
+    defaultValue: format(new Date(), "yyyy-MM-dd"),
+    scroll: false,
+    shallow: true,
+  });
 
-  const { data: events, isLoading } =
-    trpc.event.listPublicEventsPreview.useQuery({
-      limit: 32,
-      startDate: now,
-      endDate: weekEnd,
-    });
+  const currentDate = useMemo(() => {
+    try {
+      return startOfDay(parseISO(dateParam));
+    } catch {
+      return startOfDay(new Date());
+    }
+  }, [dateParam]);
 
-  const eventsByDay = withMockFriendsGoing(events ?? []).reduce<
-    Array<{ label: string; dateKey: string; events: EventListItem[] }>
-  >((groups, event) => {
-    const eventDate = new Date(event.startAt);
-    const dateKey = format(eventDate, "yyyy-MM-dd");
-    const isToday = isSameDay(eventDate, now);
-    const dateLabel = isToday
-      ? now.getHours() >= 17
-        ? "Tonight's Events"
-        : "Today's Events"
-      : format(eventDate, "EEE, MMM d");
-    const currentGroup = groups.at(-1);
+  const isCurrentWeek = useMemo(() => {
+    const today = startOfDay(new Date());
+    return (
+      isSameWeek(currentDate, today, { weekStartsOn: 1 }) ||
+      isBefore(currentDate, today)
+    );
+  }, [currentDate]);
 
-    if (!currentGroup || currentGroup.dateKey !== dateKey) {
-      groups.push({
-        label: dateLabel,
-        dateKey,
-        events: [event],
-      });
-      return groups;
+  const isSearching = Boolean(searchQuery.trim());
+  const isSearchView = isSearchMode || isSearching;
+  const shouldShowReturnToCurrentWeekButton = !isCurrentWeek && !isSearchView;
+
+  const dateRange = useMemo(() => {
+    const today = startOfDay(new Date());
+    const isLastNightWindow = isCurrentWeek && new Date().getHours() < 6;
+
+    if (isSearching) {
+      return { startDate: today, endDate: addDays(today, 365) };
     }
 
-    currentGroup.events.push(event);
-    return groups;
-  }, []);
+    if (isCurrentWeek) {
+      return {
+        startDate: isLastNightWindow ? subDays(today, 1) : today,
+        endDate: endOfWeek(today, { weekStartsOn: 1 }),
+      };
+    }
+
+    const startDate = startOfWeek(currentDate, { weekStartsOn: 1 });
+    return {
+      startDate,
+      endDate: endOfWeek(startDate, { weekStartsOn: 1 }),
+    };
+  }, [currentDate, isCurrentWeek, isSearching]);
+
+  const { data: cities } = trpc.event.getAvailableCities.useQuery();
+  const { data: activeCategories } = trpc.category.listActive.useQuery();
+  const {
+    data: events,
+    isLoading,
+    isFetching,
+  } = trpc.event.listPublicEventsByRange.useQuery(
+    {
+      startDate: dateRange.startDate,
+      endDate: dateRange.endDate,
+      city: selectedCity && selectedCity !== "all" ? selectedCity : undefined,
+      search: searchQuery || undefined,
+      limit: isSearching ? 100 : 64,
+    },
+    {
+      placeholderData: (previousData) => previousData,
+    }
+  );
+
+  const { data: upcomingSearchEvents, isLoading: isUpcomingSearchLoading } =
+    trpc.event.listPublicEventsByRange.useQuery(
+      {
+        startDate: startOfDay(new Date()),
+        endDate: addDays(startOfDay(new Date()), 365),
+        city: selectedCity && selectedCity !== "all" ? selectedCity : undefined,
+        limit: 20,
+      },
+      {
+        enabled: isSearchView && !isSearching,
+      }
+    );
+
+  const enhancedEvents = useMemo(
+    () => withMockFriendsGoing(events ?? []),
+    [events]
+  );
+  const enhancedUpcomingEvents = useMemo(
+    () => withMockFriendsGoing(upcomingSearchEvents ?? []),
+    [upcomingSearchEvents]
+  );
+
+  const visibleCategories = useMemo(() => {
+    const availableCategoryKeys = new Set<string>();
+    enhancedEvents.forEach((event) =>
+      event.categories?.forEach((category) =>
+        availableCategoryKeys.add(category)
+      )
+    );
+
+    return (activeCategories ?? []).filter((category) =>
+      availableCategoryKeys.has(category.key)
+    );
+  }, [activeCategories, enhancedEvents]);
+
+  const filteredEvents = useMemo(() => {
+    if (selectedCategories.length === 0) return enhancedEvents;
+
+    return enhancedEvents.filter((event) =>
+      selectedCategories.every((category) =>
+        event.categories?.includes(category)
+      )
+    );
+  }, [enhancedEvents, selectedCategories]);
+
+  const filteredUpcomingEvents = useMemo(() => {
+    if (selectedCategories.length === 0) return enhancedUpcomingEvents;
+
+    return enhancedUpcomingEvents.filter((event) =>
+      selectedCategories.every((category) =>
+        event.categories?.includes(category)
+      )
+    );
+  }, [enhancedUpcomingEvents, selectedCategories]);
+
+  const eventsByDay = useMemo(
+    () =>
+      filteredEvents.reduce<Record<string, EventListItem[]>>(
+        (groups, event) => {
+          const dateKey = format(new Date(event.startAt), "yyyy-MM-dd");
+          if (!groups[dateKey]) {
+            groups[dateKey] = [];
+          }
+          groups[dateKey].push(event);
+          return groups;
+        },
+        {}
+      ),
+    [filteredEvents]
+  );
+
+  const daysToDisplay = useMemo(
+    () =>
+      eachDayOfInterval({
+        start: dateRange.startDate,
+        end: dateRange.endDate,
+      }),
+    [dateRange]
+  );
+
+  const showSkeletons = (!events && isLoading) || (isFetching && !isSearching);
+
+  const cityOptions = useMemo(
+    () => [
+      { value: "all", label: "All Cities" },
+      ...(cities?.map((city) => ({
+        value: city.city,
+        label: `${city.city}, ${city.state}`,
+      })) || []),
+    ],
+    [cities]
+  );
 
   return (
-    <div className="space-y-6">
-      {/*<div className="flex flex-col gap-2 sm:flex-row sm:items-center">*/}
-      {/*  <SearchInput*/}
-      {/*    placeholder="Search events..."*/}
-      {/*    value={search}*/}
-      {/*    onChange={setSearch}*/}
-      {/*    className="w-full sm:flex-1"*/}
-      {/*  />*/}
-      {/*  <ResponsiveSelect*/}
-      {/*    value={selectedCity}*/}
-      {/*    onValueChange={setSelectedCity}*/}
-      {/*    options={[*/}
-      {/*      { value: "all", label: "All Cities" },*/}
-      {/*      ...(cities?.map((city) => ({*/}
-      {/*        value: city.city,*/}
-      {/*        label: `${city.city}, ${city.state}`,*/}
-      {/*      })) || []),*/}
-      {/*    ]}*/}
-      {/*    placeholder="Select city"*/}
-      {/*    title="Select City"*/}
-      {/*    className="shrink-0 sm:w-[200px]"*/}
-      {/*  />*/}
-      {/*</div>*/}
+    <EventBrowserSurface
+      searchInputRef={searchInputRef}
+      searchQuery={searchQuery}
+      onSearchQueryChange={setSearchQuery}
+      onSearchFocus={() => setIsSearchMode(true)}
+      showSearchBack={isSearchView}
+      onSearchBack={() => {
+        setIsSearchMode(false);
+        setSearchQuery("");
+        searchInputRef.current?.blur();
+      }}
+      shouldShowReturnToCurrentWeekButton={shouldShowReturnToCurrentWeekButton}
+      onToday={() =>
+        setDateParam(format(new Date(), "yyyy-MM-dd"), {
+          scroll: false,
+          shallow: true,
+        })
+      }
+      onPrevious={async () => {
+        if (isCurrentWeek) {
+          return;
+        }
 
-      {isLoading ? (
-        <div className="flex justify-center py-12">
-          <Loader2 className="h-8 w-8 animate-spin text-muted-foreground" />
-        </div>
-      ) : eventsByDay.length === 0 ? (
-        <div className="py-12 text-center">
-          <CalendarIcon className="mx-auto mb-4 h-12 w-12 text-muted-foreground" />
-          <h3 className="mb-2 text-lg font-semibold">No events this week</h3>
-          <p className="text-muted-foreground">
-            Check back later for upcoming events
-          </p>
-        </div>
-      ) : (
-        <div className="space-y-4">
-          {eventsByDay.map((group) => (
-            <div key={group.dateKey}>
-              <StickySectionHeader>
-                <span
-                  className={
-                    group.label === "Today's Events" ||
-                    group.label === "Tonight's Events"
-                      ? "text-primary"
-                      : undefined
-                  }
-                >
-                  {group.label}
-                </span>
-              </StickySectionHeader>
-              <div className="container mx-auto px-4">
-                <HomeMobileEventRail events={group.events} />
-              </div>
-            </div>
-          ))}
-        </div>
-      )}
+        const today = startOfDay(new Date());
+        const previousWeekStart = addDays(currentDate, -7);
 
-      {/*<div className="flex justify-center pt-2">*/}
-      {/*  <Link href="/sign-up">*/}
-      {/*    <Button size="lg" variant="outline">*/}
-      {/*      Sign up to see more*/}
-      {/*    </Button>*/}
-      {/*  </Link>*/}
-      {/*</div>*/}
-    </div>
+        if (
+          isSameWeek(previousWeekStart, today, { weekStartsOn: 1 }) ||
+          isBefore(previousWeekStart, today)
+        ) {
+          await setDateParam(format(today, "yyyy-MM-dd"), {
+            scroll: false,
+            shallow: true,
+          });
+          return;
+        }
+
+        await setDateParam(
+          format(
+            startOfWeek(previousWeekStart, { weekStartsOn: 1 }),
+            "yyyy-MM-dd"
+          ),
+          {
+            scroll: false,
+            shallow: true,
+          }
+        );
+      }}
+      onNext={() => {
+        const today = startOfDay(new Date());
+        const nextDate = isCurrentWeek
+          ? startOfWeek(addDays(today, 7), { weekStartsOn: 1 })
+          : addDays(startOfWeek(currentDate, { weekStartsOn: 1 }), 7);
+
+        return setDateParam(format(nextDate, "yyyy-MM-dd"), {
+          scroll: false,
+          shallow: true,
+        });
+      }}
+      isPreviousDisabled={isCurrentWeek}
+      cityValue={selectedCity ?? "all"}
+      onCityChange={setSelectedCity}
+      cityOptions={cityOptions}
+      filterValue={activeFilter}
+      onFilterChange={setActiveFilter}
+      allowPersonalFilters={false}
+      showSkeletons={showSkeletons}
+      visibleCategories={visibleCategories}
+      selectedCategories={selectedCategories}
+      onToggleCategory={(categoryKey) =>
+        setSelectedCategories((current) =>
+          current.includes(categoryKey)
+            ? current.filter((key) => key !== categoryKey)
+            : [...current, categoryKey]
+        )
+      }
+      showRecentActivity={
+        !isSearchView &&
+        !showSkeletons &&
+        isCurrentWeek &&
+        activeFilter === "all" &&
+        selectedCategories.length === 0
+      }
+      recentActivityTitle={
+        <h1 className="text-xl font-bold tracking-tight">Recent Activity</h1>
+      }
+      recentActivityContent={<LandingRecentActivity />}
+      isSearchView={isSearchView}
+      isSearching={isSearching}
+      upcomingEventsLoading={isUpcomingSearchLoading}
+      upcomingEvents={filteredUpcomingEvents}
+      filteredEvents={filteredEvents}
+      dayEmptyState={<EventsPlaceholder message="No events scheduled" />}
+      daysToDisplay={daysToDisplay}
+      isCurrentWeek={isCurrentWeek}
+      eventsByDay={eventsByDay}
+    />
   );
 }

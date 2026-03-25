@@ -2256,6 +2256,125 @@ export const eventRouter = router({
       return { success: true, deletedEvents: 1, deletedRecurring: false };
     }),
 
+  listPublicEventsByRange: publicProcedure
+    .input(
+      z.object({
+        search: z.string().optional(),
+        city: z.string().optional(),
+        limit: z.number().min(1).max(100).default(50),
+        startDate: z.date(),
+        endDate: z.date(),
+      })
+    )
+    .query(async ({ ctx, input }) => {
+      const conditions = [
+        eq(events.visibility, "public"),
+        gte(events.startAt, input.startDate),
+        lte(events.startAt, input.endDate),
+      ];
+
+      if (input.city) {
+        const metro = await ctx.db.query.metroAreas.findFirst({
+          where: eq(metroAreas.name, input.city),
+        });
+
+        const originCity =
+          metro ??
+          (await ctx.db.query.cities.findFirst({
+            where: eq(cities.name, input.city),
+          }));
+
+        if (originCity?.latitude != null && originCity?.longitude != null) {
+          const radiusMiles = metro?.radiusMiles ?? 20;
+
+          const distanceSql = sql`
+            (
+              3959 * 2 * asin(
+                sqrt(
+                  pow(sin(radians(${originCity.latitude} - ${cities.latitude}) / 2), 2) +
+                  cos(radians(${originCity.latitude})) * cos(radians(${cities.latitude})) *
+                  pow(sin(radians(${originCity.longitude} - ${cities.longitude}) / 2), 2)
+                )
+              )
+            )
+          `;
+
+          const nearbyEventIds = await ctx.db
+            .select({ id: events.id })
+            .from(events)
+            .innerJoin(
+              cities,
+              and(eq(cities.name, events.city), eq(cities.state, events.state))
+            )
+            .where(
+              and(
+                eq(events.visibility, "public"),
+                gte(events.startAt, input.startDate),
+                lte(events.startAt, input.endDate),
+                sql`${distanceSql} <= ${radiusMiles}`
+              )
+            );
+
+          if (nearbyEventIds.length === 0) {
+            return [];
+          }
+
+          conditions.push(
+            inArray(
+              events.id,
+              nearbyEventIds.map((row) => row.id)
+            )
+          );
+        } else {
+          conditions.push(eq(events.city, input.city));
+        }
+      }
+
+      if (input.search?.trim()) {
+        const searchTerm = `%${input.search.trim()}%`;
+        const matchingVenueRows = await ctx.db
+          .select({ id: places.id })
+          .from(places)
+          .where(and(eq(places.type, "venue"), ilike(places.name, searchTerm)));
+
+        const searchConditions = [ilike(events.title, searchTerm)];
+
+        if (matchingVenueRows.length > 0) {
+          searchConditions.push(
+            inArray(
+              events.venueId,
+              matchingVenueRows.map((row) => row.id)
+            )
+          );
+        }
+
+        conditions.push(or(...searchConditions)!);
+      }
+
+      const eventList = await ctx.db.query.events.findMany({
+        where: and(...conditions),
+        orderBy: [events.startAt],
+        limit: input.limit,
+        with: {
+          venue: true,
+          organizer: true,
+          createdBy: true,
+          categoryLinks: {
+            with: {
+              category: true,
+            },
+          },
+        },
+      });
+
+      return eventList.map((event) => ({
+        ...mapEventCategoryData(event),
+        userRsvp: null,
+        friendsGoing: [] as never[],
+        friendsInterested: [] as never[],
+      }));
+    }),
+
   listPublicEventsPreview: publicProcedure
     .input(
       z.object({
