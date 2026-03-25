@@ -51,25 +51,6 @@ function EventPageSkeleton() {
   return (
     <div className="relative isolate -mt-14 min-h-screen pt-14 md:-mt-16 md:pt-16">
       <div className="absolute inset-0 -z-20 bg-background" />
-      <div className="pointer-events-none absolute inset-x-0 top-0 -z-10 h-[28rem] overflow-hidden">
-        <div className="bg-neon-pink/12 absolute left-[-8rem] top-10 h-72 w-72 rounded-full blur-3xl" />
-        <div className="bg-neon-teal/12 absolute right-[-5rem] top-16 h-80 w-80 rounded-full blur-3xl" />
-        <div
-          className="absolute inset-x-0 top-0 h-full"
-          style={{
-            background:
-              "linear-gradient(to bottom, hsl(var(--background)) 0%, hsl(var(--background) / 0.6) 8%, transparent 18%, hsl(var(--background) / 0.3) 70%, hsl(var(--background)) 100%)",
-          }}
-        />
-        <div
-          className="absolute inset-x-0 top-0 md:hidden"
-          style={{
-            height: "160px",
-            background:
-              "linear-gradient(to bottom, hsl(var(--background)) 56px, transparent 160px)",
-          }}
-        />
-      </div>
       <div className="container w-full px-4 pb-6 md:pt-4">
         <div className="lg:flex lg:items-start lg:gap-10">
           <div className="lg:w-[360px] lg:flex-none">
@@ -398,37 +379,6 @@ export default function EventPage() {
   return (
     <div className="relative isolate -mt-14 min-h-screen pt-14 md:-mt-16 md:pt-16">
       <div className="absolute inset-0 -z-20 bg-background" />
-      <div className="pointer-events-none absolute inset-x-0 top-0 -z-10 h-[42rem] overflow-hidden">
-        {eventImageUrl ? (
-          <div className="absolute inset-x-[-4%] top-[-2rem] h-[34rem] opacity-25 blur-3xl">
-            <Image
-              src={eventImageUrl}
-              alt=""
-              fill
-              priority
-              fetchPriority="high"
-              sizes="110vw"
-              className="scale-125 object-cover"
-              aria-hidden="true"
-            />
-          </div>
-        ) : (
-          <>
-            <div className="bg-neon-pink/10 absolute left-[-8rem] top-10 h-80 w-80 rounded-full blur-3xl" />
-            <div className="absolute right-[-6rem] top-16 h-96 w-96 rounded-full bg-neon-teal/10 blur-3xl" />
-          </>
-        )}
-        {/* Top fade — always present, blends navbar into image regardless of load state */}
-        <div
-          className="absolute inset-x-0 top-0 h-[45%]"
-          style={{
-            background:
-              "linear-gradient(to bottom, hsl(var(--background)) 0%, hsl(var(--background) / 0.85) 10%, hsl(var(--background) / 0.5) 30%, hsl(var(--background) / 0.1) 70%, transparent 100%)",
-          }}
-        />
-        {/* Bottom fade — always present, ensures image never hard-clips into page background */}
-        <div className="absolute inset-x-0 bottom-0 h-[55%] bg-gradient-to-t from-background via-background/60 to-transparent" />
-      </div>
       {/* Image Modal */}
       {isImageModalOpen && eventImageUrl && (
         <div
