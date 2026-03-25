@@ -171,21 +171,19 @@ export default async function LandingPage() {
             <LandingExplainerCards items={LANDING_EXPLAINERS} />
           </section>
 
-          <section className="mx-auto pb-10 md:pb-16">
+          <section className="mx-auto pb-4">
             <LandingEventsPreview />
           </section>
 
-          <footer className="border-t border-white/10 bg-card/40 py-12">
+          <footer className="bg-card/40 pb-8 pt-4 md:pb-12">
             <div className="container mx-auto px-4">
               <div className="flex flex-col gap-6 md:flex-row md:items-end md:justify-between md:gap-8">
                 <div className="space-y-3">
                   <div className="inline-flex">
                     <WigLogo asLink={false} />
                   </div>
-                  <h2 className="text-3xl font-semibold leading-[0.98] tracking-tight md:text-4xl">
-                    <span className={truculenta.className}>
-                      See who is going.
-                    </span>
+                  <h2 className="font-space-grotesk text-3xl font-semibold leading-[0.98] tracking-tight md:text-4xl">
+                    <span>See who is going.</span>
                   </h2>
                 </div>
 
