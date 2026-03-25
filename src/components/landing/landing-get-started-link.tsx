@@ -33,7 +33,7 @@ export function LandingGetStartedLink({
           buttonClassName
         )}
       >
-        Get Started
+        Sign Up
       </Button>
     </Link>
   );

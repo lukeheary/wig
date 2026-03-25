@@ -52,6 +52,7 @@ function MainLayoutContent({ children }: { children: React.ReactNode }) {
   const [hasMounted, setHasMounted] = useState(false);
   const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
   const signInHref = withReturnTo("/sign-in", buildReturnTo(pathname, null));
+  const signUpHref = withReturnTo("/sign-up", buildReturnTo(pathname, null));
   const { data: adminCheck } = trpc.user.isAdmin.useQuery(undefined, {
     enabled: Boolean(isSignedIn),
   });
@@ -96,6 +97,7 @@ function MainLayoutContent({ children }: { children: React.ReactNode }) {
   const isAdminPage = pathname?.startsWith("/admin");
   const isEventDetail =
     pathname?.startsWith("/event/") && !pathname?.includes("/edit");
+  const shouldShowSignUp = !isSignedIn && isEventDetail;
 
   const handleSignOut = async () => {
     await signOut();
@@ -291,14 +293,25 @@ function MainLayoutContent({ children }: { children: React.ReactNode }) {
                 </DropdownMenu>
               </>
             ) : (
-              <Link href={signInHref}>
-                <Button
-                  variant="ghost"
-                  onClick={() => trackNavigationClick(signInHref, "auth")}
-                >
-                  Sign In
-                </Button>
-              </Link>
+              <>
+                <Link href={signInHref}>
+                  <Button
+                    variant="ghost"
+                    onClick={() => trackNavigationClick(signInHref, "auth")}
+                  >
+                    Sign In
+                  </Button>
+                </Link>
+                {shouldShowSignUp ? (
+                  <Link href={signUpHref}>
+                    <Button
+                      onClick={() => trackNavigationClick(signUpHref, "auth")}
+                    >
+                      Sign Up
+                    </Button>
+                  </Link>
+                ) : null}
+              </>
             )}
           </div>
 
@@ -492,14 +505,25 @@ function MainLayoutContent({ children }: { children: React.ReactNode }) {
                 </SheetContent>
               </Sheet>
             ) : (
-              <Link href={signInHref}>
-                <Button
-                  variant="ghost"
-                  onClick={() => trackNavigationClick(signInHref, "auth")}
-                >
-                  Sign In
-                </Button>
-              </Link>
+              <>
+                <Link href={signInHref}>
+                  <Button
+                    variant="ghost"
+                    onClick={() => trackNavigationClick(signInHref, "auth")}
+                  >
+                    Sign In
+                  </Button>
+                </Link>
+                {shouldShowSignUp ? (
+                  <Link href={signUpHref}>
+                    <Button
+                      onClick={() => trackNavigationClick(signUpHref, "auth")}
+                    >
+                      Sign Up
+                    </Button>
+                  </Link>
+                ) : null}
+              </>
             )}
           </div>
         </div>

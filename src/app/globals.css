@@ -113,3 +113,36 @@
     font-family: var(--font-space-grotesk), sans-serif;
   }
 }
+
+@keyframes hero-event-marquee {
+  from {
+    transform: translateX(0);
+  }
+
+  to {
+    transform: translateX(calc(-50% - 0.75rem));
+  }
+}
+
+.hero-event-marquee-track {
+  animation: hero-event-marquee 34s linear infinite;
+  will-change: transform;
+}
+
+@media (min-width: 768px) {
+  @keyframes hero-event-marquee {
+    from {
+      transform: translateX(0);
+    }
+
+    to {
+      transform: translateX(calc(-50% - 1rem));
+    }
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .hero-event-marquee-track {
+    animation: none;
+  }
+}
