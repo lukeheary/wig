@@ -69,9 +69,9 @@ export default async function LandingPage() {
 
         <main className="flex-1 bg-background">
           {/* Hero Section */}
-          <section className="relative flex min-h-[calc(100svh-7.5rem)] flex-col bg-card md:min-h-[calc(100svh-4rem)]">
+          <section className="relative flex min-h-[calc(100svh-7.5rem)] flex-col bg-card md:min-h-[calc(100svh-8rem)]">
             <div className="flex flex-1 items-center">
-              <div className="relative mx-auto flex w-full max-w-6xl justify-start pb-8 pt-36 md:py-10">
+              <div className="relative mx-auto flex w-full max-w-6xl justify-start pb-8 pt-48 md:py-10">
                 {/* The Moon Container */}
                 {/*<div className="relative mx-auto mb-[-60px] flex h-[300px] w-[300px] items-center justify-center rounded-full bg-gradient-to-b from-white/[0.08] to-background shadow-[0_0_50px_-12px_rgba(255,255,255,0.1)] md:mb-[-100px] md:h-[400px] md:w-[400px]">*/}
                 {/*  <h1*/}
@@ -88,11 +88,11 @@ export default async function LandingPage() {
                     decide where to go.
                   </h2>
 
-                  <div className="relative left-1/2 mt-7 w-screen -translate-x-1/2 overflow-hidden md:mt-10">
+                  <div className="relative left-1/2 mt-5 w-screen -translate-x-1/2 overflow-hidden md:mt-8">
                     <LandingHeroEventMarquee />
                   </div>
 
-                  <div className="mt-8 flex w-full justify-center">
+                  <div className="mt-6 flex w-full justify-center">
                     <LandingGetStartedLink
                       location="hero"
                       className="block"
