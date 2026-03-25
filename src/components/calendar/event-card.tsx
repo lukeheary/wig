@@ -1,42 +1,27 @@
 "use client";
 
 import Link from "next/link";
-import { usePathname, useSearchParams } from "next/navigation";
 import Image from "next/image";
 import { Card } from "@/components/ui/card";
 import { cn, formatTime, splitTrailingParenthetical } from "@/lib/utils";
 import { Calendar } from "lucide-react";
 import { format } from "date-fns";
-import { type EventListItem } from "@/types/trpc";
+import { EventSocialOverlay } from "@/components/events/event-social-overlay";
+import {
+  getEventImageUrl,
+  getSocialUsers,
+  type EventCardItem,
+} from "@/components/events/event-card-helpers";
+import { useEventCardLink } from "@/components/events/use-event-card-link";
 import { AvatarStack } from "@/components/ui/avatar-stack";
 import { getEventStatusLabel } from "@/lib/event-status";
-import {
-  buildReturnTo,
-  getScrollRestoreKey,
-  withReturnTo,
-} from "@/lib/navigation";
-
-type SocialUser = {
-  id: string;
-  avatarImageUrl: string | null;
-  firstName: string | null;
-  lastName: string | null;
-  rsvpStatus: "going" | "interested";
-};
-
-export type EventCardItem = Omit<EventListItem, "friendsInterested"> & {
-  friendsInterested?: EventListItem["friendsInterested"];
-};
 
 interface EventCardProps {
   event: EventCardItem;
 }
 
 export function EventCard({ event }: EventCardProps) {
-  const pathname = usePathname();
-  const searchParams = useSearchParams();
-  const returnTo = buildReturnTo(pathname, searchParams);
-  const eventHref = withReturnTo(`/event/${event.id}`, returnTo);
+  const { eventHref, handleClick } = useEventCardLink(event.id);
   const eventDate = new Date(event.startAt);
   const dayOfWeek = format(eventDate, "EEE");
   const month = format(eventDate, "MMM");
@@ -46,38 +31,9 @@ export function EventCard({ event }: EventCardProps) {
     event.title
   );
 
-  const friendsGoing = event.friendsGoing || [];
-  const friendsInterested = event.friendsInterested || [];
-  const socialUsers: SocialUser[] = [
-    ...friendsGoing,
-    ...friendsInterested,
-  ].flatMap((rsvp) => {
-    if (rsvp.status !== "going" && rsvp.status !== "interested") {
-      return [];
-    }
-
-    return [
-      {
-        ...rsvp.user,
-        rsvpStatus: rsvp.status,
-      },
-    ];
-  });
+  const socialUsers = getSocialUsers(event);
   const hasInactiveStatus = event.status !== "active";
-  const eventImageUrl =
-    event.coverImageUrl ||
-    event.venue?.logoImageUrl ||
-    event.organizer?.logoImageUrl ||
-    null;
-  const handleClick = () => {
-    if (typeof window === "undefined") return;
-
-    const currentPath = `${window.location.pathname}${window.location.search}`;
-    window.sessionStorage.setItem(
-      getScrollRestoreKey(currentPath),
-      String(window.scrollY)
-    );
-  };
+  const eventImageUrl = getEventImageUrl(event);
 
   return (
     <Link href={eventHref} className="group" onClick={handleClick}>
@@ -101,17 +57,16 @@ export function EventCard({ event }: EventCardProps) {
                 <Calendar className="h-12 w-12 text-muted-foreground/20 md:h-24 md:w-24" />
               </div>
             )}
+            <EventSocialOverlay
+              users={socialUsers}
+              size="lg"
+              stackClassName="hidden drop-shadow-[0_8px_24px_rgba(0,0,0,0.45)] md:block"
+            />
             {hasInactiveStatus && (
               <div className="absolute inset-0 flex items-center justify-center px-2">
                 <span className="relative z-10 rounded-md bg-card px-1 py-1 text-center text-[11px] font-semibold uppercase tracking-[0.12em] text-white md:px-2 md:text-base">
                   {getEventStatusLabel(event.status)}
                 </span>
-              </div>
-            )}
-
-            {socialUsers.length > 0 && (
-              <div className="absolute bottom-2 right-2 hidden md:block">
-                <AvatarStack users={socialUsers} maxDisplay={3} size="lg" />
               </div>
             )}
           </div>

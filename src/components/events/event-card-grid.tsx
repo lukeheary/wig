@@ -1,9 +1,7 @@
 "use client";
 
-import {
-  EventCard,
-  type EventCardItem,
-} from "@/components/calendar/event-card";
+import { EventCard } from "@/components/calendar/event-card";
+import { type EventCardItem } from "@/components/events/event-card-helpers";
 import { cn } from "@/lib/utils";
 
 interface EventCardGridProps {

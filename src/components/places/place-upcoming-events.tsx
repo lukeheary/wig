@@ -8,10 +8,10 @@ import {
   compareAsc,
   compareDesc,
 } from "date-fns";
+import { type EventCardItem } from "@/components/events/event-card-helpers";
 import { HomeMobileEventRail } from "@/components/events/home-mobile-event-rail";
 import { EventsPlaceholder } from "@/components/shared/events-placeholder";
 import { StickySectionHeader } from "@/components/ui/sticky-section-header";
-import { type EventCardItem } from "@/components/calendar/event-card";
 
 interface PlaceUpcomingEventsProps {
   events: EventCardItem[] | null | undefined;

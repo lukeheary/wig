@@ -4,52 +4,22 @@ import Image from "next/image";
 import Link from "next/link";
 import { format } from "date-fns";
 import { Calendar } from "lucide-react";
-import { usePathname, useSearchParams } from "next/navigation";
-import { AvatarStack } from "@/components/ui/avatar-stack";
 import { Card } from "@/components/ui/card";
-import { type EventCardItem } from "@/components/calendar/event-card";
+import { EventSocialOverlay } from "@/components/events/event-social-overlay";
 import { EventCardGrid } from "@/components/events/event-card-grid";
-import { getEventStatusLabel } from "@/lib/event-status";
 import {
-  buildReturnTo,
-  getScrollRestoreKey,
-  withReturnTo,
-} from "@/lib/navigation";
+  getEventImageUrl,
+  getSocialUsers,
+  type EventCardItem,
+} from "@/components/events/event-card-helpers";
+import { useEventCardLink } from "@/components/events/use-event-card-link";
+import { getEventStatusLabel } from "@/lib/event-status";
 import { cn, formatTime, splitTrailingParenthetical } from "@/lib/utils";
-
-type SocialUser = {
-  id: string;
-  avatarImageUrl: string | null;
-  firstName: string | null;
-  lastName: string | null;
-  rsvpStatus: "going" | "interested";
-};
 
 export const HOME_MOBILE_EVENT_CARD_WIDTH = 212;
 
-function getSocialUsers(event: EventCardItem): SocialUser[] {
-  const friendsGoing = event.friendsGoing || [];
-  const friendsInterested = event.friendsInterested || [];
-
-  return [...friendsGoing, ...friendsInterested].flatMap((rsvp) => {
-    if (rsvp.status !== "going" && rsvp.status !== "interested") {
-      return [];
-    }
-
-    return [
-      {
-        ...rsvp.user,
-        rsvpStatus: rsvp.status,
-      },
-    ];
-  });
-}
-
 function HomeMiniEventCard({ event }: { event: EventCardItem }) {
-  const pathname = usePathname();
-  const searchParams = useSearchParams();
-  const returnTo = buildReturnTo(pathname, searchParams);
-  const eventHref = withReturnTo(`/event/${event.id}`, returnTo);
+  const { eventHref, handleClick } = useEventCardLink(event.id);
   const eventDate = new Date(event.startAt);
   const month = format(eventDate, "MMM");
   const day = format(eventDate, "d");
@@ -59,22 +29,8 @@ function HomeMiniEventCard({ event }: { event: EventCardItem }) {
   );
   const socialUsers = getSocialUsers(event);
   const hasInactiveStatus = event.status !== "active";
-  const eventImageUrl =
-    event.coverImageUrl ||
-    event.venue?.logoImageUrl ||
-    event.organizer?.logoImageUrl ||
-    null;
+  const eventImageUrl = getEventImageUrl(event);
   const subtitle = event.venue?.name || event.organizer?.name || "TBA";
-
-  const handleClick = () => {
-    if (typeof window === "undefined") return;
-
-    const currentPath = `${window.location.pathname}${window.location.search}`;
-    window.sessionStorage.setItem(
-      getScrollRestoreKey(currentPath),
-      String(window.scrollY)
-    );
-  };
 
   return (
     <Link href={eventHref} className="group block h-full" onClick={handleClick}>
@@ -104,11 +60,10 @@ function HomeMiniEventCard({ event }: { event: EventCardItem }) {
             </div>
           )}
 
-          {socialUsers.length > 0 && (
-            <div className="absolute bottom-2 right-2">
-              <AvatarStack users={socialUsers} maxDisplay={3} size="md" />
-            </div>
-          )}
+          <EventSocialOverlay
+            users={socialUsers}
+            size="md"
+          />
         </div>
 
         <div className="font-space-grotesk flex flex-1 flex-col px-1 pb-1 pt-3">
