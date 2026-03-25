@@ -14,25 +14,15 @@ import {
   format,
   addDays,
   startOfDay,
-  startOfMonth,
-  endOfMonth,
-  addMonths,
-  subMonths,
   isSameMonth,
   isSameDay,
-  eachDayOfInterval,
-  startOfWeek,
-  endOfWeek,
-  isBefore,
-  isSameWeek,
-  parseISO,
-  subDays,
 } from "date-fns";
 import { useAuth } from "@clerk/nextjs";
 import { useQueryState } from "nuqs";
 import { CalendarIcon, Clock, ChevronRight, MapPin } from "lucide-react";
 import { trpc } from "@/lib/trpc";
 import { EventBrowserSurface } from "@/components/events/event-browser-surface";
+import { useEventBrowserState } from "@/components/events/use-event-browser-state";
 import { Card, CardContent } from "@/components/ui/card";
 import {
   HoverCard,
@@ -76,28 +66,15 @@ function HomePageContent() {
   const { userId } = useAuth();
   const utils = trpc.useUtils();
   const addFriendsBannerStorageKey = `${HOME_ADD_FRIENDS_BANNER_KEY_PREFIX}:${userId ?? "anonymous"}`;
+
   const [activeFilter, setActiveFilter] = useState<EventFilterTab>("all");
-  const [selectedCategories, setSelectedCategories] = useState<string[]>([]);
   const [isAddFriendsBannerDismissed, setIsAddFriendsBannerDismissed] =
     useState(false);
   const [isSticky, setIsSticky] = useState(false);
   const [isDateNavigating, setIsDateNavigating] = useState(false);
   const stickySentinelRef = useRef<HTMLDivElement>(null);
   const hasMarkedHomeActivitySeenRef = useRef(false);
-  const searchInputRef = useRef<HTMLInputElement>(null);
-  const [isSearchMode, setIsSearchMode] = useState(false);
-  const [searchQuery, setSearchQuery] = useQueryState("search", {
-    defaultValue: "",
-    scroll: false,
-    shallow: true,
-  });
-  const [selectedCity, setSelectedCity] = useQueryState<string | null>("city", {
-    defaultValue: null,
-    parse: (value) => value || null,
-    serialize: (value) => value || "",
-    scroll: false,
-    shallow: true,
-  });
+
   const [viewMode] = useQueryState<ViewMode>("view", {
     defaultValue: "week",
     parse: (value) => (value === "month" ? "month" : "week"),
@@ -105,28 +82,44 @@ function HomePageContent() {
     scroll: false,
     shallow: true,
   });
-  const [dateParam, setDateParam] = useQueryState("date", {
-    defaultValue: format(new Date(), "yyyy-MM-dd"),
-    scroll: false,
-    shallow: true,
+
+  const isDefaultCalendarView = activeFilter === "all";
+  const isFollowingFeed = activeFilter === "following";
+  const usesDaySectionLayout = isDefaultCalendarView || isFollowingFeed;
+  const shouldPrioritizeFriendActivity =
+    activeFilter === "all" || isFollowingFeed;
+
+  const browser = useEventBrowserState({
+    viewMode,
+    // Pass the filter-driven flag without isSearching (hook ANDs with !isSearching internally)
+    isFilteredFeedView: !usesDaySectionLayout,
+    onBeforeNavigate: () => setIsDateNavigating(true),
+    onNavigate: ({ direction, fromDate, toDate }) => {
+      sendGoogleAnalyticsEvent("home_date_navigation_clicked", userId, {
+        direction,
+        view_mode: viewMode,
+        from_date: fromDate,
+        to_date: toDate,
+      });
+    },
   });
 
-  const currentDate = useMemo(() => {
-    try {
-      return startOfDay(parseISO(dateParam));
-    } catch {
-      return startOfDay(new Date());
-    }
-  }, [dateParam]);
+  const {
+    searchQuery,
+    selectedCity,
+    isSearching,
+    isSearchView,
+    isCurrentWeek,
+    currentDate,
+    dateRange,
+    daysToDisplay,
+    cityOptions,
+    getVisibleCategories,
+    filterByCategories,
+    buildEventsByDay,
+  } = browser;
 
-  const isCurrentWeek = useMemo(() => {
-    if (viewMode !== "week") return false;
-    const today = startOfDay(new Date());
-    return (
-      isSameWeek(currentDate, today, { weekStartsOn: 1 }) ||
-      isBefore(currentDate, today)
-    );
-  }, [viewMode, currentDate]);
+  const isFilteredFeedView = !isSearching && !usesDaySectionLayout;
 
   const { data: currentUser, isLoading: isLoadingUser } =
     trpc.user.getCurrentUser.useQuery();
@@ -164,8 +157,10 @@ function HomePageContent() {
     staleAfterDays: HOME_ACTIVITY_WINDOW_DAYS,
   });
 
+  // These queries are deduplicated with the ones inside the hook
   const { data: cities } = trpc.event.getAvailableCities.useQuery();
   const { data: activeCategories } = trpc.category.listActive.useQuery();
+
   const categoryLabelMap = useMemo(
     () =>
       Object.fromEntries(
@@ -212,7 +207,6 @@ function HomePageContent() {
     ) {
       return null;
     }
-
     return {
       latitude: referenceCityRecord.latitude,
       longitude: referenceCityRecord.longitude,
@@ -221,7 +215,6 @@ function HomePageContent() {
 
   const cityDistanceMap = useMemo(() => {
     if (!cities || !referenceCoords) return new Map<string, number>();
-
     const map = new Map<string, number>();
     cities.forEach((city) => {
       if (city.latitude == null || city.longitude == null) return;
@@ -233,74 +226,10 @@ function HomePageContent() {
         map.set(`${city.city}|${city.state}`, distance);
       }
     });
-
     return map;
   }, [cities, referenceCoords]);
 
   const isReady = !isLoadingUser;
-  const isSearching = Boolean(searchQuery && searchQuery.trim().length > 0);
-  const isSearchView = isSearchMode || isSearching;
-  const isDefaultCalendarView = activeFilter === "all";
-  const isFollowingFeed = activeFilter === "following";
-  const shouldPrioritizeFriendActivity =
-    activeFilter === "all" || isFollowingFeed;
-  const usesDaySectionLayout = isDefaultCalendarView || isFollowingFeed;
-  const isFilteredFeedView = !isSearching && !usesDaySectionLayout;
-
-  const handleExitSearch = useCallback(() => {
-    setIsSearchMode(false);
-    setSearchQuery("");
-    searchInputRef.current?.blur();
-  }, [setSearchQuery]);
-
-  const handleBackFromSearchOrFilter = useCallback(() => {
-    void triggerHaptic(HapticPreset.Soft);
-
-    if (isFilteredFeedView) {
-      setActiveFilter("all");
-      return;
-    }
-
-    handleExitSearch();
-  }, [handleExitSearch, isFilteredFeedView, triggerHaptic]);
-
-  const scrollToSearchAndFocus = useCallback(() => {
-    window.scrollTo({ top: 0, left: 0, behavior: "auto" });
-    searchInputRef.current?.focus();
-  }, []);
-
-  useEffect(() => {
-    registerScrollToSearch(scrollToSearchAndFocus);
-  }, [registerScrollToSearch, scrollToSearchAndFocus]);
-
-  useEffect(() => {
-    setShowNavbarSearch(isSticky);
-  }, [isSticky, setShowNavbarSearch]);
-
-  const dateRange = useMemo(() => {
-    const today = startOfDay(new Date());
-    const isLastNightWindow = isCurrentWeek && new Date().getHours() < 6;
-
-    if (isSearching || isFilteredFeedView) {
-      return { startDate: today, endDate: addDays(today, 365) };
-    }
-
-    if (viewMode === "week") {
-      if (isCurrentWeek) {
-        const start = isLastNightWindow ? subDays(today, 1) : today;
-        const end = endOfWeek(today, { weekStartsOn: 1 });
-        return { startDate: start, endDate: end };
-      }
-
-      const start = startOfWeek(currentDate, { weekStartsOn: 1 });
-      const end = endOfWeek(start, { weekStartsOn: 1 });
-      return { startDate: start, endDate: end };
-    }
-
-    const start = startOfMonth(currentDate);
-    const end = endOfMonth(currentDate);
-    return { startDate: start, endDate: end };
-  }, [viewMode, currentDate, isCurrentWeek, isSearching, isFilteredFeedView]);
 
   const {
     data: events,
@@ -346,69 +275,45 @@ function HomePageContent() {
   const sortedEvents = useMemo(() => {
     if (!events) return [];
     if (!referenceCoords && !shouldPrioritizeFriendActivity) return events;
-
     const nextEvents = [...events];
     nextEvents.sort((a, b) => {
       if (shouldPrioritizeFriendActivity) {
-        const friendActivityDifference =
-          getFriendActivityCount(b) - getFriendActivityCount(a);
-
-        if (friendActivityDifference !== 0) {
-          return friendActivityDifference;
-        }
+        const diff = getFriendActivityCount(b) - getFriendActivityCount(a);
+        if (diff !== 0) return diff;
       }
-
       if (!referenceCoords) {
         return new Date(a.startAt).getTime() - new Date(b.startAt).getTime();
       }
-
       const aDistance =
         cityDistanceMap.get(`${a.city}|${a.state}`) ?? Number.POSITIVE_INFINITY;
       const bDistance =
         cityDistanceMap.get(`${b.city}|${b.state}`) ?? Number.POSITIVE_INFINITY;
-
       if (aDistance !== bDistance) return aDistance - bDistance;
       return new Date(a.startAt).getTime() - new Date(b.startAt).getTime();
     });
-
     return nextEvents;
-  }, [
-    cityDistanceMap,
-    events,
-    referenceCoords,
-    shouldPrioritizeFriendActivity,
-  ]);
+  }, [cityDistanceMap, events, referenceCoords, shouldPrioritizeFriendActivity]);
 
   const sortedUpcomingSearchEvents = useMemo(() => {
     if (!upcomingSearchEvents) return [];
-    if (!referenceCoords && !shouldPrioritizeFriendActivity) {
+    if (!referenceCoords && !shouldPrioritizeFriendActivity)
       return upcomingSearchEvents;
-    }
-
     const nextEvents = [...upcomingSearchEvents];
     nextEvents.sort((a, b) => {
       if (shouldPrioritizeFriendActivity) {
-        const friendActivityDifference =
-          getFriendActivityCount(b) - getFriendActivityCount(a);
-
-        if (friendActivityDifference !== 0) {
-          return friendActivityDifference;
-        }
+        const diff = getFriendActivityCount(b) - getFriendActivityCount(a);
+        if (diff !== 0) return diff;
       }
-
       if (!referenceCoords) {
         return new Date(a.startAt).getTime() - new Date(b.startAt).getTime();
       }
-
       const aDistance =
         cityDistanceMap.get(`${a.city}|${a.state}`) ?? Number.POSITIVE_INFINITY;
       const bDistance =
         cityDistanceMap.get(`${b.city}|${b.state}`) ?? Number.POSITIVE_INFINITY;
-
       if (aDistance !== bDistance) return aDistance - bDistance;
       return new Date(a.startAt).getTime() - new Date(b.startAt).getTime();
     });
-
     return nextEvents;
   }, [
     cityDistanceMap,
@@ -417,51 +322,21 @@ function HomePageContent() {
     upcomingSearchEvents,
   ]);
 
-  const visibleCategories = useMemo(() => {
-    const availableCategoryKeys = new Set<string>();
-    sortedEvents.forEach((event) =>
-      event.categories?.forEach((key) => availableCategoryKeys.add(key))
-    );
-
-    return (activeCategories ?? []).filter((category) =>
-      availableCategoryKeys.has(category.key)
-    );
-  }, [activeCategories, sortedEvents]);
-
-  const filteredEvents = useMemo(() => {
-    if (selectedCategories.length === 0) return sortedEvents;
-
-    return sortedEvents.filter((event) =>
-      selectedCategories.every((category) =>
-        event.categories?.includes(category)
-      )
-    );
-  }, [sortedEvents, selectedCategories]);
-
-  const filteredUpcomingSearchEvents = useMemo(() => {
-    if (selectedCategories.length === 0) return sortedUpcomingSearchEvents;
-
-    return sortedUpcomingSearchEvents.filter((event) =>
-      selectedCategories.every((category) =>
-        event.categories?.includes(category)
-      )
-    );
-  }, [sortedUpcomingSearchEvents, selectedCategories]);
-
+  const visibleCategories = useMemo(
+    () => getVisibleCategories(sortedEvents),
+    [getVisibleCategories, sortedEvents]
+  );
+  const filteredEvents = useMemo(
+    () => filterByCategories(sortedEvents),
+    [filterByCategories, sortedEvents]
+  );
+  const filteredUpcomingSearchEvents = useMemo(
+    () => filterByCategories(sortedUpcomingSearchEvents),
+    [filterByCategories, sortedUpcomingSearchEvents]
+  );
   const eventsByDay = useMemo(
-    () =>
-      filteredEvents.reduce<Record<string, typeof filteredEvents>>(
-        (groups, event) => {
-          const dateKey = format(new Date(event.startAt), "yyyy-MM-dd");
-          if (!groups[dateKey]) {
-            groups[dateKey] = [];
-          }
-          groups[dateKey].push(event);
-          return groups;
-        },
-        {}
-      ),
-    [filteredEvents]
+    () => buildEventsByDay(filteredEvents),
+    [buildEventsByDay, filteredEvents]
   );
 
   const isHomeActivityStateReady = !isHomeActivityStateLoading;
@@ -473,7 +348,7 @@ function HomePageContent() {
     hasRecentActivity &&
     isCurrentWeek &&
     isDefaultCalendarView &&
-    selectedCategories.length === 0;
+    browser.selectedCategories.length === 0;
   const hasAcceptedFriends = (acceptedFriends?.length ?? 0) > 0;
   const shouldShowAddFriendsBanner =
     !isSearchView &&
@@ -482,30 +357,43 @@ function HomePageContent() {
     isDefaultCalendarView &&
     !hasAcceptedFriends &&
     !isAddFriendsBannerDismissed;
-  const shouldShowReturnToCurrentWeekButton =
-    viewMode === "week" &&
-    !isCurrentWeek &&
-    !isSearchView &&
-    !isFilteredFeedView;
   const shouldShowWeekSectionSkeletons =
-    !isSearchView &&
-    viewMode === "week" &&
-    usesDaySectionLayout;
+    !isSearchView && viewMode === "week" && usesDaySectionLayout;
+
   const skeletonDateHeader = useMemo(() => {
     if (isSearchView) return null;
-
     if (viewMode === "week") {
       if (isCurrentWeek) {
         return new Date().getHours() >= 17
           ? "Tonight's Events"
           : "Today's Events";
       }
-
       return format(dateRange.startDate, "EEE, MMM d");
     }
-
     return format(currentDate, "MMMM yyyy");
   }, [currentDate, dateRange.startDate, isCurrentWeek, isSearchView, viewMode]);
+
+  const handleBackFromSearchOrFilter = useCallback(() => {
+    if (isFilteredFeedView) {
+      void triggerHaptic(HapticPreset.Soft);
+      setActiveFilter("all");
+      return;
+    }
+    void browser.handleExitSearch();
+  }, [browser, isFilteredFeedView, triggerHaptic]);
+
+  const scrollToSearchAndFocus = useCallback(() => {
+    window.scrollTo({ top: 0, left: 0, behavior: "auto" });
+    browser.searchInputRef.current?.focus();
+  }, [browser.searchInputRef]);
+
+  useEffect(() => {
+    registerScrollToSearch(scrollToSearchAndFocus);
+  }, [registerScrollToSearch, scrollToSearchAndFocus]);
+
+  useEffect(() => {
+    setShowNavbarSearch(isSticky);
+  }, [isSticky, setShowNavbarSearch]);
 
   useEffect(() => {
     if (typeof window === "undefined") return;
@@ -533,7 +421,6 @@ function HomePageContent() {
     ) {
       return;
     }
-
     hasMarkedHomeActivitySeenRef.current = true;
     markSurfaceVisitedMutation.mutate({
       surface: HOME_RECENT_ACTIVITY_SURFACE,
@@ -550,128 +437,6 @@ function HomePageContent() {
     shouldStartMissedWindow,
   ]);
 
-  const handleAddFriendsBannerClick = useCallback(() => {
-    if (typeof window !== "undefined") {
-      window.localStorage.setItem(addFriendsBannerStorageKey, "true");
-    }
-    setIsAddFriendsBannerDismissed(true);
-  }, [addFriendsBannerStorageKey]);
-
-  const handlePrevious = useCallback(async () => {
-    if (isCurrentWeek) {
-      void triggerHaptic(HapticPreset.Warning);
-      return;
-    }
-
-    void triggerHaptic(HapticPreset.Light);
-    setIsDateNavigating(true);
-    let nextDateParam: string;
-
-    if (viewMode === "week") {
-      const today = startOfDay(new Date());
-      const prevWeekStart = addDays(currentDate, -7);
-
-      if (
-        isSameWeek(prevWeekStart, today, { weekStartsOn: 1 }) ||
-        isBefore(prevWeekStart, today)
-      ) {
-        nextDateParam = format(today, "yyyy-MM-dd");
-        await setDateParam(nextDateParam, {
-          scroll: false,
-          shallow: true,
-        });
-      } else {
-        nextDateParam = format(
-          startOfWeek(prevWeekStart, { weekStartsOn: 1 }),
-          "yyyy-MM-dd"
-        );
-        await setDateParam(nextDateParam, { scroll: false, shallow: true });
-      }
-    } else {
-      nextDateParam = format(subMonths(currentDate, 1), "yyyy-MM-dd");
-      await setDateParam(nextDateParam, {
-        scroll: false,
-        shallow: true,
-      });
-    }
-
-    sendGoogleAnalyticsEvent("home_date_navigation_clicked", userId, {
-      direction: "previous",
-      view_mode: viewMode,
-      from_date: format(currentDate, "yyyy-MM-dd"),
-      to_date: nextDateParam,
-    });
-  }, [
-    currentDate,
-    isCurrentWeek,
-    setDateParam,
-    triggerHaptic,
-    userId,
-    viewMode,
-  ]);
-
-  const handleNext = useCallback(async () => {
-    void triggerHaptic(HapticPreset.Light);
-    setIsDateNavigating(true);
-    let nextDateParam: string;
-
-    if (viewMode === "week") {
-      const today = startOfDay(new Date());
-      const nextDate = isCurrentWeek
-        ? startOfWeek(addDays(today, 7), { weekStartsOn: 1 })
-        : addDays(startOfWeek(currentDate, { weekStartsOn: 1 }), 7);
-
-      nextDateParam = format(nextDate, "yyyy-MM-dd");
-      await setDateParam(nextDateParam, {
-        scroll: false,
-        shallow: true,
-      });
-    } else {
-      nextDateParam = format(addMonths(currentDate, 1), "yyyy-MM-dd");
-      await setDateParam(nextDateParam, {
-        scroll: false,
-        shallow: true,
-      });
-    }
-
-    sendGoogleAnalyticsEvent("home_date_navigation_clicked", userId, {
-      direction: "next",
-      view_mode: viewMode,
-      from_date: format(currentDate, "yyyy-MM-dd"),
-      to_date: nextDateParam,
-    });
-  }, [
-    currentDate,
-    isCurrentWeek,
-    setDateParam,
-    triggerHaptic,
-    userId,
-    viewMode,
-  ]);
-
-  const handleToday = useCallback(async () => {
-    void triggerHaptic(HapticPreset.Soft);
-    setIsDateNavigating(true);
-    await setDateParam(format(new Date(), "yyyy-MM-dd"), {
-      scroll: false,
-      shallow: true,
-    });
-  }, [setDateParam, triggerHaptic]);
-
-  const daysToDisplay = useMemo(() => {
-    if (viewMode === "week") {
-      return eachDayOfInterval({
-        start: dateRange.startDate,
-        end: dateRange.endDate,
-      });
-    }
-
-    return eachDayOfInterval({
-      start: startOfMonth(currentDate),
-      end: endOfMonth(currentDate),
-    });
-  }, [viewMode, currentDate, dateRange]);
-
   useEffect(() => {
     if (error) {
       toast({
@@ -683,9 +448,7 @@ function HomePageContent() {
   }, [error, toast]);
 
   useEffect(() => {
-    if (!isFetching) {
-      setIsDateNavigating(false);
-    }
+    if (!isFetching) setIsDateNavigating(false);
   }, [isFetching]);
 
   useEffect(() => {
@@ -693,34 +456,21 @@ function HomePageContent() {
       ([entry]) => {
         setIsSticky(!entry.isIntersecting);
       },
-      {
-        threshold: [1],
-        rootMargin: "-1px 0px 0px 0px",
-      }
+      { threshold: [1], rootMargin: "-1px 0px 0px 0px" }
     );
-
     const sentinel = stickySentinelRef.current;
-    if (sentinel) {
-      observer.observe(sentinel);
-    }
-
+    if (sentinel) observer.observe(sentinel);
     return () => {
-      if (sentinel) {
-        observer.unobserve(sentinel);
-      }
+      if (sentinel) observer.unobserve(sentinel);
     };
   }, []);
 
-  const cityOptions = useMemo(
-    () => [
-      { value: "all", label: "All Cities" },
-      ...(cities?.map((city) => ({
-        value: city.city,
-        label: `${city.city}, ${city.state}`,
-      })) || []),
-    ],
-    [cities]
-  );
+  const handleAddFriendsBannerClick = useCallback(() => {
+    if (typeof window !== "undefined") {
+      window.localStorage.setItem(addFriendsBannerStorageKey, "true");
+    }
+    setIsAddFriendsBannerDismissed(true);
+  }, [addFriendsBannerStorageKey]);
 
   const monthContent =
     !isSearchView &&
@@ -895,34 +645,28 @@ function HomePageContent() {
     <EventBrowserSurface
       rootClassName="min-h-screen"
       topSlot={<div ref={stickySentinelRef} className="h-px w-full" />}
-      searchInputRef={searchInputRef}
-      searchQuery={searchQuery}
-      onSearchQueryChange={setSearchQuery}
-      onSearchFocus={() => setIsSearchMode(true)}
+      searchInputRef={browser.searchInputRef}
+      searchQuery={browser.searchQuery}
+      onSearchQueryChange={browser.setSearchQuery}
+      onSearchFocus={() => browser.setIsSearchMode(true)}
       showSearchBack={isSearchView || isFilteredFeedView}
       onSearchBack={handleBackFromSearchOrFilter}
-      shouldShowReturnToCurrentWeekButton={shouldShowReturnToCurrentWeekButton}
-      onToday={handleToday}
-      onPrevious={handlePrevious}
-      onNext={handleNext}
-      isPreviousDisabled={isCurrentWeek}
+      shouldShowReturnToCurrentWeekButton={
+        browser.shouldShowReturnToCurrentWeekButton
+      }
+      onToday={browser.handleToday}
+      onPrevious={browser.handlePrevious}
+      onNext={browser.handleNext}
       hideNavigationControls={isSearchView || isFilteredFeedView}
       cityValue={effectiveCity ?? "all"}
-      onCityChange={setSelectedCity}
+      onCityChange={browser.setSelectedCity}
       cityOptions={cityOptions}
       filterValue={activeFilter}
       onFilterChange={setActiveFilter}
       showSkeletons={showSkeletons}
       visibleCategories={visibleCategories}
-      selectedCategories={selectedCategories}
-      onToggleCategory={(categoryKey) => {
-        void triggerHaptic(HapticPreset.Selection);
-        setSelectedCategories((current) =>
-          current.includes(categoryKey)
-            ? current.filter((key) => key !== categoryKey)
-            : [...current, categoryKey]
-        );
-      }}
+      selectedCategories={browser.selectedCategories}
+      onToggleCategory={browser.handleToggleCategory}
       topBanner={
         shouldShowAddFriendsBanner ? (
           <Card className="mb-4 bg-primary/5">
@@ -941,59 +685,64 @@ function HomePageContent() {
                     Add your friends to see who is going out.
                   </p>
                 </div>
-
                 <ChevronRight className="h-5 w-5 shrink-0 text-white" />
               </CardContent>
             </Link>
           </Card>
         ) : null
       }
-      showRecentActivity={shouldShowRecentActivity}
-      recentActivityTitle={
-        <Link
-          href="/friends"
-          className="flex items-center gap-1 transition-colors hover:text-primary"
-        >
-          <h1 className="text-xl font-bold tracking-tight">Recent Activity</h1>
-          <ChevronRight className="h-4 w-4" />
-        </Link>
-      }
-      recentActivityContent={
-        <ActivityFeedList activities={homeActivityPreview} />
+      recentActivity={
+        shouldShowRecentActivity
+          ? {
+              title: (
+                <Link
+                  href="/friends"
+                  className="flex items-center gap-1 transition-colors hover:text-primary"
+                >
+                  <h1 className="text-xl font-bold tracking-tight">
+                    Recent Activity
+                  </h1>
+                  <ChevronRight className="h-4 w-4" />
+                </Link>
+              ),
+              content: <ActivityFeedList activities={homeActivityPreview} />,
+            }
+          : undefined
       }
       isSearchView={isSearchView}
-      isSearching={isSearching}
       upcomingEventsLoading={upcomingSearchLoading}
       upcomingEvents={filteredUpcomingSearchEvents}
       filteredEvents={filteredEvents}
       flatListTitle={isFilteredFeedView ? "Upcoming Events" : null}
-      flatListEmptyState={
-        <EventsPlaceholder
-          message={
-            isFollowingFeed
-              ? "No upcoming events from places you're following"
-              : undefined
-          }
-        />
-      }
-      searchEmptyState={
-        <EmptyStateCard
-          icon={CalendarIcon}
-          title="No events found"
-          description="Try adjusting your search or filters"
-        />
-      }
-      upcomingEmptyState={
-        <EmptyStateCard
-          icon={CalendarIcon}
-          title={
-            isFollowingFeed
-              ? "No upcoming events from places you're following"
-              : "No upcoming events to show"
-          }
-        />
-      }
-      dayEmptyState={<EventsPlaceholder message="No events scheduled" />}
+      emptyStates={{
+        flatList: (
+          <EventsPlaceholder
+            message={
+              isFollowingFeed
+                ? "No upcoming events from places you're following"
+                : undefined
+            }
+          />
+        ),
+        search: (
+          <EmptyStateCard
+            icon={CalendarIcon}
+            title="No events found"
+            description="Try adjusting your search or filters"
+          />
+        ),
+        upcoming: (
+          <EmptyStateCard
+            icon={CalendarIcon}
+            title={
+              isFollowingFeed
+                ? "No upcoming events from places you're following"
+                : "No upcoming events to show"
+            }
+          />
+        ),
+        day: <EventsPlaceholder message="No events scheduled" />,
+      }}
       daysToDisplay={daysToDisplay}
       isCurrentWeek={isCurrentWeek}
       eventsByDay={eventsByDay}

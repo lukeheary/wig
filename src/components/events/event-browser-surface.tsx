@@ -41,6 +41,18 @@ type CategoryOption = {
   label: string;
 };
 
+type EmptyStates = {
+  flatList?: ReactNode;
+  search?: ReactNode;
+  upcoming?: ReactNode;
+  day?: ReactNode;
+};
+
+type RecentActivity = {
+  title?: ReactNode;
+  content?: ReactNode;
+};
+
 interface EventBrowserSurfaceProps {
   rootClassName?: string;
   topSlot?: ReactNode;
@@ -50,13 +62,12 @@ interface EventBrowserSurfaceProps {
   searchQuery: string;
   onSearchQueryChange: (value: string) => void | Promise<unknown>;
   onSearchFocus?: () => void;
-  showSearchBack: boolean;
+  showSearchBack?: boolean;
   onSearchBack: () => void;
   shouldShowReturnToCurrentWeekButton: boolean;
   onToday: () => void | Promise<unknown>;
   onPrevious: () => void | Promise<unknown>;
   onNext: () => void | Promise<unknown>;
-  isPreviousDisabled: boolean;
   hideNavigationControls?: boolean;
   cityValue: string;
   onCityChange: (value: string) => void | Promise<unknown>;
@@ -69,19 +80,13 @@ interface EventBrowserSurfaceProps {
   selectedCategories: string[];
   onToggleCategory: (categoryKey: string) => void;
   topBanner?: ReactNode;
-  showRecentActivity?: boolean;
-  recentActivityTitle?: ReactNode;
-  recentActivityContent?: ReactNode;
+  recentActivity?: RecentActivity;
   isSearchView: boolean;
-  isSearching: boolean;
   upcomingEventsLoading: boolean;
   upcomingEvents: EventListItem[];
   filteredEvents: EventListItem[];
   flatListTitle?: string | null;
-  flatListEmptyState?: ReactNode;
-  searchEmptyState?: ReactNode;
-  upcomingEmptyState?: ReactNode;
-  dayEmptyState?: ReactNode;
+  emptyStates?: EmptyStates;
   daysToDisplay: Date[];
   isCurrentWeek: boolean;
   eventsByDay: Record<string, EventListItem[]>;
@@ -191,13 +196,13 @@ export function EventBrowserSurface({
   searchQuery,
   onSearchQueryChange,
   onSearchFocus,
-  showSearchBack,
+  isSearchView,
+  showSearchBack = isSearchView,
   onSearchBack,
   shouldShowReturnToCurrentWeekButton,
   onToday,
   onPrevious,
   onNext,
-  isPreviousDisabled,
   hideNavigationControls = false,
   cityValue,
   onCityChange,
@@ -210,19 +215,12 @@ export function EventBrowserSurface({
   selectedCategories,
   onToggleCategory,
   topBanner,
-  showRecentActivity = false,
-  recentActivityTitle,
-  recentActivityContent,
-  isSearchView,
-  isSearching,
+  recentActivity,
   upcomingEventsLoading,
   upcomingEvents,
   filteredEvents,
   flatListTitle,
-  flatListEmptyState,
-  searchEmptyState,
-  upcomingEmptyState,
-  dayEmptyState,
+  emptyStates,
   daysToDisplay,
   isCurrentWeek,
   eventsByDay,
@@ -230,6 +228,7 @@ export function EventBrowserSurface({
   skeletonDateHeader,
   defaultContent,
 }: EventBrowserSurfaceProps) {
+  const isSearching = Boolean(searchQuery.trim());
   const [hasScrolled, setHasScrolled] = useState(!hideUntilScroll);
 
   useEffect(() => {
@@ -321,11 +320,11 @@ export function EventBrowserSurface({
                       size="icon"
                       className={cn(
                         "h-full w-10 rounded-none border-r bg-muted px-0 active:bg-muted/80",
-                        isPreviousDisabled &&
+                        isCurrentWeek &&
                           "cursor-not-allowed opacity-50 hover:bg-muted"
                       )}
                       onClick={() => void onPrevious()}
-                      aria-disabled={isPreviousDisabled}
+                      aria-disabled={isCurrentWeek}
                     >
                       <ChevronLeft className="h-4 w-4" />
                     </Button>
@@ -372,11 +371,11 @@ export function EventBrowserSurface({
                       size="icon"
                       className={cn(
                         "h-full w-10 shrink-0 rounded-none border-r bg-muted px-0 hover:bg-muted/60",
-                        isPreviousDisabled &&
+                        isCurrentWeek &&
                           "cursor-not-allowed opacity-50 hover:bg-muted"
                       )}
                       onClick={() => void onPrevious()}
-                      aria-disabled={isPreviousDisabled}
+                      aria-disabled={isCurrentWeek}
                     >
                       <ChevronLeft className="h-4 w-4" />
                     </Button>
@@ -438,10 +437,10 @@ export function EventBrowserSurface({
         <div className="container relative mx-auto">{topBanner}</div>
       ) : null}
 
-      {showRecentActivity && recentActivityContent ? (
+      {recentActivity?.content ? (
         <div className="mb-4">
-          <StickySectionHeader>{recentActivityTitle}</StickySectionHeader>
-          <div className="container mx-auto px-4">{recentActivityContent}</div>
+          <StickySectionHeader>{recentActivity.title}</StickySectionHeader>
+          <div className="container mx-auto px-4">{recentActivity.content}</div>
         </div>
       ) : null}
 
@@ -453,7 +452,7 @@ export function EventBrowserSurface({
                 <Loader2 className="h-8 w-8 animate-spin text-muted-foreground" />
               </div>
             ) : upcomingEvents.length === 0 ? (
-              (upcomingEmptyState ?? (
+              (emptyStates?.upcoming ?? (
                 <EmptyStateCard
                   icon={CalendarIcon}
                   title="No upcoming events to show"
@@ -473,7 +472,7 @@ export function EventBrowserSurface({
         <div className="container mx-auto px-4">
           <div className="space-y-4">
             {filteredEvents.length === 0 ? (
-              (searchEmptyState ?? (
+              (emptyStates?.search ?? (
                 <EmptyStateCard
                   icon={CalendarIcon}
                   title="No events found"
@@ -532,7 +531,7 @@ export function EventBrowserSurface({
           <StickyDateHeader dateHeader={flatListTitle} isToday={false} />
           <div className="container mx-auto px-4">
             {filteredEvents.length === 0 ? (
-              (flatListEmptyState ?? (
+              (emptyStates?.flatList ?? (
                 <EmptyStateCard icon={CalendarIcon} title="No events found" />
               ))
             ) : (
@@ -563,7 +562,7 @@ export function EventBrowserSurface({
                     />
                     <div className="container mx-auto px-4">
                       {dayEvents.length === 0 ? (
-                        (dayEmptyState ?? (
+                        (emptyStates?.day ?? (
                           <EmptyStateCard
                             icon={CalendarIcon}
                             title="No events scheduled"
