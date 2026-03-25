@@ -1,6 +1,6 @@
 "use client";
 
-import { useMemo, useRef, useState } from "react";
+import { useCallback, useMemo, useRef, useState } from "react";
 import {
   addDays,
   eachDayOfInterval,
@@ -17,6 +17,7 @@ import { useQueryState } from "nuqs";
 import { EventBrowserSurface } from "@/components/events/event-browser-surface";
 import { LandingRecentActivity } from "@/components/landing/landing-recent-activity";
 import { EventsPlaceholder } from "@/components/shared/events-placeholder";
+import { HapticPreset, useHaptics } from "@/hooks/use-haptics";
 import { trpc } from "@/lib/trpc";
 import { type EventFilterTab } from "@/types/events";
 import { type EventListItem } from "@/types/trpc";
@@ -98,6 +99,7 @@ function withMockFriendsGoing(events: EventListItem[]): EventListItem[] {
 
 export function LandingEventsPreview() {
   const searchInputRef = useRef<HTMLInputElement>(null);
+  const { triggerHaptic } = useHaptics();
   const [activeFilter, setActiveFilter] = useState<EventFilterTab>("all");
   const [selectedCategories, setSelectedCategories] = useState<string[]>([]);
   const [isSearchMode, setIsSearchMode] = useState(false);
@@ -273,6 +275,66 @@ export function LandingEventsPreview() {
     [cities]
   );
 
+  const handleSearchBack = useCallback(() => {
+    void triggerHaptic(HapticPreset.Soft);
+    setIsSearchMode(false);
+    void setSearchQuery("");
+    searchInputRef.current?.blur();
+  }, [setSearchQuery, triggerHaptic]);
+
+  const handleToday = useCallback(() => {
+    void triggerHaptic(HapticPreset.Soft);
+    return setDateParam(format(new Date(), "yyyy-MM-dd"), {
+      scroll: false,
+      shallow: true,
+    });
+  }, [setDateParam, triggerHaptic]);
+
+  const handlePrevious = useCallback(async () => {
+    if (isCurrentWeek) {
+      void triggerHaptic(HapticPreset.Warning);
+      return;
+    }
+
+    void triggerHaptic(HapticPreset.Light);
+
+    const today = startOfDay(new Date());
+    const previousWeekStart = addDays(currentDate, -7);
+
+    if (
+      isSameWeek(previousWeekStart, today, { weekStartsOn: 1 }) ||
+      isBefore(previousWeekStart, today)
+    ) {
+      await setDateParam(format(today, "yyyy-MM-dd"), {
+        scroll: false,
+        shallow: true,
+      });
+      return;
+    }
+
+    await setDateParam(
+      format(startOfWeek(previousWeekStart, { weekStartsOn: 1 }), "yyyy-MM-dd"),
+      {
+        scroll: false,
+        shallow: true,
+      }
+    );
+  }, [currentDate, isCurrentWeek, setDateParam, triggerHaptic]);
+
+  const handleNext = useCallback(() => {
+    void triggerHaptic(HapticPreset.Light);
+
+    const today = startOfDay(new Date());
+    const nextDate = isCurrentWeek
+      ? startOfWeek(addDays(today, 7), { weekStartsOn: 1 })
+      : addDays(startOfWeek(currentDate, { weekStartsOn: 1 }), 7);
+
+    return setDateParam(format(nextDate, "yyyy-MM-dd"), {
+      scroll: false,
+      shallow: true,
+    });
+  }, [currentDate, isCurrentWeek, setDateParam, triggerHaptic]);
+
   return (
     <EventBrowserSurface
       searchInputRef={searchInputRef}
@@ -280,59 +342,11 @@ export function LandingEventsPreview() {
       onSearchQueryChange={setSearchQuery}
       onSearchFocus={() => setIsSearchMode(true)}
       showSearchBack={isSearchView}
-      onSearchBack={() => {
-        setIsSearchMode(false);
-        setSearchQuery("");
-        searchInputRef.current?.blur();
-      }}
+      onSearchBack={handleSearchBack}
       shouldShowReturnToCurrentWeekButton={shouldShowReturnToCurrentWeekButton}
-      onToday={() =>
-        setDateParam(format(new Date(), "yyyy-MM-dd"), {
-          scroll: false,
-          shallow: true,
-        })
-      }
-      onPrevious={async () => {
-        if (isCurrentWeek) {
-          return;
-        }
-
-        const today = startOfDay(new Date());
-        const previousWeekStart = addDays(currentDate, -7);
-
-        if (
-          isSameWeek(previousWeekStart, today, { weekStartsOn: 1 }) ||
-          isBefore(previousWeekStart, today)
-        ) {
-          await setDateParam(format(today, "yyyy-MM-dd"), {
-            scroll: false,
-            shallow: true,
-          });
-          return;
-        }
-
-        await setDateParam(
-          format(
-            startOfWeek(previousWeekStart, { weekStartsOn: 1 }),
-            "yyyy-MM-dd"
-          ),
-          {
-            scroll: false,
-            shallow: true,
-          }
-        );
-      }}
-      onNext={() => {
-        const today = startOfDay(new Date());
-        const nextDate = isCurrentWeek
-          ? startOfWeek(addDays(today, 7), { weekStartsOn: 1 })
-          : addDays(startOfWeek(currentDate, { weekStartsOn: 1 }), 7);
-
-        return setDateParam(format(nextDate, "yyyy-MM-dd"), {
-          scroll: false,
-          shallow: true,
-        });
-      }}
+      onToday={handleToday}
+      onPrevious={handlePrevious}
+      onNext={handleNext}
       isPreviousDisabled={isCurrentWeek}
       cityValue={selectedCity ?? "all"}
       onCityChange={setSelectedCity}
@@ -343,13 +357,14 @@ export function LandingEventsPreview() {
       showSkeletons={showSkeletons}
       visibleCategories={visibleCategories}
       selectedCategories={selectedCategories}
-      onToggleCategory={(categoryKey) =>
+      onToggleCategory={(categoryKey) => {
+        void triggerHaptic(HapticPreset.Selection);
         setSelectedCategories((current) =>
           current.includes(categoryKey)
             ? current.filter((key) => key !== categoryKey)
             : [...current, categoryKey]
-        )
-      }
+        );
+      }}
       showRecentActivity={
         !isSearchView &&
         !showSkeletons &&
