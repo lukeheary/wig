@@ -35,10 +35,7 @@ import {
 } from "drizzle-orm";
 import { uploadImageFromUrl, deleteFromS3, BUCKET_NAME } from "@/lib/s3";
 import { TRPCError } from "@trpc/server";
-import {
-  logActivity,
-  upsertRsvpActivity,
-} from "../../utils/activity-logger";
+import { logActivity, upsertRsvpActivity } from "../../utils/activity-logger";
 import { logEventActivity } from "../../utils/event-activity-logger";
 import {
   filterExistingCategoryKeys,
@@ -77,8 +74,10 @@ function resolveEventUpdateActivityType(
 function isPendingEventUploadUrl(url: string): boolean {
   try {
     const parsed = new URL(url);
-    return parsed.host.includes(`${BUCKET_NAME}.s3`) &&
-      parsed.pathname.includes("/events/pending/");
+    return (
+      parsed.host.includes(`${BUCKET_NAME}.s3`) &&
+      parsed.pathname.includes("/events/pending/")
+    );
   } catch {
     return false;
   }
@@ -123,22 +122,25 @@ async function notifyPartnerOfMirroredRsvp({
     "Your partner";
   const verb = status === "going" ? "RSVP'd going to" : "RSVP'd interested in";
 
-  await createNotification({
-    userId: partnerUserId,
-    actorUserId,
-    type: "event_update",
-    entityType: "event",
-    entityId: event.id,
-    title: "Partner RSVP update",
-    body: `${actorName} ${verb} ${event.title} for both of you`,
-    actionUrl: `/event/${event.id}`,
-    metadata: {
-      source: "partner_rsvp",
-      status,
-      eventId: event.id,
-      eventTitle: event.title,
+  await createNotification(
+    {
+      userId: partnerUserId,
+      actorUserId,
+      type: "event_update",
+      entityType: "event",
+      entityId: event.id,
+      title: "Partner RSVP update",
+      body: `${actorName} ${verb} ${event.title} for both of you`,
+      actionUrl: `/event/${event.id}`,
+      metadata: {
+        source: "partner_rsvp",
+        status,
+        eventId: event.id,
+        eventTitle: event.title,
+      },
     },
-  }, ctx.db);
+    ctx.db
+  );
 }
 
 function isBucketUrl(url: string): boolean {
@@ -152,8 +154,10 @@ function isBucketUrl(url: string): boolean {
 function isLegacyEventCoverImageUrl(url: string, eventId: string): boolean {
   try {
     const parsed = new URL(url);
-    return parsed.host.includes(`${BUCKET_NAME}.s3`) &&
-      parsed.pathname.endsWith(`/events/${eventId}/coverImage.png`);
+    return (
+      parsed.host.includes(`${BUCKET_NAME}.s3`) &&
+      parsed.pathname.endsWith(`/events/${eventId}/coverImage.png`)
+    );
   } catch {
     return false;
   }
@@ -607,7 +611,8 @@ export const eventRouter = router({
       const [updatedEvent] = await ctx.db
         .update(events)
         .set({
-          coverImageUrl: input.coverImageUrl === "" ? null : input.coverImageUrl,
+          coverImageUrl:
+            input.coverImageUrl === "" ? null : input.coverImageUrl,
           updatedAt: new Date(),
         })
         .where(eq(events.id, input.eventId))
@@ -742,8 +747,8 @@ export const eventRouter = router({
             input.coverImageUrl === ""
               ? null
               : input.coverImageUrl !== undefined
-              ? input.coverImageUrl
-              : existingSeries.coverImageUrl,
+                ? input.coverImageUrl
+                : existingSeries.coverImageUrl,
           eventUrl:
             input.eventUrl !== undefined
               ? input.eventUrl
@@ -939,7 +944,10 @@ export const eventRouter = router({
           updatedAt: new Date(),
         })
         .where(eq(eventSeries.id, input.seriesId))
-        .returning({ id: eventSeries.id, coverImageUrl: eventSeries.coverImageUrl });
+        .returning({
+          id: eventSeries.id,
+          coverImageUrl: eventSeries.coverImageUrl,
+        });
 
       if (!updatedSeries) {
         throw new TRPCError({
@@ -955,10 +963,7 @@ export const eventRouter = router({
           updatedAt: new Date(),
         })
         .where(
-          and(
-            eq(events.seriesId, input.seriesId),
-            inheritedImageCondition
-          )
+          and(eq(events.seriesId, input.seriesId), inheritedImageCondition)
         );
 
       return updatedSeries;
@@ -1606,7 +1611,10 @@ export const eventRouter = router({
 
       // Create a map of event IDs to social RSVPs (current user + friends)
       const socialRsvpsMap = new Map<string, typeof friendsRsvps>();
-      const addSocialRsvp = (eventId: string, attendee: (typeof friendsRsvps)[number]) => {
+      const addSocialRsvp = (
+        eventId: string,
+        attendee: (typeof friendsRsvps)[number]
+      ) => {
         if (!socialRsvpsMap.has(eventId)) {
           socialRsvpsMap.set(eventId, []);
         }
@@ -1618,10 +1626,7 @@ export const eventRouter = router({
 
         if (existingIndex >= 0) {
           const existing = attendees[existingIndex];
-          if (
-            existing.status === "interested" &&
-            attendee.status === "going"
-          ) {
+          if (existing.status === "interested" && attendee.status === "going") {
             attendees[existingIndex] = attendee;
           }
           return;
@@ -2256,16 +2261,22 @@ export const eventRouter = router({
       z.object({
         search: z.string().optional(),
         city: z.string().optional(),
-        limit: z.number().min(1).max(8).default(8),
+        limit: z.number().min(1).max(32).default(8),
+        startDate: z.date().optional(),
+        endDate: z.date().optional(),
       })
     )
     .query(async ({ ctx, input }) => {
-      const now = new Date();
+      const startDate = input.startDate ?? new Date();
 
       const conditions = [
         eq(events.visibility, "public"),
-        gte(events.startAt, now),
+        gte(events.startAt, startDate),
       ];
+
+      if (input.endDate) {
+        conditions.push(lte(events.startAt, input.endDate));
+      }
 
       if (input.city) {
         // Look up metro area for coordinates and radius
@@ -2295,6 +2306,16 @@ export const eventRouter = router({
             )
           `;
 
+          const nearbyEventConditions = [
+            eq(events.visibility, "public"),
+            gte(events.startAt, startDate),
+            sql`${distanceSql} <= ${radiusMiles}`,
+          ];
+
+          if (input.endDate) {
+            nearbyEventConditions.push(lte(events.startAt, input.endDate));
+          }
+
           const nearbyEventIds = await ctx.db
             .select({ id: events.id })
             .from(events)
@@ -2302,13 +2323,7 @@ export const eventRouter = router({
               cities,
               and(eq(cities.name, events.city), eq(cities.state, events.state))
             )
-            .where(
-              and(
-                eq(events.visibility, "public"),
-                gte(events.startAt, now),
-                sql`${distanceSql} <= ${radiusMiles}`
-              )
-            );
+            .where(and(...nearbyEventConditions));
 
           if (nearbyEventIds.length === 0) {
             return [];
@@ -2560,7 +2575,10 @@ export const eventRouter = router({
 
       // Create a map of event IDs to attendees
       const attendeesMap = new Map<string, typeof friendsRsvps>();
-      const addAttendee = (eventId: string, attendee: (typeof friendsRsvps)[number]) => {
+      const addAttendee = (
+        eventId: string,
+        attendee: (typeof friendsRsvps)[number]
+      ) => {
         if (!attendeesMap.has(eventId)) {
           attendeesMap.set(eventId, []);
         }

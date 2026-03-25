@@ -1,9 +1,12 @@
 "use client";
 
+import { useMemo } from "react";
 import { trpc } from "@/lib/trpc";
-import { EventCardGrid } from "@/components/events/event-card-grid";
+import { HomeMobileEventRail } from "@/components/events/home-mobile-event-rail";
+import { StickySectionHeader } from "@/components/ui/sticky-section-header";
 import { Loader2, CalendarIcon } from "lucide-react";
 import { type EventListItem } from "@/types/trpc";
+import { endOfWeek, format, isSameDay } from "date-fns";
 
 const MOCK_EVENT_ATTENDEES = [
   {
@@ -61,7 +64,10 @@ function withMockFriendsGoing(events: EventListItem[]): EventListItem[] {
     const attendeeCount = ((event.title.length + index) % 4) + 1;
     const startIndex = index % MOCK_EVENT_ATTENDEES.length;
     const friendsGoing = Array.from({ length: attendeeCount }, (_, offset) => ({
-      status: offset === attendeeCount - 1 && attendeeCount > 1 ? "interested" : "going",
+      status:
+        offset === attendeeCount - 1 && attendeeCount > 1
+          ? "interested"
+          : "going",
       user: MOCK_EVENT_ATTENDEES[
         (startIndex + offset) % MOCK_EVENT_ATTENDEES.length
       ],
@@ -78,12 +84,41 @@ function withMockFriendsGoing(events: EventListItem[]): EventListItem[] {
 }
 
 export function LandingEventsPreview() {
-  const limit = 8;
+  const now = useMemo(() => new Date(), []);
+  const weekEnd = useMemo(() => endOfWeek(now, { weekStartsOn: 1 }), [now]);
 
   const { data: events, isLoading } =
     trpc.event.listPublicEventsPreview.useQuery({
-      limit,
+      limit: 32,
+      startDate: now,
+      endDate: weekEnd,
     });
+
+  const eventsByDay = withMockFriendsGoing(events ?? []).reduce<
+    Array<{ label: string; dateKey: string; events: EventListItem[] }>
+  >((groups, event) => {
+    const eventDate = new Date(event.startAt);
+    const dateKey = format(eventDate, "yyyy-MM-dd");
+    const isToday = isSameDay(eventDate, now);
+    const dateLabel = isToday
+      ? now.getHours() >= 17
+        ? "Tonight's Events"
+        : "Today's Events"
+      : format(eventDate, "EEE, MMM d");
+    const currentGroup = groups.at(-1);
+
+    if (!currentGroup || currentGroup.dateKey !== dateKey) {
+      groups.push({
+        label: dateLabel,
+        dateKey,
+        events: [event],
+      });
+      return groups;
+    }
+
+    currentGroup.events.push(event);
+    return groups;
+  }, []);
 
   return (
     <div className="space-y-6">
@@ -114,20 +149,36 @@ export function LandingEventsPreview() {
         <div className="flex justify-center py-12">
           <Loader2 className="h-8 w-8 animate-spin text-muted-foreground" />
         </div>
-      ) : !events || events.length === 0 ? (
+      ) : eventsByDay.length === 0 ? (
         <div className="py-12 text-center">
           <CalendarIcon className="mx-auto mb-4 h-12 w-12 text-muted-foreground" />
-          <h3 className="mb-2 text-lg font-semibold">No events found</h3>
+          <h3 className="mb-2 text-lg font-semibold">No events this week</h3>
           <p className="text-muted-foreground">
             Check back later for upcoming events
           </p>
         </div>
       ) : (
-        <EventCardGrid
-          events={withMockFriendsGoing(events)}
-          columns={{ mobile: 1, tablet: 3, desktop: 4 }}
-          gap="md"
-        />
+        <div className="space-y-4">
+          {eventsByDay.map((group) => (
+            <div key={group.dateKey}>
+              <StickySectionHeader>
+                <span
+                  className={
+                    group.label === "Today's Events" ||
+                    group.label === "Tonight's Events"
+                      ? "text-primary"
+                      : undefined
+                  }
+                >
+                  {group.label}
+                </span>
+              </StickySectionHeader>
+              <div className="container mx-auto px-4">
+                <HomeMobileEventRail events={group.events} />
+              </div>
+            </div>
+          ))}
+        </div>
       )}
 
       {/*<div className="flex justify-center pt-2">*/}

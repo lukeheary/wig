@@ -132,7 +132,7 @@ function EventSkeletonGrid({
   return (
     <>
       <div className="-mx-4 overflow-x-auto [scrollbar-width:none] md:hidden [&::-webkit-scrollbar]:hidden">
-        <div className="flex items-stretch gap-3 px-4 pb-1 pr-6">
+        <div className="flex w-max items-stretch gap-3 px-4 pb-1">
           {Array.from({ length: renderedMobileCount }).map((_, index) => (
             <div
               key={`event-mobile-skeleton-${index}`}

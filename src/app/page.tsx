@@ -143,7 +143,7 @@ export default async function LandingPage() {
             <LandingRecentActivity />
           </section>
 
-          <section className="container mx-auto px-4 pb-10 md:pb-16">
+          <section className="mx-auto pb-10 md:pb-16">
             <LandingEventsPreview />
           </section>
 
@@ -153,9 +153,6 @@ export default async function LandingPage() {
               <h2 className="text-4xl font-semibold md:text-4xl">
                 <span className={truculenta.className}>See who is going.</span>
               </h2>
-              <p className="max-w-lg text-muted-foreground">
-                Never miss a night out with your people again.
-              </p>
 
               <div className="flex flex-wrap items-center justify-center gap-3 pt-4">
                 <LandingGetStartedLink location="footer" />

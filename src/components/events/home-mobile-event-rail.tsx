@@ -144,7 +144,7 @@ export function HomeMobileEventRail({ events }: { events: EventCardItem[] }) {
   return (
     <>
       <div className="-mx-4 overflow-x-auto [scrollbar-width:none] md:hidden [&::-webkit-scrollbar]:hidden">
-        <div className="flex items-stretch gap-3 px-4 pb-1 pr-6">
+        <div className="flex w-max items-stretch gap-3 px-4 pb-1">
           {events.map((event) => (
             <div
               key={event.id}
