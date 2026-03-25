@@ -61,6 +61,15 @@ const HOME_ADD_FRIENDS_BANNER_KEY_PREFIX =
   "wig:home:add-friends-banner-dismissed";
 const HOME_ACTIVITY_WINDOW_DAYS = 1;
 
+function getFriendActivityCount(event: {
+  friendsGoing?: ArrayLike<unknown> | null;
+  friendsInterested?: ArrayLike<unknown> | null;
+}) {
+  return (
+    (event.friendsGoing?.length ?? 0) + (event.friendsInterested?.length ?? 0)
+  );
+}
+
 function HomePageContent() {
   const { toast } = useToast();
   const { triggerHaptic } = useHaptics();
@@ -232,7 +241,11 @@ function HomePageContent() {
   const isSearching = Boolean(searchQuery && searchQuery.trim().length > 0);
   const isSearchView = isSearchMode || isSearching;
   const isDefaultCalendarView = activeFilter === "all";
-  const isFilteredFeedView = !isSearching && !isDefaultCalendarView;
+  const isFollowingFeed = activeFilter === "following";
+  const shouldPrioritizeFriendActivity =
+    activeFilter === "all" || isFollowingFeed;
+  const usesDaySectionLayout = isDefaultCalendarView || isFollowingFeed;
+  const isFilteredFeedView = !isSearching && !usesDaySectionLayout;
 
   const handleExitSearch = useCallback(() => {
     setIsSearchMode(false);
@@ -298,6 +311,7 @@ function HomePageContent() {
     {
       startDate: dateRange.startDate,
       endDate: dateRange.endDate,
+      followedOnly: isFollowingFeed,
       friendsRsvpOnly: activeFilter === "friends",
       myRsvpOnly: activeFilter === "mine",
       city:
@@ -317,6 +331,7 @@ function HomePageContent() {
       {
         startDate: startOfDay(new Date()),
         endDate: addDays(startOfDay(new Date()), 365),
+        followedOnly: isFollowingFeed,
         friendsRsvpOnly: activeFilter === "friends",
         myRsvpOnly: activeFilter === "mine",
         city:
@@ -329,10 +344,24 @@ function HomePageContent() {
     );
 
   const sortedEvents = useMemo(() => {
-    if (!events || !referenceCoords) return events ?? [];
+    if (!events) return [];
+    if (!referenceCoords && !shouldPrioritizeFriendActivity) return events;
 
     const nextEvents = [...events];
     nextEvents.sort((a, b) => {
+      if (shouldPrioritizeFriendActivity) {
+        const friendActivityDifference =
+          getFriendActivityCount(b) - getFriendActivityCount(a);
+
+        if (friendActivityDifference !== 0) {
+          return friendActivityDifference;
+        }
+      }
+
+      if (!referenceCoords) {
+        return new Date(a.startAt).getTime() - new Date(b.startAt).getTime();
+      }
+
       const aDistance =
         cityDistanceMap.get(`${a.city}|${a.state}`) ?? Number.POSITIVE_INFINITY;
       const bDistance =
@@ -343,14 +372,34 @@ function HomePageContent() {
     });
 
     return nextEvents;
-  }, [events, referenceCoords, cityDistanceMap]);
+  }, [
+    cityDistanceMap,
+    events,
+    referenceCoords,
+    shouldPrioritizeFriendActivity,
+  ]);
 
   const sortedUpcomingSearchEvents = useMemo(() => {
-    if (!upcomingSearchEvents || !referenceCoords)
-      return upcomingSearchEvents ?? [];
+    if (!upcomingSearchEvents) return [];
+    if (!referenceCoords && !shouldPrioritizeFriendActivity) {
+      return upcomingSearchEvents;
+    }
 
     const nextEvents = [...upcomingSearchEvents];
     nextEvents.sort((a, b) => {
+      if (shouldPrioritizeFriendActivity) {
+        const friendActivityDifference =
+          getFriendActivityCount(b) - getFriendActivityCount(a);
+
+        if (friendActivityDifference !== 0) {
+          return friendActivityDifference;
+        }
+      }
+
+      if (!referenceCoords) {
+        return new Date(a.startAt).getTime() - new Date(b.startAt).getTime();
+      }
+
       const aDistance =
         cityDistanceMap.get(`${a.city}|${a.state}`) ?? Number.POSITIVE_INFINITY;
       const bDistance =
@@ -361,7 +410,12 @@ function HomePageContent() {
     });
 
     return nextEvents;
-  }, [upcomingSearchEvents, referenceCoords, cityDistanceMap]);
+  }, [
+    cityDistanceMap,
+    referenceCoords,
+    shouldPrioritizeFriendActivity,
+    upcomingSearchEvents,
+  ]);
 
   const visibleCategories = useMemo(() => {
     const availableCategoryKeys = new Set<string>();
@@ -435,9 +489,8 @@ function HomePageContent() {
     !isFilteredFeedView;
   const shouldShowWeekSectionSkeletons =
     !isSearchView &&
-    isDefaultCalendarView &&
     viewMode === "week" &&
-    !isFilteredFeedView;
+    usesDaySectionLayout;
   const skeletonDateHeader = useMemo(() => {
     if (isSearchView) return null;
 
@@ -914,7 +967,15 @@ function HomePageContent() {
       upcomingEvents={filteredUpcomingSearchEvents}
       filteredEvents={filteredEvents}
       flatListTitle={isFilteredFeedView ? "Upcoming Events" : null}
-      flatListEmptyState={<EventsPlaceholder />}
+      flatListEmptyState={
+        <EventsPlaceholder
+          message={
+            isFollowingFeed
+              ? "No upcoming events from places you're following"
+              : undefined
+          }
+        />
+      }
       searchEmptyState={
         <EmptyStateCard
           icon={CalendarIcon}
@@ -925,7 +986,11 @@ function HomePageContent() {
       upcomingEmptyState={
         <EmptyStateCard
           icon={CalendarIcon}
-          title="No upcoming events to show"
+          title={
+            isFollowingFeed
+              ? "No upcoming events from places you're following"
+              : "No upcoming events to show"
+          }
         />
       }
       dayEmptyState={<EventsPlaceholder message="No events scheduled" />}

@@ -12,6 +12,7 @@ interface EventFilterSelectProps {
 
 const OPTIONS = [
   { value: "all", label: "All Events" },
+  { value: "following", label: "Following" },
   { value: "friends", label: "Friends' Events" },
   { value: "mine", label: "My Events" },
 ];

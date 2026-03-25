@@ -29,6 +29,7 @@ export default function HomePage() {
   } = trpc.event.listEventsByRange.useQuery({
     startDate: dateRange.startDate,
     endDate: dateRange.endDate,
+    followedOnly: activeFilter === "following",
     friendsRsvpOnly: activeFilter === "friends",
     myRsvpOnly: activeFilter === "mine",
   });
@@ -138,6 +139,8 @@ export default function HomePage() {
             <p className="mb-4 text-muted-foreground">
               {activeFilter === "friends" &&
                 "Add friends to see events they're interested in or going to"}
+              {activeFilter === "following" &&
+                "Follow places to see their upcoming events here"}
               {activeFilter === "mine" &&
                 "RSVP or mark events as interested to see them here"}
               {activeFilter === "all" && "Check back later for upcoming events"}
