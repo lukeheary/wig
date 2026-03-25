@@ -71,7 +71,7 @@ export default async function LandingPage() {
           {/* Hero Section */}
           <section className="relative flex min-h-[calc(100svh-7.5rem)] flex-col bg-card md:min-h-[calc(100svh-4rem)]">
             <div className="flex flex-1 items-center">
-              <div className="relative mx-auto flex w-full max-w-6xl justify-start px-4 pb-8 pt-24 md:py-10">
+              <div className="relative mx-auto flex w-full max-w-6xl justify-start pb-8 pt-36 md:py-10">
                 {/* The Moon Container */}
                 {/*<div className="relative mx-auto mb-[-60px] flex h-[300px] w-[300px] items-center justify-center rounded-full bg-gradient-to-b from-white/[0.08] to-background shadow-[0_0_50px_-12px_rgba(255,255,255,0.1)] md:mb-[-100px] md:h-[400px] md:w-[400px]">*/}
                 {/*  <h1*/}
@@ -82,23 +82,22 @@ export default async function LandingPage() {
                 {/*</div>*/}
 
                 <div className="w-full text-left">
-                  <h2 className="font-space-grotesk relative z-20 text-4xl font-bold leading-[0.9] tracking-tight md:text-7xl md:leading-[0.92]">
+                  <h2 className="font-space-grotesk relative z-20 text-center text-[40px] font-bold leading-[1.1] tracking-tight md:text-7xl md:leading-[0.92]">
                     See who is going,
                     <br />
                     decide where to go.
                   </h2>
 
-                  <div className="relative left-1/2 mt-7 w-screen -translate-x-1/2 overflow-hidden md:mt-8">
+                  <div className="relative left-1/2 mt-7 w-screen -translate-x-1/2 overflow-hidden md:mt-10">
                     <LandingHeroEventMarquee />
                   </div>
 
-                  <div className="mt-7 flex flex-wrap items-center justify-start gap-3 pb-4">
-                    <div className="w-full md:w-auto md:max-w-[180px]">
-                      <LandingGetStartedLink
-                        location="hero"
-                        className="block"
-                      />
-                    </div>
+                  <div className="mt-8 flex w-full justify-center">
+                    <LandingGetStartedLink
+                      location="hero"
+                      className="block"
+                      buttonClassName="min-w-[200px] px-10 text-base md:min-w-[228px] md:h-12"
+                    />
                   </div>
                 </div>
               </div>
