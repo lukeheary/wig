@@ -140,22 +140,38 @@ function HomeMiniEventCard({ event }: { event: EventCardItem }) {
   );
 }
 
-export function HomeMobileEventRail({ events }: { events: EventCardItem[] }) {
+export function HomeMobileEventRail({
+  events,
+  mobileLayout = "rail",
+}: {
+  events: EventCardItem[];
+  mobileLayout?: "rail" | "grid";
+}) {
   return (
     <>
-      <div className="-mx-4 overflow-x-auto [scrollbar-width:none] md:hidden [&::-webkit-scrollbar]:hidden">
-        <div className="flex w-max items-stretch gap-3 px-4 pb-1">
+      {mobileLayout === "grid" ? (
+        <div className="grid grid-cols-2 gap-3 md:hidden">
           {events.map((event) => (
-            <div
-              key={event.id}
-              className="shrink-0 self-stretch"
-              style={{ width: `${HOME_MOBILE_EVENT_CARD_WIDTH}px` }}
-            >
+            <div key={event.id} className="min-w-0">
               <HomeMiniEventCard event={event} />
             </div>
           ))}
         </div>
-      </div>
+      ) : (
+        <div className="-mx-4 overflow-x-auto [scrollbar-width:none] md:hidden [&::-webkit-scrollbar]:hidden">
+          <div className="flex w-max items-stretch gap-3 px-4 pb-1">
+            {events.map((event) => (
+              <div
+                key={event.id}
+                className="shrink-0 self-stretch"
+                style={{ width: `${HOME_MOBILE_EVENT_CARD_WIDTH}px` }}
+              >
+                <HomeMiniEventCard event={event} />
+              </div>
+            ))}
+          </div>
+        </div>
+      )}
 
       <div className="hidden md:block">
         <EventCardGrid

@@ -460,7 +460,10 @@ export function EventBrowserSurface({
                 />
               ))
             ) : (
-              <HomeMobileEventRail events={upcomingEvents} />
+              <HomeMobileEventRail
+                events={upcomingEvents}
+                mobileLayout="grid"
+              />
             )}
           </div>
         </div>
@@ -478,7 +481,10 @@ export function EventBrowserSurface({
                 />
               ))
             ) : (
-              <HomeMobileEventRail events={filteredEvents} />
+              <HomeMobileEventRail
+                events={filteredEvents}
+                mobileLayout="grid"
+              />
             )}
           </div>
         </div>
