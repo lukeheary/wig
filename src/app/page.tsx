@@ -71,7 +71,7 @@ export default async function LandingPage() {
           {/* Hero Section */}
           <section className="relative flex min-h-[calc(100svh-7.5rem)] flex-col bg-card md:min-h-[calc(100svh-2rem)]">
             <div className="flex flex-1 items-center">
-              <div className="relative mx-auto flex w-full max-w-6xl justify-start pb-8 pt-36 md:py-10">
+              <div className="relative mx-auto flex w-full max-w-6xl justify-start pb-8 pt-36 md:pb-10 md:pt-40">
                 {/* The Moon Container */}
                 {/*<div className="relative mx-auto mb-[-60px] flex h-[300px] w-[300px] items-center justify-center rounded-full bg-gradient-to-b from-white/[0.08] to-background shadow-[0_0_50px_-12px_rgba(255,255,255,0.1)] md:mb-[-100px] md:h-[400px] md:w-[400px]">*/}
                 {/*  <h1*/}

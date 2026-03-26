@@ -199,7 +199,7 @@ export function PlacePage({ actionMenuType }: PlacePageProps) {
                 )}
               </div>
 
-              <div>
+              <div className={"flex flex-col justify-center md:space-y-1"}>
                 <h1 className="font-space-grotesk text-3xl font-bold tracking-tight md:text-4xl">
                   {place.name}
                 </h1>

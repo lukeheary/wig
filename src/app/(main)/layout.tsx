@@ -108,6 +108,13 @@ function MainLayoutContent({ children }: { children: React.ReactNode }) {
     setMobileMenuOpen(false);
   };
 
+  const handleLogoClick = (event: React.MouseEvent<HTMLAnchorElement>) => {
+    if (!isSignedIn || !isHome) return;
+
+    event.preventDefault();
+    window.location.assign("/home");
+  };
+
   const trackNavigationClick = (
     destination: string,
     location: "desktop_nav" | "mobile_menu" | "user_menu" | "auth"
@@ -134,7 +141,10 @@ function MainLayoutContent({ children }: { children: React.ReactNode }) {
         <div className="container mx-auto flex h-14 items-center md:h-16">
           {/* Left Side - Logo */}
           <div className="flex items-center">
-            <WigLogo href={isSignedIn ? "/home" : "/"} />
+            <WigLogo
+              href={isSignedIn ? "/home" : "/"}
+              onClick={handleLogoClick}
+            />
           </div>
 
           {/* Center - Desktop Navigation */}

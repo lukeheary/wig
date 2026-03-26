@@ -93,7 +93,7 @@ export function LandingExplainerCards({
             <div className="pointer-events-none absolute inset-x-0 top-0 h-px" />
             <div className="pointer-events-none absolute -right-10 -top-10 h-36 w-36 rounded-full transition-transform duration-700 group-hover:scale-110" />
 
-            <div className="relative mt-5 flex h-full flex-col items-center text-center">
+            <div className="relative flex h-full flex-col items-center text-center md:mt-5">
               <div className="flex w-full items-baseline justify-center gap-4">
                 <h4 className="font-space-grotesk whitespace-nowrap text-2xl font-semibold leading-none text-foreground">
                   {title}

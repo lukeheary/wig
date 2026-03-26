@@ -22,6 +22,9 @@ const FALLBACK_GRADIENTS = [
   "from-[#86efac]/80 via-[#22c55e]/55 to-[#052e16]/80",
 ] as const;
 
+const MARQUEE_SLIDE_CLASS_NAME =
+  "group relative h-36 w-36 shrink-0 overflow-hidden rounded-2xl border border-white/10 bg-white/[0.05] shadow-[0_24px_40px_-28px_rgba(0,0,0,0.95)] md:h-52 md:w-52";
+
 function getEventImageUrl(event: {
   coverImageUrl?: string | null;
   venue?: { logoImageUrl?: string | null } | null;
@@ -78,7 +81,7 @@ export function LandingHeroEventMarquee({
           {trackSlides.map((slide, index) => (
             <div
               key={`${slide.id}-${index}`}
-              className="group relative h-36 w-36 shrink-0 overflow-hidden rounded-2xl border border-white/10 bg-white/[0.05] shadow-[0_24px_40px_-28px_rgba(0,0,0,0.95)] md:h-52 md:w-52"
+              className={MARQUEE_SLIDE_CLASS_NAME}
             >
               {slide.imageUrl ? (
                 <Image
@@ -103,12 +106,15 @@ export function LandingHeroEventMarquee({
           ))}
         </div>
       ) : (
-        <div className="flex gap-3 md:gap-4">
-          {Array.from({ length: 6 }).map((_, index) => (
+        <div className="hero-event-marquee-track flex w-max gap-3 md:gap-4">
+          {Array.from({ length: 10 }).map((_, index) => (
             <div
               key={index}
-              className="h-24 w-24 shrink-0 animate-pulse rounded-[24px] bg-white/[0.08] md:h-28 md:w-28"
-            />
+              className={cn(MARQUEE_SLIDE_CLASS_NAME, "animate-pulse")}
+            >
+              <div className="h-full w-full bg-white/[0.08]" />
+              <div className="pointer-events-none absolute inset-0 bg-gradient-to-t from-black/35 via-transparent to-white/10" />
+            </div>
           ))}
         </div>
       )}

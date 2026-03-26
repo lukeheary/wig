@@ -1,12 +1,18 @@
 import Link from "next/link";
+import { type MouseEventHandler } from "react";
 import { truculenta } from "@/lib/fonts";
 
 interface WigLogoProps {
   asLink?: boolean;
   href?: string;
+  onClick?: MouseEventHandler<HTMLAnchorElement>;
 }
 
-export function WigLogo({ asLink = true, href = "/home" }: WigLogoProps) {
+export function WigLogo({
+  asLink = true,
+  href = "/home",
+  onClick,
+}: WigLogoProps) {
   const inner = (
     <span className={"flex items-baseline gap-1"}>
       <span
@@ -19,7 +25,11 @@ export function WigLogo({ asLink = true, href = "/home" }: WigLogoProps) {
   );
 
   if (asLink) {
-    return <Link href={href}>{inner}</Link>;
+    return (
+      <Link href={href} onClick={onClick}>
+        {inner}
+      </Link>
+    );
   }
 
   return <div>{inner}</div>;
