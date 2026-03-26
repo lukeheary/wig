@@ -8,6 +8,7 @@ import {
   places,
   placeMembers,
   scrapers,
+  scraperLogs,
   supportTicketActivity,
   supportTickets,
   users,
@@ -22,7 +23,7 @@ import {
 
 const placeTypeSchema = z.enum(["venue", "organizer"]);
 const placeMemberRoleSchema = z.enum(["owner", "manager", "promoter", "staff"]);
-const scraperTypeSchema = z.enum(["dice", "posh", "clubcafe", "ticketmaster"]);
+const scraperTypeSchema = z.enum(["dice", "posh", "ticketmaster"]);
 const supportTicketStatusSchema = z.enum([
   "open",
   "in-review",
@@ -954,5 +955,15 @@ export const adminRouter = router({
       }
 
       return { success: true };
+    }),
+
+  listScraperLogs: adminProcedure
+    .input(z.object({ limit: z.number().min(1).max(500).default(200) }))
+    .query(async ({ ctx, input }) => {
+      return ctx.db
+        .select()
+        .from(scraperLogs)
+        .orderBy(desc(scraperLogs.ranAt))
+        .limit(input.limit);
     }),
 });

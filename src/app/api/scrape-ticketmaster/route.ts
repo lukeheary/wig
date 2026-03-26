@@ -432,6 +432,154 @@ function mapCategories(event: TicketmasterEvent) {
   );
 }
 
+export async function scrapeTicketmaster(params: {
+  venueName: string;
+  stateCode: string;
+  classificationName?: string;
+}) {
+  const { venueName, stateCode, classificationName } = params;
+
+  const apiKey = process.env.TICKETMASTER_API_KEY;
+  if (!apiKey) {
+    throw new Error("TICKETMASTER_API_KEY is not configured");
+  }
+
+  const normalizedState = stateCode.trim().toUpperCase();
+  const normalizedVenueName = venueName.trim();
+  const normalizedClassificationName =
+    typeof classificationName === "string" && classificationName.trim()
+      ? classificationName.trim()
+      : undefined;
+
+  const venueSearchUrl = buildTicketmasterUrl("venues.json", {
+    apikey: apiKey,
+    keyword: normalizedVenueName,
+    stateCode: normalizedState,
+    countryCode: "US",
+    size: "10",
+  });
+
+  const venueResponse = await fetch(venueSearchUrl, {
+    headers: {
+      "User-Agent":
+        "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36",
+    },
+    signal: AbortSignal.timeout(10000),
+  });
+
+  if (!venueResponse.ok) {
+    throw new Error(
+      `Failed to fetch Ticketmaster venues: ${venueResponse.status} ${venueResponse.statusText}`
+    );
+  }
+
+  const venueData = (await venueResponse.json()) as {
+    _embedded?: { venues?: TicketmasterVenue[] };
+  };
+
+  const venues = venueData._embedded?.venues ?? [];
+
+  if (venues.length === 0) {
+    throw new Error("No venues found for that search");
+  }
+
+  const normalizedName = normalizedVenueName.toLowerCase();
+  const matchedVenue =
+    venues.find((venue) => venue.name?.toLowerCase() === normalizedName) ||
+    venues.find((venue) =>
+      venue.name?.toLowerCase().includes(normalizedName)
+    ) ||
+    venues[0];
+
+  if (!matchedVenue?.id) {
+    throw new Error("Unable to resolve venue ID");
+  }
+
+  const eventsUrl = buildTicketmasterUrl("events.json", {
+    apikey: apiKey,
+    venueId: matchedVenue.id,
+    classificationName: normalizedClassificationName,
+    sort: "date,asc",
+    size: "100",
+  });
+
+  const eventsResponse = await fetch(eventsUrl, {
+    headers: {
+      "User-Agent":
+        "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36",
+    },
+    signal: AbortSignal.timeout(10000),
+  });
+
+  if (!eventsResponse.ok) {
+    throw new Error(
+      `Failed to fetch Ticketmaster events: ${eventsResponse.status} ${eventsResponse.statusText}`
+    );
+  }
+
+  const eventsData = (await eventsResponse.json()) as {
+    _embedded?: { events?: TicketmasterEvent[] };
+  };
+
+  const rawEvents = eventsData._embedded?.events ?? [];
+
+  const dedupedRawEvents = Array.from(
+    rawEvents
+      .reduce((groups, event) => {
+        const venue = event._embedded?.venues?.[0] ?? matchedVenue;
+        const startAt = buildDateTime(event.dates?.start);
+        if (!startAt) {
+          return groups;
+        }
+
+        const groupKey = buildEventGroupKey(
+          event,
+          venue,
+          matchedVenue,
+          startAt
+        );
+        const existing = groups.get(groupKey);
+        groups.set(
+          groupKey,
+          existing ? pickPreferredTicketmasterEvent(existing, event) : event
+        );
+        return groups;
+      }, new Map<string, TicketmasterEvent>())
+      .values()
+  );
+
+  const collapsedRawEvents = collapseNearDuplicateTicketmasterEvents(
+    dedupedRawEvents,
+    matchedVenue
+  );
+
+  const events = collapsedRawEvents.reduce<ScrapedEvent[]>((acc, event) => {
+    const mappedEvent = mapTicketmasterEventToScrapedEvent(
+      event,
+      matchedVenue,
+      normalizedState
+    );
+    if (mappedEvent) {
+      acc.push(mappedEvent);
+    }
+    return acc;
+  }, []);
+
+  return {
+    venue: {
+      id: matchedVenue.id,
+      name: matchedVenue.name ?? "Unknown Venue",
+      address: buildAddress(matchedVenue),
+      city: matchedVenue.city?.name ?? "Unknown",
+      state: matchedVenue.state?.stateCode ?? normalizedState ?? "XX",
+    },
+    events,
+    totalEvents: events.length,
+    rawTotalEvents: rawEvents.length,
+    dedupedRawTotalEvents: collapsedRawEvents.length,
+  };
+}
+
 export async function POST(request: NextRequest) {
   try {
     const { venueName, stateCode, classificationName } = await request.json();
@@ -450,160 +598,12 @@ export async function POST(request: NextRequest) {
       );
     }
 
-    const apiKey = process.env.TICKETMASTER_API_KEY;
-    if (!apiKey) {
-      return NextResponse.json(
-        { error: "TICKETMASTER_API_KEY is not configured" },
-        { status: 500 }
-      );
-    }
-
-    const normalizedState = stateCode.trim().toUpperCase();
-    const normalizedVenueName = venueName.trim();
-    const normalizedClassificationName =
-      typeof classificationName === "string" && classificationName.trim()
-        ? classificationName.trim()
-        : undefined;
-
-    const venueSearchUrl = buildTicketmasterUrl("venues.json", {
-      apikey: apiKey,
-      keyword: normalizedVenueName,
-      stateCode: normalizedState,
-      countryCode: "US",
-      size: "10",
+    const result = await scrapeTicketmaster({
+      venueName,
+      stateCode,
+      classificationName,
     });
-
-    const venueResponse = await fetch(venueSearchUrl, {
-      headers: {
-        "User-Agent":
-          "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36",
-      },
-      signal: AbortSignal.timeout(10000),
-    });
-
-    if (!venueResponse.ok) {
-      return NextResponse.json(
-        {
-          error: `Failed to fetch Ticketmaster venues: ${venueResponse.status} ${venueResponse.statusText}`,
-        },
-        { status: 502 }
-      );
-    }
-
-    const venueData = (await venueResponse.json()) as {
-      _embedded?: { venues?: TicketmasterVenue[] };
-    };
-
-    const venues = venueData._embedded?.venues ?? [];
-
-    if (venues.length === 0) {
-      return NextResponse.json(
-        { error: "No venues found for that search" },
-        { status: 404 }
-      );
-    }
-
-    const normalizedName = normalizedVenueName.toLowerCase();
-    const matchedVenue =
-      venues.find((venue) => venue.name?.toLowerCase() === normalizedName) ||
-      venues.find((venue) =>
-        venue.name?.toLowerCase().includes(normalizedName)
-      ) ||
-      venues[0];
-
-    if (!matchedVenue?.id) {
-      return NextResponse.json(
-        { error: "Unable to resolve venue ID" },
-        { status: 404 }
-      );
-    }
-
-    const eventsUrl = buildTicketmasterUrl("events.json", {
-      apikey: apiKey,
-      venueId: matchedVenue.id,
-      classificationName: normalizedClassificationName,
-      sort: "date,asc",
-      size: "100",
-    });
-
-    const eventsResponse = await fetch(eventsUrl, {
-      headers: {
-        "User-Agent":
-          "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36",
-      },
-      signal: AbortSignal.timeout(10000),
-    });
-
-    if (!eventsResponse.ok) {
-      return NextResponse.json(
-        {
-          error: `Failed to fetch Ticketmaster events: ${eventsResponse.status} ${eventsResponse.statusText}`,
-        },
-        { status: 502 }
-      );
-    }
-
-    const eventsData = (await eventsResponse.json()) as {
-      _embedded?: { events?: TicketmasterEvent[] };
-    };
-
-    const rawEvents = eventsData._embedded?.events ?? [];
-
-    const dedupedRawEvents = Array.from(
-      rawEvents
-        .reduce((groups, event) => {
-          const venue = event._embedded?.venues?.[0] ?? matchedVenue;
-          const startAt = buildDateTime(event.dates?.start);
-          if (!startAt) {
-            return groups;
-          }
-
-          const groupKey = buildEventGroupKey(
-            event,
-            venue,
-            matchedVenue,
-            startAt
-          );
-          const existing = groups.get(groupKey);
-          groups.set(
-            groupKey,
-            existing ? pickPreferredTicketmasterEvent(existing, event) : event
-          );
-          return groups;
-        }, new Map<string, TicketmasterEvent>())
-        .values()
-    );
-
-    const collapsedRawEvents = collapseNearDuplicateTicketmasterEvents(
-      dedupedRawEvents,
-      matchedVenue
-    );
-
-    const events = collapsedRawEvents.reduce<ScrapedEvent[]>((acc, event) => {
-      const mappedEvent = mapTicketmasterEventToScrapedEvent(
-        event,
-        matchedVenue,
-        normalizedState
-      );
-      if (mappedEvent) {
-        acc.push(mappedEvent);
-      }
-      return acc;
-    }, []);
-
-    return NextResponse.json({
-      venue: {
-        id: matchedVenue.id,
-        name: matchedVenue.name ?? "Unknown Venue",
-        address: buildAddress(matchedVenue),
-        city: matchedVenue.city?.name ?? "Unknown",
-        state: matchedVenue.state?.stateCode ?? normalizedState ?? "XX",
-      },
-      events,
-      totalEvents: events.length,
-      rawTotalEvents: rawEvents.length,
-      dedupedRawTotalEvents: collapsedRawEvents.length,
-    });
+    return NextResponse.json(result);
   } catch (error) {
     return NextResponse.json(
       {

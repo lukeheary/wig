@@ -24,7 +24,7 @@ import {
 } from "@/components/venue-hours-editor";
 
 export type PlaceType = "venue" | "organizer";
-export type ScraperType = "dice" | "posh" | "clubcafe" | "ticketmaster";
+export type ScraperType = "dice" | "posh" | "ticketmaster";
 
 export interface PlaceFormData {
   type: PlaceType;
@@ -530,7 +530,6 @@ export function PlaceEditForm({
                 <SelectItem value="none">No scraper</SelectItem>
                 <SelectItem value="dice">Dice.fm</SelectItem>
                 <SelectItem value="posh">Posh</SelectItem>
-                <SelectItem value="clubcafe">Club Cafe</SelectItem>
                 <SelectItem value="ticketmaster">Ticketmaster</SelectItem>
               </SelectContent>
             </Select>

@@ -136,7 +136,6 @@ export const supportTicketActivityTypeEnum = pgEnum(
 export const scraperTypeEnum = pgEnum("scraper_type", [
   "dice",
   "posh",
-  "clubcafe",
   "ticketmaster",
 ]);
 
@@ -341,6 +340,7 @@ export const placesRelations = relations(places, ({ many }) => ({
   follows: many(placeFollows),
   categoryLinks: many(placeCategories),
   scraperConfigs: many(scrapers),
+  scraperLogs: many(scraperLogs),
 }));
 
 // ============================================================================
@@ -365,9 +365,50 @@ export const scrapers = pgTable(
   })
 );
 
-export const scrapersRelations = relations(scrapers, ({ one }) => ({
+export const scrapersRelations = relations(scrapers, ({ one, many }) => ({
   place: one(places, {
     fields: [scrapers.placeId],
+    references: [places.id],
+  }),
+  logs: many(scraperLogs),
+}));
+
+// ============================================================================
+// SCRAPER LOGS TABLE
+// ============================================================================
+
+export const scraperLogStatusEnum = pgEnum("scraper_log_status", [
+  "success",
+  "error",
+  "partial",
+]);
+
+export const scraperLogs = pgTable("scraper_logs", {
+  id: uuid("id").defaultRandom().primaryKey(),
+  scraperId: uuid("scraper_id").references(() => scrapers.id, {
+    onDelete: "set null",
+  }),
+  placeId: uuid("place_id").references(() => places.id, {
+    onDelete: "set null",
+  }),
+  placeName: text("place_name").notNull(),
+  scraper: scraperTypeEnum("scraper").notNull(),
+  status: scraperLogStatusEnum("status").notNull(),
+  eventsFound: integer("events_found").notNull().default(0),
+  eventsAdded: integer("events_added").notNull().default(0),
+  durationMs: integer("duration_ms"),
+  error: text("error"),
+  data: jsonb("data"),
+  ranAt: timestamp("ran_at").defaultNow().notNull(),
+});
+
+export const scraperLogsRelations = relations(scraperLogs, ({ one }) => ({
+  scraper: one(scrapers, {
+    fields: [scraperLogs.scraperId],
+    references: [scrapers.id],
+  }),
+  place: one(places, {
+    fields: [scraperLogs.placeId],
     references: [places.id],
   }),
 }));

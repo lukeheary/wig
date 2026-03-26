@@ -3,6 +3,10 @@
     {
       "path": "/api/cron/sync-event-series",
       "schedule": "0 8 * * *"
+    },
+    {
+      "path": "/api/cron/run-scrapers",
+      "schedule": "0 2 * * *"
     }
   ]
 }

@@ -1203,6 +1203,128 @@ async function discoverEventUrls(groupUrl: string): Promise<string[]> {
   return extractEventUrlsFromHtml(html, $);
 }
 
+export async function scrapePosh(urls: string[]) {
+  // Separate group URLs from event URLs
+  const eventUrls: string[] = [];
+  const groupUrls: string[] = [];
+
+  for (const url of urls) {
+    const cleaned = url.trim();
+    if (!cleaned) continue;
+    if (!cleaned.includes("posh.vip")) {
+      throw new Error(`Invalid URL: ${cleaned}. Must be a posh.vip URL.`);
+    }
+    if (cleaned.includes("/g/")) {
+      groupUrls.push(cleaned);
+    } else if (cleaned.includes("/e/")) {
+      eventUrls.push(cleaned);
+    }
+  }
+
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  const events: any[] = [];
+  const errors: { url: string; error: string }[] = [];
+  let organizerFromGroup: { name: string; url?: string } | null = null;
+
+  // Try the group API first (best chance of full data)
+  for (const groupUrl of groupUrls) {
+    let groupEvents: any[] = [];
+    let groupOrganizer: { name: string; url?: string } | null = null;
+    let groupApiFailed = false;
+
+    try {
+      const result = await fetchGroupEventsFromApi(groupUrl);
+      groupEvents = result.events;
+      groupOrganizer = result.organizer;
+    } catch (error) {
+      groupApiFailed = true;
+    }
+
+    if (groupEvents.length > 0) {
+      events.push(...groupEvents);
+      if (!organizerFromGroup && groupOrganizer) {
+        organizerFromGroup = groupOrganizer;
+      }
+      continue;
+    }
+
+    // Fallback: try to discover event URLs from group page HTML
+    try {
+      const discovered = await discoverEventUrls(groupUrl);
+      eventUrls.push(...discovered);
+    } catch (error) {
+      if (groupApiFailed) {
+        errors.push({
+          url: groupUrl,
+          error:
+            error instanceof Error ? error.message : "Failed to scrape group",
+        });
+      }
+    }
+  }
+
+  // Deduplicate URLs and skip any already sourced via group API
+  const existingEventUrls = new Set(
+    events
+      .map((event) => event.eventUrl)
+      .filter((url): url is string => typeof url === "string")
+  );
+  const uniqueUrls = [...new Set(eventUrls)].filter(
+    (url) => !existingEventUrls.has(url)
+  );
+
+  // Process in batches of 5 to avoid overwhelming the server
+  const batchSize = 5;
+  if (uniqueUrls.length > 0) {
+    for (let i = 0; i < uniqueUrls.length; i += batchSize) {
+      const batch = uniqueUrls.slice(i, i + batchSize);
+      const results = await Promise.allSettled(
+        batch.map((url) => scrapeEventPage(url))
+      );
+
+      for (let j = 0; j < results.length; j++) {
+        const result = results[j];
+        if (result.status === "fulfilled") {
+          events.push(result.value);
+        } else {
+          errors.push({
+            url: batch[j],
+            error: result.reason?.message || "Unknown error",
+          });
+        }
+      }
+    }
+  }
+
+  // Deduplicate by externalId or URL
+  const seen = new Set<string>();
+  const uniqueEvents = events.filter((event) => {
+    const key =
+      event.externalId || event.eventUrl || `${event.title}-${event.startAt}`;
+    if (!key) return true;
+    if (seen.has(key)) return false;
+    seen.add(key);
+    return true;
+  });
+
+  // Extract organizer info from group (preferred) or first event
+  const organizer =
+    organizerFromGroup ||
+    (uniqueEvents[0]?.organizerName
+      ? {
+          name: uniqueEvents[0].organizerName,
+          url: uniqueEvents[0].organizerUrl,
+        }
+      : null);
+
+  return {
+    organizer,
+    events: uniqueEvents,
+    totalEvents: uniqueEvents.length,
+    errors: errors.length > 0 ? errors : undefined,
+  };
+}
+
 export async function POST(request: NextRequest) {
   try {
     const { urls } = (await request.json()) as { urls: string[] };
@@ -1214,138 +1336,16 @@ export async function POST(request: NextRequest) {
       );
     }
 
-    // Separate group URLs from event URLs
-    const eventUrls: string[] = [];
-    const groupUrls: string[] = [];
+    const result = await scrapePosh(urls);
 
-    for (const url of urls) {
-      const cleaned = url.trim();
-      if (!cleaned) continue;
-      if (!cleaned.includes("posh.vip")) {
-        return NextResponse.json(
-          { error: `Invalid URL: ${cleaned}. Must be a posh.vip URL.` },
-          { status: 400 }
-        );
-      }
-      if (cleaned.includes("/g/")) {
-        groupUrls.push(cleaned);
-      } else if (cleaned.includes("/e/")) {
-        eventUrls.push(cleaned);
-      }
-    }
-
-    // eslint-disable-next-line @typescript-eslint/no-explicit-any
-    const events: any[] = [];
-    const errors: { url: string; error: string }[] = [];
-    let organizerFromGroup: { name: string; url?: string } | null = null;
-
-    // Try the group API first (best chance of full data)
-    for (const groupUrl of groupUrls) {
-      let groupEvents: any[] = [];
-      let groupOrganizer: { name: string; url?: string } | null = null;
-      let groupApiFailed = false;
-
-      try {
-        const result = await fetchGroupEventsFromApi(groupUrl);
-        groupEvents = result.events;
-        groupOrganizer = result.organizer;
-      } catch (error) {
-        groupApiFailed = true;
-      }
-
-      if (groupEvents.length > 0) {
-        events.push(...groupEvents);
-        if (!organizerFromGroup && groupOrganizer) {
-          organizerFromGroup = groupOrganizer;
-        }
-        continue;
-      }
-
-      // Fallback: try to discover event URLs from group page HTML
-      try {
-        const discovered = await discoverEventUrls(groupUrl);
-        eventUrls.push(...discovered);
-      } catch (error) {
-        if (groupApiFailed) {
-          errors.push({
-            url: groupUrl,
-            error:
-              error instanceof Error ? error.message : "Failed to scrape group",
-          });
-        }
-      }
-    }
-
-    // Deduplicate URLs and skip any already sourced via group API
-    const existingEventUrls = new Set(
-      events
-        .map((event) => event.eventUrl)
-        .filter((url): url is string => typeof url === "string")
-    );
-    const uniqueUrls = [...new Set(eventUrls)].filter(
-      (url) => !existingEventUrls.has(url)
-    );
-
-    // Process in batches of 5 to avoid overwhelming the server
-    const batchSize = 5;
-    if (uniqueUrls.length > 0) {
-      for (let i = 0; i < uniqueUrls.length; i += batchSize) {
-        const batch = uniqueUrls.slice(i, i + batchSize);
-        const results = await Promise.allSettled(
-          batch.map((url) => scrapeEventPage(url))
-        );
-
-        for (let j = 0; j < results.length; j++) {
-          const result = results[j];
-          if (result.status === "fulfilled") {
-            events.push(result.value);
-          } else {
-            errors.push({
-              url: batch[j],
-              error: result.reason?.message || "Unknown error",
-            });
-          }
-        }
-      }
-    }
-
-    // Deduplicate by externalId or URL
-    const seen = new Set<string>();
-    const uniqueEvents = events.filter((event) => {
-      const key =
-        event.externalId || event.eventUrl || `${event.title}-${event.startAt}`;
-      if (!key) return true;
-      if (seen.has(key)) return false;
-      seen.add(key);
-      return true;
-    });
-
-    if (uniqueEvents.length === 0) {
+    if (result.events.length === 0) {
       return NextResponse.json(
-        {
-          error: "Failed to scrape any events",
-          details: errors,
-        },
+        { error: "Failed to scrape any events", details: result.errors },
         { status: 404 }
       );
     }
 
-    // Extract organizer info from group (preferred) or first event
-    const organizer =
-      organizerFromGroup ||
-      (uniqueEvents[0]?.organizerName
-        ? {
-            name: uniqueEvents[0].organizerName,
-            url: uniqueEvents[0].organizerUrl,
-          }
-        : null);
-
-    return NextResponse.json({
-      organizer,
-      events: uniqueEvents,
-      totalEvents: uniqueEvents.length,
-      errors: errors.length > 0 ? errors : undefined,
-    });
+    return NextResponse.json(result);
   } catch (error) {
     return NextResponse.json(
       {

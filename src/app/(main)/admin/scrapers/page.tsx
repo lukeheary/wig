@@ -40,7 +40,7 @@ import {
   PopoverTrigger,
 } from "@/components/ui/popover";
 
-type ScraperType = "dice" | "posh" | "clubcafe" | "ticketmaster";
+type ScraperType = "dice" | "posh" | "ticketmaster";
 
 interface ScraperRow {
   id: string;
@@ -113,14 +113,12 @@ interface ScrapeResult {
 const SCRAPER_LABELS: Record<ScraperType, string> = {
   dice: "Dice.fm",
   posh: "Posh",
-  clubcafe: "Club Cafe",
   ticketmaster: "Ticketmaster",
 };
 
 const SCRAPER_WEBSITES: Record<ScraperType, string> = {
   dice: "https://dice.fm",
   posh: "https://posh.vip",
-  clubcafe: "https://www.clubcafe.com",
   ticketmaster: "https://www.ticketmaster.com",
 };
 
@@ -600,9 +598,6 @@ export default function AdminScrapersPage() {
       if (selectedRow.scraper === "dice") {
         endpoint = "/api/scrape-dice";
         payload = { url: selectedRow.searchString };
-      } else if (selectedRow.scraper === "clubcafe") {
-        endpoint = "/api/scrape-clubcafe";
-        payload = { url: selectedRow.searchString, maxPages: 3 };
       } else if (selectedRow.scraper === "posh") {
         endpoint = "/api/scrape-posh";
         const urls = selectedRow.searchString

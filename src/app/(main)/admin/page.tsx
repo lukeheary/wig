@@ -11,6 +11,7 @@ import {
   Building,
   Building2,
   Download,
+  FileText,
   MapPin,
   Plus,
   Tags,
@@ -148,6 +149,14 @@ export default function AdminPage() {
                 <div className="flex items-center gap-3">
                   <Download className="h-4 w-4" />
                   <div className="text-sm font-medium">Run Scrapers</div>
+                </div>
+              </Card>
+            </Link>
+            <Link href="/admin/scraper-logs">
+              <Card className="p-4 hover:bg-accent">
+                <div className="flex items-center gap-3">
+                  <FileText className="h-4 w-4" />
+                  <div className="text-sm font-medium">Scraper Logs</div>
                 </div>
               </Card>
             </Link>
