@@ -535,7 +535,10 @@ export function EventBrowserSurface({
                 <EmptyStateCard icon={CalendarIcon} title="No events found" />
               ))
             ) : (
-              <HomeMobileEventRail events={filteredEvents} />
+              <HomeMobileEventRail
+                events={filteredEvents}
+                mobileLayout="grid"
+              />
             )}
           </div>
         </div>
