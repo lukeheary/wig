@@ -25,8 +25,9 @@ const LANDING_EXPLAINERS = [
     icon: "users" as const,
   },
   {
-    title: "Decide Faster",
-    description: "Less group chat back-and-forth, more spontaneous plans.",
+    title: "Decide Where To Go",
+    description:
+      "Use your friends' plans and interests to help you decide what to do.",
     icon: "compass" as const,
   },
 ];
