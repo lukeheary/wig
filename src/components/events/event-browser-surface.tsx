@@ -30,6 +30,9 @@ import { cn } from "@/lib/utils";
 import { type EventFilterTab } from "@/types/events";
 import { type EventListItem } from "@/types/trpc";
 
+const DESKTOP_RAIL_SIDE_INSET =
+  "max(2rem, calc((100vw - 1200px) / 2 + 2rem))";
+
 type CityOption = {
   value: string;
   label: string;
@@ -136,11 +139,30 @@ function StickyDateHeader({
 function EventSkeletonGrid({
   count = 8,
   mobileCount,
+  desktopLayout = "grid",
+  desktopBleed = false,
 }: {
   count?: number;
   mobileCount?: number;
+  desktopLayout?: "grid" | "rail";
+  desktopBleed?: boolean;
 }) {
   const renderedMobileCount = mobileCount ?? Math.max(6, count);
+  const desktopSkeletonCards = Array.from({ length: count }).map((_, index) => (
+    <div
+      key={`event-skeleton-${index}`}
+      className="w-[280px] shrink-0 self-stretch rounded-2xl bg-card p-2 shadow-sm"
+    >
+      <div className="flex h-full animate-pulse flex-col">
+        <div className="aspect-square rounded-2xl bg-muted" />
+        <div className="flex-1 space-y-2 px-3 py-3">
+          <div className="h-4 w-3/4 rounded-full bg-muted" />
+          <div className="h-3 w-1/2 rounded-full bg-muted" />
+          <div className="h-3 w-2/3 rounded-full bg-muted" />
+        </div>
+      </div>
+    </div>
+  ));
 
   return (
     <>
@@ -166,23 +188,56 @@ function EventSkeletonGrid({
         </div>
       </div>
 
-      <div className="hidden grid-cols-1 gap-4 md:grid md:grid-cols-3 lg:grid-cols-4">
-        {Array.from({ length: count }).map((_, index) => (
-          <div
-            key={`event-skeleton-${index}`}
-            className="rounded-2xl bg-card p-2 shadow-sm"
-          >
-            <div className="flex animate-pulse md:block">
-              <div className="h-24 w-24 shrink-0 rounded-2xl bg-muted md:aspect-square md:h-auto md:w-full lg:max-w-[274px]" />
-              <div className="flex-1 space-y-2 py-2 pl-3 pr-1 md:px-3 md:py-3">
-                <div className="h-4 w-3/4 rounded-full bg-muted" />
-                <div className="h-3 w-1/2 rounded-full bg-muted" />
-                <div className="h-3 w-2/3 rounded-full bg-muted" />
-              </div>
+      {desktopLayout === "rail" ? (
+        <div
+          className="hidden md:block"
+          style={
+            desktopBleed
+              ? {
+                  width: "100vw",
+                  marginLeft: `calc(-1 * ${DESKTOP_RAIL_SIDE_INSET})`,
+                  maxWidth: "none",
+                }
+              : undefined
+          }
+        >
+          <div className="overflow-x-auto [scrollbar-width:none] [&::-webkit-scrollbar]:hidden">
+            <div
+              className={cn(
+                "flex w-max items-stretch gap-4 pb-1",
+                desktopBleed ? "pr-4 md:pr-6 lg:pr-8 xl:pr-10" : "px-0"
+              )}
+              style={
+                desktopBleed
+                  ? {
+                      paddingLeft: DESKTOP_RAIL_SIDE_INSET,
+                    }
+                  : undefined
+              }
+            >
+              {desktopSkeletonCards}
             </div>
           </div>
-        ))}
-      </div>
+        </div>
+      ) : (
+        <div className="hidden grid-cols-1 gap-4 md:grid md:grid-cols-3 lg:grid-cols-4">
+          {Array.from({ length: count }).map((_, index) => (
+            <div
+              key={`event-skeleton-${index}`}
+              className="rounded-2xl bg-card p-2 shadow-sm"
+            >
+              <div className="flex animate-pulse md:block">
+                <div className="h-24 w-24 shrink-0 rounded-2xl bg-muted md:aspect-square md:h-auto md:w-full lg:max-w-[274px]" />
+                <div className="flex-1 space-y-2 py-2 pl-3 pr-1 md:px-3 md:py-3">
+                  <div className="h-4 w-3/4 rounded-full bg-muted" />
+                  <div className="h-3 w-1/2 rounded-full bg-muted" />
+                  <div className="h-3 w-2/3 rounded-full bg-muted" />
+                </div>
+              </div>
+            </div>
+          ))}
+        </div>
+      )}
     </>
   );
 }
@@ -505,6 +560,8 @@ export function EventBrowserSurface({
                     <EventSkeletonGrid
                       count={Math.min(4 + (index % 2), 5)}
                       mobileCount={3 + (index % 2)}
+                      desktopLayout="rail"
+                      desktopBleed
                     />
                   </div>
                 </div>
@@ -572,7 +629,11 @@ export function EventBrowserSurface({
                           />
                         ))
                       ) : (
-                        <HomeMobileEventRail events={dayEvents} />
+                        <HomeMobileEventRail
+                          events={dayEvents}
+                          desktopLayout="rail"
+                          desktopBleed
+                        />
                       )}
                     </div>
                   </div>

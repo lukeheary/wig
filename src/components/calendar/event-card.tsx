@@ -36,7 +36,7 @@ export function EventCard({ event }: EventCardProps) {
   const eventImageUrl = getEventImageUrl(event);
 
   return (
-    <Link href={eventHref} className="group" onClick={handleClick}>
+    <Link href={eventHref} className="group block h-full" onClick={handleClick}>
       <Card className="relative h-full cursor-pointer overflow-hidden !border-none bg-card p-2 transition-all duration-300 md:flex-col">
         {/* Container - horizontal on mobile, vertical on desktop */}
         <div className="flex md:block">

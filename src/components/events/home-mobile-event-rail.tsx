@@ -1,9 +1,10 @@
 "use client";
 
+import { type ReactNode, useEffect, useRef, useState } from "react";
 import Image from "next/image";
 import Link from "next/link";
 import { format } from "date-fns";
-import { Calendar } from "lucide-react";
+import { Calendar, ChevronLeft, ChevronRight } from "lucide-react";
 import { Card } from "@/components/ui/card";
 import { EventSocialOverlay } from "@/components/events/event-social-overlay";
 import { EventCardGrid } from "@/components/events/event-card-grid";
@@ -12,11 +13,148 @@ import {
   getSocialUsers,
   type EventCardItem,
 } from "@/components/events/event-card-helpers";
+import { EventCard } from "@/components/calendar/event-card";
 import { useEventCardLink } from "@/components/events/use-event-card-link";
 import { getEventStatusLabel } from "@/lib/event-status";
 import { cn, formatTime, splitTrailingParenthetical } from "@/lib/utils";
 
 export const HOME_MOBILE_EVENT_CARD_WIDTH = 212;
+const DESKTOP_RAIL_SIDE_INSET =
+  "max(2rem, calc((100vw - 1200px) / 2 + 2rem))";
+const DESKTOP_SCROLL_STEP = 320;
+
+function DesktopRailScroller({
+  children,
+  desktopBleed,
+}: {
+  children: ReactNode;
+  desktopBleed: boolean;
+}) {
+  const scrollRef = useRef<HTMLDivElement>(null);
+  const [hoveredSide, setHoveredSide] = useState<"left" | "right" | null>(null);
+  const [canScrollLeft, setCanScrollLeft] = useState(false);
+  const [canScrollRight, setCanScrollRight] = useState(false);
+
+  useEffect(() => {
+    const scrollContainer = scrollRef.current;
+    if (!scrollContainer) return;
+
+    const updateScrollState = () => {
+      setCanScrollLeft(scrollContainer.scrollLeft > 4);
+      setCanScrollRight(
+        scrollContainer.scrollLeft + scrollContainer.clientWidth <
+          scrollContainer.scrollWidth - 4
+      );
+    };
+
+    updateScrollState();
+    scrollContainer.addEventListener("scroll", updateScrollState, {
+      passive: true,
+    });
+    window.addEventListener("resize", updateScrollState);
+
+    return () => {
+      scrollContainer.removeEventListener("scroll", updateScrollState);
+      window.removeEventListener("resize", updateScrollState);
+    };
+  }, [children]);
+
+  const handleScroll = (direction: "left" | "right") => {
+    const scrollContainer = scrollRef.current;
+    if (!scrollContainer) return;
+
+    const amount = Math.max(
+      DESKTOP_SCROLL_STEP,
+      Math.round(scrollContainer.clientWidth * 0.72)
+    );
+
+    scrollContainer.scrollBy({
+      left: direction === "left" ? -amount : amount,
+      behavior: "smooth",
+    });
+  };
+
+  return (
+    <div
+      className="relative hidden md:block"
+      style={
+        desktopBleed
+          ? {
+              width: "100vw",
+              marginLeft: `calc(-1 * ${DESKTOP_RAIL_SIDE_INSET})`,
+              maxWidth: "none",
+            }
+          : undefined
+      }
+      onMouseLeave={() => setHoveredSide(null)}
+    >
+      <div
+        ref={scrollRef}
+        className="overflow-x-auto [scrollbar-width:none] [&::-webkit-scrollbar]:hidden"
+      >
+        <div
+          className={cn(
+            "flex w-max items-stretch gap-4 pb-1",
+            desktopBleed ? "pr-4 md:pr-6 lg:pr-8 xl:pr-10" : "px-0"
+          )}
+          style={
+            desktopBleed
+              ? {
+                  paddingLeft: DESKTOP_RAIL_SIDE_INSET,
+                }
+              : undefined
+          }
+        >
+          {children}
+        </div>
+      </div>
+
+      {canScrollLeft ? (
+        <div
+          className="absolute inset-y-0 left-0 z-10 hidden w-24 md:block"
+          onMouseEnter={() => setHoveredSide("left")}
+          onMouseLeave={() => setHoveredSide(null)}
+        >
+          <button
+            type="button"
+            aria-label="Scroll events left"
+            onClick={() => handleScroll("left")}
+            className={cn(
+              "absolute inset-0 bg-gradient-to-r from-background via-background/95 via-40% to-transparent text-foreground transition-opacity duration-200",
+              hoveredSide === "left"
+                ? "opacity-100"
+                : "pointer-events-none opacity-0"
+            )}
+          >
+            <ChevronLeft className="absolute left-4 top-1/2 h-6 w-6 -translate-y-1/2 drop-shadow-[0_2px_8px_rgba(0,0,0,0.55)]" />
+          </button>
+        </div>
+      ) : null}
+
+      {canScrollRight ? (
+        <div
+          className="absolute inset-y-0 right-0 z-10 hidden w-24 md:block"
+          onMouseEnter={() => setHoveredSide("right")}
+          onMouseLeave={() => setHoveredSide(null)}
+        >
+          <button
+            type="button"
+            aria-label="Scroll events right"
+            onClick={() => handleScroll("right")}
+            className={cn(
+              "absolute inset-0 bg-gradient-to-l from-background via-background/95 via-40% to-transparent text-foreground transition-opacity duration-200",
+              hoveredSide === "right"
+                ? "opacity-100"
+                : "pointer-events-none opacity-0"
+            )}
+          >
+            <ChevronRight className="absolute right-4 top-1/2 h-6 w-6 -translate-y-1/2 drop-shadow-[0_2px_8px_rgba(0,0,0,0.55)]" />
+          </button>
+        </div>
+      ) : null}
+    </div>
+  );
+}
 
 function HomeMiniEventCard({ event }: { event: EventCardItem }) {
   const { eventHref, handleClick } = useEventCardLink(event.id);
@@ -95,9 +233,13 @@ function HomeMiniEventCard({ event }: { event: EventCardItem }) {
 export function HomeMobileEventRail({
   events,
   mobileLayout = "rail",
+  desktopLayout = "grid",
+  desktopBleed = false,
 }: {
   events: EventCardItem[];
   mobileLayout?: "rail" | "grid";
+  desktopLayout?: "grid" | "rail";
+  desktopBleed?: boolean;
 }) {
   return (
     <>
@@ -125,13 +267,23 @@ export function HomeMobileEventRail({
         </div>
       )}
 
-      <div className="hidden md:block">
-        <EventCardGrid
-          events={events}
-          columns={{ mobile: 1, tablet: 3, desktop: 4 }}
-          gap="md"
-        />
-      </div>
+      {desktopLayout === "rail" ? (
+        <DesktopRailScroller desktopBleed={desktopBleed}>
+          {events.map((event) => (
+            <div key={event.id} className="w-[280px] shrink-0 self-stretch">
+              <EventCard event={event} />
+            </div>
+          ))}
+        </DesktopRailScroller>
+      ) : (
+        <div className="hidden md:block">
+          <EventCardGrid
+            events={events}
+            columns={{ mobile: 1, tablet: 3, desktop: 4 }}
+            gap="md"
+          />
+        </div>
+      )}
     </>
   );
 }
