@@ -50,6 +50,7 @@ type ViewMode = "week" | "month";
 const HOME_ADD_FRIENDS_BANNER_KEY_PREFIX =
   "wig:home:add-friends-banner-dismissed";
 const HOME_ACTIVITY_WINDOW_DAYS = 1;
+const HOME_EVENTS_QUERY_LIMIT = 500;
 
 function getFriendActivityCount(event: {
   friendsGoing?: ArrayLike<unknown> | null;
@@ -240,6 +241,7 @@ function HomePageContent() {
     {
       startDate: dateRange.startDate,
       endDate: dateRange.endDate,
+      limit: HOME_EVENTS_QUERY_LIMIT,
       followedOnly: isFollowingFeed,
       friendsRsvpOnly: activeFilter === "friends",
       myRsvpOnly: activeFilter === "mine",

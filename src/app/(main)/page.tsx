@@ -13,6 +13,7 @@ import { EventFilterTab } from "@/types/events";
 export default function HomePage() {
   const { toast } = useToast();
   const [activeFilter, setActiveFilter] = useState<EventFilterTab>("all");
+  const homeEventsQueryLimit = 500;
 
   // Calculate 7-day range starting from today
   const dateRange = useMemo(() => {
@@ -29,6 +30,7 @@ export default function HomePage() {
   } = trpc.event.listEventsByRange.useQuery({
     startDate: dateRange.startDate,
     endDate: dateRange.endDate,
+    limit: homeEventsQueryLimit,
     followedOnly: activeFilter === "following",
     friendsRsvpOnly: activeFilter === "friends",
     myRsvpOnly: activeFilter === "mine",
