@@ -461,6 +461,9 @@ export default function EventPage() {
                 returnTo={returnTo}
                 variant="ghost"
                 size="icon"
+                onClick={() => {
+                  void triggerHaptic(HapticPreset.Light);
+                }}
                 className={cn(
                   "absolute left-2.5 top-2.5",
                   imageOverlayButtonClassName
@@ -519,7 +522,10 @@ export default function EventPage() {
                     "absolute bottom-2.5 left-2.5",
                     imageOverlayButtonClassName
                   )}
-                  onClick={() => setIsImageModalOpen(true)}
+                  onClick={() => {
+                    void triggerHaptic(HapticPreset.Light);
+                    setIsImageModalOpen(true);
+                  }}
                 >
                   <Expand className="h-4 w-4" />
                 </Button>

@@ -21,6 +21,7 @@ import {
 } from "@/components/events/event-card-helpers";
 import { EventCard } from "@/components/calendar/event-card";
 import { useEventCardLink } from "@/components/events/use-event-card-link";
+import { useMediaQuery } from "@/hooks/use-media-query";
 import { getEventStatusLabel } from "@/lib/event-status";
 import { cn, formatTime, splitTrailingParenthetical } from "@/lib/utils";
 
@@ -128,9 +129,13 @@ function RailProgressIndicator({
 function DesktopRailScroller({
   children,
   desktopBleed,
+  onCanScrollBackChange,
+  scrollToStartSignal,
 }: {
   children: ReactNode;
   desktopBleed: boolean;
+  onCanScrollBackChange?: (value: boolean) => void;
+  scrollToStartSignal?: number;
 }) {
   const scrollRef = useRef<HTMLDivElement>(null);
   const [hoveredSide, setHoveredSide] = useState<"left" | "right" | null>(null);
@@ -141,6 +146,15 @@ function DesktopRailScroller({
     hasOverflow,
     isScrollActive,
   } = useHorizontalScrollProgress(scrollRef, [children]);
+
+  useEffect(() => {
+    onCanScrollBackChange?.(canScrollLeft);
+  }, [canScrollLeft, onCanScrollBackChange]);
+
+  useEffect(() => {
+    if (!scrollToStartSignal) return;
+    scrollRef.current?.scrollTo({ left: 0, behavior: "smooth" });
+  }, [scrollToStartSignal]);
 
   const handleScroll = (direction: "left" | "right") => {
     const scrollContainer = scrollRef.current;
@@ -247,10 +261,27 @@ function DesktopRailScroller({
   );
 }
 
-function MobileRailScroller({ events }: { events: EventCardItem[] }) {
+function MobileRailScroller({
+  events,
+  onCanScrollBackChange,
+  scrollToStartSignal,
+}: {
+  events: EventCardItem[];
+  onCanScrollBackChange?: (value: boolean) => void;
+  scrollToStartSignal?: number;
+}) {
   const scrollRef = useRef<HTMLDivElement>(null);
-  const { scrollProgress, hasOverflow, isScrollActive } =
+  const { canScrollLeft, scrollProgress, hasOverflow, isScrollActive } =
     useHorizontalScrollProgress(scrollRef, [events]);
+
+  useEffect(() => {
+    onCanScrollBackChange?.(canScrollLeft);
+  }, [canScrollLeft, onCanScrollBackChange]);
+
+  useEffect(() => {
+    if (!scrollToStartSignal) return;
+    scrollRef.current?.scrollTo({ left: 0, behavior: "smooth" });
+  }, [scrollToStartSignal]);
 
   return (
     <div className="relative md:hidden">
@@ -359,12 +390,18 @@ export function HomeMobileEventRail({
   mobileLayout = "rail",
   desktopLayout = "grid",
   desktopBleed = false,
+  onCanScrollBackChange,
+  scrollToStartSignal,
 }: {
   events: EventCardItem[];
   mobileLayout?: "rail" | "grid";
   desktopLayout?: "grid" | "rail";
   desktopBleed?: boolean;
+  onCanScrollBackChange?: (value: boolean) => void;
+  scrollToStartSignal?: number;
 }) {
+  const isDesktop = useMediaQuery("(min-width: 768px)");
+
   return (
     <>
       {mobileLayout === "grid" ? (
@@ -376,11 +413,19 @@ export function HomeMobileEventRail({
           ))}
         </div>
       ) : (
-        <MobileRailScroller events={events} />
+        <MobileRailScroller
+          events={events}
+          onCanScrollBackChange={!isDesktop ? onCanScrollBackChange : undefined}
+          scrollToStartSignal={!isDesktop ? scrollToStartSignal : undefined}
+        />
       )}
 
       {desktopLayout === "rail" ? (
-        <DesktopRailScroller desktopBleed={desktopBleed}>
+        <DesktopRailScroller
+          desktopBleed={desktopBleed}
+          onCanScrollBackChange={isDesktop ? onCanScrollBackChange : undefined}
+          scrollToStartSignal={isDesktop ? scrollToStartSignal : undefined}
+        >
           {events.map((event) => (
             <div key={event.id} className="w-[280px] shrink-0 self-stretch">
               <EventCard event={event} />

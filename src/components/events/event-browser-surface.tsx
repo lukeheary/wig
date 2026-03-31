@@ -125,14 +125,89 @@ function getWeekSectionMeta(date: Date, isCurrentWeek: boolean) {
 function StickyDateHeader({
   dateHeader,
   isToday,
+  showBackToStart = false,
+  onBackToStart,
 }: {
   dateHeader: string;
   isToday: boolean;
+  showBackToStart?: boolean;
+  onBackToStart?: () => void;
 }) {
   return (
-    <StickySectionHeader>
+    <StickySectionHeader
+      leadingSlotVisible={showBackToStart}
+      leadingSlot={
+        <button
+          type="button"
+          aria-label="Scroll back to the beginning of this row"
+          aria-hidden={!showBackToStart}
+          tabIndex={showBackToStart ? 0 : -1}
+          disabled={!showBackToStart}
+          onClick={onBackToStart}
+          className={cn(
+            "flex h-8 w-8 items-center justify-center rounded-full text-muted-foreground transition-all duration-300 ease-out",
+            showBackToStart
+              ? "translate-x-0 opacity-100"
+              : "pointer-events-none translate-x-1 opacity-0"
+          )}
+        >
+          <ChevronLeft className="h-4 w-4" />
+        </button>
+      }
+    >
       <span className={cn(isToday && "text-primary")}>{dateHeader}</span>
     </StickySectionHeader>
+  );
+}
+
+function DayEventSection({
+  dateHeader,
+  isToday,
+  dayEvents,
+  emptyDayState,
+}: {
+  dateHeader: string;
+  isToday: boolean;
+  dayEvents: EventListItem[];
+  emptyDayState?: ReactNode;
+}) {
+  const [canScrollBack, setCanScrollBack] = useState(false);
+  const [scrollToStartSignal, setScrollToStartSignal] = useState(0);
+  const [isResettingScroll, setIsResettingScroll] = useState(false);
+
+  useEffect(() => {
+    if (!canScrollBack) {
+      setIsResettingScroll(false);
+    }
+  }, [canScrollBack]);
+
+  return (
+    <div>
+      <StickyDateHeader
+        dateHeader={dateHeader}
+        isToday={isToday}
+        showBackToStart={canScrollBack && !isResettingScroll}
+        onBackToStart={() => {
+          setIsResettingScroll(true);
+          setScrollToStartSignal((current) => current + 1);
+        }}
+      />
+      <div className="container mx-auto px-4">
+        {dayEvents.length === 0 ? (
+          emptyDayState ?? (
+            <EmptyStateCard icon={CalendarIcon} title="No events scheduled" />
+          )
+        ) : (
+          <HomeMobileEventRail
+            events={dayEvents}
+            desktopLayout="rail"
+            desktopBleed
+            onCanScrollBackChange={setCanScrollBack}
+            scrollToStartSignal={scrollToStartSignal}
+          />
+        )}
+      </div>
+    </div>
   );
 }
 
@@ -616,26 +691,12 @@ export function EventBrowserSurface({
 
                 return (
                   <div key={dateKey}>
-                    <StickyDateHeader
+                    <DayEventSection
                       dateHeader={dateHeader}
                       isToday={isToday}
+                      dayEvents={dayEvents}
+                      emptyDayState={emptyStates?.day}
                     />
-                    <div className="container mx-auto px-4">
-                      {dayEvents.length === 0 ? (
-                        (emptyStates?.day ?? (
-                          <EmptyStateCard
-                            icon={CalendarIcon}
-                            title="No events scheduled"
-                          />
-                        ))
-                      ) : (
-                        <HomeMobileEventRail
-                          events={dayEvents}
-                          desktopLayout="rail"
-                          desktopBleed
-                        />
-                      )}
-                    </div>
                   </div>
                 );
               })}
