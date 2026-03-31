@@ -25,8 +25,7 @@ import { getEventStatusLabel } from "@/lib/event-status";
 import { cn, formatTime, splitTrailingParenthetical } from "@/lib/utils";
 
 export const HOME_MOBILE_EVENT_CARD_WIDTH = 212;
-const DESKTOP_RAIL_SIDE_INSET =
-  "max(2rem, calc((100vw - 1200px) / 2 + 2rem))";
+const DESKTOP_RAIL_SIDE_INSET = "max(2rem, calc((100vw - 1200px) / 2 + 2rem))";
 const DESKTOP_SCROLL_STEP = 320;
 
 function useHorizontalScrollProgress(
@@ -139,8 +138,7 @@ function DesktopRailScroller({
     scrollProgress,
     hasOverflow,
     isScrollActive,
-  } =
-    useHorizontalScrollProgress(scrollRef, [children]);
+  } = useHorizontalScrollProgress(scrollRef, [children]);
 
   const handleScroll = (direction: "left" | "right") => {
     const scrollContainer = scrollRef.current;
@@ -174,13 +172,10 @@ function DesktopRailScroller({
         scrollProgress={scrollProgress}
         hasOverflow={hasOverflow}
         isScrollActive={isScrollActive}
-        className="inset-x-0 top-0 z-20"
+        className="inset-x-0 -bottom-[4] z-20"
       />
 
-      <div
-        className="relative"
-        onMouseLeave={() => setHoveredSide(null)}
-      >
+      <div className="relative" onMouseLeave={() => setHoveredSide(null)}>
         <div
           ref={scrollRef}
           className="overflow-x-auto [scrollbar-width:none] [&::-webkit-scrollbar]:hidden"
@@ -261,7 +256,7 @@ function MobileRailScroller({ events }: { events: EventCardItem[] }) {
         scrollProgress={scrollProgress}
         hasOverflow={hasOverflow}
         isScrollActive={isScrollActive}
-        className="-left-4 -right-4 top-0 z-10"
+        className="-bottom-[4] -left-4 -right-4 z-10"
       />
       <div
         ref={scrollRef}
