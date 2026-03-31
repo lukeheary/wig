@@ -47,6 +47,10 @@ function useHorizontalScrollProgress(
       const maxScrollLeft =
         scrollContainer.scrollWidth - scrollContainer.clientWidth;
       const hasHorizontalOverflow = maxScrollLeft > 4;
+      const rawProgress = hasHorizontalOverflow
+        ? scrollContainer.scrollLeft / maxScrollLeft
+        : 0;
+      const clampedProgress = Math.min(1, Math.max(0, rawProgress));
 
       setHasOverflow(hasHorizontalOverflow);
       setCanScrollLeft(scrollContainer.scrollLeft > 4);
@@ -54,9 +58,7 @@ function useHorizontalScrollProgress(
         scrollContainer.scrollLeft + scrollContainer.clientWidth <
           scrollContainer.scrollWidth - 4
       );
-      setScrollProgress(
-        hasHorizontalOverflow ? scrollContainer.scrollLeft / maxScrollLeft : 0
-      );
+      setScrollProgress(clampedProgress);
     };
 
     const handleScroll = () => {
@@ -110,7 +112,7 @@ function RailProgressIndicator({
   return (
     <div
       className={cn(
-        "pointer-events-none absolute h-px transition-opacity duration-300 ease-out",
+        "pointer-events-none absolute h-px overflow-hidden transition-opacity duration-300 ease-out",
         scrollProgress > 0 && isScrollActive ? "opacity-100" : "opacity-0",
         className
       )}
