@@ -1,6 +1,12 @@
 "use client";
 
-import { type ReactNode, useEffect, useRef, useState } from "react";
+import {
+  type ReactNode,
+  type RefObject,
+  useEffect,
+  useRef,
+  useState,
+} from "react";
 import Image from "next/image";
 import Link from "next/link";
 import { format } from "date-fns";
@@ -23,6 +29,101 @@ const DESKTOP_RAIL_SIDE_INSET =
   "max(2rem, calc((100vw - 1200px) / 2 + 2rem))";
 const DESKTOP_SCROLL_STEP = 320;
 
+function useHorizontalScrollProgress(
+  scrollRef: RefObject<HTMLDivElement | null>,
+  deps: readonly unknown[]
+) {
+  const [canScrollLeft, setCanScrollLeft] = useState(false);
+  const [canScrollRight, setCanScrollRight] = useState(false);
+  const [scrollProgress, setScrollProgress] = useState(0);
+  const [hasOverflow, setHasOverflow] = useState(false);
+  const [isScrollActive, setIsScrollActive] = useState(false);
+
+  useEffect(() => {
+    const scrollContainer = scrollRef.current;
+    if (!scrollContainer) return;
+    let scrollEndTimeout: ReturnType<typeof setTimeout> | null = null;
+
+    const updateScrollState = () => {
+      const maxScrollLeft =
+        scrollContainer.scrollWidth - scrollContainer.clientWidth;
+      const hasHorizontalOverflow = maxScrollLeft > 4;
+
+      setHasOverflow(hasHorizontalOverflow);
+      setCanScrollLeft(scrollContainer.scrollLeft > 4);
+      setCanScrollRight(
+        scrollContainer.scrollLeft + scrollContainer.clientWidth <
+          scrollContainer.scrollWidth - 4
+      );
+      setScrollProgress(
+        hasHorizontalOverflow ? scrollContainer.scrollLeft / maxScrollLeft : 0
+      );
+    };
+
+    const handleScroll = () => {
+      setIsScrollActive(true);
+      if (scrollEndTimeout) {
+        clearTimeout(scrollEndTimeout);
+      }
+      updateScrollState();
+      scrollEndTimeout = setTimeout(() => {
+        setIsScrollActive(false);
+      }, 320);
+    };
+
+    updateScrollState();
+    scrollContainer.addEventListener("scroll", handleScroll, {
+      passive: true,
+    });
+    window.addEventListener("resize", updateScrollState);
+
+    return () => {
+      scrollContainer.removeEventListener("scroll", handleScroll);
+      window.removeEventListener("resize", updateScrollState);
+      if (scrollEndTimeout) {
+        clearTimeout(scrollEndTimeout);
+      }
+    };
+  }, [scrollRef, ...deps]);
+
+  return {
+    canScrollLeft,
+    canScrollRight,
+    scrollProgress,
+    hasOverflow,
+    isScrollActive,
+  };
+}
+
+function RailProgressIndicator({
+  scrollProgress,
+  hasOverflow,
+  isScrollActive,
+  className,
+}: {
+  scrollProgress: number;
+  hasOverflow: boolean;
+  isScrollActive: boolean;
+  className?: string;
+}) {
+  if (!hasOverflow) return null;
+
+  return (
+    <div
+      className={cn(
+        "pointer-events-none absolute h-px transition-opacity duration-300 ease-out",
+        scrollProgress > 0 && isScrollActive ? "opacity-100" : "opacity-0",
+        className
+      )}
+    >
+      <div
+        className="absolute inset-x-0 top-0 h-px origin-left bg-white/[0.16]"
+        style={{ transform: `scaleX(${scrollProgress})` }}
+      />
+    </div>
+  );
+}
+
 function DesktopRailScroller({
   children,
   desktopBleed,
@@ -32,32 +133,14 @@ function DesktopRailScroller({
 }) {
   const scrollRef = useRef<HTMLDivElement>(null);
   const [hoveredSide, setHoveredSide] = useState<"left" | "right" | null>(null);
-  const [canScrollLeft, setCanScrollLeft] = useState(false);
-  const [canScrollRight, setCanScrollRight] = useState(false);
-
-  useEffect(() => {
-    const scrollContainer = scrollRef.current;
-    if (!scrollContainer) return;
-
-    const updateScrollState = () => {
-      setCanScrollLeft(scrollContainer.scrollLeft > 4);
-      setCanScrollRight(
-        scrollContainer.scrollLeft + scrollContainer.clientWidth <
-          scrollContainer.scrollWidth - 4
-      );
-    };
-
-    updateScrollState();
-    scrollContainer.addEventListener("scroll", updateScrollState, {
-      passive: true,
-    });
-    window.addEventListener("resize", updateScrollState);
-
-    return () => {
-      scrollContainer.removeEventListener("scroll", updateScrollState);
-      window.removeEventListener("resize", updateScrollState);
-    };
-  }, [children]);
+  const {
+    canScrollLeft,
+    canScrollRight,
+    scrollProgress,
+    hasOverflow,
+    isScrollActive,
+  } =
+    useHorizontalScrollProgress(scrollRef, [children]);
 
   const handleScroll = (direction: "left" | "right") => {
     const scrollContainer = scrollRef.current;
@@ -86,72 +169,116 @@ function DesktopRailScroller({
             }
           : undefined
       }
-      onMouseLeave={() => setHoveredSide(null)}
     >
+      <RailProgressIndicator
+        scrollProgress={scrollProgress}
+        hasOverflow={hasOverflow}
+        isScrollActive={isScrollActive}
+        className="inset-x-0 top-0 z-20"
+      />
+
       <div
-        ref={scrollRef}
-        className="overflow-x-auto [scrollbar-width:none] [&::-webkit-scrollbar]:hidden"
+        className="relative"
+        onMouseLeave={() => setHoveredSide(null)}
       >
         <div
-          className={cn(
-            "flex w-max items-stretch gap-4 pb-1",
-            desktopBleed ? "pr-4 md:pr-6 lg:pr-8 xl:pr-10" : "px-0"
-          )}
-          style={
-            desktopBleed
-              ? {
-                  paddingLeft: DESKTOP_RAIL_SIDE_INSET,
-                }
-              : undefined
-          }
+          ref={scrollRef}
+          className="overflow-x-auto [scrollbar-width:none] [&::-webkit-scrollbar]:hidden"
         >
-          {children}
+          <div
+            className={cn(
+              "flex w-max items-stretch gap-4 pb-1",
+              desktopBleed ? "pr-4 md:pr-6 lg:pr-8 xl:pr-10" : "px-0"
+            )}
+            style={
+              desktopBleed
+                ? {
+                    paddingLeft: DESKTOP_RAIL_SIDE_INSET,
+                  }
+                : undefined
+            }
+          >
+            {children}
+          </div>
+        </div>
+
+        {canScrollLeft ? (
+          <div
+            className="absolute inset-y-0 left-0 z-10 hidden w-24 md:block"
+            onMouseEnter={() => setHoveredSide("left")}
+            onMouseLeave={() => setHoveredSide(null)}
+          >
+            <button
+              type="button"
+              aria-label="Scroll events left"
+              onClick={() => handleScroll("left")}
+              className={cn(
+                "absolute inset-0 bg-gradient-to-r from-background via-background/95 via-40% to-transparent text-foreground transition-opacity duration-200",
+                hoveredSide === "left"
+                  ? "opacity-100"
+                  : "pointer-events-none opacity-0"
+              )}
+            >
+              <ChevronLeft className="absolute left-4 top-1/2 h-6 w-6 -translate-y-1/2 drop-shadow-[0_2px_8px_rgba(0,0,0,0.55)]" />
+            </button>
+          </div>
+        ) : null}
+
+        {canScrollRight ? (
+          <div
+            className="absolute inset-y-0 right-0 z-10 hidden w-24 md:block"
+            onMouseEnter={() => setHoveredSide("right")}
+            onMouseLeave={() => setHoveredSide(null)}
+          >
+            <button
+              type="button"
+              aria-label="Scroll events right"
+              onClick={() => handleScroll("right")}
+              className={cn(
+                "absolute inset-0 bg-gradient-to-l from-background via-background/95 via-40% to-transparent text-foreground transition-opacity duration-200",
+                hoveredSide === "right"
+                  ? "opacity-100"
+                  : "pointer-events-none opacity-0"
+              )}
+            >
+              <ChevronRight className="absolute right-4 top-1/2 h-6 w-6 -translate-y-1/2 drop-shadow-[0_2px_8px_rgba(0,0,0,0.55)]" />
+            </button>
+          </div>
+        ) : null}
+      </div>
+    </div>
+  );
+}
+
+function MobileRailScroller({ events }: { events: EventCardItem[] }) {
+  const scrollRef = useRef<HTMLDivElement>(null);
+  const { scrollProgress, hasOverflow, isScrollActive } =
+    useHorizontalScrollProgress(scrollRef, [events]);
+
+  return (
+    <div className="relative md:hidden">
+      <RailProgressIndicator
+        scrollProgress={scrollProgress}
+        hasOverflow={hasOverflow}
+        isScrollActive={isScrollActive}
+        className="-left-4 -right-4 top-0 z-10"
+      />
+      <div
+        ref={scrollRef}
+        className="-mx-4 overflow-x-auto [scrollbar-width:none] [&::-webkit-scrollbar]:hidden"
+      >
+        <div className="flex w-max items-stretch gap-3 px-4 pb-1">
+          {events.map((event) => (
+            <div
+              key={event.id}
+              className="shrink-0 self-stretch"
+              style={{ width: `${HOME_MOBILE_EVENT_CARD_WIDTH}px` }}
+            >
+              <HomeMiniEventCard event={event} />
+            </div>
+          ))}
         </div>
       </div>
-
-      {canScrollLeft ? (
-        <div
-          className="absolute inset-y-0 left-0 z-10 hidden w-24 md:block"
-          onMouseEnter={() => setHoveredSide("left")}
-          onMouseLeave={() => setHoveredSide(null)}
-        >
-          <button
-            type="button"
-            aria-label="Scroll events left"
-            onClick={() => handleScroll("left")}
-            className={cn(
-              "absolute inset-0 bg-gradient-to-r from-background via-background/95 via-40% to-transparent text-foreground transition-opacity duration-200",
-              hoveredSide === "left"
-                ? "opacity-100"
-                : "pointer-events-none opacity-0"
-            )}
-          >
-            <ChevronLeft className="absolute left-4 top-1/2 h-6 w-6 -translate-y-1/2 drop-shadow-[0_2px_8px_rgba(0,0,0,0.55)]" />
-          </button>
-        </div>
-      ) : null}
-
-      {canScrollRight ? (
-        <div
-          className="absolute inset-y-0 right-0 z-10 hidden w-24 md:block"
-          onMouseEnter={() => setHoveredSide("right")}
-          onMouseLeave={() => setHoveredSide(null)}
-        >
-          <button
-            type="button"
-            aria-label="Scroll events right"
-            onClick={() => handleScroll("right")}
-            className={cn(
-              "absolute inset-0 bg-gradient-to-l from-background via-background/95 via-40% to-transparent text-foreground transition-opacity duration-200",
-              hoveredSide === "right"
-                ? "opacity-100"
-                : "pointer-events-none opacity-0"
-            )}
-          >
-            <ChevronRight className="absolute right-4 top-1/2 h-6 w-6 -translate-y-1/2 drop-shadow-[0_2px_8px_rgba(0,0,0,0.55)]" />
-          </button>
-        </div>
-      ) : null}
     </div>
   );
 }
@@ -252,19 +379,7 @@ export function HomeMobileEventRail({
           ))}
         </div>
       ) : (
-        <div className="-mx-4 overflow-x-auto [scrollbar-width:none] md:hidden [&::-webkit-scrollbar]:hidden">
-          <div className="flex w-max items-stretch gap-3 px-4 pb-1">
-            {events.map((event) => (
-              <div
-                key={event.id}
-                className="shrink-0 self-stretch"
-                style={{ width: `${HOME_MOBILE_EVENT_CARD_WIDTH}px` }}
-              >
-                <HomeMiniEventCard event={event} />
-              </div>
-            ))}
-          </div>
-        </div>
+        <MobileRailScroller events={events} />
       )}
 
       {desktopLayout === "rail" ? (
