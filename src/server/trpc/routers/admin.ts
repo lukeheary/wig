@@ -20,6 +20,12 @@ import {
   mapPlaceCategoryData,
   setPlaceCategoryKeys,
 } from "@/server/utils/categories";
+import {
+  INSTAGRAM_HANDLE_ERROR,
+  INSTAGRAM_HANDLE_REGEX,
+  PLACE_SLUG_ERROR,
+  PLACE_SLUG_REGEX,
+} from "@/lib/place-identifiers";
 
 const placeTypeSchema = z.enum(["venue", "organizer"]);
 const placeMemberRoleSchema = z.enum(["owner", "manager", "promoter", "staff"]);
@@ -55,7 +61,12 @@ function getWordSet(...values: Array<string | null | undefined>) {
 }
 
 function scoreScrapedVenueMatch(
-  scraped: { venueName: string; city?: string | null; state?: string | null; address?: string | null },
+  scraped: {
+    venueName: string;
+    city?: string | null;
+    state?: string | null;
+    address?: string | null;
+  },
   place: {
     id: string;
     name: string;
@@ -280,10 +291,7 @@ export const adminRouter = router({
           .string()
           .min(3)
           .max(100)
-          .regex(
-            /^[a-z0-9_-]+$/,
-            "Slug must be lowercase alphanumeric with hyphens and underscores"
-          ),
+          .regex(PLACE_SLUG_REGEX, PLACE_SLUG_ERROR),
         name: z.string().min(1).max(255),
         description: z.string().optional(),
         logoImageUrl: z.string().url().optional().or(z.literal("")),
@@ -294,7 +302,14 @@ export const adminRouter = router({
         latitude: z.number().optional(),
         longitude: z.number().optional(),
         website: z.string().url().optional().or(z.literal("")),
-        instagram: z.string().max(100).optional(),
+        instagram: z
+          .string()
+          .max(100)
+          .refine(
+            (value) => value === "" || INSTAGRAM_HANDLE_REGEX.test(value),
+            INSTAGRAM_HANDLE_ERROR
+          )
+          .optional(),
         hours: z.any().optional(),
         categories: z.array(z.string()).optional().default([]),
       })
@@ -313,13 +328,12 @@ export const adminRouter = router({
       }
 
       const { categories, ...rest } = input;
-      const [place] = await ctx.db
-        .insert(places)
-        .values(rest)
-        .returning();
+      const [place] = await ctx.db.insert(places).values(rest).returning();
 
       if (categories.length > 0) {
-        await setPlaceCategoryKeys(ctx.db, place.id, categories, { activeOnly: true });
+        await setPlaceCategoryKeys(ctx.db, place.id, categories, {
+          activeOnly: true,
+        });
       }
 
       if (
@@ -489,14 +503,16 @@ export const adminRouter = router({
   matchVenuesForScrapedEvents: adminProcedure
     .input(
       z.object({
-        events: z.array(
-          z.object({
-            venueName: z.string(),
-            city: z.string().nullable().optional(),
-            state: z.string().nullable().optional(),
-            address: z.string().nullable().optional(),
-          })
-        ).max(100),
+        events: z
+          .array(
+            z.object({
+              venueName: z.string(),
+              city: z.string().nullable().optional(),
+              state: z.string().nullable().optional(),
+              address: z.string().nullable().optional(),
+            })
+          )
+          .max(100),
       })
     )
     .query(async ({ ctx, input }) => {

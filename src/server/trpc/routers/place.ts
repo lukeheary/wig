@@ -30,15 +30,23 @@ import {
   mapPlaceCategoryData,
   setPlaceCategoryKeys,
 } from "@/server/utils/categories";
+import {
+  INSTAGRAM_HANDLE_ERROR,
+  INSTAGRAM_HANDLE_REGEX,
+  PLACE_SLUG_ERROR,
+  PLACE_SLUG_REGEX,
+} from "@/lib/place-identifiers";
 
 const placeTypeSchema = z.enum(["venue", "organizer"]);
 
 export const placeRouter = router({
   searchPlaces: publicProcedure
-    .input(z.object({
-      query: z.string().optional(),
-      type: placeTypeSchema.optional(),
-    }))
+    .input(
+      z.object({
+        query: z.string().optional(),
+        type: placeTypeSchema.optional(),
+      })
+    )
     .query(async ({ ctx, input }) => {
       const conditions = [];
       if (input.query) {
@@ -134,7 +142,14 @@ export const placeRouter = router({
         latitude: z.number().optional(),
         longitude: z.number().optional(),
         website: z.string().url().optional().or(z.literal("")),
-        instagram: z.string().max(100).optional(),
+        instagram: z
+          .string()
+          .max(100)
+          .refine(
+            (value) => value === "" || INSTAGRAM_HANDLE_REGEX.test(value),
+            INSTAGRAM_HANDLE_ERROR
+          )
+          .optional(),
       })
     )
     .mutation(async ({ ctx, input }) => {
@@ -232,7 +247,10 @@ export const placeRouter = router({
             where: and(...cityConditions),
           });
           if (cityRecord?.latitude != null && cityRecord?.longitude != null) {
-            originCity = { latitude: cityRecord.latitude, longitude: cityRecord.longitude };
+            originCity = {
+              latitude: cityRecord.latitude,
+              longitude: cityRecord.longitude,
+            };
           }
         }
 
@@ -274,7 +292,8 @@ export const placeRouter = router({
           conditions.push(eq(places.city, input.city));
         }
       }
-      if (input.state && !input.city) conditions.push(eq(places.state, input.state));
+      if (input.state && !input.city)
+        conditions.push(eq(places.state, input.state));
       if (input.search) {
         conditions.push(ilike(places.name, `%${input.search}%`));
       }
@@ -329,12 +348,7 @@ export const placeRouter = router({
           count: sql<number>`count(*)::int`,
         })
         .from(events)
-        .where(
-          and(
-            inArray(events.venueId, placeIds),
-            gte(events.startAt, now)
-          )
-        )
+        .where(and(inArray(events.venueId, placeIds), gte(events.startAt, now)))
         .groupBy(events.venueId);
 
       // Count upcoming events where this place is the organizer
@@ -345,19 +359,24 @@ export const placeRouter = router({
         })
         .from(events)
         .where(
-          and(
-            inArray(events.organizerId, placeIds),
-            gte(events.startAt, now)
-          )
+          and(inArray(events.organizerId, placeIds), gte(events.startAt, now))
         )
         .groupBy(events.organizerId);
 
       const countMap = new Map<string, number>();
       for (const row of venueCounts) {
-        if (row.placeId) countMap.set(row.placeId, (countMap.get(row.placeId) ?? 0) + row.count);
+        if (row.placeId)
+          countMap.set(
+            row.placeId,
+            (countMap.get(row.placeId) ?? 0) + row.count
+          );
       }
       for (const row of organizerCounts) {
-        if (row.placeId) countMap.set(row.placeId, (countMap.get(row.placeId) ?? 0) + row.count);
+        if (row.placeId)
+          countMap.set(
+            row.placeId,
+            (countMap.get(row.placeId) ?? 0) + row.count
+          );
       }
 
       return placesList.map((p) => ({
@@ -396,9 +415,10 @@ export const placeRouter = router({
       const now = new Date();
 
       // Get events where this place is either the venue or the organizer
-      const eventCondition = place.type === "venue"
-        ? eq(events.venueId, place.id)
-        : eq(events.organizerId, place.id);
+      const eventCondition =
+        place.type === "venue"
+          ? eq(events.venueId, place.id)
+          : eq(events.organizerId, place.id);
 
       const upcomingEvents = await ctx.db.query.events.findMany({
         where: and(eventCondition, gte(events.startAt, now)),
@@ -471,7 +491,9 @@ export const placeRouter = router({
           }
 
           const attendees = attendeesMap.get(eventId)!;
-          if (attendees.some((existing) => existing.userId === attendee.userId)) {
+          if (
+            attendees.some((existing) => existing.userId === attendee.userId)
+          ) {
             return;
           }
 
@@ -744,7 +766,9 @@ export const placeRouter = router({
             if (!upcomingEventsMap.has(event.venueId)) {
               upcomingEventsMap.set(event.venueId, []);
             }
-            upcomingEventsMap.get(event.venueId)!.push(mapEventCategoryData(event));
+            upcomingEventsMap
+              .get(event.venueId)!
+              .push(mapEventCategoryData(event));
           }
         }
 
@@ -753,7 +777,9 @@ export const placeRouter = router({
             if (!upcomingEventsMap.has(event.organizerId)) {
               upcomingEventsMap.set(event.organizerId, []);
             }
-            upcomingEventsMap.get(event.organizerId)!.push(mapEventCategoryData(event));
+            upcomingEventsMap
+              .get(event.organizerId)!
+              .push(mapEventCategoryData(event));
           }
         }
 
@@ -777,10 +803,7 @@ export const placeRouter = router({
           .string()
           .min(3)
           .max(100)
-          .regex(
-            /^[a-z0-9_-]+$/,
-            "Slug must be lowercase alphanumeric with hyphens and underscores"
-          )
+          .regex(PLACE_SLUG_REGEX, PLACE_SLUG_ERROR)
           .optional(),
         name: z.string().min(1).max(255).optional(),
         description: z.string().optional(),
@@ -790,7 +813,14 @@ export const placeRouter = router({
         city: z.string().max(100).optional(),
         state: z.string().length(2).optional(),
         website: z.string().url().optional().or(z.literal("")),
-        instagram: z.string().max(100).optional(),
+        instagram: z
+          .string()
+          .max(100)
+          .refine(
+            (value) => value === "" || INSTAGRAM_HANDLE_REGEX.test(value),
+            INSTAGRAM_HANDLE_ERROR
+          )
+          .optional(),
         latitude: z.number().optional(),
         longitude: z.number().optional(),
         hours: z.any().optional(),
@@ -852,7 +882,9 @@ export const placeRouter = router({
         .returning();
 
       if (categories !== undefined) {
-        await setPlaceCategoryKeys(ctx.db, placeId, categories, { activeOnly: true });
+        await setPlaceCategoryKeys(ctx.db, placeId, categories, {
+          activeOnly: true,
+        });
       }
 
       if (!updated) {

@@ -3,6 +3,7 @@
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
+import { slugToInstagramHandle } from "@/lib/place-identifiers";
 
 interface SlugInstagramInputProps {
   slug: string;
@@ -32,7 +33,7 @@ export function SlugInstagramInput({
   error,
 }: SlugInstagramInputProps) {
   const handleSyncedInputChange = (value: string) => {
-    const newInstagram = value.replace(/-/g, "");
+    const newInstagram = slugToInstagramHandle(value);
     if (onBothChange) {
       onBothChange(value, newInstagram);
     } else {
@@ -43,7 +44,7 @@ export function SlugInstagramInput({
 
   const handleSyncFields = () => {
     onSyncedChange(true);
-    onInstagramChange(slug.replace(/-/g, ""));
+    onInstagramChange(slugToInstagramHandle(slug));
   };
 
   const handleSeparateFields = () => {

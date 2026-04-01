@@ -342,6 +342,19 @@ export function PlaceEditForm({
         </div>
       )}
 
+      {/* Name */}
+      {!isVenue && (
+        <div>
+          <Label htmlFor="place-name">Name *</Label>
+          <Input
+            id="place-name"
+            placeholder="After Brunch"
+            value={formData.name}
+            onChange={(e) => setFormData({ ...formData, name: e.target.value })}
+          />
+        </div>
+      )}
+
       {/* Slug & Instagram */}
       <SlugInstagramInput
         slug={formData.slug}
@@ -358,19 +371,6 @@ export function PlaceEditForm({
         slugPlaceholder={isVenue ? "big-night-live" : "after-brunch"}
         idPrefix="place"
       />
-
-      {/* Name */}
-      {!isVenue && (
-        <div>
-          <Label htmlFor="place-name">Name *</Label>
-          <Input
-            id="place-name"
-            placeholder="After Brunch"
-            value={formData.name}
-            onChange={(e) => setFormData({ ...formData, name: e.target.value })}
-          />
-        </div>
-      )}
 
       {/* Profile Image */}
       <div>
