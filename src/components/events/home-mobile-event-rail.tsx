@@ -184,12 +184,12 @@ function DesktopRailScroller({
           : undefined
       }
     >
-      <RailProgressIndicator
-        scrollProgress={scrollProgress}
-        hasOverflow={hasOverflow}
-        isScrollActive={isScrollActive}
-        className="inset-x-0 -bottom-[4] z-20"
-      />
+      {/*<RailProgressIndicator*/}
+      {/*  scrollProgress={scrollProgress}*/}
+      {/*  hasOverflow={hasOverflow}*/}
+      {/*  isScrollActive={isScrollActive}*/}
+      {/*  className="inset-x-0 -bottom-[4] z-20"*/}
+      {/*/>*/}
 
       <div className="relative" onMouseLeave={() => setHoveredSide(null)}>
         <div
@@ -285,12 +285,12 @@ function MobileRailScroller({
 
   return (
     <div className="relative md:hidden">
-      <RailProgressIndicator
-        scrollProgress={scrollProgress}
-        hasOverflow={hasOverflow}
-        isScrollActive={isScrollActive}
-        className="-bottom-[4] -left-4 -right-4 z-10"
-      />
+      {/*<RailProgressIndicator*/}
+      {/*  scrollProgress={scrollProgress}*/}
+      {/*  hasOverflow={hasOverflow}*/}
+      {/*  isScrollActive={isScrollActive}*/}
+      {/*  className="-bottom-[4] -left-4 -right-4 z-10"*/}
+      {/*/>*/}
       <div
         ref={scrollRef}
         className="-mx-4 overflow-x-auto [scrollbar-width:none] [&::-webkit-scrollbar]:hidden"

@@ -60,7 +60,7 @@ export function StickySectionHeader({
                 <div
                   className={cn(
                     "font-space-grotesk text-xl font-semibold leading-none transition-[padding] duration-300 ease-out",
-                    leadingSlotVisible ? "pl-11" : "pl-0"
+                    leadingSlotVisible ? "pl-8" : "pl-0"
                   )}
                 >
                   {children}
