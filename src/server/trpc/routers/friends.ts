@@ -521,6 +521,7 @@ export const friendsRouter = router({
 
       if (actorIdsWithPartnerIncluded.length > 0) {
         const actorIdSet = new Set(actorIdsWithPartnerIncluded);
+        const friendIdSet = new Set(friendIds);
         const partnerRelationships = await ctx.db.query.userPartners.findMany({
           where: and(
             eq(userPartners.status, "accepted"),
@@ -537,14 +538,22 @@ export const friendsRouter = router({
 
         const partnerFirstNameByActorId = new Map<string, string>();
         for (const relationship of partnerRelationships) {
-          if (actorIdSet.has(relationship.requesterId) && relationship.recipient) {
+          if (
+            actorIdSet.has(relationship.requesterId) &&
+            relationship.recipient &&
+            friendIdSet.has(relationship.recipientId)
+          ) {
             partnerFirstNameByActorId.set(
               relationship.requesterId,
               relationship.recipient.firstName || "their partner"
             );
           }
 
-          if (actorIdSet.has(relationship.recipientId) && relationship.requester) {
+          if (
+            actorIdSet.has(relationship.recipientId) &&
+            relationship.requester &&
+            friendIdSet.has(relationship.requesterId)
+          ) {
             partnerFirstNameByActorId.set(
               relationship.recipientId,
               relationship.requester.firstName || "their partner"
