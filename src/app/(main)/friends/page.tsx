@@ -89,7 +89,8 @@ function FriendsPageContent() {
   }, []);
 
   // Fetch friends
-  const { data: friends } = trpc.friends.listFriends.useQuery({});
+  const { data: friends, isLoading: friendsLoading } =
+    trpc.friends.listFriends.useQuery({});
   const { data: pendingRequests } = trpc.friends.listFriends.useQuery({
     statusFilter: "pending",
   });
@@ -98,6 +99,7 @@ function FriendsPageContent() {
     (isSearchMode && searchQuery.length < 2) ||
     (!isSearchMode &&
       activeView === "discover" &&
+      !friendsLoading &&
       !!friends &&
       acceptedFriends.length === 0);
 
@@ -739,7 +741,11 @@ function FriendsPageContent() {
           )}
 
           {/* Activity Feed */}
-          {acceptedFriends.length === 0 ? (
+          {friendsLoading ? (
+            <div className="flex justify-center py-12">
+              <Loader2 className="h-8 w-8 animate-spin text-muted-foreground" />
+            </div>
+          ) : acceptedFriends.length === 0 ? (
             renderRecentlyJoined()
           ) : (
             <div>

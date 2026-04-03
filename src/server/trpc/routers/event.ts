@@ -35,7 +35,10 @@ import {
 } from "drizzle-orm";
 import { uploadImageFromUrl, deleteFromS3, BUCKET_NAME } from "@/lib/s3";
 import { TRPCError } from "@trpc/server";
-import { logActivity, upsertRsvpActivity } from "../../utils/activity-logger";
+import {
+  clearRsvpActivity,
+  upsertRsvpActivity,
+} from "../../utils/activity-logger";
 import { logEventActivity } from "../../utils/event-activity-logger";
 import {
   filterExistingCategoryKeys,
@@ -50,6 +53,7 @@ import {
 } from "@/server/utils/event-series";
 import { EVENT_STATUS_VALUES, type EventStatus } from "@/lib/event-status";
 import { createNotification } from "@/server/utils/notifications";
+import { RSVP_DECLINE_REASON_VALUES } from "@/lib/rsvp";
 
 function resolveEventUpdateActivityType(
   previousStatus: EventStatus,
@@ -1724,11 +1728,22 @@ export const eventRouter = router({
 
   setRsvpStatus: protectedProcedure
     .input(
-      z.object({
-        eventId: z.string().uuid(),
-        status: z.enum(["going", "interested", "not_going"]),
-        includePartner: z.boolean().optional(),
-      })
+      z
+        .object({
+          eventId: z.string().uuid(),
+          status: z.enum(["going", "interested", "not_going"]),
+          includePartner: z.boolean().optional(),
+          reason: z.enum(RSVP_DECLINE_REASON_VALUES).nullable().optional(),
+        })
+        .superRefine((value, ctx) => {
+          if (value.status !== "not_going" && value.reason != null) {
+            ctx.addIssue({
+              code: z.ZodIssueCode.custom,
+              message: "A decline reason can only be set for can't go RSVPs",
+              path: ["reason"],
+            });
+          }
+        })
     )
     .mutation(async ({ ctx, input }) => {
       // Verify event exists
@@ -1775,13 +1790,15 @@ export const eventRouter = router({
           })
         : null;
       const shouldMirrorPartnerRsvp =
-        Boolean(partnerUserId) &&
-        input.includePartner === true &&
-        (input.status === "going" || input.status === "interested");
+        Boolean(partnerUserId) && input.includePartner === true;
       const shouldNotifyPartner =
         Boolean(partnerUserId) &&
         shouldMirrorPartnerRsvp &&
+        (input.status === "going" || input.status === "interested") &&
         existingMirroredPartnerRsvp?.status !== input.status;
+      const notGoingReason =
+        input.status === "not_going" ? input.reason ?? null : null;
+      let includedPartnerInRsvp = false;
 
       // Upsert RSVP
       const [rsvp] = await ctx.db
@@ -1790,12 +1807,14 @@ export const eventRouter = router({
           userId: ctx.auth.userId,
           eventId: input.eventId,
           status: input.status,
+          notGoingReason,
           partnerRsvpByUserId: null,
         })
         .onConflictDoUpdate({
           target: [eventRsvps.userId, eventRsvps.eventId],
           set: {
             status: input.status,
+            notGoingReason,
             partnerRsvpByUserId: null,
             updatedAt: new Date(),
           },
@@ -1816,18 +1835,21 @@ export const eventRouter = router({
             existingPartnerRsvp.partnerRsvpByUserId === ctx.auth.userId;
 
           if (canWriteMirroredRsvp) {
+            includedPartnerInRsvp = true;
             await ctx.db
               .insert(eventRsvps)
               .values({
                 userId: partnerUserId,
                 eventId: input.eventId,
                 status: input.status,
+                notGoingReason,
                 partnerRsvpByUserId: ctx.auth.userId,
               })
               .onConflictDoUpdate({
                 target: [eventRsvps.userId, eventRsvps.eventId],
                 set: {
                   status: input.status,
+                  notGoingReason,
                   partnerRsvpByUserId: ctx.auth.userId,
                   updatedAt: new Date(),
                 },
@@ -1865,7 +1887,7 @@ export const eventRouter = router({
           input.status === "going" ? "rsvp_going" : "rsvp_interested";
         const activityMetadata = {
           status: input.status,
-          includePartner: shouldMirrorPartnerRsvp,
+          includePartner: includedPartnerInRsvp,
         };
         void upsertRsvpActivity({
           actorUserId: ctx.auth.userId,
@@ -1873,19 +1895,14 @@ export const eventRouter = router({
           type: activityType,
           metadata: activityMetadata,
         });
-      } else if (
-        input.status === "not_going" &&
-        existingUserRsvp?.status === "going"
-      ) {
+      } else if (input.status === "not_going") {
         void upsertRsvpActivity({
           actorUserId: ctx.auth.userId,
           entityId: input.eventId,
           type: "rsvp_not_going",
           metadata: {
-            includePartner: Boolean(
-              existingMirroredPartnerRsvp &&
-              existingMirroredPartnerRsvp.status === "going"
-            ),
+            includePartner: includedPartnerInRsvp,
+            reason: notGoingReason,
           },
         });
       }
@@ -1918,16 +1935,6 @@ export const eventRouter = router({
           ? partnerRelationship.recipientId
           : partnerRelationship.requesterId
         : null;
-      const existingMirroredPartnerRsvp = partnerUserId
-        ? await ctx.db.query.eventRsvps.findFirst({
-            where: and(
-              eq(eventRsvps.eventId, input.eventId),
-              eq(eventRsvps.userId, partnerUserId),
-              eq(eventRsvps.partnerRsvpByUserId, ctx.auth.userId)
-            ),
-          })
-        : null;
-
       await ctx.db
         .delete(eventRsvps)
         .where(
@@ -1949,18 +1956,10 @@ export const eventRouter = router({
           );
       }
 
-      if (existingUserRsvp?.status === "going") {
-        void logActivity({
+      if (existingUserRsvp) {
+        void clearRsvpActivity({
           actorUserId: ctx.auth.userId,
-          type: "rsvp_not_going",
-          entityType: "event",
           entityId: input.eventId,
-          metadata: {
-            includePartner: Boolean(
-              existingMirroredPartnerRsvp &&
-              existingMirroredPartnerRsvp.status === "going"
-            ),
-          },
         });
       }
 

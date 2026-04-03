@@ -151,5 +151,28 @@ export async function upsertRsvpActivity({
         }
     } catch (error) {
         console.error("Failed to upsert RSVP activity:", error);
-    }
+  }
+}
+
+export async function clearRsvpActivity({
+  actorUserId,
+  entityId,
+}: {
+  actorUserId: string;
+  entityId: string;
+}) {
+  try {
+    await db
+      .delete(userActivity)
+      .where(
+        and(
+          eq(userActivity.actorUserId, actorUserId),
+          eq(userActivity.entityType, "event"),
+          eq(userActivity.entityId, entityId),
+          inArray(userActivity.type, RSVP_ACTIVITY_TYPES)
+        )
+      );
+  } catch (error) {
+    console.error("Failed to clear RSVP activity:", error);
+  }
 }

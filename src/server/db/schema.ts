@@ -14,6 +14,7 @@ import {
   boolean,
   integer,
 } from "drizzle-orm/pg-core";
+import { RSVP_DECLINE_REASON_VALUES } from "@/lib/rsvp";
 
 // ============================================================================
 // ENUMS
@@ -47,6 +48,11 @@ export const friendStatusEnum = pgEnum("friend_status", [
 export const userRoleEnum = pgEnum("user_role", ["user", "admin"]);
 
 export const genderEnum = pgEnum("gender", ["male", "female", "other"]);
+
+export const rsvpNotGoingReasonEnum = pgEnum(
+  "rsvp_not_going_reason",
+  RSVP_DECLINE_REASON_VALUES
+);
 
 export const activityTypeEnum = pgEnum("activity_type", [
   "rsvp_going",
@@ -772,6 +778,7 @@ export const eventRsvps = pgTable(
       { onDelete: "set null" }
     ),
     status: rsvpStatusEnum("status").notNull(),
+    notGoingReason: rsvpNotGoingReasonEnum("not_going_reason"),
     createdAt: timestamp("created_at").defaultNow().notNull(),
     updatedAt: timestamp("updated_at").defaultNow().notNull(),
   },

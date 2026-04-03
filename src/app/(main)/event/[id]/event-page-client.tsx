@@ -37,6 +37,24 @@ import { HapticPreset, useHaptics } from "@/hooks/use-haptics";
 import { useAuth } from "@clerk/nextjs";
 import { sendGoogleAnalyticsEvent } from "@/lib/google-analytics";
 import { CategoryPillList } from "@/components/categories/category-pill";
+import {
+  Sheet,
+  SheetContent,
+  SheetHeader,
+  SheetTitle,
+} from "@/components/ui/sheet";
+import {
+  Dialog,
+  DialogContent,
+  DialogHeader,
+  DialogTitle,
+} from "@/components/ui/dialog";
+import {
+  RSVP_DECLINE_REASON_LABELS,
+  RSVP_DECLINE_REASON_VALUES,
+  type RsvpDeclineReason,
+} from "@/lib/rsvp";
+import { useMediaQuery } from "@/hooks/use-media-query";
 
 type RsvpStatus = "going" | "interested" | "not_going";
 type SocialAvatarUser = {
@@ -144,6 +162,12 @@ export default function EventPage() {
   });
   const [includePartner, setIncludePartner] = useState(false);
   const { triggerHaptic } = useHaptics();
+  const [isCantGoSheetOpen, setIsCantGoSheetOpen] = useState(false);
+  const [cantGoReason, setCantGoReason] = useState<RsvpDeclineReason | null>(
+    null
+  );
+  const [cantGoIncludePartner, setCantGoIncludePartner] = useState(false);
+  const isDesktop = useMediaQuery("(min-width: 768px)");
 
   // RSVP mutation
   const rsvpMutation = trpc.event.setRsvpStatus.useMutation({
@@ -197,6 +221,8 @@ export default function EventPage() {
   const hasActivePartner = myPartner?.status === "accepted";
   const isRsvpPending = rsvpMutation.isPending || deleteRsvpMutation.isPending;
   const currentRsvpStatus = event?.userRsvp?.status;
+  const currentNotGoingReason =
+    currentRsvpStatus === "not_going" ? event.userRsvp?.notGoingReason : null;
   const hasSelectableRsvp =
     currentRsvpStatus === "going" || currentRsvpStatus === "interested";
   const savedIncludePartner = useMemo(() => {
@@ -229,10 +255,44 @@ export default function EventPage() {
     myPartner?.partner?.id,
     userId,
   ]);
+  const savedCantGoIncludePartner = useMemo(() => {
+    if (
+      !hasActivePartner ||
+      currentRsvpStatus !== "not_going" ||
+      !myPartner?.partner?.id ||
+      userId == null
+    ) {
+      return false;
+    }
+
+    const partnerId = myPartner.partner.id;
+    return (
+      attendees?.some(
+        (attendee) =>
+          attendee.userId === partnerId &&
+          attendee.partnerRsvpByUserId === userId &&
+          attendee.status === "not_going"
+      ) ?? false
+    );
+  }, [
+    attendees,
+    currentRsvpStatus,
+    hasActivePartner,
+    myPartner?.partner?.id,
+    userId,
+  ]);
 
   useEffect(() => {
     setIncludePartner(savedIncludePartner);
   }, [savedIncludePartner]);
+
+  useEffect(() => {
+    setCantGoReason(currentNotGoingReason ?? null);
+  }, [currentNotGoingReason]);
+
+  useEffect(() => {
+    setCantGoIncludePartner(savedCantGoIncludePartner);
+  }, [savedCantGoIncludePartner]);
 
   const handleRsvp = (status: RsvpStatus) => {
     if (!isSignedIn) {
@@ -263,6 +323,46 @@ export default function EventPage() {
         includePartner: hasActivePartner && includePartner,
       });
     }
+  };
+
+  const handleCantGo = () => {
+    if (!isSignedIn) {
+      router.push(unauthedRsvpHref);
+      return;
+    }
+
+    if (currentRsvpStatus === "not_going") {
+      void handleRsvp("not_going");
+      return;
+    }
+
+    void triggerHaptic(HapticPreset.Light);
+    setCantGoReason(currentNotGoingReason ?? null);
+    setCantGoIncludePartner(savedCantGoIncludePartner);
+    setIsCantGoSheetOpen(true);
+  };
+
+  const submitCantGo = (reason: RsvpDeclineReason | null) => {
+    if (!isSignedIn) {
+      router.push(unauthedRsvpHref);
+      return;
+    }
+
+    void triggerHaptic(HapticPreset.Warning);
+    sendGoogleAnalyticsEvent("event_rsvp_changed", userId, {
+      action: "set",
+      event_id: eventId,
+      status: "not_going",
+      include_partner: hasActivePartner && cantGoIncludePartner,
+      reason: reason ?? undefined,
+    });
+    setIsCantGoSheetOpen(false);
+    rsvpMutation.mutate({
+      eventId,
+      status: "not_going",
+      includePartner: hasActivePartner && cantGoIncludePartner,
+      reason,
+    });
   };
 
   const handlePartnerToggle = () => {
@@ -315,8 +415,11 @@ export default function EventPage() {
   const goingAttendees = attendees?.filter((a) => a.status === "going") || [];
   const interestedAttendees =
     attendees?.filter((a) => a.status === "interested") || [];
+  const notGoingAttendees =
+    attendees?.filter((a) => a.status === "not_going") || [];
   const goingCount = goingAttendees.length;
   const interestedCount = interestedAttendees.length;
+  const notGoingCount = notGoingAttendees.length;
   const socialStackUsers: SocialAvatarUser[] = [
     ...goingAttendees,
     ...interestedAttendees,
@@ -375,6 +478,86 @@ export default function EventPage() {
   // Check if user can edit this event
   const canEdit =
     isAdmin || (currentUser && event.createdByUserId === currentUser.id);
+  const cantGoPickerContent = (
+    <div className="space-y-3">
+      {hasActivePartner && myPartner?.partner?.firstName ? (
+        <div className="space-y-3 pb-1">
+          <div className="space-y-1 px-1">
+            <h3 className="text-lg font-semibold tracking-tight">
+              {myPartner.partner.firstName} too?
+            </h3>
+          </div>
+          <div className="flex gap-2">
+            <Button
+              type="button"
+              variant={cantGoIncludePartner ? "destructive" : "outline"}
+              className={cn(
+                "flex-1 rounded-2xl py-5 text-base font-medium",
+                cantGoIncludePartner && "hover:bg-destructive/90"
+              )}
+              onClick={() => setCantGoIncludePartner(true)}
+            >
+              Yes
+            </Button>
+            <Button
+              type="button"
+              variant={!cantGoIncludePartner ? "secondary" : "outline"}
+              className="flex-1 rounded-2xl py-5 text-base font-medium"
+              onClick={() => setCantGoIncludePartner(false)}
+            >
+              No
+            </Button>
+          </div>
+        </div>
+      ) : null}
+      <div className="space-y-1 px-1 pt-1">
+        <h3 className="text-lg font-semibold tracking-tight">
+          Why can&apos;t you go?
+        </h3>
+        <p className="text-sm text-muted-foreground">
+          Add a quick reason if you want your friends to know.
+        </p>
+      </div>
+      {RSVP_DECLINE_REASON_VALUES.map((reason) => (
+        <button
+          key={reason}
+          type="button"
+          className={cn(
+            "flex w-full items-center justify-between rounded-2xl border px-4 py-4 text-left transition-colors",
+            cantGoReason === reason
+              ? "border-transparent bg-destructive text-destructive-foreground"
+              : "border-border bg-card hover:bg-muted"
+          )}
+          onClick={() => setCantGoReason(reason)}
+        >
+          <span className="font-medium">
+            {RSVP_DECLINE_REASON_LABELS[reason]}
+          </span>
+          {cantGoReason === reason ? <Check className="h-4 w-4" /> : null}
+        </button>
+      ))}
+      <div className="flex gap-2 pt-2">
+        <Button
+          type="button"
+          variant="outline"
+          className="flex-1"
+          onClick={() => submitCantGo(null)}
+          disabled={isRsvpPending}
+        >
+          Skip
+        </Button>
+        <Button
+          type="button"
+          variant="destructive"
+          className="flex-1"
+          onClick={() => submitCantGo(cantGoReason)}
+          disabled={isRsvpPending}
+        >
+          Save
+        </Button>
+      </div>
+    </div>
+  );
 
   return (
     <div className="relative isolate -mt-14 min-h-screen pt-14 md:-mt-16 md:pt-16">
@@ -406,6 +589,26 @@ export default function EventPage() {
             />
           </div>
         </div>
+      )}
+
+      {isDesktop ? (
+        <Dialog open={isCantGoSheetOpen} onOpenChange={setIsCantGoSheetOpen}>
+          <DialogContent className="max-w-md rounded-3xl border-none p-6">
+            <DialogHeader className="sr-only">
+              <DialogTitle>Can&apos;t Go</DialogTitle>
+            </DialogHeader>
+            {cantGoPickerContent}
+          </DialogContent>
+        </Dialog>
+      ) : (
+        <Sheet open={isCantGoSheetOpen} onOpenChange={setIsCantGoSheetOpen}>
+          <SheetContent side="bottom" className="px-0 pb-6 pt-6 outline-none">
+            <SheetHeader className="sr-only">
+              <SheetTitle>Can&apos;t Go</SheetTitle>
+            </SheetHeader>
+            <div className="px-6">{cantGoPickerContent}</div>
+          </SheetContent>
+        </Sheet>
       )}
 
       {/* Desktop two-column layout */}
@@ -638,7 +841,6 @@ export default function EventPage() {
                     Going
                   </Button>
                 </div>
-
                 {hasActivePartner && hasSelectableRsvp && (
                   <div className="mb-4">
                     <Button
@@ -658,6 +860,26 @@ export default function EventPage() {
                     </Button>
                   </div>
                 )}
+
+                <div className="pb-2">
+                  <Button
+                    variant={
+                      event.userRsvp?.status === "not_going"
+                        ? "destructive"
+                        : "outline"
+                    }
+                    className={cn(
+                      "font-space-grotesk w-full rounded-xl py-5 text-base font-medium lg:text-lg",
+                      event.userRsvp?.status === "not_going" &&
+                        "hover:bg-destructive/90"
+                    )}
+                    size="lg"
+                    onClick={handleCantGo}
+                    disabled={isRsvpPending}
+                  >
+                    Can&apos;t Go
+                  </Button>
+                </div>
               </>
             )}
 
@@ -758,6 +980,40 @@ export default function EventPage() {
                 {interestedCount > 9 && (
                   <p className="mt-4 text-sm text-muted-foreground">
                     And {interestedCount - 9} others are interested
+                  </p>
+                )}
+              </div>
+            )}
+
+            {shouldShowAttendeeIdentities && notGoingCount > 0 && (
+              <div className={"pt-4"}>
+                <h2 className="font-space-grotesk mb-4 text-2xl font-bold">
+                  Can&apos;t Go
+                </h2>
+                <div className="grid grid-cols-2 gap-4 md:grid-cols-3">
+                  {notGoingAttendees.slice(0, 9).map((attendee) => (
+                    <div
+                      key={attendee.user.id}
+                      className="flex items-center gap-3 rounded-lg border bg-card p-3"
+                    >
+                      <div className="rounded-full p-px">
+                        <UserAvatar
+                          src={attendee.user.avatarImageUrl}
+                          name={attendee.user.firstName}
+                          className="h-10 w-10"
+                        />
+                      </div>
+                      <div className="text-sm">
+                        <p className="font-medium">
+                          {attendee.user.firstName} {attendee.user.lastName}
+                        </p>
+                      </div>
+                    </div>
+                  ))}
+                </div>
+                {notGoingCount > 9 && (
+                  <p className="mt-4 text-sm text-muted-foreground">
+                    And {notGoingCount - 9} others can&apos;t go
                   </p>
                 )}
               </div>

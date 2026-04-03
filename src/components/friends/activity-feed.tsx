@@ -33,6 +33,11 @@ import { formatRelativeEventDate } from "@/lib/utils";
 import { StickySectionHeader } from "@/components/ui/sticky-section-header";
 import { buildReturnTo, withReturnTo } from "@/lib/navigation";
 import { EmptyStateCard } from "@/components/shared/empty-state-card";
+import { getGenderGrammar } from "@/lib/gender-grammar";
+import {
+  getRsvpDeclineReasonPhrase,
+  type RsvpDeclineReason,
+} from "@/lib/rsvp";
 
 interface ActivityItemProps {
   activity: any;
@@ -40,6 +45,24 @@ interface ActivityItemProps {
 
 function getActivityTimestamp(activity: any) {
   return new Date(activity.updatedAt ?? activity.createdAt);
+}
+
+function formatInlineEventDate(eventDate: Date) {
+  const now = startOfDay(new Date());
+  const normalizedEventDate = startOfDay(eventDate);
+  const diff = differenceInCalendarDays(normalizedEventDate, now);
+
+  if (diff === 0) return "tonight";
+  if (diff === 1) return "tomorrow";
+  if (diff > 1 && diff < 7) return `on ${format(eventDate, "EEEE")}`;
+  if (diff >= 7 && diff < 14) return `next ${format(eventDate, "EEEE")}`;
+
+  return `on ${format(
+    eventDate,
+    eventDate.getFullYear() === new Date().getFullYear()
+      ? "MMMM d"
+      : "MMMM d, yyyy"
+  )}`;
 }
 
 const EVENT_UPDATE_TYPES = new Set([
@@ -58,6 +81,7 @@ export function ActivityItem({ activity }: ActivityItemProps) {
   const { actor, type, entityId, metadata, event } = activity;
   const place = activity.place;
   const isEventStatusUpdate = EVENT_UPDATE_TYPES.has(type);
+  const shouldInlineEventDate = type === "rsvp_not_going";
   const returnTo = buildReturnTo(pathname, searchParams);
   const eventHref = withReturnTo(`/event/${entityId}`, returnTo);
   const placeHref =
@@ -164,6 +188,19 @@ export function ActivityItem({ activity }: ActivityItemProps) {
     ) : (
       <span className="font-medium text-foreground">{entityName}</span>
     );
+    const notGoingReason =
+      ((metadata as { reason?: RsvpDeclineReason | null } | null)?.reason ??
+        null) as RsvpDeclineReason | null;
+    const notGoingReasonText = (() => {
+      if (!notGoingReason) return null;
+      const reasonPhrase = getRsvpDeclineReasonPhrase(notGoingReason);
+
+      if (isPluralSubject) {
+        return `because they're ${reasonPhrase}`;
+      }
+
+      return `because ${getGenderGrammar(actor.gender).contractedBe} ${reasonPhrase}`;
+    })();
 
     switch (type) {
       case "rsvp_going":
@@ -231,26 +268,10 @@ export function ActivityItem({ activity }: ActivityItemProps) {
       case "rsvp_not_going":
         return (
           <>
-            {subjectName} {isPluralSubject ? "are" : "is"} no longer going to{" "}
+            {subjectName} {isEventPast ? "couldn't" : "can't"} go to{" "}
             {eventTitleInline}
-            {activity.event?.venue?.name && (
-              <>
-                {" "}
-                at{" "}
-                {activity.event.venue?.slug ? (
-                  <Link
-                    href={`/venue/${activity.event.venue.slug}`}
-                    className="font-medium text-primary hover:underline"
-                  >
-                    {activity.event.venue?.name}
-                  </Link>
-                ) : (
-                  <span className="font-medium text-foreground">
-                    {activity.event.venue?.name}
-                  </span>
-                )}
-              </>
-            )}
+            {eventDate ? <> {formatInlineEventDate(eventDate)}</> : null}
+            {notGoingReasonText ? <> {notGoingReasonText}</> : null}
           </>
         );
       case "follow_venue":
@@ -462,7 +483,7 @@ export function ActivityItem({ activity }: ActivityItemProps) {
       <div className="flex-1">
         <p className="text-base text-muted-foreground">
           {content}
-          {!isEventStatusUpdate && eventRelativeDate && (
+          {!isEventStatusUpdate && !shouldInlineEventDate && eventRelativeDate && (
             <span className="ml-1.5 font-medium text-muted-foreground">
               {eventRelativeDate}
             </span>
