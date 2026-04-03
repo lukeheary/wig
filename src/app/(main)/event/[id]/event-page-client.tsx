@@ -222,7 +222,9 @@ export default function EventPage() {
   const isRsvpPending = rsvpMutation.isPending || deleteRsvpMutation.isPending;
   const currentRsvpStatus = event?.userRsvp?.status;
   const currentNotGoingReason =
-    currentRsvpStatus === "not_going" ? event.userRsvp?.notGoingReason : null;
+    currentRsvpStatus === "not_going"
+      ? event?.userRsvp?.notGoingReason ?? null
+      : null;
   const hasSelectableRsvp =
     currentRsvpStatus === "going" || currentRsvpStatus === "interested";
   const savedIncludePartner = useMemo(() => {
