@@ -223,7 +223,7 @@ export default function EventPage() {
   const currentRsvpStatus = event?.userRsvp?.status;
   const currentNotGoingReason =
     currentRsvpStatus === "not_going"
-      ? event?.userRsvp?.notGoingReason ?? null
+      ? (event?.userRsvp?.notGoingReason ?? null)
       : null;
   const hasSelectableRsvp =
     currentRsvpStatus === "going" || currentRsvpStatus === "interested";
@@ -819,7 +819,7 @@ export default function EventPage() {
                   <Button
                     variant="neon"
                     className={cn(
-                      "font-space-grotesk flex-1 rounded-xl py-5 text-base font-medium lg:text-lg",
+                      "font-space-grotesk h-14 flex-1 rounded-xl px-4 text-base font-medium lg:text-lg",
                       event.userRsvp?.status === "interested" &&
                         "border-transparent bg-neon-teal text-black hover:bg-neon-teal-hover hover:text-black active:text-black"
                     )}
@@ -832,7 +832,7 @@ export default function EventPage() {
                   <Button
                     variant="neon"
                     className={cn(
-                      "font-space-grotesk flex-1 rounded-xl py-5 text-base font-medium lg:text-lg",
+                      "font-space-grotesk h-14 flex-1 rounded-xl px-4 text-base font-medium lg:text-lg",
                       event.userRsvp?.status === "going" &&
                         "border-transparent bg-neon-teal text-black hover:bg-neon-teal-hover hover:text-black active:text-black"
                     )}
@@ -844,7 +844,7 @@ export default function EventPage() {
                   </Button>
                 </div>
                 {hasActivePartner && hasSelectableRsvp && (
-                  <div className="mb-4">
+                  <div className="mb-2">
                     <Button
                       type="button"
                       variant="neon"
@@ -871,7 +871,7 @@ export default function EventPage() {
                         : "outline"
                     }
                     className={cn(
-                      "font-space-grotesk w-full rounded-xl py-5 text-base font-medium lg:text-lg",
+                      "font-space-grotesk h-11 w-full rounded-xl text-base font-medium lg:text-lg",
                       event.userRsvp?.status === "not_going" &&
                         "hover:bg-destructive/90"
                     )}
