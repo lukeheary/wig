@@ -28,6 +28,13 @@ export type ScraperType = "dice" | "posh" | "ticketmaster";
 
 export interface PlaceScraperFormData {
   id?: string;
+  scraper: ScraperType;
+  searchString: string;
+  classificationName?: string | null;
+}
+
+interface EditablePlaceScraperFormData {
+  id?: string;
   scraper: ScraperType | null;
   searchString: string;
   classificationName: string;
@@ -84,12 +91,12 @@ const emptyFormData: PlaceFormData = {
   scrapers: [],
 };
 
-type ScraperRow = PlaceScraperFormData & {
+type ScraperRow = EditablePlaceScraperFormData & {
   localId: string;
 };
 
 function createScraperRow(
-  data?: Partial<PlaceScraperFormData> | null
+  data?: Partial<EditablePlaceScraperFormData> | null
 ): ScraperRow {
   return {
     localId: crypto.randomUUID(),
@@ -309,10 +316,12 @@ export function PlaceEditForm({
           id: scraperRow.id,
           scraper: scraperRow.scraper,
           searchString: scraperRow.searchString.trim(),
-          classificationName: scraperRow.classificationName.trim(),
+          classificationName: scraperRow.classificationName.trim() || null,
         }))
         .filter(
-          (scraperRow) =>
+          (
+            scraperRow
+          ): scraperRow is PlaceScraperFormData =>
             scraperRow.scraper !== null && scraperRow.searchString.length > 0
         ),
     });
@@ -344,7 +353,7 @@ export function PlaceEditForm({
   }, []);
 
   const updateScraperRow = useCallback(
-    (localId: string, updates: Partial<PlaceScraperFormData>) => {
+    (localId: string, updates: Partial<EditablePlaceScraperFormData>) => {
       setScraperRows((prev) =>
         prev.map((scraperRow) =>
           scraperRow.localId === localId

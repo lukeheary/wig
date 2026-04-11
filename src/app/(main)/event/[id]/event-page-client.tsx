@@ -13,11 +13,9 @@ import { Button } from "@/components/ui/button";
 import { UserAvatar } from "@/components/ui/user-avatar";
 import {
   Calendar,
-  MapPin,
   Link as LinkIcon,
   Check,
   Edit,
-  Users,
   ExternalLink,
   X,
   Expand,
@@ -27,10 +25,7 @@ import { differenceInCalendarDays, format, startOfDay } from "date-fns";
 import { cn, splitTrailingParenthetical } from "@/lib/utils";
 import { AvatarStack } from "@/components/ui/avatar-stack";
 import { useEffect, useMemo, useState } from "react";
-import {
-  getEventStatusBadgeClassName,
-  getEventStatusLabel,
-} from "@/lib/event-status";
+import { getEventStatusLabel } from "@/lib/event-status";
 import { SharedBackButton } from "@/components/shared/back-button";
 import { buildReturnTo, withReturnTo } from "@/lib/navigation";
 import { HapticPreset, useHaptics } from "@/hooks/use-haptics";
