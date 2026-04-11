@@ -18,6 +18,14 @@ import { DatePicker } from "@/components/ui/date-picker";
 import { BackButtonHeader } from "@/components/shared/back-button-header";
 import { PageContainer } from "@/components/shared/page-container";
 import {
+  Dialog,
+  DialogContent,
+  DialogDescription,
+  DialogFooter,
+  DialogHeader,
+  DialogTitle,
+} from "@/components/ui/dialog";
+import {
   Select,
   SelectContent,
   SelectItem,
@@ -68,6 +76,7 @@ export default function EditEventPage() {
 
   const [selectedVenue, setSelectedVenue] = useState<VenueData | null>(null);
   const [isCreatingNewVenue, setIsCreatingNewVenue] = useState(false);
+  const [isDeleteDialogOpen, setIsDeleteDialogOpen] = useState(false);
 
   const createVenueMutation = trpc.place.createPlace.useMutation();
 
@@ -150,13 +159,7 @@ export default function EditEventPage() {
   });
 
   const deleteMutation = trpc.event.deleteEvent.useMutation({
-    onSuccess: async (data) => {
-      await Promise.all([
-        utils.event.getEventById.invalidate({ eventId }),
-        utils.event.listEventsByRange.invalidate(),
-        utils.event.getRecentlyAddedEvents.invalidate(),
-      ]);
-
+    onSuccess: (data) => {
       const deletedFutureCount = Math.max(0, data.deletedEvents - 1);
       const description = data.deletedRecurring
         ? deletedFutureCount > 0
@@ -170,6 +173,13 @@ export default function EditEventPage() {
         title: "Event deleted",
         description,
       });
+
+      void Promise.all([
+        utils.event.getEventById.invalidate({ eventId }),
+        utils.event.listEventsByRange.invalidate(),
+        utils.event.getRecentlyAddedEvents.invalidate(),
+      ]);
+
       router.push(afterDeleteHref);
     },
     onError: (error) => {
@@ -298,12 +308,7 @@ export default function EditEventPage() {
   };
 
   const handleDelete = () => {
-    const confirmed = window.confirm(
-      event?.seriesId
-        ? "Delete this recurring event? This will remove this occurrence and all future occurrences in the series."
-        : "Delete this event? It will be hidden across the platform."
-    );
-    if (!confirmed) return;
+    setIsDeleteDialogOpen(false);
     deleteMutation.mutate({ eventId });
   };
 
@@ -329,6 +334,42 @@ export default function EditEventPage() {
 
   return (
     <PageContainer className="max-w-2xl space-y-2">
+      <Dialog open={isDeleteDialogOpen} onOpenChange={setIsDeleteDialogOpen}>
+        <DialogContent className="max-w-md">
+          <DialogHeader>
+            <DialogTitle>Delete Event?</DialogTitle>
+            <DialogDescription>
+              {event.seriesId
+                ? "This will remove this occurrence and all future occurrences in the series."
+                : "This event will be hidden across the platform."}
+            </DialogDescription>
+          </DialogHeader>
+          <DialogFooter className="gap-2">
+            <Button
+              type="button"
+              variant="outline"
+              onClick={() => setIsDeleteDialogOpen(false)}
+              disabled={deleteMutation.isPending}
+              className="w-full sm:w-auto"
+            >
+              Cancel
+            </Button>
+            <Button
+              type="button"
+              variant="destructive"
+              onClick={handleDelete}
+              disabled={deleteMutation.isPending}
+              className="w-full sm:w-auto"
+            >
+              {deleteMutation.isPending && (
+                <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+              )}
+              Delete Event
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+
       <div className="flex flex-wrap items-center justify-between gap-3">
         <BackButtonHeader backHref={eventDetailHref} title="Edit Event" />
         <Button
@@ -501,7 +542,7 @@ export default function EditEventPage() {
               <Button
                 type="button"
                 variant="outline"
-                onClick={handleDelete}
+                onClick={() => setIsDeleteDialogOpen(true)}
                 disabled={updateMutation.isPending || deleteMutation.isPending}
                 className="text-destructive hover:bg-destructive/10 hover:text-destructive"
               >
