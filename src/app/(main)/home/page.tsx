@@ -45,6 +45,7 @@ import { HOME_RECENT_ACTIVITY_SURFACE } from "@/lib/user-surface-state";
 import { cn, formatTime } from "@/lib/utils";
 import { useToast } from "@/hooks/use-toast";
 import { type EventFilterTab } from "@/types/events";
+import { withImageVersion } from "@/components/events/event-card-helpers";
 
 type ViewMode = "week" | "month";
 const HOME_ADD_FRIENDS_BANNER_KEY_PREFIX =
@@ -521,7 +522,7 @@ function HomePageContent() {
                     <div className="space-y-1">
                       {dayEvents.slice(0, 3).map((event) => {
                         const eventImageUrl =
-                          event.coverImageUrl ||
+                          withImageVersion(event.coverImageUrl, event.updatedAt) ||
                           event.venue?.logoImageUrl ||
                           event.organizer?.logoImageUrl ||
                           null;

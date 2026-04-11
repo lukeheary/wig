@@ -4,6 +4,7 @@ import Image from "next/image";
 import { useMemo } from "react";
 import { trpc } from "@/lib/trpc";
 import { cn } from "@/lib/utils";
+import { withImageVersion } from "@/components/events/event-card-helpers";
 
 type LandingHeroEventMarqueeProps = {
   className?: string;
@@ -27,11 +28,12 @@ const MARQUEE_SLIDE_CLASS_NAME =
 
 function getEventImageUrl(event: {
   coverImageUrl?: string | null;
+  updatedAt?: Date | string | null;
   venue?: { logoImageUrl?: string | null } | null;
   organizer?: { logoImageUrl?: string | null } | null;
 }) {
   return (
-    event.coverImageUrl ||
+    withImageVersion(event.coverImageUrl, event.updatedAt) ||
     event.venue?.logoImageUrl ||
     event.organizer?.logoImageUrl ||
     null
