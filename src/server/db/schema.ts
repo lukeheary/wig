@@ -366,7 +366,7 @@ export const scrapers = pgTable(
     updatedAt: timestamp("updated_at").defaultNow().notNull(),
   },
   (table) => ({
-    placeIdx: uniqueIndex("scrapers_place_idx").on(table.placeId),
+    placeIdx: index("scrapers_place_idx").on(table.placeId),
     scraperIdx: index("scrapers_scraper_idx").on(table.scraper),
   })
 );

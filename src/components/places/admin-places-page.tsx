@@ -53,8 +53,8 @@ export function AdminPlacesPage({ placeType }: AdminPlacesPageProps) {
 
   const createPlaceMutation = trpc.admin.createPlace.useMutation();
   const updatePlaceMutation = trpc.place.updatePlace.useMutation();
-  const upsertPlaceScraperMutation =
-    trpc.admin.upsertPlaceScraper.useMutation();
+  const replacePlaceScrapersMutation =
+    trpc.admin.replacePlaceScrapers.useMutation();
 
   const uploadPlaceLogo = async (placeId: string, file: File) => {
     const uploadFormData = new FormData();
@@ -83,9 +83,7 @@ export function AdminPlacesPage({ placeType }: AdminPlacesPageProps) {
   const handleCreateSubmit = async (formData: PlaceFormData) => {
     try {
       const {
-        scraper,
-        scraperSearchString,
-        scraperClassificationName,
+        scrapers,
         ...placeData
       } = formData;
 
@@ -118,11 +116,9 @@ export function AdminPlacesPage({ placeType }: AdminPlacesPageProps) {
 
       let scraperWarning: string | null = null;
       try {
-        await upsertPlaceScraperMutation.mutateAsync({
+        await replacePlaceScrapersMutation.mutateAsync({
           placeId: createdPlace.id,
-          scraper,
-          searchString: scraperSearchString,
-          classificationName: scraperClassificationName,
+          scrapers,
         });
       } catch (error) {
         scraperWarning =
@@ -192,7 +188,7 @@ export function AdminPlacesPage({ placeType }: AdminPlacesPageProps) {
           isSubmitting={
             createPlaceMutation.isPending ||
             updatePlaceMutation.isPending ||
-            upsertPlaceScraperMutation.isPending ||
+            replacePlaceScrapersMutation.isPending ||
             isUploadingLogo
           }
         />

@@ -1169,6 +1169,7 @@ export const eventRouter = router({
                 address: sql`excluded.address`,
                 city: sql`excluded.city`,
                 state: sql`excluded.state`,
+                venueId: sql`excluded.venue_id`,
                 updatedAt: sql`now()`,
               },
             })

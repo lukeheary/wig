@@ -13,7 +13,7 @@ import {
   SelectTrigger,
   SelectValue,
 } from "@/components/ui/select";
-import { Building, Building2, Loader2 } from "lucide-react";
+import { Loader2, Plus, Trash2 } from "lucide-react";
 import { S3Uploader } from "@/components/ui/s3-uploader";
 import { GooglePlacesAutocomplete } from "@/components/google-places-autocomplete";
 import { CategoryMultiSelect } from "@/components/category-multi-select";
@@ -25,6 +25,13 @@ import {
 
 export type PlaceType = "venue" | "organizer";
 export type ScraperType = "dice" | "posh" | "ticketmaster";
+
+export interface PlaceScraperFormData {
+  id?: string;
+  scraper: ScraperType | null;
+  searchString: string;
+  classificationName: string;
+}
 
 export interface PlaceFormData {
   type: PlaceType;
@@ -42,9 +49,7 @@ export interface PlaceFormData {
   longitude: number | null;
   hours: VenueHours | null;
   categories: string[];
-  scraper: ScraperType | null;
-  scraperSearchString: string;
-  scraperClassificationName: string;
+  scrapers: PlaceScraperFormData[];
 }
 
 interface PlaceEditFormProps {
@@ -76,10 +81,24 @@ const emptyFormData: PlaceFormData = {
   longitude: null,
   hours: null,
   categories: [],
-  scraper: null,
-  scraperSearchString: "",
-  scraperClassificationName: "",
+  scrapers: [],
 };
+
+type ScraperRow = PlaceScraperFormData & {
+  localId: string;
+};
+
+function createScraperRow(
+  data?: Partial<PlaceScraperFormData> | null
+): ScraperRow {
+  return {
+    localId: crypto.randomUUID(),
+    id: data?.id,
+    scraper: data?.scraper ?? null,
+    searchString: data?.searchString ?? "",
+    classificationName: data?.classificationName ?? "",
+  };
+}
 
 export function PlaceEditForm({
   initialData,
@@ -111,9 +130,7 @@ export function PlaceEditForm({
         longitude: initialData?.longitude ?? null,
         hours: initialData?.hours ?? null,
         categories: initialData?.categories ?? [],
-        scraper: initialData?.scraper ?? null,
-        scraperSearchString: initialData?.scraperSearchString ?? "",
-        scraperClassificationName: initialData?.scraperClassificationName ?? "",
+        scrapers: initialData?.scrapers ?? [],
       }),
     [initialData, placeType]
   );
@@ -129,6 +146,9 @@ export function PlaceEditForm({
     initialData?.name || ""
   );
   const [nameOverride, setNameOverride] = useState("");
+  const [scraperRows, setScraperRows] = useState<ScraperRow[]>(
+    (initialData?.scrapers ?? []).map((scraper) => createScraperRow(scraper))
+  );
   const [isSlugSynced, setIsSlugSynced] = useState(
     (initialData?.slug || "") === (initialData?.instagram || "")
   );
@@ -144,6 +164,9 @@ export function PlaceEditForm({
       setPlaceSearch(initialData.name || "");
       setGooglePlaceName(initialData.name || "");
       setNameOverride("");
+      setScraperRows(
+        (initialData.scrapers ?? []).map((scraper) => createScraperRow(scraper))
+      );
       setIsSlugSynced(
         (initialData.slug || "") === (initialData.instagram || "")
       );
@@ -279,7 +302,20 @@ export function PlaceEditForm({
 
   const handleSubmit = (e: React.FormEvent) => {
     e.preventDefault();
-    onSubmit(formData);
+    onSubmit({
+      ...formData,
+      scrapers: scraperRows
+        .map((scraperRow) => ({
+          id: scraperRow.id,
+          scraper: scraperRow.scraper,
+          searchString: scraperRow.searchString.trim(),
+          classificationName: scraperRow.classificationName.trim(),
+        }))
+        .filter(
+          (scraperRow) =>
+            scraperRow.scraper !== null && scraperRow.searchString.length > 0
+        ),
+    });
   };
 
   const handleNameOverrideChange = useCallback(
@@ -297,14 +333,40 @@ export function PlaceEditForm({
   const isVenue = placeType === "venue";
   const typeLabel = isVenue ? "Venue" : "Organizer";
   const shouldDeferLogoUpload = mode === "create" || !placeId;
+  const hasIncompleteScraperRows = scraperRows.some((scraperRow) => {
+    const hasScraper = scraperRow.scraper !== null;
+    const hasSearchString = scraperRow.searchString.trim().length > 0;
+    return hasScraper !== hasSearchString;
+  });
+
+  const addScraperRow = useCallback(() => {
+    setScraperRows((prev) => [...prev, createScraperRow()]);
+  }, []);
+
+  const updateScraperRow = useCallback(
+    (localId: string, updates: Partial<PlaceScraperFormData>) => {
+      setScraperRows((prev) =>
+        prev.map((scraperRow) =>
+          scraperRow.localId === localId
+            ? { ...scraperRow, ...updates }
+            : scraperRow
+        )
+      );
+    },
+    []
+  );
+
+  const removeScraperRow = useCallback((localId: string) => {
+    setScraperRows((prev) =>
+      prev.filter((scraperRow) => scraperRow.localId !== localId)
+    );
+  }, []);
 
   const isFormValid =
     formData.slug &&
     formData.name &&
     (!isVenue || (formData.city && formData.state)) &&
-    (!showScraperFields ||
-      !formData.scraper ||
-      formData.scraperSearchString.trim().length > 0);
+    (!showScraperFields || !hasIncompleteScraperRows);
 
   const formContent = (
     <form onSubmit={handleSubmit} className="space-y-4">
@@ -507,80 +569,120 @@ export function PlaceEditForm({
 
       {showScraperFields && (
         <div id="scraper-settings" className="space-y-3 rounded-md border p-3">
-          <p className="text-sm font-medium">Scraper (Optional)</p>
-          <div>
-            <Label>Scraper Type</Label>
-            <Select
-              value={formData.scraper ?? "none"}
-              onValueChange={(value) =>
-                setFormData({
-                  ...formData,
-                  scraper: value === "none" ? null : (value as ScraperType),
-                  scraperClassificationName:
-                    value === "ticketmaster"
-                      ? formData.scraperClassificationName
-                      : "",
-                })
-              }
-            >
-              <SelectTrigger>
-                <SelectValue placeholder="No scraper" />
-              </SelectTrigger>
-              <SelectContent>
-                <SelectItem value="none">No scraper</SelectItem>
-                <SelectItem value="dice">Dice.fm</SelectItem>
-                <SelectItem value="posh">Posh</SelectItem>
-                <SelectItem value="ticketmaster">Ticketmaster</SelectItem>
-              </SelectContent>
-            </Select>
+          <div className="flex items-start justify-between gap-3">
+            <div>
+              <p className="text-sm font-medium">Scrapers (Optional)</p>
+              <p className="text-xs text-muted-foreground">
+                Add one or more scrapers for this {typeLabel.toLowerCase()}.
+              </p>
+            </div>
+            <Button type="button" variant="outline" size="sm" onClick={addScraperRow}>
+              <Plus className="mr-2 h-4 w-4" />
+              Add Additional Scraper
+            </Button>
           </div>
-          {formData.scraper && (
-            <div>
-              <Label htmlFor="place-scraper-search-string">Search String</Label>
-              <Input
-                id="place-scraper-search-string"
-                value={formData.scraperSearchString}
-                onChange={(e) =>
-                  setFormData({
-                    ...formData,
-                    scraperSearchString: e.target.value,
-                  })
-                }
-                placeholder={
-                  formData.scraper === "ticketmaster"
-                    ? "Venue/organizer name (e.g. Big Night Live)"
-                    : formData.scraper === "posh"
-                      ? "Posh event or group URL(s)"
-                      : "Scraper URL"
-                }
-              />
-              <p className="mt-1 text-xs text-muted-foreground">
-                Use a URL for URL-based scrapers, or plain text for text-based
-                scrapers.
-              </p>
-            </div>
+          {scraperRows.length === 0 ? (
+            <p className="text-sm text-muted-foreground">
+              No scrapers configured yet.
+            </p>
+          ) : (
+            scraperRows.map((scraperRow, index) => (
+              <div
+                key={scraperRow.localId}
+                className="space-y-3 rounded-md border p-3"
+              >
+                <div className="flex items-center justify-between gap-3">
+                  <p className="text-sm font-medium">Scraper {index + 1}</p>
+                  <Button
+                    type="button"
+                    variant="ghost"
+                    size="sm"
+                    onClick={() => removeScraperRow(scraperRow.localId)}
+                  >
+                    <Trash2 className="mr-2 h-4 w-4" />
+                    Remove
+                  </Button>
+                </div>
+                <div>
+                  <Label>Scraper Type</Label>
+                  <Select
+                    value={scraperRow.scraper ?? "none"}
+                    onValueChange={(value) =>
+                      updateScraperRow(scraperRow.localId, {
+                        scraper: value === "none" ? null : (value as ScraperType),
+                        classificationName:
+                          value === "ticketmaster"
+                            ? scraperRow.classificationName
+                            : "",
+                      })
+                    }
+                  >
+                    <SelectTrigger>
+                      <SelectValue placeholder="No scraper" />
+                    </SelectTrigger>
+                    <SelectContent>
+                      <SelectItem value="none">No scraper</SelectItem>
+                      <SelectItem value="dice">Dice.fm</SelectItem>
+                      <SelectItem value="posh">Posh</SelectItem>
+                      <SelectItem value="ticketmaster">Ticketmaster</SelectItem>
+                    </SelectContent>
+                  </Select>
+                </div>
+                <div>
+                  <Label htmlFor={`place-scraper-search-string-${scraperRow.localId}`}>
+                    Search String
+                  </Label>
+                  <Input
+                    id={`place-scraper-search-string-${scraperRow.localId}`}
+                    value={scraperRow.searchString}
+                    onChange={(e) =>
+                      updateScraperRow(scraperRow.localId, {
+                        searchString: e.target.value,
+                      })
+                    }
+                    placeholder={
+                      scraperRow.scraper === "ticketmaster"
+                        ? "Venue/organizer name (e.g. Big Night Live)"
+                        : scraperRow.scraper === "posh"
+                          ? "Posh event or group URL(s)"
+                          : "Scraper URL"
+                    }
+                  />
+                  <p className="mt-1 text-xs text-muted-foreground">
+                    Use a URL for URL-based scrapers, or plain text for
+                    text-based scrapers.
+                  </p>
+                </div>
+                {scraperRow.scraper === "ticketmaster" && (
+                  <div>
+                    <Label
+                      htmlFor={`place-scraper-classification-name-${scraperRow.localId}`}
+                    >
+                      Classification Name
+                    </Label>
+                    <Input
+                      id={`place-scraper-classification-name-${scraperRow.localId}`}
+                      value={scraperRow.classificationName}
+                      onChange={(e) =>
+                        updateScraperRow(scraperRow.localId, {
+                          classificationName: e.target.value,
+                        })
+                      }
+                      placeholder="music"
+                    />
+                    <p className="mt-1 text-xs text-muted-foreground">
+                      Optional Ticketmaster classification filter, like
+                      <span className="font-mono"> music</span>.
+                    </p>
+                  </div>
+                )}
+              </div>
+            ))
           )}
-          {formData.scraper === "ticketmaster" && (
-            <div>
-              <Label htmlFor="place-scraper-classification-name">
-                Classification Name
-              </Label>
-              <Input
-                id="place-scraper-classification-name"
-                value={formData.scraperClassificationName}
-                onChange={(e) =>
-                  setFormData({
-                    ...formData,
-                    scraperClassificationName: e.target.value,
-                  })
-                }
-                placeholder="music"
-              />
-              <p className="mt-1 text-xs text-muted-foreground">
-                Optional Ticketmaster classification filter, like
-                <span className="font-mono"> music</span>.
-              </p>
-            </div>
+          {hasIncompleteScraperRows && (
+            <p className="text-xs text-destructive">
+              Each scraper needs both a type and a search string before saving.
+            </p>
           )}
         </div>
       )}

@@ -13,7 +13,7 @@ import {
   supportTickets,
   users,
 } from "../../db/schema";
-import { eq, and, or, ilike, desc, ne } from "drizzle-orm";
+import { eq, and, or, ilike, desc, ne, inArray } from "drizzle-orm";
 import { TRPCError } from "@trpc/server";
 import {
   listCategoryOptions,
@@ -30,6 +30,12 @@ import {
 const placeTypeSchema = z.enum(["venue", "organizer"]);
 const placeMemberRoleSchema = z.enum(["owner", "manager", "promoter", "staff"]);
 const scraperTypeSchema = z.enum(["dice", "posh", "ticketmaster"]);
+const placeScraperInputSchema = z.object({
+  id: z.string().uuid().optional(),
+  scraper: scraperTypeSchema,
+  searchString: z.string(),
+  classificationName: z.string().optional().nullable(),
+});
 const supportTicketStatusSchema = z.enum([
   "open",
   "in-review",
@@ -617,6 +623,117 @@ export const adminRouter = router({
       });
 
       return scraper ?? null;
+    }),
+
+  replacePlaceScrapers: adminProcedure
+    .input(
+      z.object({
+        placeId: z.string().uuid(),
+        scrapers: z.array(placeScraperInputSchema),
+      })
+    )
+    .mutation(async ({ ctx, input }) => {
+      const place = await ctx.db.query.places.findFirst({
+        where: eq(places.id, input.placeId),
+      });
+
+      if (!place) {
+        throw new TRPCError({
+          code: "NOT_FOUND",
+          message: "Place not found",
+        });
+      }
+
+      const normalizedScrapers = input.scrapers.map((scraperConfig) => {
+        const trimmedSearchString = scraperConfig.searchString.trim();
+        const trimmedClassificationName =
+          scraperConfig.classificationName?.trim() ?? "";
+
+        return {
+          id: scraperConfig.id,
+          scraper: scraperConfig.scraper,
+          searchString: trimmedSearchString,
+          classificationName:
+            scraperConfig.scraper === "ticketmaster" &&
+            trimmedClassificationName.length > 0
+              ? trimmedClassificationName
+              : null,
+        };
+      });
+
+      const incompleteScraper = normalizedScrapers.find(
+        (scraperConfig) => scraperConfig.searchString.length === 0
+      );
+
+      if (incompleteScraper) {
+        throw new TRPCError({
+          code: "BAD_REQUEST",
+          message: "Each scraper must include a search string",
+        });
+      }
+
+      const savedScrapers = await ctx.db.transaction(async (tx) => {
+        const existingScrapers = await tx.query.scrapers.findMany({
+          where: eq(scrapers.placeId, input.placeId),
+        });
+
+        const existingIds = new Set(existingScrapers.map((row) => row.id));
+        for (const scraperConfig of normalizedScrapers) {
+          if (scraperConfig.id && !existingIds.has(scraperConfig.id)) {
+            throw new TRPCError({
+              code: "BAD_REQUEST",
+              message: "One or more scraper rows do not belong to this place",
+            });
+          }
+        }
+
+        const incomingIds = normalizedScrapers
+          .map((scraperConfig) => scraperConfig.id)
+          .filter((id): id is string => Boolean(id));
+
+        const scraperIdsToDelete = existingScrapers
+          .map((row) => row.id)
+          .filter((id) => !incomingIds.includes(id));
+
+        if (scraperIdsToDelete.length > 0) {
+          await tx.delete(scrapers).where(inArray(scrapers.id, scraperIdsToDelete));
+        }
+
+        const nextScrapers = [];
+        for (const scraperConfig of normalizedScrapers) {
+          if (scraperConfig.id) {
+            const [updated] = await tx
+              .update(scrapers)
+              .set({
+                scraper: scraperConfig.scraper,
+                searchString: scraperConfig.searchString,
+                classificationName: scraperConfig.classificationName,
+                updatedAt: new Date(),
+              })
+              .where(eq(scrapers.id, scraperConfig.id))
+              .returning();
+
+            nextScrapers.push(updated);
+            continue;
+          }
+
+          const [created] = await tx
+            .insert(scrapers)
+            .values({
+              placeId: input.placeId,
+              scraper: scraperConfig.scraper,
+              searchString: scraperConfig.searchString,
+              classificationName: scraperConfig.classificationName,
+            })
+            .returning();
+
+          nextScrapers.push(created);
+        }
+
+        return nextScrapers;
+      });
+
+      return { success: true, scrapers: savedScrapers };
     }),
 
   upsertPlaceScraper: adminProcedure

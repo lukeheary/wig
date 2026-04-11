@@ -36,13 +36,13 @@ export default function EditPlacePage() {
 
   // Get current user
   const { data: currentUser } = trpc.user.getCurrentUser.useQuery();
-  const { data: scraperConfig } = trpc.admin.getScraperForPlace.useQuery(
+  const { data: scraperConfigs = [] } = trpc.admin.listScrapers.useQuery(
     { placeId: place?.id ?? "" },
     { enabled: isAdmin && !!place?.id }
   );
 
   const updateMutation = trpc.place.updatePlace.useMutation();
-  const upsertScraperMutation = trpc.admin.upsertPlaceScraper.useMutation();
+  const replaceScrapersMutation = trpc.admin.replacePlaceScrapers.useMutation();
 
   // Check if user can edit this place
   const isMember =
@@ -92,11 +92,9 @@ export default function EditPlacePage() {
       });
 
       if (isAdmin) {
-        await upsertScraperMutation.mutateAsync({
+        await replaceScrapersMutation.mutateAsync({
           placeId: place.id,
-          scraper: formData.scraper,
-          searchString: formData.scraperSearchString,
-          classificationName: formData.scraperClassificationName,
+          scrapers: formData.scrapers,
         });
       }
 
@@ -168,9 +166,12 @@ export default function EditPlacePage() {
     longitude: place.longitude || null,
     hours: (place as any).hours || null,
     categories: place.categories || [],
-    scraper: scraperConfig?.scraper ?? null,
-    scraperSearchString: scraperConfig?.searchString ?? "",
-    scraperClassificationName: scraperConfig?.classificationName ?? "",
+    scrapers: scraperConfigs.map((scraperConfig) => ({
+      id: scraperConfig.id,
+      scraper: scraperConfig.scraper,
+      searchString: scraperConfig.searchString,
+      classificationName: scraperConfig.classificationName ?? "",
+    })),
   };
 
   return (
@@ -184,9 +185,7 @@ export default function EditPlacePage() {
         mode="edit"
         onSubmit={handleSubmit}
         onCancel={() => router.push(backHref)}
-        isSubmitting={
-          updateMutation.isPending || upsertScraperMutation.isPending
-        }
+        isSubmitting={updateMutation.isPending || replaceScrapersMutation.isPending}
         showScraperFields={isAdmin}
       />
     </PageContainer>
