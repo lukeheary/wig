@@ -95,8 +95,15 @@ type ScraperRow = EditablePlaceScraperFormData & {
   localId: string;
 };
 
+type ScraperRowSeed = {
+  id?: string;
+  scraper?: ScraperType | null;
+  searchString?: string;
+  classificationName?: string | null;
+};
+
 function createScraperRow(
-  data?: Partial<EditablePlaceScraperFormData> | null
+  data?: ScraperRowSeed | null
 ): ScraperRow {
   return {
     localId: crypto.randomUUID(),
