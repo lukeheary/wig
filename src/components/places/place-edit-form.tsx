@@ -319,18 +319,18 @@ export function PlaceEditForm({
     onSubmit({
       ...formData,
       scrapers: scraperRows
+        .filter(
+          (
+            scraperRow
+          ): scraperRow is ScraperRow & { scraper: ScraperType } =>
+            scraperRow.scraper !== null && scraperRow.searchString.length > 0
+        )
         .map((scraperRow) => ({
           id: scraperRow.id,
           scraper: scraperRow.scraper,
           searchString: scraperRow.searchString.trim(),
           classificationName: scraperRow.classificationName.trim() || null,
-        }))
-        .filter(
-          (
-            scraperRow
-          ): scraperRow is PlaceScraperFormData =>
-            scraperRow.scraper !== null && scraperRow.searchString.length > 0
-        ),
+        })),
     });
   };
 
