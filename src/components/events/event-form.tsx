@@ -7,6 +7,10 @@ import { trpc } from "@/lib/trpc";
 import { useToast } from "@/hooks/use-toast";
 import { CategoryMultiSelect } from "@/components/category-multi-select";
 import { VenueSelector, VenueData } from "@/components/events/venue-selector";
+import {
+  OrganizerSelector,
+  type OrganizerData,
+} from "@/components/events/organizer-selector";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { DatePicker } from "@/components/ui/date-picker";
 import { Button } from "@/components/ui/button";
@@ -79,6 +83,8 @@ export function EventForm({
   });
 
   const [selectedVenue, setSelectedVenue] = useState<VenueData | null>(null);
+  const [selectedOrganizer, setSelectedOrganizer] =
+    useState<OrganizerData | null>(null);
   const [isCreatingNewVenue, setIsCreatingNewVenue] = useState(false);
   const lastAutoAppliedKeyRef = useRef<string | null>(null);
   const [deferredCoverImageFile, setDeferredCoverImageFile] =
@@ -168,6 +174,11 @@ export function EventForm({
       { id: venueId as string },
       { enabled: !!venueId }
     );
+  const { data: organizer, isLoading: isLoadingOrganizer } =
+    trpc.place.getPlaceById.useQuery(
+      { id: organizerId as string },
+      { enabled: !!organizerId }
+    );
 
   const titleQuery = formData.title.trim();
   const {
@@ -253,6 +264,19 @@ export function EventForm({
       }
     }
   }, [venue]);
+
+  useEffect(() => {
+    if (organizer) {
+      setSelectedOrganizer({
+        id: organizer.id,
+        name: organizer.name,
+        city: organizer.city || "",
+        state: organizer.state || "",
+        slug: organizer.slug,
+        instagram: organizer.instagram || "",
+      });
+    }
+  }, [organizer]);
 
   useEffect(() => {
     if (!isRecurringDefault || recurrenceData.frequency === "daily") return;
@@ -432,7 +456,7 @@ export function EventForm({
 
       const payload = {
         venueId: finalVenueId,
-        organizerId,
+        organizerId: selectedOrganizer?.id || undefined,
         title: formData.title,
         description: formData.description || undefined,
         eventUrl: formData.eventUrl || undefined,
@@ -665,7 +689,7 @@ export function EventForm({
     createRecurringMutation.isPending ||
     createVenueMutation.isPending;
 
-  if (venueId && isLoadingVenue) {
+  if ((venueId && isLoadingVenue) || (organizerId && isLoadingOrganizer)) {
     return (
       <div className="flex justify-center py-24">
         <Loader2 className="h-8 w-8 animate-spin text-muted-foreground" />
@@ -683,6 +707,11 @@ export function EventForm({
           setIsCreatingNew={setIsCreatingNewVenue}
         />
       )}
+
+      <OrganizerSelector
+        selectedOrganizer={selectedOrganizer}
+        onOrganizerSelect={setSelectedOrganizer}
+      />
 
       <Card>
         <CardHeader>

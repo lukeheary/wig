@@ -2043,7 +2043,7 @@ export const eventRouter = router({
         visibility: z.enum(["public", "private"]).optional(),
         status: z.enum(EVENT_STATUS_VALUES).optional(),
         venueId: z.string().uuid().optional(),
-        organizerId: z.string().uuid().optional(),
+        organizerId: z.string().uuid().nullable().optional(),
       })
     )
     .mutation(async ({ ctx, input }) => {

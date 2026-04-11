@@ -13,6 +13,10 @@ import { useToast } from "@/hooks/use-toast";
 import { S3Uploader } from "@/components/ui/s3-uploader";
 import { format } from "date-fns";
 import { VenueSelector, VenueData } from "@/components/events/venue-selector";
+import {
+  OrganizerSelector,
+  type OrganizerData,
+} from "@/components/events/organizer-selector";
 import { CategoryMultiSelect } from "@/components/category-multi-select";
 import { DatePicker } from "@/components/ui/date-picker";
 import { BackButtonHeader } from "@/components/shared/back-button-header";
@@ -75,6 +79,8 @@ export default function EditEventPage() {
   });
 
   const [selectedVenue, setSelectedVenue] = useState<VenueData | null>(null);
+  const [selectedOrganizer, setSelectedOrganizer] =
+    useState<OrganizerData | null>(null);
   const [isCreatingNewVenue, setIsCreatingNewVenue] = useState(false);
   const [isDeleteDialogOpen, setIsDeleteDialogOpen] = useState(false);
 
@@ -222,6 +228,19 @@ export default function EditEventPage() {
       if (!event.venueId) {
         setIsCreatingNewVenue(true);
       }
+
+      setSelectedOrganizer(
+        event.organizerId && event.organizer
+          ? {
+              id: event.organizerId,
+              name: event.organizer.name || "",
+              city: event.organizer.city || "",
+              state: event.organizer.state || "",
+              slug: event.organizer.slug || "",
+              instagram: event.organizer.instagram || "",
+            }
+          : null
+      );
     }
   }, [event]);
 
@@ -301,6 +320,7 @@ export default function EditEventPage() {
         city: selectedVenue?.city || formData.city,
         state: selectedVenue?.state || formData.state,
         venueId: finalVenueId,
+        organizerId: selectedOrganizer?.id ?? null,
       });
     };
 
@@ -535,6 +555,11 @@ export default function EditEventPage() {
               onVenueSelect={setSelectedVenue}
               isCreatingNew={isCreatingNewVenue}
               setIsCreatingNew={setIsCreatingNewVenue}
+            />
+
+            <OrganizerSelector
+              selectedOrganizer={selectedOrganizer}
+              onOrganizerSelect={setSelectedOrganizer}
             />
 
             {/* Submit Button */}
