@@ -110,19 +110,30 @@ export const placeRouter = router({
           : eq(events.venueId, input.venueId),
         columns: {
           title: true,
+          startAt: true,
+          endAt: true,
+          createdAt: true,
         },
-        orderBy: [desc(events.startAt)],
+        orderBy: [desc(events.createdAt), desc(events.startAt)],
         limit: 100,
       });
 
       const seen = new Set<string>();
-      const suggestions: string[] = [];
+      const suggestions: Array<{
+        title: string;
+        startAt: Date;
+        endAt: Date | null;
+      }> = [];
 
       for (const row of eventRows) {
         const normalized = row.title.trim().toLowerCase();
         if (!normalized || seen.has(normalized)) continue;
         seen.add(normalized);
-        suggestions.push(row.title.trim());
+        suggestions.push({
+          title: row.title.trim(),
+          startAt: row.startAt,
+          endAt: row.endAt,
+        });
         if (suggestions.length >= input.limit) break;
       }
 

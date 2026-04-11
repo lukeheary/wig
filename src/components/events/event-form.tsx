@@ -1,7 +1,7 @@
 "use client";
 
 import { useEffect, useRef, useState } from "react";
-import { addDays } from "date-fns";
+import { addDays, differenceInCalendarDays } from "date-fns";
 import { Loader2 } from "lucide-react";
 import { trpc } from "@/lib/trpc";
 import { useToast } from "@/hooks/use-toast";
@@ -87,11 +87,27 @@ export function EventForm({
   const [showTitleSuggestions, setShowTitleSuggestions] = useState(false);
   const submitLockRef = useRef(false);
   const [isSubmitLocked, setIsSubmitLocked] = useState(false);
+  const [suggestedTitleTimeTemplate, setSuggestedTitleTimeTemplate] = useState<{
+    startTime: string;
+    endTime: string | null;
+    endDayOffset: number;
+  } | null>(null);
 
   const getDatePart = (value: string) => (value ? value.split("T")[0] : "");
   const getTimePart = (value: string) => (value ? value.split("T")[1] : "");
   const buildDateTime = (date: string, time: string) =>
     date ? `${date}T${time}` : "";
+  const formatDatePart = (value: Date) => {
+    const year = value.getFullYear();
+    const month = String(value.getMonth() + 1).padStart(2, "0");
+    const day = String(value.getDate()).padStart(2, "0");
+    return `${year}-${month}-${day}`;
+  };
+  const formatTimePart = (value: Date) => {
+    const hours = String(value.getHours()).padStart(2, "0");
+    const minutes = String(value.getMinutes()).padStart(2, "0");
+    return `${hours}:${minutes}`;
+  };
 
   const getVenueDayHours = (dateString: string, hours?: VenueHours | null) => {
     if (!dateString || !hours) return null;
@@ -168,8 +184,49 @@ export function EventForm({
     }
   );
   const visibleTitleSuggestions = titleSuggestions.filter(
-    (suggestion) => suggestion.toLowerCase() !== titleQuery.toLowerCase()
+    (suggestion) => suggestion.title.toLowerCase() !== titleQuery.toLowerCase()
   );
+
+  const applySuggestedEventTimes = (suggestion: {
+    title: string;
+    startAt: Date;
+    endAt: Date | null;
+  }) => {
+    const startTime = formatTimePart(suggestion.startAt);
+    const endTime = suggestion.endAt ? formatTimePart(suggestion.endAt) : null;
+    const endDayOffset = suggestion.endAt
+      ? differenceInCalendarDays(suggestion.endAt, suggestion.startAt)
+      : 0;
+
+    setSuggestedTitleTimeTemplate({
+      startTime,
+      endTime,
+      endDayOffset,
+    });
+
+    setFormData((prev) => {
+      const currentStartDate = getDatePart(prev.startAt);
+      const baseStartDate = currentStartDate || formatDatePart(new Date());
+      const nextStartAt = buildDateTime(baseStartDate, startTime);
+
+      let nextEndAt = "";
+      if (endTime) {
+        nextEndAt = buildDateTime(
+          formatDatePart(
+            addDays(new Date(`${baseStartDate}T00:00`), endDayOffset)
+          ),
+          endTime
+        );
+      }
+
+      return {
+        ...prev,
+        title: suggestion.title,
+        startAt: nextStartAt,
+        endAt: nextEndAt,
+      };
+    });
+  };
 
   useEffect(() => {
     if (venue) {
@@ -527,12 +584,23 @@ export function EventForm({
     }
 
     setFormData((prev) => {
-      const startTime = getTimePart(prev.startAt) || "19:00";
+      const startTime =
+        getTimePart(prev.startAt) ||
+        suggestedTitleTimeTemplate?.startTime ||
+        "19:00";
       const nextStartAt = buildDateTime(date, startTime);
-      const endDate = getDatePart(prev.endAt);
-      const endTime = getTimePart(prev.endAt);
-      const nextEndAt = endDate
-        ? buildDateTime(date, endTime || "23:00")
+      const endTime =
+        getTimePart(prev.endAt) || suggestedTitleTimeTemplate?.endTime;
+      const nextEndAt = endTime
+        ? buildDateTime(
+            formatDatePart(
+              addDays(
+                new Date(`${date}T00:00`),
+                suggestedTitleTimeTemplate?.endDayOffset ?? 0
+              )
+            ),
+            endTime
+          )
         : prev.endAt;
       return {
         ...prev,
@@ -558,7 +626,10 @@ export function EventForm({
     }
     setFormData((prev) => {
       const time =
-        getTimePart(prev.endAt) || getTimePart(prev.startAt) || "23:00";
+        getTimePart(prev.endAt) ||
+        suggestedTitleTimeTemplate?.endTime ||
+        getTimePart(prev.startAt) ||
+        "23:00";
       return {
         ...prev,
         endAt: buildDateTime(date, time),
@@ -653,9 +724,10 @@ export function EventForm({
                   onBlur={() => {
                     setTimeout(() => setShowTitleSuggestions(false), 120);
                   }}
-                  onChange={(e) =>
-                    setFormData({ ...formData, title: e.target.value })
-                  }
+                  onChange={(e) => {
+                    setSuggestedTitleTimeTemplate(null);
+                    setFormData({ ...formData, title: e.target.value });
+                  }}
                   placeholder="Summer Music Festival"
                   autoComplete="off"
                   required
@@ -672,19 +744,16 @@ export function EventForm({
                       ) : visibleTitleSuggestions.length > 0 ? (
                         visibleTitleSuggestions.map((suggestion) => (
                           <button
-                            key={suggestion}
+                            key={suggestion.title}
                             type="button"
                             className="w-full rounded-sm px-2 py-1.5 text-left text-sm hover:bg-accent hover:text-accent-foreground"
                             onMouseDown={(e) => e.preventDefault()}
                             onClick={() => {
-                              setFormData((prev) => ({
-                                ...prev,
-                                title: suggestion,
-                              }));
+                              applySuggestedEventTimes(suggestion);
                               setShowTitleSuggestions(false);
                             }}
                           >
-                            {suggestion}
+                            {suggestion.title}
                           </button>
                         ))
                       ) : (
