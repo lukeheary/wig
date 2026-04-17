@@ -6,6 +6,7 @@ import {
   filterExistingCategoryKeys,
   setEventCategoryKeys,
 } from "@/server/utils/categories";
+import { uploadImageFromUrl } from "@/lib/s3";
 import { scrapeDice } from "@/app/api/scrape-dice/route";
 import { scrapePosh } from "@/app/api/scrape-posh/route";
 import { scrapeTicketmaster } from "@/app/api/scrape-ticketmaster/route";
@@ -224,6 +225,35 @@ async function runScraper(
           : [];
         if (cats.length > 0) {
           await setEventCategoryKeys(db, row.id, cats, { activeOnly: true });
+        }
+      })
+    );
+
+    await Promise.allSettled(
+      upserted.map(async (row) => {
+        const scrapedEvent = scrapedEvents.find(
+          (event) =>
+            event.source === row.source && event.externalId === row.externalId
+        );
+        const originalCoverImageUrl = scrapedEvent?.coverImageUrl;
+
+        if (!originalCoverImageUrl) {
+          return;
+        }
+
+        try {
+          const s3Url = await uploadImageFromUrl(
+            originalCoverImageUrl,
+            `events/${row.id}`,
+            "cover-image.png"
+          );
+
+          await db
+            .update(events)
+            .set({ coverImageUrl: s3Url })
+            .where(eq(events.id, row.id));
+        } catch {
+          // Keep the original external URL if re-hosting fails.
         }
       })
     );
