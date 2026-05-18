@@ -1,0 +1,23 @@
+{
+  "expo": {
+    "name": "WIG",
+    "slug": "wig-mobile",
+    "scheme": "wig",
+    "version": "1.0.0",
+    "orientation": "portrait",
+    "userInterfaceStyle": "dark",
+    "plugins": [
+      "expo-router"
+    ],
+    "experiments": {
+      "typedRoutes": true
+    },
+    "ios": {
+      "supportsTablet": true,
+      "bundleIdentifier": "com.wig.mobile"
+    },
+    "android": {
+      "package": "com.wig.mobile"
+    }
+  }
+}

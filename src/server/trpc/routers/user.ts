@@ -6,6 +6,10 @@ import { eq, and, ne } from "drizzle-orm";
 import { clerkClient } from "@clerk/nextjs/server";
 import { addDays } from "date-fns";
 import { USER_SURFACE_VALUES } from "@/lib/user-surface-state";
+import {
+  onboardingProfileSchema,
+  profileUpdateSchema,
+} from "../../../../packages/validation/src";
 
 const RESERVED_USERNAMES = new Set(["luke"]);
 
@@ -56,23 +60,7 @@ export const userRouter = router({
   }),
 
   updateUsername: protectedProcedure
-    .input(
-      z.object({
-        username: z
-          .string()
-          .min(3, "Username must be at least 3 characters")
-          .max(20, "Username must be at most 20 characters")
-          .regex(/^[a-zA-Z0-9_]+$/, "Username can only contain letters, numbers, and underscores"),
-        city: z.string().optional(),
-        state: z.string().optional(),
-        gender: z.enum(["male", "female", "other"]).optional(),
-        dateOfBirth: z
-          .string()
-          .regex(/^\d{4}-\d{2}-\d{2}$/, "Date of birth must be YYYY-MM-DD")
-          .optional(),
-        avatarImageUrl: z.string().optional(),
-      })
-    )
+    .input(onboardingProfileSchema.partial({ city: true, state: true }))
     .mutation(async ({ ctx, input }) => {
       const userId = ctx.auth.userId;
       const normalizedUsername = input.username.toLowerCase();
@@ -290,29 +278,7 @@ export const userRouter = router({
     }),
 
   updateProfile: protectedProcedure
-    .input(
-      z.object({
-        username: z
-          .string()
-          .min(3, "Username must be at least 3 characters")
-          .max(20, "Username must be at most 20 characters")
-          .regex(
-            /^[a-zA-Z0-9_]+$/,
-            "Username can only contain letters, numbers, and underscores"
-          )
-          .optional(),
-        firstName: z.string().min(1).max(100).optional(),
-        lastName: z.string().min(1).max(100).optional(),
-        avatarImageUrl: z.string().url().optional(),
-        city: z.string().optional(),
-        state: z.string().optional(),
-        gender: z.enum(["male", "female", "other"]).optional(),
-        dateOfBirth: z
-          .string()
-          .regex(/^\d{4}-\d{2}-\d{2}$/, "Date of birth must be YYYY-MM-DD")
-          .optional(),
-      })
-    )
+    .input(profileUpdateSchema)
     .mutation(async ({ ctx, input }) => {
       const userId = ctx.auth.userId;
       const normalizedUsername = input.username?.toLowerCase().trim();
