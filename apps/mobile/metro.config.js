@@ -13,7 +13,6 @@ const pnpmHoistedNodeModules = path.resolve(
 const expoPackage = path.dirname(
   require.resolve("expo/package.json", { paths: [projectRoot] })
 );
-const shim = (name) => path.resolve(projectRoot, "shims", `${name}.ts`);
 
 config.resolver.nodeModulesPaths = [
   mobileNodeModules,
@@ -22,21 +21,20 @@ config.resolver.nodeModulesPaths = [
 ];
 config.resolver.disableHierarchicalLookup = true;
 config.resolver.extraNodeModules = {
-  "@clerk/clerk-expo": shim("clerk-expo"),
   "@expo/metro-runtime": path.resolve(
     pnpmHoistedNodeModules,
     "@expo/metro-runtime"
   ),
   expo: expoPackage,
-  "expo-crypto": shim("expo-crypto"),
-  "expo-secure-store": shim("expo-secure-store"),
-  "expo-web-browser": shim("expo-web-browser"),
   react: path.resolve(mobileNodeModules, "react"),
   "react/jsx-runtime": path.resolve(mobileNodeModules, "react/jsx-runtime"),
   "react/jsx-dev-runtime": path.resolve(
     mobileNodeModules,
     "react/jsx-dev-runtime"
   ),
+  "react-dom": path.resolve(mobileNodeModules, "react-dom"),
+  "react-dom/client": path.resolve(mobileNodeModules, "react-dom/client"),
+  "react-dom/server": path.resolve(mobileNodeModules, "react-dom/server"),
   "react-native": path.resolve(mobileNodeModules, "react-native"),
 };
 

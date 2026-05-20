@@ -67,3 +67,40 @@ export type PlaceListItem = {
   eventCount: number;
   categories?: string[];
 };
+
+export type PlaceDetail = PlaceListItem & {
+  address?: string | null;
+  website?: string | null;
+  instagram?: string | null;
+  description: string | null;
+  events: EventListItem[];
+  pastEvents?: EventListItem[];
+  members?: Array<{
+    userId: string;
+    user?: {
+      id: string;
+      firstName?: string | null;
+      lastName?: string | null;
+      username?: string | null;
+      avatarImageUrl?: string | null;
+    } | null;
+  }>;
+};
+
+export type FriendUser = {
+  id: string;
+  email?: string | null;
+  username?: string | null;
+  firstName?: string | null;
+  lastName?: string | null;
+  avatarImageUrl?: string | null;
+};
+
+export type FriendConnection = {
+  id: string;
+  status: "pending" | "accepted";
+  userId: string;
+  friendUserId: string;
+  friend: FriendUser | null;
+  isSender: boolean;
+};

@@ -1,5 +1,7 @@
-import { Stack, useLocalSearchParams } from "expo-router";
 import { Alert, Image, Linking, StyleSheet, Text, View } from "react-native";
+import { useAuth } from "@clerk/expo";
+import { Stack, useLocalSearchParams, useRouter } from "expo-router";
+import { RSVPActionBar } from "../../components/rsvp-actions";
 import { Screen } from "../../components/screen";
 import { Button, Card } from "../../components/ui";
 import { formatDateTime, withImageVersion } from "../../lib/mobile-utils";
@@ -7,9 +9,19 @@ import { mobileTheme } from "../../lib/theme";
 import { trpc } from "../../lib/trpc";
 
 export default function EventDetailScreen() {
+  const router = useRouter();
+  const { isSignedIn } = useAuth();
   const { id } = useLocalSearchParams<{ id: string }>();
   const eventQuery = trpc.event.getEventById.useQuery({
     eventId: id,
+  });
+  const rsvpMutation = trpc.event.setRsvpStatus.useMutation({
+    onSuccess: () => {
+      void eventQuery.refetch();
+    },
+    onError: (error: any) => {
+      Alert.alert("RSVP failed", error.message ?? "Try again.");
+    },
   });
 
   const event = eventQuery.data;
@@ -23,15 +35,10 @@ export default function EventDetailScreen() {
     <Screen>
       <Stack.Screen options={{ title: event?.title ?? "Event" }} />
       {imageUrl ? (
-        <Image
-          source={{ uri: imageUrl }}
-          style={styles.heroImage}
-        />
+        <Image source={{ uri: imageUrl }} style={styles.heroImage} />
       ) : null}
       <Card>
-        <Text style={styles.title}>
-          {event?.title}
-        </Text>
+        <Text style={styles.title}>{event?.title}</Text>
         <Text style={styles.meta}>
           {event ? formatDateTime(event.startAt) : ""}
         </Text>
@@ -39,32 +46,30 @@ export default function EventDetailScreen() {
           {[event?.city, event?.state].filter(Boolean).join(", ")}
         </Text>
         {event?.description ? (
-          <Text style={styles.description}>
-            {event.description}
-          </Text>
+          <Text style={styles.description}>{event.description}</Text>
         ) : null}
-        <Button
-          variant="secondary"
-          onPress={() =>
-            Alert.alert(
-              "RSVP requires sign in",
-              "Native authenticated RSVP is temporarily disabled in this Expo-safe build."
-            )
-          }
-        >
-          Going
-        </Button>
-        <Button
-          variant="ghost"
-          onPress={() =>
-            Alert.alert(
-              "RSVP requires sign in",
-              "Native authenticated RSVP is temporarily disabled in this Expo-safe build."
-            )
-          }
-        >
-          Interested
-        </Button>
+        <RSVPActionBar
+          currentStatus={event?.userRsvp?.status}
+          loading={rsvpMutation.isPending}
+          onSetStatus={(status) => {
+            if (!isSignedIn) {
+              Alert.alert(
+                "RSVP requires sign in",
+                "Sign in to mark yourself as going or interested.",
+                [
+                  { text: "Not now", style: "cancel" },
+                  { text: "Sign in", onPress: () => router.push("/(auth)") },
+                ]
+              );
+              return;
+            }
+
+            rsvpMutation.mutate({
+              eventId: id,
+              status,
+            });
+          }}
+        />
         {event?.eventUrl ? (
           <Button
             variant="ghost"

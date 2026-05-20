@@ -1,17 +1,25 @@
 import { useState } from "react";
-import { View } from "react-native";
+import { Alert, View } from "react-native";
+import { useAuth } from "@clerk/expo";
 import { useRouter } from "expo-router";
 import { Screen } from "../components/screen";
 import { Button, Card, FieldLabel, Heading, Input } from "../components/ui";
 import { US_STATES } from "../lib/mobile-utils";
 import { onboardingProfileSchema } from "../lib/mobile-validation";
+import { trpc } from "../lib/trpc";
 
 export default function OnboardingScreen() {
   const router = useRouter();
+  const { isSignedIn } = useAuth();
   const [username, setUsername] = useState("");
   const [city, setCity] = useState("");
   const [state, setState] = useState("NY");
   const [gender, setGender] = useState<"male" | "female" | "other">("other");
+  const updateUsernameMutation = trpc.user.updateUsername.useMutation({
+    onSuccess: () => router.replace("/(tabs)/feed"),
+    onError: (error: any) =>
+      Alert.alert("Profile update failed", error.message ?? "Try again."),
+  });
 
   function submit() {
     const parsed = onboardingProfileSchema.safeParse({
@@ -22,15 +30,21 @@ export default function OnboardingScreen() {
     });
 
     if (!parsed.success) {
+      Alert.alert("Profile needs a little more", parsed.error.issues[0]?.message);
       return;
     }
 
-    router.replace("/(tabs)/feed");
+    if (!isSignedIn) {
+      router.replace("/(auth)");
+      return;
+    }
+
+    updateUsernameMutation.mutate(parsed.data);
   }
 
   return (
     <Screen>
-      <Heading subtitle="This screen stays in place for future native onboarding, but currently just captures the shape of the profile flow and then returns you to the public feed.">
+      <Heading subtitle="Choose the profile details WIG uses for friends, RSVPs, and recommendations.">
         Complete your profile
       </Heading>
       <Card>
@@ -71,7 +85,9 @@ export default function OnboardingScreen() {
             ))}
           </View>
         </View>
-        <Button onPress={submit}>Continue to feed</Button>
+        <Button onPress={submit} loading={updateUsernameMutation.isPending}>
+          Continue to feed
+        </Button>
       </Card>
     </Screen>
   );

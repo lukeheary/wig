@@ -1,5 +1,6 @@
+import { Link } from "expo-router";
 import { useMemo, useState } from "react";
-import { View } from "react-native";
+import { Pressable, View } from "react-native";
 import { Screen } from "../../components/screen";
 import { PlaceCard } from "../../components/place-card";
 import { Card, FieldLabel, Heading, Input, Pill } from "../../components/ui";
@@ -25,8 +26,8 @@ export default function VenueScreen() {
 
   return (
     <Screen>
-      <Heading subtitle="A native version of the mobile web venues and organizers browser, backed by the same public place route.">
-        Venue
+      <Heading subtitle="Browse venues and organizers using the same place data as mobile web.">
+        Venues
       </Heading>
 
       <Card>
@@ -73,7 +74,15 @@ export default function VenueScreen() {
       </Card>
 
       {placesQuery.data?.map((place: PlaceListItem) => (
-        <PlaceCard key={place.id} place={place} />
+        <Link
+          key={place.id}
+          href={`/${place.type}/${place.slug}`}
+          asChild
+        >
+          <Pressable>
+            <PlaceCard place={place} />
+          </Pressable>
+        </Link>
       ))}
 
       {!placesQuery.isLoading && !placesQuery.data?.length ? (

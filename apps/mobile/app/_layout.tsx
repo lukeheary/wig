@@ -3,6 +3,8 @@ import {
   SpaceGrotesk_500Medium,
   SpaceGrotesk_700Bold,
 } from "@expo-google-fonts/space-grotesk";
+import { ClerkProvider } from "@clerk/expo";
+import { tokenCache } from "@clerk/expo/token-cache";
 import {
   Urbanist_400Regular,
   Urbanist_500Medium,
@@ -11,8 +13,10 @@ import {
 } from "@expo-google-fonts/urbanist";
 import { Stack } from "expo-router";
 import { StatusBar } from "expo-status-bar";
+import { Platform } from "react-native";
 import { AppProviders } from "../lib/trpc";
 import { mobileTheme } from "../lib/theme";
+import { mobileEnv } from "../lib/env";
 
 export default function RootLayout() {
   const [fontsLoaded] = useFonts({
@@ -29,25 +33,34 @@ export default function RootLayout() {
   }
 
   return (
-    <AppProviders>
-      <StatusBar style="light" />
-      <Stack
-        screenOptions={{
-          headerShadowVisible: false,
-          headerStyle: {
-            backgroundColor: mobileTheme.colors.background,
-          },
-          headerTintColor: mobileTheme.colors.foreground,
-          headerTitleStyle: {
-            fontFamily: mobileTheme.fonts.displayMedium,
-          },
-          contentStyle: {
-            backgroundColor: mobileTheme.colors.background,
-          },
-        }}
-      >
-        <Stack.Screen name="(tabs)" options={{ headerShown: false }} />
-      </Stack>
-    </AppProviders>
+    <ClerkProvider
+      publishableKey={mobileEnv.clerkPublishableKey ?? ""}
+      tokenCache={tokenCache}
+    >
+      <AppProviders>
+        <StatusBar style="light" />
+        <Stack
+          screenOptions={{
+            contentStyle: {
+              backgroundColor: mobileTheme.colors.background,
+            },
+            ...(Platform.OS === "ios"
+              ? {}
+              : {
+                  headerShadowVisible: false,
+                  headerStyle: {
+                    backgroundColor: mobileTheme.colors.background,
+                  },
+                  headerTintColor: mobileTheme.colors.foreground,
+                  headerTitleStyle: {
+                    fontFamily: mobileTheme.fonts.displayMedium,
+                  },
+                }),
+          }}
+        >
+          <Stack.Screen name="(tabs)" options={{ headerShown: false }} />
+        </Stack>
+      </AppProviders>
+    </ClerkProvider>
   );
 }
