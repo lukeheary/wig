@@ -2,6 +2,7 @@
 
 # dependencies
 /node_modules
+**/node_modules/
 /.pnp
 .pnp.*
 .yarn/*
@@ -42,3 +43,7 @@ next-env.d.ts
 
 # clerk configuration (can include secrets)
 /.clerk/
+
+# local generated artifacts
+apps/mobile/ios/Pods 2/
+src/server/db/migrations/0045_add_push_notifications.sql
