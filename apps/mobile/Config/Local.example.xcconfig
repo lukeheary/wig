@@ -1,0 +1,4 @@
+CLERK_PUBLISHABLE_KEY = pk_test_replace_me
+CLERK_FRONTEND_API = your-frontend-api.clerk.accounts.dev
+API_BASE_URL = https:/$()/api.example.com
+CLERK_JWT_TEMPLATE =

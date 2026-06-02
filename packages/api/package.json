@@ -1,0 +1,14 @@
+{
+  "name": "@wig/api",
+  "version": "0.0.1",
+  "private": true,
+  "type": "module",
+  "main": "./src/index.ts",
+  "types": "./src/index.ts",
+  "dependencies": {
+    "@tanstack/react-query": "^5.62.18",
+    "@trpc/client": "^11.0.0-rc.673",
+    "@trpc/react-query": "^11.0.0-rc.673",
+    "superjson": "^2.2.2"
+  }
+}
