@@ -1,7 +1,26 @@
+import { auth } from "@clerk/nextjs/server";
 import { NextResponse } from "next/server";
 import { and, asc, eq, gte, inArray, sql } from "drizzle-orm";
 import { db } from "@/server/db";
-import { events, places } from "@/server/db/schema";
+import { events, placeFollows, places, users } from "@/server/db/schema";
+
+async function currentMobileUserId() {
+  const { userId } = await auth();
+
+  if (userId) {
+    return userId;
+  }
+
+  const previewUser = await db.query.users.findFirst({
+    where: eq(users.isOnboarding, false),
+    orderBy: [asc(users.createdAt)],
+    columns: {
+      id: true,
+    },
+  });
+
+  return previewUser?.id ?? null;
+}
 
 export async function GET(request: Request) {
   const { searchParams } = new URL(request.url);
@@ -10,16 +29,69 @@ export async function GET(request: Request) {
     ? Math.min(Math.max(limitParam, 1), 200)
     : 100;
 
-  const placesList = await db.query.places.findMany({
-    orderBy: [asc(places.name)],
-    limit,
-  });
+  const userId = await currentMobileUserId();
+
+  const [currentUser, availableCities, placesList] = await Promise.all([
+    userId
+      ? db.query.users.findFirst({
+          where: eq(users.id, userId),
+          columns: {
+            city: true,
+            state: true,
+          },
+        })
+      : null,
+    db
+      .select({
+        city: places.city,
+        state: places.state,
+      })
+      .from(places)
+      .where(and(sql`${places.city} is not null`, sql`${places.state} is not null`))
+      .groupBy(places.city, places.state)
+      .orderBy(asc(places.city), asc(places.state)),
+    db.query.places.findMany({
+      orderBy: [asc(places.name)],
+      limit,
+    }),
+  ]);
+
+  const normalizedAvailableCities = availableCities.flatMap((city) =>
+    city.city && city.state ? [{ city: city.city, state: city.state }] : []
+  );
 
   if (placesList.length === 0) {
-    return NextResponse.json([]);
+    return NextResponse.json({
+      places: [],
+      availableCities: normalizedAvailableCities,
+      currentUserLocation:
+        currentUser?.city && currentUser?.state
+          ? {
+              city: currentUser.city,
+              state: currentUser.state,
+            }
+          : null,
+    });
   }
 
   const placeIds = placesList.map((place) => place.id);
+  const followedPlaceIds =
+    userId && placeIds.length > 0
+      ? new Set(
+          (
+            await db.query.placeFollows.findMany({
+              where: and(
+                eq(placeFollows.userId, userId),
+                inArray(placeFollows.placeId, placeIds)
+              ),
+              columns: {
+                placeId: true,
+              },
+            })
+          ).map((follow) => follow.placeId)
+        )
+      : new Set<string>();
+
   const now = new Date();
 
   const venueCounts = await db
@@ -80,6 +152,7 @@ export async function GET(request: Request) {
     return {
       id: place.id,
       type: place.type,
+      slug: place.slug,
       name: place.name,
       logoImageUrl: place.logoImageUrl,
       city: place.city,
@@ -87,8 +160,19 @@ export async function GET(request: Request) {
       eventCount,
       upcomingEventCount: eventCount,
       updatedAt: place.updatedAt,
+      isFollowed: followedPlaceIds.has(place.id),
     };
   });
 
-  return NextResponse.json(payload);
+  return NextResponse.json({
+    places: payload,
+    availableCities: normalizedAvailableCities,
+    currentUserLocation:
+      currentUser?.city && currentUser?.state
+        ? {
+            city: currentUser.city,
+            state: currentUser.state,
+          }
+        : null,
+  });
 }

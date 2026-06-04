@@ -27,6 +27,7 @@ struct APIClient: Sendable {
         var queryItems: [URLQueryItem] = []
         var body: Data?
         var requiresAuthentication = true
+        var includesAuthenticationIfAvailable = false
 
         init(
             path: String,
@@ -34,7 +35,8 @@ struct APIClient: Sendable {
             headers: [String: String] = [:],
             queryItems: [URLQueryItem] = [],
             body: Data? = nil,
-            requiresAuthentication: Bool = true
+            requiresAuthentication: Bool = true,
+            includesAuthenticationIfAvailable: Bool = false
         ) {
             self.path = path
             self.method = method
@@ -42,6 +44,7 @@ struct APIClient: Sendable {
             self.queryItems = queryItems
             self.body = body
             self.requiresAuthentication = requiresAuthentication
+            self.includesAuthenticationIfAvailable = includesAuthenticationIfAvailable
         }
     }
 
@@ -54,7 +57,7 @@ struct APIClient: Sendable {
     }
 
     enum APIError: Error {
-        case invalidURL
+        case invalidURL(String)
         case missingAuthenticationToken
         case invalidResponse
         case requestFailed(statusCode: Int, payload: Data)
@@ -81,19 +84,85 @@ struct APIClient: Sendable {
         APIClient(baseURL: baseURL, tokenProvider: tokenProvider)
     }
 
-    static func mobileEventsPreview(limit: Int = 20) -> Endpoint<[EventFeedItem]> {
+    static func mobileEventsPreview(limit: Int = 20) -> Endpoint<MobileEventsResponse> {
         Endpoint(
             path: "/api/mobile/events",
+            queryItems: [URLQueryItem(name: "limit", value: String(limit))],
+            requiresAuthentication: false,
+            includesAuthenticationIfAvailable: true
+        )
+    }
+
+    static func mobilePlaces(limit: Int = 100) -> Endpoint<MobilePlacesResponse> {
+        Endpoint(
+            path: "/api/mobile/places",
+            queryItems: [URLQueryItem(name: "limit", value: String(limit))],
+            requiresAuthentication: false,
+            includesAuthenticationIfAvailable: true
+        )
+    }
+
+    static func mobilePlaceDetail(slug: String) -> Endpoint<PlaceDetail> {
+        Endpoint(
+            path: "/api/mobile/places/\(slug)",
+            requiresAuthentication: false
+        )
+    }
+
+    static func mobileActivity(limit: Int = 40) -> Endpoint<ActivityFeedResponse> {
+        Endpoint(
+            path: "/api/mobile/activity",
             queryItems: [URLQueryItem(name: "limit", value: String(limit))],
             requiresAuthentication: false
         )
     }
 
-    static func mobilePlaces(limit: Int = 100) -> Endpoint<[PlaceListItem]> {
+    static func mobileHomeActivity(limit: Int = 3) -> Endpoint<ActivityFeedResponse> {
         Endpoint(
-            path: "/api/mobile/places",
+            path: "/api/mobile/home-activity",
             queryItems: [URLQueryItem(name: "limit", value: String(limit))],
             requiresAuthentication: false
+        )
+    }
+
+    static func mobileFriends() -> Endpoint<FriendsFeedResponse> {
+        Endpoint(
+            path: "/api/mobile/friends",
+            requiresAuthentication: false,
+            includesAuthenticationIfAvailable: true
+        )
+    }
+
+    static func mobileEventRSVP(eventID: UUID) -> Endpoint<EventRSVPState> {
+        Endpoint(
+            path: "/api/mobile/events/\(eventID.uuidString)/rsvp",
+            requiresAuthentication: false,
+            includesAuthenticationIfAvailable: true
+        )
+    }
+
+    static func updateMobileEventRSVP(
+        eventID: UUID,
+        status: EventRSVPStatus,
+        notGoingReason: EventRSVPDeclineReason? = nil
+    ) throws -> Endpoint<EventRSVPState> {
+        Endpoint(
+            path: "/api/mobile/events/\(eventID.uuidString)/rsvp",
+            method: .post,
+            body: try JSONEncoder().encode(
+                EventRSVPUpdateRequest(status: status, notGoingReason: notGoingReason)
+            ),
+            requiresAuthentication: false,
+            includesAuthenticationIfAvailable: true
+        )
+    }
+
+    static func deleteMobileEventRSVP(eventID: UUID) -> Endpoint<EventRSVPState> {
+        Endpoint(
+            path: "/api/mobile/events/\(eventID.uuidString)/rsvp",
+            method: .delete,
+            requiresAuthentication: false,
+            includesAuthenticationIfAvailable: true
         )
     }
 
@@ -126,19 +195,23 @@ struct APIClient: Sendable {
     }
 
     private func makeRequest<Response>(for endpoint: Endpoint<Response>) async throws -> URLRequest {
-        guard var components = URLComponents(
-            url: baseURL.appending(path: endpoint.path),
-            resolvingAgainstBaseURL: false
-        ) else {
-            throw APIError.invalidURL
+        guard var components = URLComponents(url: baseURL, resolvingAgainstBaseURL: false) else {
+            throw APIError.invalidURL(baseURL.absoluteString)
         }
+
+        let basePath = components.path.trimmingCharacters(in: CharacterSet(charactersIn: "/"))
+        let endpointPath = endpoint.path.trimmingCharacters(in: CharacterSet(charactersIn: "/"))
+        components.path = [basePath, endpointPath]
+            .filter { !$0.isEmpty }
+            .joined(separator: "/")
+            .appendingSlashPrefix()
 
         if !endpoint.queryItems.isEmpty {
             components.queryItems = endpoint.queryItems
         }
 
         guard let url = components.url else {
-            throw APIError.invalidURL
+            throw APIError.invalidURL("\(baseURL.absoluteString) + \(endpoint.path)")
         }
 
         var request = URLRequest(url: url)
@@ -154,19 +227,85 @@ struct APIClient: Sendable {
             request.setValue(value, forHTTPHeaderField: header)
         }
 
-        if endpoint.requiresAuthentication {
-            guard let token = try await tokenProvider.authToken() else {
+        if endpoint.requiresAuthentication || endpoint.includesAuthenticationIfAvailable {
+            let token = try await tokenProvider.authToken()
+
+            if endpoint.requiresAuthentication, token == nil {
                 throw APIError.missingAuthenticationToken
             }
 
-            request.setValue("Bearer \(token)", forHTTPHeaderField: "Authorization")
+            if let token {
+                request.setValue("Bearer \(token)", forHTTPHeaderField: "Authorization")
+            }
         }
 
         return request
     }
 }
 
+extension APIClient.APIError: LocalizedError {
+    var errorDescription: String? {
+        switch self {
+        case .invalidURL(let value):
+            return "Invalid API URL: \(value)"
+        case .missingAuthenticationToken:
+            return "Missing authentication token."
+        case .invalidResponse:
+            return "The server returned an invalid response."
+        case .requestFailed(let statusCode, let payload):
+            let body = String(data: payload, encoding: .utf8)?
+                .replacingOccurrences(of: "\n", with: " ")
+                .trimmingCharacters(in: .whitespacesAndNewlines)
+            let summary = body.map { String($0.prefix(180)) }
+            return "Request failed with HTTP \(statusCode)\(summary.map { ": \($0)" } ?? ".")"
+        }
+    }
+}
+
+private extension String {
+    func appendingSlashPrefix() -> String {
+        hasPrefix("/") ? self : "/\(self)"
+    }
+}
+
 struct EmptyResponse: Decodable, Sendable {}
+
+enum EventRSVPStatus: String, Codable, Hashable, Sendable {
+    case going
+    case interested
+    case notGoing = "not_going"
+}
+
+enum EventRSVPDeclineReason: String, Codable, CaseIterable, Hashable, Sendable {
+    case busy
+    case outOfTown = "out_of_town"
+    case working
+    case layingLow = "laying_low"
+
+    var title: String {
+        switch self {
+        case .busy:
+            return "Busy"
+        case .outOfTown:
+            return "Out of town"
+        case .working:
+            return "Working"
+        case .layingLow:
+            return "Laying low"
+        }
+    }
+}
+
+struct EventRSVPState: Decodable, Hashable, Sendable {
+    let status: EventRSVPStatus?
+    let notGoingReason: EventRSVPDeclineReason?
+    let updatedAt: Date?
+}
+
+private struct EventRSVPUpdateRequest: Encodable {
+    let status: EventRSVPStatus
+    let notGoingReason: EventRSVPDeclineReason?
+}
 
 extension JSONDecoder {
     static var wigDefault: JSONDecoder {

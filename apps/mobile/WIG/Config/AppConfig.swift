@@ -39,7 +39,10 @@ private extension Bundle {
     }
 
     func requiredURL(for key: String) -> URL {
-        guard let url = URL(string: requiredString(for: key)) else {
+        let value = requiredString(for: key)
+            .replacingOccurrences(of: ":/$()/", with: "://")
+
+        guard let url = URL(string: value), url.scheme != nil, url.host != nil else {
             assertionFailure("Invalid URL value for \(key).")
             return URL(string: "https://invalid.local")!
         }

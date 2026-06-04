@@ -1,5 +1,6 @@
 import ClerkKit
 import SwiftUI
+import UIKit
 
 @main
 struct WIGApp: App {
@@ -27,11 +28,16 @@ struct WIGApp: App {
                 jwtTemplate: AppConfig.shared.clerkJWTTemplate
             )
         )
+
+        UIWindow.appearance().backgroundColor = AppTheme.uiBackground
+        UINavigationBar.appearance().overrideUserInterfaceStyle = .dark
+        UITabBar.appearance().overrideUserInterfaceStyle = .dark
     }
 
     var body: some Scene {
         WindowGroup {
             AppRootView()
+                .preferredColorScheme(.dark)
                 .environment(Clerk.shared)
                 .environment(\.apiClient, apiClient)
                 .environmentObject(appSession)

@@ -19,10 +19,6 @@ struct ScreenPlaceholderView: View {
     }
 }
 
-private enum AppTheme {
-    static let background = Color(red: 0.07, green: 0.07, blue: 0.08)
-}
-
 #Preview {
     NavigationStack {
         ScreenPlaceholderView(

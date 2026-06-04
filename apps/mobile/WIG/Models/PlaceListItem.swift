@@ -1,5 +1,11 @@
 import Foundation
 
+struct MobilePlacesResponse: Decodable, Hashable, Sendable {
+    let places: [PlaceListItem]
+    let availableCities: [EventCity]
+    let currentUserLocation: EventCity?
+}
+
 struct PlaceListItem: Decodable, Identifiable, Hashable, Sendable {
     enum PlaceType: String, Decodable, Sendable {
         case venue
@@ -17,16 +23,19 @@ struct PlaceListItem: Decodable, Identifiable, Hashable, Sendable {
 
     let id: UUID
     let type: PlaceType
+    let slug: String
     let name: String
     let logoImageURL: URL?
     let city: String?
     let state: String?
     let upcomingEventCount: Int
     let updatedAt: Date?
+    var isFollowed = false
 
     enum CodingKeys: String, CodingKey {
         case id
         case type
+        case slug
         case name
         case logoImageURL = "logoImageUrl"
         case city
@@ -34,6 +43,7 @@ struct PlaceListItem: Decodable, Identifiable, Hashable, Sendable {
         case upcomingEventCount
         case eventCount
         case updatedAt
+        case isFollowed
     }
 
     var locationText: String {
@@ -80,6 +90,7 @@ extension PlaceListItem {
 
         id = try container.decode(UUID.self, forKey: .id)
         type = try container.decode(PlaceType.self, forKey: .type)
+        slug = try container.decode(String.self, forKey: .slug)
         name = try container.decode(String.self, forKey: .name)
         logoImageURL = try container.decodeOptionalURL(forKey: .logoImageURL)
         city = try container.decodeIfPresent(String.self, forKey: .city)
@@ -92,6 +103,7 @@ extension PlaceListItem {
         upcomingEventCount = decodedUpcomingEventCount ?? decodedEventCount ?? 0
 
         updatedAt = try container.decodeIfPresent(Date.self, forKey: .updatedAt)
+        isFollowed = try container.decodeIfPresent(Bool.self, forKey: .isFollowed) ?? false
     }
 }
 

@@ -52,7 +52,10 @@ import {
   normalizeSeriesDaysOfWeek,
 } from "@/server/utils/event-series";
 import { EVENT_STATUS_VALUES, type EventStatus } from "@/lib/event-status";
-import { createNotification } from "@/server/utils/notifications";
+import {
+  createNotification,
+  notifyFriendsOfRsvp,
+} from "@/server/utils/notifications";
 import { RSVP_DECLINE_REASON_VALUES } from "@/lib/rsvp";
 
 function resolveEventUpdateActivityType(
@@ -1896,6 +1899,17 @@ export const eventRouter = router({
           type: activityType,
           metadata: activityMetadata,
         });
+
+        if (existingUserRsvp?.status !== input.status) {
+          void notifyFriendsOfRsvp(
+            {
+              actorUserId: ctx.auth.userId,
+              eventId: input.eventId,
+              status: input.status,
+            },
+            ctx.db
+          );
+        }
       } else if (input.status === "not_going") {
         void upsertRsvpActivity({
           actorUserId: ctx.auth.userId,

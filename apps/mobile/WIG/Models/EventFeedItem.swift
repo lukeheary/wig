@@ -1,5 +1,24 @@
 import Foundation
 
+struct MobileEventsResponse: Codable, Hashable, Sendable {
+    let events: [EventFeedItem]
+    let availableCities: [EventCity]
+    let currentUserLocation: EventCity?
+}
+
+struct EventCity: Codable, Hashable, Identifiable, Sendable {
+    let city: String
+    let state: String
+
+    var id: String {
+        "\(city)|\(state)"
+    }
+
+    var title: String {
+        "\(city), \(state)"
+    }
+}
+
 struct EventFeedItem: Codable, Identifiable, Hashable, Sendable {
     let id: UUID
     let title: String
@@ -11,13 +30,21 @@ struct EventFeedItem: Codable, Identifiable, Hashable, Sendable {
     let address: String?
     let city: String
     let state: String
+    let venueID: UUID?
     let venueName: String?
+    let venueSlug: String?
+    let organizerID: UUID?
     let organizerName: String?
+    let organizerSlug: String?
     let venueLogoImageURL: URL?
     let organizerLogoImageURL: URL?
     let categories: [String]
     let categoryLabels: [String: String]
     let updatedAt: Date?
+    var isFollowed = false
+    var isCreatedByCurrentUser = false
+    var friendsGoing: [EventSocialRSVP] = []
+    var friendsInterested: [EventSocialRSVP] = []
 
     enum CodingKeys: String, CodingKey {
         case id
@@ -30,13 +57,21 @@ struct EventFeedItem: Codable, Identifiable, Hashable, Sendable {
         case address
         case city
         case state
+        case venueID = "venueId"
         case venueName
+        case venueSlug
+        case organizerID = "organizerId"
         case organizerName
+        case organizerSlug
         case venueLogoImageURL = "venueLogoImageUrl"
         case organizerLogoImageURL = "organizerLogoImageUrl"
         case categories
         case categoryLabels
         case updatedAt
+        case isFollowed
+        case isCreatedByCurrentUser
+        case friendsGoing
+        case friendsInterested
     }
 
     var primaryLocation: String {
@@ -96,6 +131,18 @@ struct EventFeedItem: Codable, Identifiable, Hashable, Sendable {
         posterImageURL != nil
     }
 
+    var socialAttendees: [EventSocialAttendee] {
+        (friendsGoing + friendsInterested).map { rsvp in
+            EventSocialAttendee(
+                id: rsvp.user.id,
+                firstName: rsvp.user.firstName,
+                lastName: rsvp.user.lastName,
+                avatarImageURL: rsvp.user.avatarImageURL,
+                status: rsvp.status
+            )
+        }
+    }
+
     private func versionedImageURL(for url: URL?) -> URL? {
         guard let url else { return nil }
         guard let updatedAt else { return url }
@@ -126,17 +173,69 @@ extension EventFeedItem {
         address = try container.decodeIfPresent(String.self, forKey: .address)
         city = try container.decode(String.self, forKey: .city)
         state = try container.decode(String.self, forKey: .state)
+        venueID = try container.decodeIfPresent(UUID.self, forKey: .venueID)
         venueName = try container.decodeIfPresent(String.self, forKey: .venueName)
+        venueSlug = try container.decodeIfPresent(String.self, forKey: .venueSlug)
+        organizerID = try container.decodeIfPresent(UUID.self, forKey: .organizerID)
         organizerName = try container.decodeIfPresent(String.self, forKey: .organizerName)
+        organizerSlug = try container.decodeIfPresent(String.self, forKey: .organizerSlug)
         venueLogoImageURL = try container.decodeOptionalURL(forKey: .venueLogoImageURL)
         organizerLogoImageURL = try container.decodeOptionalURL(forKey: .organizerLogoImageURL)
         categories = try container.decodeIfPresent([String].self, forKey: .categories) ?? []
         categoryLabels = try container.decodeIfPresent([String: String].self, forKey: .categoryLabels) ?? [:]
         updatedAt = try container.decodeIfPresent(Date.self, forKey: .updatedAt)
+        isFollowed = try container.decodeIfPresent(Bool.self, forKey: .isFollowed) ?? false
+        isCreatedByCurrentUser = try container.decodeIfPresent(Bool.self, forKey: .isCreatedByCurrentUser) ?? false
+        friendsGoing = try container.decodeIfPresent([EventSocialRSVP].self, forKey: .friendsGoing) ?? []
+        friendsInterested = try container.decodeIfPresent([EventSocialRSVP].self, forKey: .friendsInterested) ?? []
     }
 }
 
-private extension KeyedDecodingContainer where Key == EventFeedItem.CodingKeys {
+struct EventSocialRSVP: Codable, Hashable, Sendable {
+    let status: EventRSVPStatus
+    let user: EventSocialUser
+}
+
+struct EventSocialUser: Codable, Identifiable, Hashable, Sendable {
+    let id: String
+    let firstName: String?
+    let lastName: String?
+    let avatarImageURL: URL?
+    var isCurrentUser = false
+    var isFriend = false
+
+    enum CodingKeys: String, CodingKey {
+        case id
+        case firstName
+        case lastName
+        case avatarImageURL = "avatarImageUrl"
+        case isCurrentUser
+        case isFriend
+    }
+}
+
+extension EventSocialUser {
+    init(from decoder: Decoder) throws {
+        let container = try decoder.container(keyedBy: CodingKeys.self)
+
+        id = try container.decode(String.self, forKey: .id)
+        firstName = try container.decodeIfPresent(String.self, forKey: .firstName)
+        lastName = try container.decodeIfPresent(String.self, forKey: .lastName)
+        avatarImageURL = try container.decodeOptionalURL(forKey: .avatarImageURL)
+        isCurrentUser = try container.decodeIfPresent(Bool.self, forKey: .isCurrentUser) ?? false
+        isFriend = try container.decodeIfPresent(Bool.self, forKey: .isFriend) ?? false
+    }
+}
+
+struct EventSocialAttendee: Identifiable, Hashable, Sendable {
+    let id: String
+    let firstName: String?
+    let lastName: String?
+    let avatarImageURL: URL?
+    let status: EventRSVPStatus
+}
+
+private extension KeyedDecodingContainer {
     func decodeOptionalURL(forKey key: Key) throws -> URL? {
         guard let rawValue = try decodeIfPresent(String.self, forKey: key) else {
             return nil

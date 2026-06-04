@@ -15,6 +15,15 @@
 		0A7F46F19B1D4A6CA4200005 /* EventDetailView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 0A7F46F19B1D4A6CA4100005 /* EventDetailView.swift */; };
 		0A7F46F19B1D4A6CA4200006 /* PlaceListItem.swift in Sources */ = {isa = PBXBuildFile; fileRef = 0A7F46F19B1D4A6CA4100006 /* PlaceListItem.swift */; };
 		0A7F46F19B1D4A6CA4200007 /* VenuesViewModel.swift in Sources */ = {isa = PBXBuildFile; fileRef = 0A7F46F19B1D4A6CA4100007 /* VenuesViewModel.swift */; };
+		0A7F46F19B1D4A6CA4200008 /* PlaceDetail.swift in Sources */ = {isa = PBXBuildFile; fileRef = 0A7F46F19B1D4A6CA4100008 /* PlaceDetail.swift */; };
+		0A7F46F19B1D4A6CA4200009 /* PlaceDetailView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 0A7F46F19B1D4A6CA4100009 /* PlaceDetailView.swift */; };
+		0A7F46F19B1D4A6CA4200010 /* PlaceDetailViewModel.swift in Sources */ = {isa = PBXBuildFile; fileRef = 0A7F46F19B1D4A6CA4100010 /* PlaceDetailViewModel.swift */; };
+		0A7F46F19B1D4A6CA4200011 /* FloatingGlassIconButton.swift in Sources */ = {isa = PBXBuildFile; fileRef = 0A7F46F19B1D4A6CA4100011 /* FloatingGlassIconButton.swift */; };
+		0A7F46F19B1D4A6CA4200012 /* SwipeBackEnabler.swift in Sources */ = {isa = PBXBuildFile; fileRef = 0A7F46F19B1D4A6CA4100012 /* SwipeBackEnabler.swift */; };
+		0A7F46F19B1D4A6CA4200013 /* ActivityFeed.swift in Sources */ = {isa = PBXBuildFile; fileRef = 0A7F46F19B1D4A6CA4100013 /* ActivityFeed.swift */; };
+		0A7F46F19B1D4A6CA4200014 /* ActivityViewModel.swift in Sources */ = {isa = PBXBuildFile; fileRef = 0A7F46F19B1D4A6CA4100014 /* ActivityViewModel.swift */; };
+		0A7F46F19B1D4A6CA4200015 /* FriendsFeed.swift in Sources */ = {isa = PBXBuildFile; fileRef = 0A7F46F19B1D4A6CA4100015 /* FriendsFeed.swift */; };
+		0A7F46F19B1D4A6CA4200016 /* ProfileViewModel.swift in Sources */ = {isa = PBXBuildFile; fileRef = 0A7F46F19B1D4A6CA4100016 /* ProfileViewModel.swift */; };
 		0E61E35C6BC9885882E28017 /* APIClient.swift in Sources */ = {isa = PBXBuildFile; fileRef = 209CCAB342734F97FABBA5D2 /* APIClient.swift */; };
 		1D348DDF86D014D61E9BAB1F /* GiftList.swift in Sources */ = {isa = PBXBuildFile; fileRef = 426D21E06189626A1AF56246 /* GiftList.swift */; };
 		59D822A7D7ADCABFCF108A54 /* Assets.xcassets in Resources */ = {isa = PBXBuildFile; fileRef = C0D13CF91B0EECB51C7BEBC0 /* Assets.xcassets */; };
@@ -44,6 +53,15 @@
 		0A7F46F19B1D4A6CA4100005 /* EventDetailView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = EventDetailView.swift; sourceTree = "<group>"; };
 		0A7F46F19B1D4A6CA4100006 /* PlaceListItem.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = PlaceListItem.swift; sourceTree = "<group>"; };
 		0A7F46F19B1D4A6CA4100007 /* VenuesViewModel.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = VenuesViewModel.swift; sourceTree = "<group>"; };
+		0A7F46F19B1D4A6CA4100008 /* PlaceDetail.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = PlaceDetail.swift; sourceTree = "<group>"; };
+		0A7F46F19B1D4A6CA4100009 /* PlaceDetailView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = PlaceDetailView.swift; sourceTree = "<group>"; };
+		0A7F46F19B1D4A6CA4100010 /* PlaceDetailViewModel.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = PlaceDetailViewModel.swift; sourceTree = "<group>"; };
+		0A7F46F19B1D4A6CA4100011 /* FloatingGlassIconButton.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = FloatingGlassIconButton.swift; sourceTree = "<group>"; };
+		0A7F46F19B1D4A6CA4100012 /* SwipeBackEnabler.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SwipeBackEnabler.swift; sourceTree = "<group>"; };
+		0A7F46F19B1D4A6CA4100013 /* ActivityFeed.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ActivityFeed.swift; sourceTree = "<group>"; };
+		0A7F46F19B1D4A6CA4100014 /* ActivityViewModel.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ActivityViewModel.swift; sourceTree = "<group>"; };
+		0A7F46F19B1D4A6CA4100015 /* FriendsFeed.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = FriendsFeed.swift; sourceTree = "<group>"; };
+		0A7F46F19B1D4A6CA4100016 /* ProfileViewModel.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ProfileViewModel.swift; sourceTree = "<group>"; };
 		184FF519AEEF1B3325EA5631 /* UserProfile.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = UserProfile.swift; sourceTree = "<group>"; };
 		1A7D0D9C9A7444D4B6D8D001 /* Debug.xcconfig */ = {isa = PBXFileReference; lastKnownFileType = text.xcconfig; name = Debug.xcconfig; path = Config/Debug.xcconfig; sourceTree = SOURCE_ROOT; };
 		1A7D0D9C9A7444D4B6D8D002 /* Release.xcconfig */ = {isa = PBXFileReference; lastKnownFileType = text.xcconfig; name = Release.xcconfig; path = Config/Release.xcconfig; sourceTree = SOURCE_ROOT; };
@@ -145,6 +163,7 @@
 			isa = PBXGroup;
 			children = (
 				FD6B400D345B5BA47961B659 /* ProfileView.swift */,
+				0A7F46F19B1D4A6CA4100016 /* ProfileViewModel.swift */,
 			);
 			path = Profile;
 			sourceTree = "<group>";
@@ -152,6 +171,8 @@
 		666E65BCFCDE64E27206A240 /* Venues */ = {
 			isa = PBXGroup;
 			children = (
+				0A7F46F19B1D4A6CA4100009 /* PlaceDetailView.swift */,
+				0A7F46F19B1D4A6CA4100010 /* PlaceDetailViewModel.swift */,
 				BBBA8FF5228C20D71528FB71 /* VenuesView.swift */,
 				0A7F46F19B1D4A6CA4100007 /* VenuesViewModel.swift */,
 			);
@@ -181,10 +202,13 @@
 		949D46829D3A487ED8B3E64B /* Models */ = {
 			isa = PBXGroup;
 			children = (
+				0A7F46F19B1D4A6CA4100013 /* ActivityFeed.swift */,
 				0A7F46F19B1D4A6CA4100001 /* EventFeedItem.swift */,
+				0A7F46F19B1D4A6CA4100015 /* FriendsFeed.swift */,
 				7F4829999F082A6083275D78 /* Gift.swift */,
 				426D21E06189626A1AF56246 /* GiftList.swift */,
 				21CCB7FA0EC72A72E5A18158 /* Person.swift */,
+				0A7F46F19B1D4A6CA4100008 /* PlaceDetail.swift */,
 				0A7F46F19B1D4A6CA4100006 /* PlaceListItem.swift */,
 				184FF519AEEF1B3325EA5631 /* UserProfile.swift */,
 			);
@@ -195,7 +219,9 @@
 			isa = PBXGroup;
 			children = (
 				0A7F46F19B1D4A6CA4100003 /* EventCardView.swift */,
+				0A7F46F19B1D4A6CA4100011 /* FloatingGlassIconButton.swift */,
 				67D77BC3A226DC29941244AF /* ScreenPlaceholderView.swift */,
+				0A7F46F19B1D4A6CA4100012 /* SwipeBackEnabler.swift */,
 			);
 			path = Components;
 			sourceTree = "<group>";
@@ -247,6 +273,7 @@
 			isa = PBXGroup;
 			children = (
 				A2E682516EDFD49DDB28B239 /* ActivityView.swift */,
+				0A7F46F19B1D4A6CA4100014 /* ActivityViewModel.swift */,
 			);
 			path = Activity;
 			sourceTree = "<group>";
@@ -328,6 +355,8 @@
 			buildActionMask = 2147483647;
 			files = (
 				0A7F46F19B1D4A6CA4200004 /* AppSession.swift in Sources */,
+				0A7F46F19B1D4A6CA4200013 /* ActivityFeed.swift in Sources */,
+				0A7F46F19B1D4A6CA4200014 /* ActivityViewModel.swift in Sources */,
 				0E61E35C6BC9885882E28017 /* APIClient.swift in Sources */,
 				02A19F1536EC643E3CD2B226 /* AppConfig.swift in Sources */,
 				E8A57DFEEA588E89C6DA6366 /* AppRootView.swift in Sources */,
@@ -337,16 +366,23 @@
 				0A7F46F19B1D4A6CA4200001 /* EventFeedItem.swift in Sources */,
 				0A7F46F19B1D4A6CA4200002 /* EventFeedViewModel.swift in Sources */,
 				E2B9CF0F03D62D8AC3E9D987 /* Gift.swift in Sources */,
+				0A7F46F19B1D4A6CA4200015 /* FriendsFeed.swift in Sources */,
 				1D348DDF86D014D61E9BAB1F /* GiftList.swift in Sources */,
 				90C9663BDAC608D5EA336BE0 /* HomeView.swift in Sources */,
 				F9BAE145020603897D733455 /* ActivityView.swift in Sources */,
 				CA9B0D3B6C19273F055C584F /* MainTabView.swift in Sources */,
+				0A7F46F19B1D4A6CA4200008 /* PlaceDetail.swift in Sources */,
+				0A7F46F19B1D4A6CA4200009 /* PlaceDetailView.swift in Sources */,
+				0A7F46F19B1D4A6CA4200010 /* PlaceDetailViewModel.swift in Sources */,
 				0A7F46F19B1D4A6CA4200006 /* PlaceListItem.swift in Sources */,
 				68C7C86049E10AB91E4389A2 /* VenuesView.swift in Sources */,
 				0A7F46F19B1D4A6CA4200007 /* VenuesViewModel.swift in Sources */,
 				D660CF02FF972B340A8A88B0 /* Person.swift in Sources */,
+				0A7F46F19B1D4A6CA4200011 /* FloatingGlassIconButton.swift in Sources */,
 				9196A75A5399103EDDB45E99 /* ScreenPlaceholderView.swift in Sources */,
+				0A7F46F19B1D4A6CA4200012 /* SwipeBackEnabler.swift in Sources */,
 				BD73EB6C507EE9857E553F78 /* ProfileView.swift in Sources */,
+				0A7F46F19B1D4A6CA4200016 /* ProfileViewModel.swift in Sources */,
 				9BA970A1210F0773F55CEC94 /* SignedOutView.swift in Sources */,
 				AC3DAD789D77E9A30DAA2162 /* UserProfile.swift in Sources */,
 				E54C4A2CC0F52DBAFB632E94 /* WIGApp.swift in Sources */,
@@ -495,7 +531,7 @@
 					"$(inherited)",
 					"@executable_path/Frameworks",
 				);
-				PRODUCT_BUNDLE_IDENTIFIER = com.wig.app;
+				PRODUCT_BUNDLE_IDENTIFIER = com.wig.lukeheary.app;
 				PRODUCT_NAME = WIG;
 				SDKROOT = iphoneos;
 				TARGETED_DEVICE_FAMILY = "1,2";
@@ -518,7 +554,7 @@
 					"$(inherited)",
 					"@executable_path/Frameworks",
 				);
-				PRODUCT_BUNDLE_IDENTIFIER = com.wig.app;
+				PRODUCT_BUNDLE_IDENTIFIER = com.wig.lukeheary.app;
 				PRODUCT_NAME = WIG;
 				SDKROOT = iphoneos;
 				TARGETED_DEVICE_FAMILY = "1,2";
