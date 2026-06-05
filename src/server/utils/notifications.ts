@@ -1,9 +1,12 @@
-import { and, eq, inArray } from "drizzle-orm";
+import { and, eq, inArray, or } from "drizzle-orm";
 import { db } from "../db";
 import {
+  events,
   notifications,
   notificationEntityTypeEnum,
   notificationTypeEnum,
+  userFriends,
+  users,
 } from "../db/schema";
 
 type NotificationType = (typeof notificationTypeEnum.enumValues)[number];
@@ -101,4 +104,94 @@ export async function deleteNotificationsForEntity(
     .delete(notifications)
     .where(and(...conditions))
     .returning();
+}
+
+export async function notifyFriendsOfRsvp(
+  {
+    actorUserId,
+    eventId,
+    status,
+  }: {
+    actorUserId: string;
+    eventId: string;
+    status: "going" | "interested";
+  },
+  database: DatabaseClient = db
+) {
+  const [actor, event, friendConnections] = await Promise.all([
+    database.query.users.findFirst({
+      where: eq(users.id, actorUserId),
+      columns: {
+        firstName: true,
+        lastName: true,
+        username: true,
+      },
+    }),
+    database.query.events.findFirst({
+      where: eq(events.id, eventId),
+      columns: {
+        id: true,
+        title: true,
+      },
+    }),
+    database.query.userFriends.findMany({
+      where: and(
+        or(
+          eq(userFriends.userId, actorUserId),
+          eq(userFriends.friendUserId, actorUserId)
+        ),
+        eq(userFriends.status, "accepted")
+      ),
+      columns: {
+        userId: true,
+        friendUserId: true,
+      },
+    }),
+  ]);
+
+  if (!event || friendConnections.length === 0) {
+    return [];
+  }
+
+  const recipientIds = [
+    ...new Set(
+      friendConnections
+        .map((friendship) =>
+          friendship.userId === actorUserId
+            ? friendship.friendUserId
+            : friendship.userId
+        )
+        .filter((userId) => userId !== actorUserId)
+    ),
+  ];
+
+  if (recipientIds.length === 0) {
+    return [];
+  }
+
+  const actorName =
+    [actor?.firstName, actor?.lastName].filter(Boolean).join(" ").trim() ||
+    actor?.username ||
+    "Your friend";
+  const verb = status === "going" ? "RSVP'd going to" : "is interested in";
+
+  return createNotifications(
+    recipientIds.map((userId) => ({
+      userId,
+      actorUserId,
+      type: "event_update",
+      entityType: "event",
+      entityId: event.id,
+      title: "Friend RSVP update",
+      body: `${actorName} ${verb} ${event.title}`,
+      actionUrl: `/event/${event.id}`,
+      metadata: {
+        source: "friend_rsvp",
+        status,
+        eventId: event.id,
+        eventTitle: event.title,
+      },
+    })),
+    database
+  );
 }

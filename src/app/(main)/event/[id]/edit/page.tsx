@@ -12,6 +12,7 @@ import { Calendar, Loader2 } from "lucide-react";
 import { useToast } from "@/hooks/use-toast";
 import { S3Uploader } from "@/components/ui/s3-uploader";
 import { format } from "date-fns";
+import { eventTimeZone } from "@/lib/utils";
 import { VenueSelector, VenueData } from "@/components/events/venue-selector";
 import {
   OrganizerSelector,
@@ -320,6 +321,10 @@ export default function EditEventPage() {
         address: selectedVenue?.address || formData.address || undefined,
         city: selectedVenue?.city || formData.city,
         state: selectedVenue?.state || formData.state,
+        timeZone: eventTimeZone(
+          undefined,
+          selectedVenue?.state || formData.state
+        ),
         venueId: finalVenueId,
         organizerId: selectedOrganizer?.id ?? null,
       });

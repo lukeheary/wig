@@ -14,6 +14,7 @@ import {
   createNotification,
   deleteNotificationsForEntity,
 } from "@/server/utils/notifications";
+import { sendPushNotificationToUsers } from "@/server/utils/push-notifications";
 
 export const friendsRouter = router({
   searchUsers: protectedProcedure
@@ -151,6 +152,20 @@ export const friendsRouter = router({
           metadata: {
             requestId: friendRequest.id,
             requestType: "friend",
+          },
+        },
+        ctx.db
+      );
+
+      await sendPushNotificationToUsers(
+        [input.friendUserId],
+        {
+          title: "Friend request",
+          body: `${senderName} sent you a friend request`,
+          data: {
+            type: "friend_request",
+            entityId: friendRequest.id,
+            actionUrl: "/friends/requests",
           },
         },
         ctx.db

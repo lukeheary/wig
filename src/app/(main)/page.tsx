@@ -3,6 +3,7 @@
 import { useState, useMemo } from "react";
 import { format, addDays, startOfDay } from "date-fns";
 import { trpc } from "@/lib/trpc";
+import { formatEventDateKey } from "@/lib/utils";
 import { EventCard } from "@/components/calendar/event-card";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Calendar, Users, Building2, Loader2 } from "lucide-react";
@@ -49,7 +50,11 @@ export default function HomePage() {
     }
 
     events.forEach((event) => {
-      const dateKey = format(new Date(event.startAt), "yyyy-MM-dd");
+      const dateKey = formatEventDateKey(
+        event.startAt,
+        event.timeZone,
+        event.state
+      );
       if (grouped[dateKey]) {
         grouped[dateKey].push(event);
       }

@@ -188,9 +188,73 @@ export const usersRelations = relations(users, ({ many }) => ({
   eventActivities: many(eventActivity),
   notifications: many(notifications, { relationName: "notificationRecipient" }),
   notificationActors: many(notifications, { relationName: "notificationActor" }),
+  pushTokens: many(userPushTokens),
+  notificationPreferences: many(userNotificationPreferences),
   surfaceStates: many(userSurfaceState),
   supportTickets: many(supportTickets),
   supportTicketActivities: many(supportTicketActivity),
+}));
+
+export const userNotificationPreferences = pgTable(
+  "user_notification_preferences",
+  {
+    userId: text("user_id")
+      .primaryKey()
+      .notNull()
+      .references(() => users.id, { onDelete: "cascade" }),
+    friendRsvpPushEnabled: boolean("friend_rsvp_push_enabled").notNull().default(true),
+    createdAt: timestamp("created_at").defaultNow().notNull(),
+    updatedAt: timestamp("updated_at").defaultNow().notNull(),
+  },
+  (table) => ({
+    friendRsvpPushIdx: index("user_notification_preferences_friend_rsvp_idx").on(
+      table.friendRsvpPushEnabled
+    ),
+  })
+);
+
+export const userNotificationPreferencesRelations = relations(
+  userNotificationPreferences,
+  ({ one }) => ({
+    user: one(users, {
+      fields: [userNotificationPreferences.userId],
+      references: [users.id],
+    }),
+  })
+);
+
+export const userPushTokens = pgTable(
+  "user_push_tokens",
+  {
+    id: uuid("id").defaultRandom().primaryKey(),
+    userId: text("user_id")
+      .notNull()
+      .references(() => users.id, { onDelete: "cascade" }),
+    token: text("token").notNull(),
+    platform: varchar("platform", { length: 20 }).notNull(),
+    createdAt: timestamp("created_at").defaultNow().notNull(),
+    updatedAt: timestamp("updated_at").defaultNow().notNull(),
+    lastRegisteredAt: timestamp("last_registered_at").defaultNow().notNull(),
+    revokedAt: timestamp("revoked_at"),
+  },
+  (table) => ({
+    tokenIdx: uniqueIndex("user_push_tokens_token_idx").on(table.token),
+    userTokenIdx: uniqueIndex("user_push_tokens_user_token_idx").on(
+      table.userId,
+      table.token
+    ),
+    userRevokedIdx: index("user_push_tokens_user_revoked_idx").on(
+      table.userId,
+      table.revokedAt
+    ),
+  })
+);
+
+export const userPushTokensRelations = relations(userPushTokens, ({ one }) => ({
+  user: one(users, {
+    fields: [userPushTokens.userId],
+    references: [users.id],
+  }),
 }));
 
 export const userSurfaceState = pgTable(
@@ -624,6 +688,7 @@ export const events = pgTable(
       onDelete: "set null",
     }),
     startAt: timestamp("start_at").notNull(),
+    timeZone: varchar("time_zone", { length: 64 }),
     endAt: timestamp("end_at"),
     address: text("address"),
     city: varchar("city", { length: 100 }).notNull(),

@@ -1,6 +1,6 @@
 import { type ClassValue, clsx } from "clsx";
 import { twMerge } from "tailwind-merge";
-import { format, isToday, isTomorrow, differenceInCalendarDays, startOfDay } from "date-fns";
+import { format, differenceInCalendarDays, startOfDay } from "date-fns";
 
 export function cn(...inputs: ClassValue[]) {
   return twMerge(clsx(inputs));
@@ -12,6 +12,118 @@ export function formatDate(date: Date): string {
 
 export function formatTime(date: Date): string {
   return format(date, "h:mm a");
+}
+
+export function eventTimeZone(
+  timeZone?: string | null,
+  state?: string | null
+): string | undefined {
+  if (timeZone) return timeZone;
+
+  switch (state?.toUpperCase()) {
+    case "CT":
+    case "DC":
+    case "DE":
+    case "FL":
+    case "GA":
+    case "IN":
+    case "KY":
+    case "MA":
+    case "MD":
+    case "ME":
+    case "MI":
+    case "NC":
+    case "NH":
+    case "NJ":
+    case "NY":
+    case "OH":
+    case "PA":
+    case "RI":
+    case "SC":
+    case "TN":
+    case "VA":
+    case "VT":
+    case "WV":
+      return "America/New_York";
+    case "AL":
+    case "AR":
+    case "IA":
+    case "IL":
+    case "KS":
+    case "LA":
+    case "MN":
+    case "MO":
+    case "MS":
+    case "ND":
+    case "NE":
+    case "OK":
+    case "SD":
+    case "TX":
+    case "WI":
+      return "America/Chicago";
+    case "AZ":
+    case "CO":
+    case "ID":
+    case "MT":
+    case "NM":
+    case "UT":
+    case "WY":
+      return "America/Denver";
+    case "CA":
+    case "NV":
+    case "OR":
+    case "WA":
+      return "America/Los_Angeles";
+    case "AK":
+      return "America/Anchorage";
+    case "HI":
+      return "Pacific/Honolulu";
+    default:
+      return undefined;
+  }
+}
+
+export function formatEventTime(
+  date: Date | string,
+  timeZone?: string | null,
+  state?: string | null
+): string {
+  return new Intl.DateTimeFormat("en-US", {
+    hour: "numeric",
+    minute: "2-digit",
+    timeZone: eventTimeZone(timeZone, state),
+  }).format(new Date(date));
+}
+
+export function formatEventDate(
+  date: Date | string,
+  timeZone?: string | null,
+  state?: string | null,
+  options: Intl.DateTimeFormatOptions = {
+    weekday: "short",
+    month: "short",
+    day: "numeric",
+  }
+): string {
+  return new Intl.DateTimeFormat("en-US", {
+    ...options,
+    timeZone: eventTimeZone(timeZone, state),
+  }).format(new Date(date));
+}
+
+export function formatEventDateKey(
+  date: Date | string,
+  timeZone?: string | null,
+  state?: string | null
+): string {
+  const parts = new Intl.DateTimeFormat("en-US", {
+    year: "numeric",
+    month: "2-digit",
+    day: "2-digit",
+    timeZone: eventTimeZone(timeZone, state),
+  }).formatToParts(new Date(date));
+  const value = Object.fromEntries(parts.map((part) => [part.type, part.value]));
+  return `${value.year}-${value.month}-${value.day}`;
 }
 
 export function formatDateTime(date: Date): string {

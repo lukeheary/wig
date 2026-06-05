@@ -735,6 +735,7 @@ export async function materializeEventSeries(
           source: series.source,
           externalId: null,
           startAt,
+          timeZone: series.timeZone,
           endAt:
             durationMinutes == null
               ? null

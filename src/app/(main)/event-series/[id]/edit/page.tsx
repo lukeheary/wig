@@ -5,6 +5,7 @@ import { useParams, useRouter, useSearchParams } from "next/navigation";
 import { format } from "date-fns";
 import { Loader2, Repeat } from "lucide-react";
 import { trpc } from "@/lib/trpc";
+import { eventTimeZone } from "@/lib/utils";
 import { useToast } from "@/hooks/use-toast";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { S3Uploader } from "@/components/ui/s3-uploader";
@@ -346,7 +347,7 @@ export default function EditEventSeriesPage() {
       address: formData.address || undefined,
       city: formData.city,
       state: formData.state,
-      timeZone: Intl.DateTimeFormat().resolvedOptions().timeZone || undefined,
+      timeZone: eventTimeZone(undefined, formData.state),
       recurrence: {
         frequency: recurrenceData.frequency,
         interval: recurrenceData.interval,

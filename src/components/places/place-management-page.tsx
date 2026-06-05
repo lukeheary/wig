@@ -2,7 +2,7 @@
 
 import Link from "next/link";
 import { usePathname, useSearchParams } from "next/navigation";
-import { format } from "date-fns";
+import { formatEventDate, formatEventTime } from "@/lib/utils";
 import { trpc } from "@/lib/trpc";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
@@ -280,9 +280,16 @@ export function PlaceManagementPage({
                           {event.title}
                         </p>
                         <p className="truncate text-xs text-muted-foreground sm:text-sm">
-                          {format(
-                            new Date(event.startAt),
-                            "EEE, MMM d · h:mm a"
+                          {formatEventDate(
+                            event.startAt,
+                            event.timeZone,
+                            event.state
+                          )}{" "}
+                          ·{" "}
+                          {formatEventTime(
+                            event.startAt,
+                            event.timeZone,
+                            event.state
                           )}
                         </p>
                         {event.venue?.name && (
@@ -347,9 +354,16 @@ export function PlaceManagementPage({
                         </p>
                         <p className="truncate text-xs text-muted-foreground sm:text-sm">
                           Next:{" "}
-                          {format(
-                            new Date(series.nextEvent.startAt),
-                            "EEE, MMM d · h:mm a"
+                          {formatEventDate(
+                            series.nextEvent.startAt,
+                            series.nextEvent.timeZone,
+                            series.nextEvent.state
+                          )}{" "}
+                          ·{" "}
+                          {formatEventTime(
+                            series.nextEvent.startAt,
+                            series.nextEvent.timeZone,
+                            series.nextEvent.state
                           )}
                         </p>
                         <p className="text-xs text-muted-foreground sm:text-sm">

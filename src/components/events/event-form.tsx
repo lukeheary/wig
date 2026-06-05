@@ -26,6 +26,7 @@ import {
   SelectValue,
 } from "@/components/ui/select";
 import type { VenueHours } from "@/components/venue-hours-editor";
+import { eventTimeZone } from "@/lib/utils";
 import {
   EVENT_STATUS_VALUES,
   getEventStatusLabel,
@@ -470,13 +471,16 @@ export function EventForm({
         address: selectedVenue?.address || formData.address || undefined,
         city: selectedVenue?.city || formData.city,
         state: selectedVenue?.state || formData.state,
+        timeZone: eventTimeZone(
+          undefined,
+          selectedVenue?.state || formData.state
+        ),
       };
 
       if (isRecurringDefault) {
         const createdSeries = await createRecurringMutation.mutateAsync({
           ...payload,
-          timeZone:
-            Intl.DateTimeFormat().resolvedOptions().timeZone || undefined,
+          timeZone: eventTimeZone(undefined, payload.state),
           recurrence: {
             frequency: recurrenceData.frequency,
             interval: recurrenceData.interval,

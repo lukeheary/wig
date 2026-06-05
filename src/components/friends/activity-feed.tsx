@@ -29,7 +29,7 @@ import {
 } from "date-fns";
 import { usePathname, useSearchParams } from "next/navigation";
 import Link from "next/link";
-import { formatRelativeEventDate } from "@/lib/utils";
+import { formatEventDate, formatRelativeEventDate } from "@/lib/utils";
 import { StickySectionHeader } from "@/components/ui/sticky-section-header";
 import { buildReturnTo, withReturnTo } from "@/lib/navigation";
 import { EmptyStateCard } from "@/components/shared/empty-state-card";
@@ -47,21 +47,34 @@ function getActivityTimestamp(activity: any) {
   return new Date(activity.updatedAt ?? activity.createdAt);
 }
 
-function formatInlineEventDate(eventDate: Date) {
+function formatInlineEventDate(
+  eventDate: Date,
+  event?: { timeZone?: string | null; state?: string | null } | null
+) {
   const now = startOfDay(new Date());
   const normalizedEventDate = startOfDay(eventDate);
   const diff = differenceInCalendarDays(normalizedEventDate, now);
 
   if (diff === 0) return "tonight";
   if (diff === 1) return "tomorrow";
-  if (diff > 1 && diff < 7) return `on ${format(eventDate, "EEEE")}`;
-  if (diff >= 7 && diff < 14) return `next ${format(eventDate, "EEEE")}`;
+  if (diff > 1 && diff < 7) {
+    return `on ${formatEventDate(eventDate, event?.timeZone, event?.state, {
+      weekday: "long",
+    })}`;
+  }
+  if (diff >= 7 && diff < 14) {
+    return `next ${formatEventDate(eventDate, event?.timeZone, event?.state, {
+      weekday: "long",
+    })}`;
+  }
 
-  return `on ${format(
+  return `on ${formatEventDate(
     eventDate,
+    event?.timeZone,
+    event?.state,
     eventDate.getFullYear() === new Date().getFullYear()
-      ? "MMMM d"
-      : "MMMM d, yyyy"
+      ? { month: "long", day: "numeric" }
+      : { month: "long", day: "numeric", year: "numeric" }
   )}`;
 }
 
@@ -102,7 +115,10 @@ export function ActivityItem({ activity }: ActivityItemProps) {
       ? "tonight"
       : isTomorrow(eventDate)
         ? "tomorrow"
-        : `on ${format(eventDate, "MMMM do")}`
+        : `on ${formatEventDate(eventDate, event?.timeZone, event?.state, {
+            month: "long",
+            day: "numeric",
+          })}`
     : null;
 
   if (isEventStatusUpdate) {
@@ -270,7 +286,7 @@ export function ActivityItem({ activity }: ActivityItemProps) {
           <>
             {subjectName} {isEventPast ? "couldn't" : "can't"} go to{" "}
             {eventTitleInline}
-            {eventDate ? <> {formatInlineEventDate(eventDate)}</> : null}
+            {eventDate ? <> {formatInlineEventDate(eventDate, event)}</> : null}
             {notGoingReasonText ? <> {notGoingReasonText}</> : null}
           </>
         );
