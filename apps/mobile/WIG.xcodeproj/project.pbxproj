@@ -29,6 +29,8 @@
 		59D822A7D7ADCABFCF108A54 /* Assets.xcassets in Resources */ = {isa = PBXBuildFile; fileRef = C0D13CF91B0EECB51C7BEBC0 /* Assets.xcassets */; };
 		68C7C86049E10AB91E4389A2 /* VenuesView.swift in Sources */ = {isa = PBXBuildFile; fileRef = BBBA8FF5228C20D71528FB71 /* VenuesView.swift */; };
 		78874F058F64EDC1351DAE0C /* AuthGate.swift in Sources */ = {isa = PBXBuildFile; fileRef = 849CE0A638A3798C811514B1 /* AuthGate.swift */; };
+		7D1A1101B7C3478AA43C90F1 /* MobileOnboardingView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 7D1A1100B7C3478AA43C90F1 /* MobileOnboardingView.swift */; };
+		7D1A2201B7C3478AA43C90F1 /* PushNotificationManager.swift in Sources */ = {isa = PBXBuildFile; fileRef = 7D1A2200B7C3478AA43C90F1 /* PushNotificationManager.swift */; };
 		873D8937503E7AABA38DB6A1 /* ClerkKit in Frameworks */ = {isa = PBXBuildFile; productRef = 1659B060E821F873E702D5B2 /* ClerkKit */; };
 		90C9663BDAC608D5EA336BE0 /* HomeView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 038FCA44E637DF7C72B0236B /* HomeView.swift */; };
 		9196A75A5399103EDDB45E99 /* ScreenPlaceholderView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 67D77BC3A226DC29941244AF /* ScreenPlaceholderView.swift */; };
@@ -73,6 +75,8 @@
 		456417F474AB603C89D5B7D8 /* WIG.entitlements */ = {isa = PBXFileReference; lastKnownFileType = text.plist.entitlements; path = WIG.entitlements; sourceTree = "<group>"; };
 		67D77BC3A226DC29941244AF /* ScreenPlaceholderView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ScreenPlaceholderView.swift; sourceTree = "<group>"; };
 		68E5A730E47D03B7A196879B /* WIGApp.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = WIGApp.swift; sourceTree = "<group>"; };
+		7D1A1100B7C3478AA43C90F1 /* MobileOnboardingView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = MobileOnboardingView.swift; sourceTree = "<group>"; };
+		7D1A2200B7C3478AA43C90F1 /* PushNotificationManager.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = PushNotificationManager.swift; sourceTree = "<group>"; };
 		7F4829999F082A6083275D78 /* Gift.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = Gift.swift; sourceTree = "<group>"; };
 		849CE0A638A3798C811514B1 /* AuthGate.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AuthGate.swift; sourceTree = "<group>"; };
 		940FBAD68FAA1A5667BD434D /* AppRootView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AppRootView.swift; sourceTree = "<group>"; };
@@ -230,6 +234,7 @@
 			isa = PBXGroup;
 			children = (
 				0A7F46F19B1D4A6CA4100004 /* AppSession.swift */,
+				7D1A2200B7C3478AA43C90F1 /* PushNotificationManager.swift */,
 				9ACD920D60DEE53882F3D505 /* Components */,
 			);
 			path = Shared;
@@ -256,6 +261,7 @@
 			isa = PBXGroup;
 			children = (
 				849CE0A638A3798C811514B1 /* AuthGate.swift */,
+				7D1A1100B7C3478AA43C90F1 /* MobileOnboardingView.swift */,
 				DC1F5481F6C16EA27B43C269 /* SignedOutView.swift */,
 			);
 			path = Auth;
@@ -361,6 +367,8 @@
 				02A19F1536EC643E3CD2B226 /* AppConfig.swift in Sources */,
 				E8A57DFEEA588E89C6DA6366 /* AppRootView.swift in Sources */,
 				78874F058F64EDC1351DAE0C /* AuthGate.swift in Sources */,
+				7D1A1101B7C3478AA43C90F1 /* MobileOnboardingView.swift in Sources */,
+				7D1A2201B7C3478AA43C90F1 /* PushNotificationManager.swift in Sources */,
 				0A7F46F19B1D4A6CA4200003 /* EventCardView.swift in Sources */,
 				0A7F46F19B1D4A6CA4200005 /* EventDetailView.swift in Sources */,
 				0A7F46F19B1D4A6CA4200001 /* EventFeedItem.swift in Sources */,
@@ -453,7 +461,7 @@
 				SWIFT_ACTIVE_COMPILATION_CONDITIONS = DEBUG;
 				SWIFT_OPTIMIZATION_LEVEL = "-Onone";
 				SWIFT_VERSION = 5.1;
-				TARGETED_DEVICE_FAMILY = "1,2";
+				TARGETED_DEVICE_FAMILY = 1;
 			};
 			name = Debug;
 		};
@@ -511,7 +519,7 @@
 				SWIFT_COMPILATION_MODE = wholemodule;
 				SWIFT_OPTIMIZATION_LEVEL = "-O";
 				SWIFT_VERSION = 5.1;
-				TARGETED_DEVICE_FAMILY = "1,2";
+				TARGETED_DEVICE_FAMILY = 1;
 			};
 			name = Release;
 		};
@@ -519,6 +527,7 @@
 			isa = XCBuildConfiguration;
 			baseConfigurationReference = 1A7D0D9C9A7444D4B6D8D001 /* Debug.xcconfig */;
 			buildSettings = {
+				APS_ENVIRONMENT = development;
 				ASSETCATALOG_COMPILER_APPICON_NAME = AppIcon;
 				ASSETCATALOG_COMPILER_GLOBAL_ACCENT_COLOR_NAME = AccentColor;
 				CODE_SIGN_ENTITLEMENTS = WIG/Support/WIG.entitlements;
@@ -531,10 +540,10 @@
 					"$(inherited)",
 					"@executable_path/Frameworks",
 				);
-				PRODUCT_BUNDLE_IDENTIFIER = com.wig.lukeheary.app;
+				PRODUCT_BUNDLE_IDENTIFIER = com.whoisgoing.app;
 				PRODUCT_NAME = WIG;
 				SDKROOT = iphoneos;
-				TARGETED_DEVICE_FAMILY = "1,2";
+				TARGETED_DEVICE_FAMILY = 1;
 			};
 			name = Debug;
 		};
@@ -542,6 +551,7 @@
 			isa = XCBuildConfiguration;
 			baseConfigurationReference = 1A7D0D9C9A7444D4B6D8D002 /* Release.xcconfig */;
 			buildSettings = {
+				APS_ENVIRONMENT = production;
 				ASSETCATALOG_COMPILER_APPICON_NAME = AppIcon;
 				ASSETCATALOG_COMPILER_GLOBAL_ACCENT_COLOR_NAME = AccentColor;
 				CODE_SIGN_ENTITLEMENTS = WIG/Support/WIG.entitlements;
@@ -554,10 +564,10 @@
 					"$(inherited)",
 					"@executable_path/Frameworks",
 				);
-				PRODUCT_BUNDLE_IDENTIFIER = com.wig.lukeheary.app;
+				PRODUCT_BUNDLE_IDENTIFIER = com.whoisgoing.app;
 				PRODUCT_NAME = WIG;
 				SDKROOT = iphoneos;
-				TARGETED_DEVICE_FAMILY = "1,2";
+				TARGETED_DEVICE_FAMILY = 1;
 			};
 			name = Release;
 		};

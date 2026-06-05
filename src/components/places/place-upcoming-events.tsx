@@ -7,11 +7,13 @@ import {
   startOfWeek,
   compareAsc,
   compareDesc,
+  parseISO,
 } from "date-fns";
 import { type EventCardItem } from "@/components/events/event-card-helpers";
 import { HomeMobileEventRail } from "@/components/events/home-mobile-event-rail";
 import { EventsPlaceholder } from "@/components/shared/events-placeholder";
 import { StickySectionHeader } from "@/components/ui/sticky-section-header";
+import { formatEventDateKey } from "@/lib/utils";
 
 interface PlaceUpcomingEventsProps {
   events: EventCardItem[] | null | undefined;
@@ -65,7 +67,9 @@ export function PlaceUpcomingEvents({
     })
     .reduce<Array<{ label: string; events: EventCardItem[] }>>(
       (groups, event) => {
-        const eventDate = new Date(event.startAt);
+        const eventDate = parseISO(
+          formatEventDateKey(event.startAt, event.timeZone, event.state)
+        );
         const weekDifference = differenceInCalendarWeeks(
           startOfWeek(eventDate),
           currentWeekStart

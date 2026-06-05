@@ -79,7 +79,7 @@ struct ActivityView: View {
                             ActivitySectionView(section: section)
                         }
                     }
-                    .padding(.top, 74)
+                    .padding(.top, 82)
                     .padding(.bottom, 48)
                 }
                 .scrollIndicators(.hidden)
@@ -281,7 +281,7 @@ private struct ActivitySectionView: View {
                 .foregroundStyle(.white)
                 .padding(.horizontal, 16)
 
-            VStack(alignment: .leading, spacing: 22) {
+            VStack(alignment: .leading, spacing: 16) {
                 ForEach(section.activities) { activity in
                     ActivityRowView(activity: activity)
                 }
@@ -296,12 +296,6 @@ private struct ActivityRowView: View {
     @State private var selectedEvent: EventFeedItem?
     @State private var selectedVenue: PlaceListItem?
 
-    private static let eventDateFormatter: DateFormatter = {
-        let formatter = DateFormatter()
-        formatter.dateFormat = "MMM d"
-        return formatter
-    }()
-
     private static let relativeFormatter: RelativeDateTimeFormatter = {
         let formatter = RelativeDateTimeFormatter()
         formatter.unitsStyle = .full
@@ -312,7 +306,7 @@ private struct ActivityRowView: View {
         HStack(alignment: .top, spacing: 12) {
             ActivityAvatarView(activity: activity)
 
-            VStack(alignment: .leading, spacing: 6) {
+            VStack(alignment: .leading, spacing: 4) {
                 InlineLinkedActivityText(
                     activity: activity,
                     onTapEvent: {
@@ -325,8 +319,8 @@ private struct ActivityRowView: View {
                     .frame(maxWidth: .infinity, alignment: .leading)
 
                 Text(Self.relativeFormatter.localizedString(for: activity.timestamp, relativeTo: .now))
-                    .font(.system(size: 12, weight: .medium))
-                    .foregroundStyle(.white.opacity(0.46))
+                    .font(.system(size: 11, weight: .medium))
+                    .foregroundStyle(.white.opacity(0.42))
             }
             .frame(maxWidth: .infinity, alignment: .leading)
         }
@@ -344,12 +338,6 @@ struct InlineLinkedActivityText: UIViewRepresentable {
     let activity: ActivityFeedItem
     let onTapEvent: () -> Void
     let onTapVenue: (PlaceListItem) -> Void
-
-    private static let eventDateFormatter: DateFormatter = {
-        let formatter = DateFormatter()
-        formatter.dateFormat = "MMM d"
-        return formatter
-    }()
 
     func makeCoordinator() -> Coordinator {
         Coordinator(parent: self)
@@ -469,10 +457,21 @@ struct InlineLinkedActivityText: UIViewRepresentable {
 
         text.append(
             NSAttributedString(
-                string: " on \(Self.eventDateFormatter.string(from: activity.event.startAt))",
+                string: " on \(activity.event.eventFeedItem.formattedStart(format: "MMM d"))",
                 attributes: [.font: font, .foregroundColor: mutedColor]
             )
         )
+
+        if activity.type == .rsvpNotGoing,
+           let reasonPhrase = activity.notGoingReason?.activityPhrase
+        {
+            text.append(
+                NSAttributedString(
+                    string: " because \(activity.actorGender.contractedBe) \(reasonPhrase)",
+                    attributes: [.font: font, .foregroundColor: mutedColor]
+                )
+            )
+        }
 
         let paragraphStyle = NSMutableParagraphStyle()
         paragraphStyle.lineSpacing = 3
@@ -538,23 +537,32 @@ struct InlineLinkedActivityText: UIViewRepresentable {
             self.parent = parent
         }
 
+        @available(iOS 17.0, *)
         func textView(
             _ textView: UITextView,
-            shouldInteractWith URL: URL,
-            in characterRange: NSRange,
-            interaction: UITextItemInteraction
-        ) -> Bool {
-            switch URL.scheme {
-            case "wig-event":
-                parent.onTapEvent()
-                return false
-            case "wig-venue":
-                if let venue = parent.activity.event.venue {
-                    parent.onTapVenue(venue)
+            primaryActionFor textItem: UITextItem,
+            defaultAction: UIAction
+        ) -> UIAction? {
+            switch textItem.content {
+            case .link(let url):
+                switch url.scheme {
+                case "wig-event":
+                    return UIAction { [weak self] _ in
+                        self?.parent.onTapEvent()
+                    }
+                case "wig-venue":
+                    return UIAction { [weak self] _ in
+                        guard let venue = self?.parent.activity.event.venue else {
+                            return
+                        }
+
+                        self?.parent.onTapVenue(venue)
+                    }
+                default:
+                    return defaultAction
                 }
-                return false
             default:
-                return true
+                return defaultAction
             }
         }
 
@@ -638,6 +646,34 @@ struct ActivityAvatarView: View {
             return Color.yellow
         case .rsvpNotGoing:
             return Color.red
+        }
+    }
+}
+
+private extension EventRSVPDeclineReason {
+    var activityPhrase: String {
+        switch self {
+        case .busy:
+            return "busy"
+        case .outOfTown:
+            return "out of town"
+        case .working:
+            return "working"
+        case .layingLow:
+            return "laying low"
+        }
+    }
+}
+
+private extension Optional where Wrapped == UserGender {
+    var contractedBe: String {
+        switch self {
+        case .some(.male):
+            return "he's"
+        case .some(.female):
+            return "she's"
+        case .some(.other), .none:
+            return "they're"
         }
     }
 }

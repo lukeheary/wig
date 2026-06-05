@@ -1,10 +1,35 @@
+import { auth } from "@clerk/nextjs/server";
 import { NextResponse } from "next/server";
-import { and, asc, desc, eq, gte, lt } from "drizzle-orm";
+import { and, asc, desc, eq, gte, inArray, lt } from "drizzle-orm";
 import { db } from "@/server/db";
-import { events, places } from "@/server/db/schema";
+import { eventRsvps, events, placeFollows, places, users } from "@/server/db/schema";
 import { mapEventCategoryData, mapPlaceCategoryData } from "@/server/utils/categories";
 
-function mapMobileEvent(event: any) {
+async function currentMobileUserId() {
+  const { userId } = await auth();
+
+  if (userId) {
+    return userId;
+  }
+
+  const previewUser = await db.query.users.findFirst({
+    where: eq(users.isOnboarding, false),
+    orderBy: [asc(users.createdAt)],
+    columns: {
+      id: true,
+    },
+  });
+
+  return previewUser?.id ?? null;
+}
+
+function mapMobileEvent(
+  event: any,
+  currentUserRsvp?: {
+    status: "going" | "interested" | "not_going";
+    notGoingReason: string | null;
+  } | null
+) {
   const mapped = mapEventCategoryData(event);
 
   return {
@@ -18,6 +43,7 @@ function mapMobileEvent(event: any) {
     address: mapped.address,
     city: mapped.city,
     state: mapped.state,
+    timeZone: mapped.timeZone,
     venueName: mapped.venue?.name ?? null,
     organizerName: mapped.organizer?.name ?? null,
     venueLogoImageUrl: mapped.venue?.logoImageUrl ?? null,
@@ -25,6 +51,8 @@ function mapMobileEvent(event: any) {
     categories: mapped.categories,
     categoryLabels: mapped.categoryLabels,
     updatedAt: mapped.updatedAt,
+    userRsvpStatus: currentUserRsvp?.status ?? null,
+    userRsvpNotGoingReason: currentUserRsvp?.notGoingReason ?? null,
   };
 }
 
@@ -94,6 +122,45 @@ export async function GET(
   });
 
   const mappedPlace = mapPlaceCategoryData(place);
+  const userId = await currentMobileUserId();
+  const allEvents = [...upcomingEvents, ...pastEvents];
+  const eventIds = allEvents.map((event) => event.id);
+  const currentUserRsvpMap =
+    userId && eventIds.length > 0
+      ? new Map(
+          (
+            await db.query.eventRsvps.findMany({
+              where: and(
+                inArray(eventRsvps.eventId, eventIds),
+                eq(eventRsvps.userId, userId)
+              ),
+              columns: {
+                eventId: true,
+                status: true,
+                notGoingReason: true,
+              },
+            })
+          ).map((rsvp) => [
+            rsvp.eventId,
+            {
+              status: rsvp.status,
+              notGoingReason: rsvp.notGoingReason,
+            },
+          ])
+        )
+      : new Map();
+  const follow =
+    userId
+      ? await db.query.placeFollows.findFirst({
+          where: and(
+            eq(placeFollows.userId, userId),
+            eq(placeFollows.placeId, place.id)
+          ),
+          columns: {
+            id: true,
+          },
+        })
+      : null;
 
   return NextResponse.json({
     id: mappedPlace.id,
@@ -111,7 +178,12 @@ export async function GET(
     categories: mappedPlace.categories,
     categoryLabels: mappedPlace.categoryLabels,
     updatedAt: mappedPlace.updatedAt,
-    events: upcomingEvents.map(mapMobileEvent),
-    pastEvents: pastEvents.map(mapMobileEvent),
+    isFollowed: Boolean(follow),
+    events: upcomingEvents.map((event) =>
+      mapMobileEvent(event, currentUserRsvpMap.get(event.id))
+    ),
+    pastEvents: pastEvents.map((event) =>
+      mapMobileEvent(event, currentUserRsvpMap.get(event.id))
+    ),
   });
 }

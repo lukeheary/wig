@@ -1,28 +1,37 @@
+import ClerkKit
 import SwiftUI
 import UIKit
 
 struct EventDetailView: View {
     let event: EventFeedItem
 
+    @Environment(Clerk.self) private var clerk
     @Environment(\.apiClient) private var apiClient
     @Environment(\.dismiss) private var dismiss
+    @EnvironmentObject private var appSession: AppSession
     @StateObject private var rsvpViewModel = EventRSVPViewModel()
     @State private var isShareSheetPresented = false
     @State private var isRSVPMenuExpanded = false
     @State private var rsvpMenuMode: RSVPMenuMode = .rsvp
 
-    private static let dateFormatter: DateFormatter = {
-        let formatter = DateFormatter()
-        formatter.dateFormat = "EEE, MMM d 'at' h:mm a"
-        return formatter
-    }()
+    init(event: EventFeedItem) {
+        self.event = event
+        _rsvpViewModel = StateObject(
+            wrappedValue: EventRSVPViewModel(
+                status: event.userRsvpStatus,
+                notGoingReason: event.userRsvpNotGoingReason
+            )
+        )
+    }
 
     var body: some View {
         ScrollView {
             VStack(alignment: .leading, spacing: 22) {
                 hero
                 details
-                rsvpErrorMessage
+                if isAuthenticated {
+                    rsvpErrorMessage
+                }
                 about
             }
             .padding(.horizontal, 16)
@@ -40,10 +49,23 @@ struct EventDetailView: View {
             rsvpMenuDismissOverlay
         }
         .safeAreaInset(edge: .bottom, spacing: 0) {
-            floatingRSVPMenu
+            if isAuthenticated {
+                floatingRSVPMenu
+            }
         }
-        .task(id: event.id) {
+        .task(id: "\(event.id.uuidString)-\(isAuthenticated)") {
+            guard isAuthenticated else {
+                return
+            }
+
             await rsvpViewModel.load(eventID: event.id, using: apiClient)
+        }
+        .onChange(of: isAuthenticated) { _, isAuthenticated in
+            guard !isAuthenticated else {
+                return
+            }
+
+            closeRSVPMenu()
         }
         .sheet(isPresented: $isShareSheetPresented) {
             ShareSheet(activityItems: [shareURL])
@@ -59,8 +81,10 @@ struct EventDetailView: View {
                 .frame(width: side, height: side)
                 .clipShape(RoundedRectangle(cornerRadius: 24, style: .continuous))
                 .overlay {
-                    EventSocialOverlayView(attendees: event.socialAttendees, size: .detail)
-                        .clipShape(RoundedRectangle(cornerRadius: 24, style: .continuous))
+                    if isAuthenticated {
+                        EventSocialOverlayView(attendees: event.socialAttendees, size: .detail)
+                            .clipShape(RoundedRectangle(cornerRadius: 24, style: .continuous))
+                    }
                 }
         }
         .aspectRatio(1, contentMode: .fit)
@@ -74,7 +98,10 @@ struct EventDetailView: View {
 
             Spacer()
 
-            FloatingGlassIconButton(systemImage: "square.and.pencil") {}
+            if isAuthenticated {
+                FloatingGlassIconButton(systemImage: "square.and.pencil") {}
+            }
+
             FloatingGlassIconButton(systemImage: "square.and.arrow.up") {
                 isShareSheetPresented = true
             }
@@ -131,7 +158,7 @@ struct EventDetailView: View {
                 .foregroundStyle(.white)
                 .lineSpacing(1)
 
-            Text(Self.dateFormatter.string(from: event.startAt))
+            Text(event.formattedStart(format: "EEE, MMM d 'at' h:mm a"))
                 .font(.system(size: 18, weight: .bold))
                 .foregroundStyle(Color(red: 0.48, green: 0.77, blue: 1.0))
 
@@ -294,8 +321,8 @@ struct EventDetailView: View {
                         ProgressView()
                             .tint(.white)
                             .frame(width: 18, height: 18)
-                    } else if rsvpViewModel.status != nil {
-                        Image(systemName: "checkmark")
+                    } else if let rsvpButtonSystemImage {
+                        Image(systemName: rsvpButtonSystemImage)
                             .font(.system(size: 14, weight: .bold))
                     }
 
@@ -307,7 +334,7 @@ struct EventDetailView: View {
                         .font(.system(size: 12, weight: .bold))
                         .opacity(0.72)
                 }
-                .foregroundStyle(.white)
+                .foregroundStyle(rsvpButtonColor)
                 .padding(.horizontal, 22)
                 .frame(maxWidth: .infinity)
                 .frame(height: 56)
@@ -368,6 +395,8 @@ struct EventDetailView: View {
     }
 
     private func selectRSVP(_ status: EventRSVPStatus) {
+        UIImpactFeedbackGenerator(style: .light).impactOccurred()
+
         if status == .notGoing {
             withAnimation(.spring(response: 0.28, dampingFraction: 0.86)) {
                 rsvpMenuMode = .declineReason
@@ -388,6 +417,10 @@ struct EventDetailView: View {
     }
 
     private func saveNotGoing(reason: EventRSVPDeclineReason?) {
+        if reason != nil {
+            UISelectionFeedbackGenerator().selectionChanged()
+        }
+
         withAnimation(.spring(response: 0.28, dampingFraction: 0.86)) {
             isRSVPMenuExpanded = false
         }
@@ -417,10 +450,35 @@ struct EventDetailView: View {
         case .interested:
             return "Interested"
         case .notGoing:
+            if let reason = rsvpViewModel.notGoingReason {
+                return "Can't Go (\(reason.title))"
+            }
+
             return "Can't Go"
         case nil:
             return "RSVP"
         }
+    }
+
+    private var rsvpButtonSystemImage: String? {
+        switch rsvpViewModel.status {
+        case .going:
+            return "checkmark"
+        case .interested:
+            return "star"
+        case .notGoing:
+            return "xmark"
+        case nil:
+            return nil
+        }
+    }
+
+    private var rsvpButtonColor: Color {
+        rsvpViewModel.status?.rsvpTintColor ?? .white
+    }
+
+    private var isAuthenticated: Bool {
+        appSession.isAuthBypassed || clerk.user != nil
     }
 
     private var shareURL: URL {
@@ -461,7 +519,7 @@ private struct RSVPMenuOptionButton: View {
                     .font(.system(size: 16, weight: .semibold))
                     .opacity(isSelected ? 1 : 0)
             }
-            .foregroundStyle(isSelected ? AppTheme.accentBlue : .white)
+            .foregroundStyle(isSelected ? option.status.rsvpTintColor : .white)
             .padding(.horizontal, 14)
             .frame(height: 48)
             .background(isSelected ? Color.white.opacity(0.10) : Color.clear, in: Capsule())
@@ -496,7 +554,7 @@ private struct RSVPDeclineReasonMenuButton: View {
                     .font(.system(size: 16, weight: .semibold))
                     .opacity(isSelected ? 1 : 0)
             }
-            .foregroundStyle(isSelected ? AppTheme.accentBlue : .white)
+            .foregroundStyle(isSelected ? EventRSVPStatus.notGoing.rsvpTintColor : .white)
             .padding(.horizontal, 14)
             .frame(height: 48)
             .background(isSelected ? Color.white.opacity(0.10) : Color.clear, in: Capsule())
@@ -538,6 +596,19 @@ private struct RSVPDeclineSkipButton: View {
 private enum RSVPMenuMode {
     case rsvp
     case declineReason
+}
+
+private extension EventRSVPStatus {
+    var rsvpTintColor: Color {
+        switch self {
+        case .going:
+            return AppTheme.accentBlue
+        case .interested:
+            return .yellow
+        case .notGoing:
+            return .red
+        }
+    }
 }
 
 private extension EventRSVPDeclineReason {
@@ -624,6 +695,11 @@ private final class EventRSVPViewModel: ObservableObject {
     @Published private(set) var errorMessage: String?
 
     private var loadedEventID: UUID?
+
+    init(status: EventRSVPStatus? = nil, notGoingReason: EventRSVPDeclineReason? = nil) {
+        self.status = status
+        self.notGoingReason = notGoingReason
+    }
 
     func load(eventID: UUID, using apiClient: APIClient) async {
         guard loadedEventID != eventID else {

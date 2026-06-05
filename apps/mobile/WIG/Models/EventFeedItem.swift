@@ -30,6 +30,9 @@ struct EventFeedItem: Codable, Identifiable, Hashable, Sendable {
     let address: String?
     let city: String
     let state: String
+    var timeZone: String? = nil
+    var metroAreaCity: String? = nil
+    var metroAreaState: String? = nil
     let venueID: UUID?
     let venueName: String?
     let venueSlug: String?
@@ -43,6 +46,8 @@ struct EventFeedItem: Codable, Identifiable, Hashable, Sendable {
     let updatedAt: Date?
     var isFollowed = false
     var isCreatedByCurrentUser = false
+    var userRsvpStatus: EventRSVPStatus? = nil
+    var userRsvpNotGoingReason: EventRSVPDeclineReason? = nil
     var friendsGoing: [EventSocialRSVP] = []
     var friendsInterested: [EventSocialRSVP] = []
 
@@ -57,6 +62,9 @@ struct EventFeedItem: Codable, Identifiable, Hashable, Sendable {
         case address
         case city
         case state
+        case timeZone
+        case metroAreaCity
+        case metroAreaState
         case venueID = "venueId"
         case venueName
         case venueSlug
@@ -70,6 +78,8 @@ struct EventFeedItem: Codable, Identifiable, Hashable, Sendable {
         case updatedAt
         case isFollowed
         case isCreatedByCurrentUser
+        case userRsvpStatus
+        case userRsvpNotGoingReason
         case friendsGoing
         case friendsInterested
     }
@@ -115,6 +125,40 @@ struct EventFeedItem: Codable, Identifiable, Hashable, Sendable {
             .map { String($0).capitalized }
     }
 
+    var displayTimeZone: TimeZone {
+        if let timeZone,
+           let explicitTimeZone = TimeZone(identifier: timeZone)
+        {
+            return explicitTimeZone
+        }
+
+        return TimeZone.usStateFallback(for: state) ?? .current
+    }
+
+    func formattedStart(format: String) -> String {
+        EventFeedItem.formatter(format: format, timeZone: displayTimeZone)
+            .string(from: startAt)
+    }
+
+    func formattedEnd(format: String) -> String? {
+        guard let endAt else { return nil }
+        return EventFeedItem.formatter(format: format, timeZone: displayTimeZone)
+            .string(from: endAt)
+    }
+
+    func localStartOfDay() -> Date {
+        EventFeedItem.calendar(timeZone: displayTimeZone).startOfDay(for: startAt)
+    }
+
+    func isInLocalWeek(startingAt weekStart: Date) -> Bool {
+        guard let nextWeekStart = Self.weekCalendar.date(byAdding: .day, value: 7, to: weekStart) else {
+            return true
+        }
+
+        let localDay = localStartOfDay()
+        return localDay >= weekStart && localDay < nextWeekStart
+    }
+
     var posterImageURL: URL? {
         versionedImageURL(for: coverImageURL)
     }
@@ -157,6 +201,53 @@ struct EventFeedItem: Codable, Identifiable, Hashable, Sendable {
         components.queryItems = queryItems
         return components.url ?? url
     }
+
+    private static let weekCalendar: Calendar = {
+        var calendar = Calendar(identifier: .gregorian)
+        calendar.firstWeekday = 2
+        return calendar
+    }()
+
+    private static func calendar(timeZone: TimeZone) -> Calendar {
+        var calendar = weekCalendar
+        calendar.timeZone = timeZone
+        return calendar
+    }
+
+    private static func formatter(format: String, timeZone: TimeZone) -> DateFormatter {
+        let formatter = DateFormatter()
+        formatter.dateFormat = format
+        formatter.timeZone = timeZone
+        return formatter
+    }
+}
+
+private extension TimeZone {
+    static func usStateFallback(for state: String) -> TimeZone? {
+        let identifier: String?
+
+        switch state.uppercased() {
+        case "CT", "DC", "DE", "FL", "GA", "IN", "KY", "MA", "MD", "ME", "MI",
+             "NC", "NH", "NJ", "NY", "OH", "PA", "RI", "SC", "TN", "VA", "VT",
+             "WV":
+            identifier = "America/New_York"
+        case "AL", "AR", "IA", "IL", "KS", "LA", "MN", "MO", "MS", "ND", "NE",
+             "OK", "SD", "TX", "WI":
+            identifier = "America/Chicago"
+        case "AZ", "CO", "ID", "MT", "NM", "UT", "WY":
+            identifier = "America/Denver"
+        case "CA", "NV", "OR", "WA":
+            identifier = "America/Los_Angeles"
+        case "AK":
+            identifier = "America/Anchorage"
+        case "HI":
+            identifier = "Pacific/Honolulu"
+        default:
+            identifier = nil
+        }
+
+        return identifier.flatMap(TimeZone.init(identifier:))
+    }
 }
 
 extension EventFeedItem {
@@ -173,6 +264,9 @@ extension EventFeedItem {
         address = try container.decodeIfPresent(String.self, forKey: .address)
         city = try container.decode(String.self, forKey: .city)
         state = try container.decode(String.self, forKey: .state)
+        timeZone = try container.decodeIfPresent(String.self, forKey: .timeZone)
+        metroAreaCity = try container.decodeIfPresent(String.self, forKey: .metroAreaCity)
+        metroAreaState = try container.decodeIfPresent(String.self, forKey: .metroAreaState)
         venueID = try container.decodeIfPresent(UUID.self, forKey: .venueID)
         venueName = try container.decodeIfPresent(String.self, forKey: .venueName)
         venueSlug = try container.decodeIfPresent(String.self, forKey: .venueSlug)
@@ -186,6 +280,11 @@ extension EventFeedItem {
         updatedAt = try container.decodeIfPresent(Date.self, forKey: .updatedAt)
         isFollowed = try container.decodeIfPresent(Bool.self, forKey: .isFollowed) ?? false
         isCreatedByCurrentUser = try container.decodeIfPresent(Bool.self, forKey: .isCreatedByCurrentUser) ?? false
+        userRsvpStatus = try container.decodeIfPresent(EventRSVPStatus.self, forKey: .userRsvpStatus)
+        userRsvpNotGoingReason = try container.decodeIfPresent(
+            EventRSVPDeclineReason.self,
+            forKey: .userRsvpNotGoingReason
+        )
         friendsGoing = try container.decodeIfPresent([EventSocialRSVP].self, forKey: .friendsGoing) ?? []
         friendsInterested = try container.decodeIfPresent([EventSocialRSVP].self, forKey: .friendsInterested) ?? []
     }

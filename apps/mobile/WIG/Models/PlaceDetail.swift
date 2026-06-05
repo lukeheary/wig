@@ -16,6 +16,7 @@ struct PlaceDetail: Decodable, Identifiable, Hashable, Sendable {
     let categories: [String]
     let categoryLabels: [String: String]
     let updatedAt: Date?
+    var isFollowed = false
     let events: [EventFeedItem]
     let pastEvents: [EventFeedItem]
 
@@ -35,12 +36,13 @@ struct PlaceDetail: Decodable, Identifiable, Hashable, Sendable {
         case categories
         case categoryLabels
         case updatedAt
+        case isFollowed
         case events
         case pastEvents
     }
 
     var locationText: String? {
-        if type == .venue, let address = cleaned(address) {
+        if let address = cleaned(address) {
             return address
         }
 
@@ -111,6 +113,7 @@ extension PlaceDetail {
         categories = try container.decodeIfPresent([String].self, forKey: .categories) ?? []
         categoryLabels = try container.decodeIfPresent([String: String].self, forKey: .categoryLabels) ?? [:]
         updatedAt = try container.decodeIfPresent(Date.self, forKey: .updatedAt)
+        isFollowed = try container.decodeIfPresent(Bool.self, forKey: .isFollowed) ?? false
         events = try container.decodeIfPresent([EventFeedItem].self, forKey: .events) ?? []
         pastEvents = try container.decodeIfPresent([EventFeedItem].self, forKey: .pastEvents) ?? []
     }
@@ -130,4 +133,3 @@ private extension KeyedDecodingContainer where Key == PlaceDetail.CodingKeys {
         return URL(string: value)
     }
 }
-

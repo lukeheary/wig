@@ -1,11 +1,11 @@
 import type { Metadata } from "next";
 import { auth } from "@clerk/nextjs/server";
-import { format } from "date-fns";
 import { eq } from "drizzle-orm";
 import EventPageClient from "./event-page-client";
 import { db } from "@/server/db";
 import { events } from "@/server/db/schema";
 import { withImageVersion } from "@/components/events/event-card-helpers";
+import { formatEventDate, formatEventTime } from "@/lib/utils";
 
 function getEventMetaDescription(event: {
   description: string | null;
@@ -13,6 +13,7 @@ function getEventMetaDescription(event: {
   venue?: { name: string | null } | null;
   city: string;
   state: string;
+  timeZone: string | null;
 }) {
   const explicitDescription = event.description
     ?.replace(/\s+/g, " ")
@@ -24,7 +25,13 @@ function getEventMetaDescription(event: {
   }
 
   const venueName = event.venue?.name ? ` at ${event.venue.name}` : "";
-  return `${format(event.startAt, "EEEE, MMMM d 'at' h:mm a")}${venueName} in ${event.city}, ${event.state}.`;
+  const eventDate = formatEventDate(event.startAt, event.timeZone, event.state, {
+    weekday: "long",
+    month: "long",
+    day: "numeric",
+  });
+  const eventTime = formatEventTime(event.startAt, event.timeZone, event.state);
+  return `${eventDate} at ${eventTime}${venueName} in ${event.city}, ${event.state}.`;
 }
 
 export async function generateMetadata({

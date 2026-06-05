@@ -105,7 +105,26 @@ struct APIClient: Sendable {
     static func mobilePlaceDetail(slug: String) -> Endpoint<PlaceDetail> {
         Endpoint(
             path: "/api/mobile/places/\(slug)",
-            requiresAuthentication: false
+            requiresAuthentication: false,
+            includesAuthenticationIfAvailable: true
+        )
+    }
+
+    static func followMobilePlace(slug: String) -> Endpoint<PlaceFollowState> {
+        Endpoint(
+            path: "/api/mobile/places/\(slug)/follow",
+            method: .post,
+            requiresAuthentication: false,
+            includesAuthenticationIfAvailable: true
+        )
+    }
+
+    static func unfollowMobilePlace(slug: String) -> Endpoint<PlaceFollowState> {
+        Endpoint(
+            path: "/api/mobile/places/\(slug)/follow",
+            method: .delete,
+            requiresAuthentication: false,
+            includesAuthenticationIfAvailable: true
         )
     }
 
@@ -113,7 +132,8 @@ struct APIClient: Sendable {
         Endpoint(
             path: "/api/mobile/activity",
             queryItems: [URLQueryItem(name: "limit", value: String(limit))],
-            requiresAuthentication: false
+            requiresAuthentication: false,
+            includesAuthenticationIfAvailable: true
         )
     }
 
@@ -121,13 +141,95 @@ struct APIClient: Sendable {
         Endpoint(
             path: "/api/mobile/home-activity",
             queryItems: [URLQueryItem(name: "limit", value: String(limit))],
-            requiresAuthentication: false
+            requiresAuthentication: false,
+            includesAuthenticationIfAvailable: true
         )
     }
 
     static func mobileFriends() -> Endpoint<FriendsFeedResponse> {
         Endpoint(
             path: "/api/mobile/friends",
+            requiresAuthentication: false,
+            includesAuthenticationIfAvailable: true
+        )
+    }
+
+    static func sendMobileFriendRequest(friendUserID: String) throws -> Endpoint<MobileFriendRequestResponse> {
+        Endpoint(
+            path: "/api/mobile/friends/request",
+            method: .post,
+            body: try JSONEncoder().encode(
+                MobileFriendRequestRequest(friendUserID: friendUserID)
+            ),
+            requiresAuthentication: false,
+            includesAuthenticationIfAvailable: true
+        )
+    }
+
+    static func registerMobilePushToken(token: String, platform: String) throws -> Endpoint<EmptyResponse> {
+        Endpoint(
+            path: "/api/mobile/push-token",
+            method: .post,
+            body: try JSONEncoder().encode(
+                MobilePushTokenRequest(token: token, platform: platform)
+            ),
+            requiresAuthentication: false,
+            includesAuthenticationIfAvailable: true
+        )
+    }
+
+    static func mobileSearch(query: String, limit: Int = 12) -> Endpoint<MobileSearchResponse> {
+        Endpoint(
+            path: "/api/mobile/search",
+            queryItems: [
+                URLQueryItem(name: "query", value: query),
+                URLQueryItem(name: "limit", value: String(limit)),
+            ],
+            requiresAuthentication: false,
+            includesAuthenticationIfAvailable: true
+        )
+    }
+
+    static func updateMobileProfileAvatar(imageData: Data) -> Endpoint<ProfileAvatarUpdateResponse> {
+        let boundary = "wig-avatar-\(UUID().uuidString)"
+
+        return Endpoint(
+            path: "/api/mobile/profile/avatar",
+            method: .post,
+            headers: ["Content-Type": "multipart/form-data; boundary=\(boundary)"],
+            body: multipartImageBody(
+                imageData: imageData,
+                boundary: boundary,
+                fieldName: "file",
+                fileName: "avatar-image.jpg",
+                mimeType: "image/jpeg"
+            ),
+            requiresAuthentication: false,
+            includesAuthenticationIfAvailable: true
+        )
+    }
+
+    static func mobileOnboardingState() -> Endpoint<MobileOnboardingState> {
+        Endpoint(
+            path: "/api/mobile/onboarding",
+            requiresAuthentication: false,
+            includesAuthenticationIfAvailable: true
+        )
+    }
+
+    static func completeMobileOnboarding(
+        username: String,
+        dateOfBirth: String
+    ) throws -> Endpoint<MobileOnboardingState> {
+        Endpoint(
+            path: "/api/mobile/onboarding",
+            method: .post,
+            body: try JSONEncoder().encode(
+                MobileOnboardingUpdateRequest(
+                    username: username,
+                    dateOfBirth: dateOfBirth
+                )
+            ),
             requiresAuthentication: false,
             includesAuthenticationIfAvailable: true
         )
@@ -270,6 +372,42 @@ private extension String {
 
 struct EmptyResponse: Decodable, Sendable {}
 
+struct PlaceFollowState: Decodable, Hashable, Sendable {
+    let isFollowed: Bool
+}
+
+struct ProfileAvatarUpdateResponse: Decodable, Hashable, Sendable {
+    let avatarImageURL: URL?
+
+    enum CodingKeys: String, CodingKey {
+        case avatarImageURL = "avatarImageUrl"
+    }
+}
+
+struct MobileOnboardingState: Decodable, Hashable, Sendable {
+    let isOnboarding: Bool
+    let username: String
+    let dateOfBirth: String?
+    let avatarImageURL: URL?
+
+    enum CodingKeys: String, CodingKey {
+        case isOnboarding
+        case username
+        case dateOfBirth
+        case avatarImageURL = "avatarImageUrl"
+    }
+}
+
+struct MobileSearchResponse: Decodable, Hashable, Sendable {
+    let users: [FriendUserSummary]
+    let places: [PlaceListItem]
+}
+
+struct MobileFriendRequestResponse: Decodable, Hashable, Sendable {
+    let success: Bool
+    let friendStatus: FriendUserSummary.FriendStatus
+}
+
 enum EventRSVPStatus: String, Codable, Hashable, Sendable {
     case going
     case interested
@@ -305,6 +443,46 @@ struct EventRSVPState: Decodable, Hashable, Sendable {
 private struct EventRSVPUpdateRequest: Encodable {
     let status: EventRSVPStatus
     let notGoingReason: EventRSVPDeclineReason?
+}
+
+private struct MobileOnboardingUpdateRequest: Encodable {
+    let username: String
+    let dateOfBirth: String
+}
+
+private struct MobileFriendRequestRequest: Encodable {
+    let friendUserID: String
+
+    enum CodingKeys: String, CodingKey {
+        case friendUserID = "friendUserId"
+    }
+}
+
+private struct MobilePushTokenRequest: Encodable {
+    let token: String
+    let platform: String
+}
+
+private func multipartImageBody(
+    imageData: Data,
+    boundary: String,
+    fieldName: String,
+    fileName: String,
+    mimeType: String
+) -> Data {
+    var body = Data()
+    body.appendUTF8("--\(boundary)\r\n")
+    body.appendUTF8("Content-Disposition: form-data; name=\"\(fieldName)\"; filename=\"\(fileName)\"\r\n")
+    body.appendUTF8("Content-Type: \(mimeType)\r\n\r\n")
+    body.append(imageData)
+    body.appendUTF8("\r\n--\(boundary)--\r\n")
+    return body
+}
+
+private extension Data {
+    mutating func appendUTF8(_ string: String) {
+        append(Data(string.utf8))
+    }
 }
 
 extension JSONDecoder {

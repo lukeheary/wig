@@ -39,6 +39,10 @@
 	<string>$(CLERK_JWT_TEMPLATE)</string>
 	<key>CLERK_PUBLISHABLE_KEY</key>
 	<string>$(CLERK_PUBLISHABLE_KEY)</string>
+	<key>NSCameraUsageDescription</key>
+	<string>WIG needs camera access so you can take a profile picture.</string>
+	<key>NSPhotoLibraryUsageDescription</key>
+	<string>WIG needs photo library access so you can choose a profile picture.</string>
 	<key>OAUTH_CALLBACK_SCHEME</key>
 	<string>$(OAUTH_CALLBACK_SCHEME)</string>
 	<key>UIApplicationSceneManifest</key>
@@ -46,6 +50,8 @@
 		<key>UIApplicationSupportsMultipleScenes</key>
 		<false/>
 	</dict>
+	<key>UIRequiresFullScreen</key>
+	<true/>
 	<key>UILaunchScreen</key>
 	<dict/>
 	<key>UISupportedInterfaceOrientations</key>

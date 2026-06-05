@@ -1,3 +1,4 @@
+import ClerkKit
 import ClerkKitUI
 import SwiftUI
 
@@ -11,6 +12,7 @@ struct SignedOutView: View {
                     header
 
                     AuthView(isDismissable: false)
+                        .environment(Clerk.shared)
                         .frame(maxWidth: .infinity)
                         .padding(.horizontal, 2)
                         .padding(.vertical, 8)
@@ -79,4 +81,7 @@ struct SignedOutView: View {
 
 #Preview {
     SignedOutView()
+        .environment(Clerk.preview { preview in
+            preview.isSignedIn = false
+        })
 }

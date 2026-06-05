@@ -23,7 +23,12 @@ import { EventCard } from "@/components/calendar/event-card";
 import { useEventCardLink } from "@/components/events/use-event-card-link";
 import { useMediaQuery } from "@/hooks/use-media-query";
 import { getEventStatusLabel } from "@/lib/event-status";
-import { cn, formatTime, splitTrailingParenthetical } from "@/lib/utils";
+import {
+  cn,
+  formatEventDate,
+  formatEventTime,
+  splitTrailingParenthetical,
+} from "@/lib/utils";
 
 export const HOME_MOBILE_EVENT_CARD_WIDTH = 212;
 const DESKTOP_RAIL_SIDE_INSET = "max(2rem, calc((100vw - 1200px) / 2 + 2rem))";
@@ -313,10 +318,13 @@ function MobileRailScroller({
 
 function HomeMiniEventCard({ event }: { event: EventCardItem }) {
   const { eventHref, handleClick } = useEventCardLink(event.id);
-  const eventDate = new Date(event.startAt);
-  const month = format(eventDate, "MMM");
-  const day = format(eventDate, "d");
-  const startTime = formatTime(event.startAt);
+  const month = formatEventDate(event.startAt, event.timeZone, event.state, {
+    month: "short",
+  });
+  const day = formatEventDate(event.startAt, event.timeZone, event.state, {
+    day: "numeric",
+  });
+  const startTime = formatEventTime(event.startAt, event.timeZone, event.state);
   const { main: titleMain, trailingParenthetical } = splitTrailingParenthetical(
     event.title
   );

@@ -186,8 +186,8 @@ private enum PlaceLocationFilter: Hashable, Identifiable {
         switch self {
         case .all:
             return "All Cities"
-        case .city(let city, let state):
-            return "\(city), \(state)"
+        case .city(let city, _):
+            return city
         }
     }
 
@@ -196,8 +196,11 @@ private enum PlaceLocationFilter: Hashable, Identifiable {
         case .all:
             return true
         case .city(let city, let state):
-            return place.city?.localizedCaseInsensitiveCompare(city) == .orderedSame &&
-                place.state?.localizedCaseInsensitiveCompare(state) == .orderedSame
+            let placeCity = place.metroAreaCity ?? place.city
+            let placeState = place.metroAreaState ?? place.state
+
+            return placeCity?.localizedCaseInsensitiveCompare(city) == .orderedSame &&
+                placeState?.localizedCaseInsensitiveCompare(state) == .orderedSame
         }
     }
 }

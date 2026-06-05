@@ -4,7 +4,9 @@ import UIKit
 
 @main
 struct WIGApp: App {
+    @UIApplicationDelegateAdaptor(WIGAppDelegate.self) private var appDelegate
     @StateObject private var appSession = AppSession()
+    @StateObject private var pushNotificationManager = PushNotificationManager.shared
     private let apiClient: APIClient
 
     init() {
@@ -36,11 +38,39 @@ struct WIGApp: App {
 
     var body: some Scene {
         WindowGroup {
-            AppRootView()
+            ZStack {
+                AppRootView()
+                PushNotificationSyncView()
+                    .allowsHitTesting(false)
+            }
                 .preferredColorScheme(.dark)
                 .environment(Clerk.shared)
                 .environment(\.apiClient, apiClient)
                 .environmentObject(appSession)
+                .environmentObject(pushNotificationManager)
         }
+    }
+}
+
+private struct PushNotificationSyncView: View {
+    @Environment(Clerk.self) private var clerk
+    @Environment(\.apiClient) private var apiClient
+    @EnvironmentObject private var appSession: AppSession
+    @EnvironmentObject private var pushNotificationManager: PushNotificationManager
+
+    var body: some View {
+        Color.clear
+            .task(id: "\(clerk.user?.id ?? "guest")-\(appSession.isAuthBypassed)-\(pushNotificationManager.deviceToken ?? "no-token")") {
+                pushNotificationManager.requestAuthorizationAfterFirstLoginIfNeeded(
+                    clerk: clerk,
+                    isAuthBypassed: appSession.isAuthBypassed
+                )
+
+                await pushNotificationManager.syncIfNeeded(
+                    using: apiClient,
+                    clerk: clerk,
+                    isAuthBypassed: appSession.isAuthBypassed
+                )
+            }
     }
 }

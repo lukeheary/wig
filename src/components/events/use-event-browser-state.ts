@@ -19,6 +19,7 @@ import {
 } from "date-fns";
 import { useQueryState } from "nuqs";
 import { HapticPreset, useHaptics } from "@/hooks/use-haptics";
+import { formatEventDateKey } from "@/lib/utils";
 import { trpc } from "@/lib/trpc";
 import { type EventListItem } from "@/types/trpc";
 
@@ -174,7 +175,11 @@ export function useEventBrowserState({
 
   const buildEventsByDay = useCallback((events: EventListItem[]) => {
     return events.reduce<Record<string, EventListItem[]>>((groups, event) => {
-      const dateKey = format(new Date(event.startAt), "yyyy-MM-dd");
+      const dateKey = formatEventDateKey(
+        event.startAt,
+        event.timeZone,
+        event.state
+      );
       if (!groups[dateKey]) groups[dateKey] = [];
       groups[dateKey].push(event);
       return groups;

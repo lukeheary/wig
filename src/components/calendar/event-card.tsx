@@ -3,7 +3,12 @@
 import Link from "next/link";
 import Image from "next/image";
 import { Card } from "@/components/ui/card";
-import { cn, formatTime, splitTrailingParenthetical } from "@/lib/utils";
+import {
+  cn,
+  formatEventDate,
+  formatEventTime,
+  splitTrailingParenthetical,
+} from "@/lib/utils";
 import { Calendar } from "lucide-react";
 import { format } from "date-fns";
 import { EventSocialOverlay } from "@/components/events/event-social-overlay";
@@ -22,11 +27,16 @@ interface EventCardProps {
 
 export function EventCard({ event }: EventCardProps) {
   const { eventHref, handleClick } = useEventCardLink(event.id);
-  const eventDate = new Date(event.startAt);
-  const dayOfWeek = format(eventDate, "EEE");
-  const month = format(eventDate, "MMM");
-  const day = format(eventDate, "d");
-  const startTime = formatTime(event.startAt);
+  const dayOfWeek = formatEventDate(event.startAt, event.timeZone, event.state, {
+    weekday: "short",
+  });
+  const month = formatEventDate(event.startAt, event.timeZone, event.state, {
+    month: "short",
+  });
+  const day = formatEventDate(event.startAt, event.timeZone, event.state, {
+    day: "numeric",
+  });
+  const startTime = formatEventTime(event.startAt, event.timeZone, event.state);
   const { main: titleMain, trailingParenthetical } = splitTrailingParenthetical(
     event.title
   );

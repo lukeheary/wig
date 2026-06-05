@@ -318,6 +318,7 @@ export const eventRouter = router({
           eventUrl: input.eventUrl ?? null,
           source: input.source ?? null,
           externalId: input.externalId ?? null,
+          timeZone: input.timeZone ?? null,
         } as any)
         .returning();
 
@@ -1030,6 +1031,7 @@ export const eventRouter = router({
             source: z.string().max(50).optional(),
             externalId: z.string().optional(),
             startAt: z.date(),
+            timeZone: z.string().min(1).max(64).optional(),
             endAt: z.date().optional(),
             address: z.string().optional(),
             city: z.string().min(1).max(100),
@@ -1140,6 +1142,7 @@ export const eventRouter = router({
             source: event.source ?? null,
             externalId: event.externalId ?? null,
             startAt: event.startAt,
+            timeZone: event.timeZone ?? null,
             endAt: event.endAt ?? null,
             address: event.address ?? null,
             city: event.city,
@@ -1168,6 +1171,7 @@ export const eventRouter = router({
                 coverImageUrl: sql`excluded.cover_image_url`,
                 eventUrl: sql`excluded.event_url`,
                 startAt: sql`excluded.start_at`,
+                timeZone: sql`excluded.time_zone`,
                 endAt: sql`excluded.end_at`,
                 address: sql`excluded.address`,
                 city: sql`excluded.city`,
@@ -2049,6 +2053,7 @@ export const eventRouter = router({
         source: z.string().max(50).optional(),
         externalId: z.string().optional(),
         startAt: z.date().optional(),
+        timeZone: z.string().min(1).max(64).optional().nullable(),
         endAt: z.date().optional(),
         address: z.string().optional(),
         city: z.string().min(1).max(100).optional(),
@@ -2119,6 +2124,7 @@ export const eventRouter = router({
       if (updates.externalId !== undefined)
         updateData.externalId = updates.externalId;
       if (updates.startAt !== undefined) updateData.startAt = updates.startAt;
+      if (updates.timeZone !== undefined) updateData.timeZone = updates.timeZone;
       if (updates.endAt !== undefined) updateData.endAt = updates.endAt;
       if (updates.address !== undefined) updateData.address = updates.address;
       if (updates.city !== undefined) updateData.city = updates.city;

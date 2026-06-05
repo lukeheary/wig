@@ -1,4 +1,6 @@
+import SafariServices
 import SwiftUI
+import UIKit
 
 struct PlaceDetailView: View {
     let place: PlaceListItem
@@ -22,8 +24,11 @@ struct PlaceDetailView: View {
                         logoURL: place.displayLogoURL,
                         locationText: place.locationText.isEmpty ? nil : place.locationText,
                         categoryLabel: nil,
-                        instagram: nil,
-                        websiteText: nil
+                        websiteURL: nil,
+                        websiteText: nil,
+                        isFollowed: place.isFollowed,
+                        isFollowDisabled: true,
+                        onFollowToggle: {}
                     )
 
                     ProgressView("Loading events...")
@@ -39,8 +44,11 @@ struct PlaceDetailView: View {
                         logoURL: place.displayLogoURL,
                         locationText: place.locationText.isEmpty ? nil : place.locationText,
                         categoryLabel: nil,
-                        instagram: nil,
-                        websiteText: nil
+                        websiteURL: nil,
+                        websiteText: nil,
+                        isFollowed: place.isFollowed,
+                        isFollowDisabled: true,
+                        onFollowToggle: {}
                     )
 
                     ContentUnavailableView {
@@ -64,11 +72,21 @@ struct PlaceDetailView: View {
                         logoURL: detail.displayLogoURL,
                         locationText: detail.locationText,
                         categoryLabel: detail.primaryCategoryLabel,
-                        instagram: detail.instagram,
-                        websiteText: detail.websiteDisplayText
+                        websiteURL: detail.website,
+                        websiteText: detail.websiteDisplayText,
+                        isFollowed: detail.isFollowed,
+                        isFollowDisabled: viewModel.isUpdatingFollow,
+                        onFollowToggle: {
+                            UIImpactFeedbackGenerator(style: .light).impactOccurred()
+                            Task {
+                                await viewModel.setFollowed(
+                                    !detail.isFollowed,
+                                    slug: detail.slug,
+                                    using: apiClient
+                                )
+                            }
+                        }
                     )
-
-                    actionControls
 
                     eventGroups(for: detail)
                 }
@@ -94,21 +112,6 @@ struct PlaceDetailView: View {
                 await viewModel.load(slug: place.slug, using: apiClient)
             }
         }
-    }
-
-    private var actionControls: some View {
-        Button {} label: {
-            Text("Follow")
-                .font(.system(size: 16, weight: .bold))
-                .foregroundStyle(.white)
-                .frame(maxWidth: .infinity)
-                .frame(height: 50)
-                .overlay(
-                    RoundedRectangle(cornerRadius: 16, style: .continuous)
-                        .strokeBorder(Color(red: 0.48, green: 0.77, blue: 1.0), lineWidth: 1.4)
-                )
-        }
-        .buttonStyle(.plain)
     }
 
     private var leadingTopControls: some View {
@@ -262,24 +265,40 @@ private struct PlaceDetailHeader: View {
     let logoURL: URL?
     let locationText: String?
     let categoryLabel: String?
-    let instagram: String?
+    let websiteURL: URL?
     let websiteText: String?
+    let isFollowed: Bool
+    let isFollowDisabled: Bool
+    let onFollowToggle: () -> Void
+    @State private var isMapsDialogPresented = false
+    @State private var safariRoute: SafariRoute?
 
     var body: some View {
-        VStack(alignment: .leading, spacing: 16) {
-            HStack(alignment: .top, spacing: 14) {
+        VStack(alignment: .leading, spacing: 8) {
+            HStack(alignment: .top, spacing: 16) {
                 logo
 
-                VStack(alignment: .leading, spacing: 7) {
-                    Text(name)
-                        .font(.system(size: 24, weight: .bold))
-                        .foregroundStyle(.white)
-                        .lineLimit(2)
-                        .minimumScaleFactor(0.72)
+                Spacer(minLength: 16)
 
+                followButton
+            }
+            .padding(.top, 64)
+
+            VStack(alignment: .leading, spacing: 2) {
+                Text(name)
+                    .font(.system(size: 26, weight: .bold))
+                    .foregroundStyle(.white)
+                    .lineLimit(3)
+                    .minimumScaleFactor(0.76)
+                    .fixedSize(horizontal: false, vertical: true)
+
+                HStack(alignment: .center, spacing: 10) {
                     Text("@\(slug)")
                         .font(.system(size: 16, weight: .medium))
-                        .foregroundStyle(.white.opacity(0.62))
+                        .foregroundStyle(.white.opacity(0.58))
+                        .lineLimit(2)
+                        .minimumScaleFactor(0.78)
+                        .fixedSize(horizontal: false, vertical: true)
 
                     if let categoryLabel {
                         Text(categoryLabel)
@@ -288,30 +307,70 @@ private struct PlaceDetailHeader: View {
                             .padding(.horizontal, 10)
                             .padding(.vertical, 6)
                             .background(Color.white.opacity(0.10), in: Capsule())
+                            .fixedSize(horizontal: true, vertical: false)
                     }
                 }
+                .frame(minHeight: 30, alignment: .center)
             }
-            .padding(.top, 64)
+            .frame(maxWidth: .infinity, alignment: .leading)
 
-            VStack(alignment: .leading, spacing: 12) {
+            HStack(alignment: .center, spacing: 16) {
                 if let locationText {
-                    Label(locationText, systemImage: "mappin.circle")
+                    Button {
+                        isMapsDialogPresented = true
+                    } label: {
+                        Label(locationText, systemImage: "mappin.circle")
+                            .lineLimit(1)
+                    }
+                    .buttonStyle(.plain)
+                    .confirmationDialog(locationText, isPresented: $isMapsDialogPresented) {
+                        Button("Open in Maps") {
+                            openInMaps(address: locationText)
+                        }
+
+                        Button("Cancel", role: .cancel) {}
+                    }
                 }
 
-                HStack(spacing: 16) {
-                    if let instagram, !instagram.isEmpty {
-                        Label("@\(instagram)", systemImage: "camera")
-                    }
-
-                    if let websiteText {
+                if let websiteText, let websiteURL {
+                    Button {
+                        safariRoute = SafariRoute(url: websiteURL)
+                    } label: {
                         Label(websiteText, systemImage: "globe")
+                            .lineLimit(1)
                     }
+                    .buttonStyle(.plain)
                 }
             }
-            .font(.system(size: 15, weight: .medium))
-            .foregroundStyle(.white.opacity(0.62))
+            .font(.system(size: 13, weight: .medium))
+            .foregroundStyle(.white.opacity(0.58))
             .lineLimit(1)
         }
+        .sheet(item: $safariRoute) { route in
+            SafariView(url: route.url)
+                .ignoresSafeArea()
+        }
+    }
+
+    private var followButton: some View {
+        Button(action: onFollowToggle) {
+            Text(isFollowed ? "Following" : "Follow")
+                .font(.system(size: 15, weight: .bold))
+                .foregroundStyle(isFollowed ? .black : .white)
+                .padding(.horizontal, 20)
+                .frame(height: 44)
+                .contentShape(Capsule())
+                .background {
+                    if isFollowed {
+                        Capsule()
+                            .fill(Color(red: 0.25, green: 1.0, blue: 0.86))
+                    }
+                }
+                .placeDetailLiquidGlass(in: Capsule())
+        }
+        .buttonStyle(.plain)
+        .disabled(isFollowDisabled)
+        .opacity(isFollowDisabled ? 0.72 : 1)
     }
 
     @ViewBuilder
@@ -349,6 +408,31 @@ private struct PlaceDetailHeader: View {
                 .foregroundStyle(.white.opacity(0.70))
         }
     }
+
+    private func openInMaps(address: String) {
+        guard let encodedAddress = address.addingPercentEncoding(withAllowedCharacters: .urlQueryAllowed),
+              let url = URL(string: "http://maps.apple.com/?q=\(encodedAddress)")
+        else {
+            return
+        }
+
+        UIApplication.shared.open(url)
+    }
+}
+
+private struct SafariRoute: Identifiable {
+    let id = UUID()
+    let url: URL
+}
+
+private struct SafariView: UIViewControllerRepresentable {
+    let url: URL
+
+    func makeUIViewController(context: Context) -> SFSafariViewController {
+        SFSafariViewController(url: url)
+    }
+
+    func updateUIViewController(_ uiViewController: SFSafariViewController, context: Context) {}
 }
 
 private enum PlaceEventsTab: CaseIterable, Identifiable {
@@ -390,7 +474,7 @@ private enum PlaceEventGrouper {
         }
 
         return sortedEvents.reduce(into: [PlaceEventGroup]()) { groups, event in
-            let label = label(for: event.startAt, mode: mode)
+            let label = label(for: event, mode: mode)
 
             if let lastIndex = groups.indices.last, groups[lastIndex].label == label {
                 groups[lastIndex].events.append(event)
@@ -400,13 +484,14 @@ private enum PlaceEventGrouper {
         }
     }
 
-    private static func label(for date: Date, mode: PlaceEventsTab) -> String {
-        let calendar = Calendar.current
+    private static func label(for event: EventFeedItem, mode: PlaceEventsTab) -> String {
+        var calendar = Calendar(identifier: .gregorian)
+        calendar.timeZone = event.displayTimeZone
         let now = Date()
         let currentWeekStart = calendar.dateInterval(of: .weekOfYear, for: now)?.start ?? now
-        let eventWeekStart = calendar.dateInterval(of: .weekOfYear, for: date)?.start ?? date
+        let eventWeekStart = calendar.dateInterval(of: .weekOfYear, for: event.startAt)?.start ?? event.startAt
         let currentMonthStart = calendar.dateInterval(of: .month, for: now)?.start ?? now
-        let eventMonthStart = calendar.dateInterval(of: .month, for: date)?.start ?? date
+        let eventMonthStart = calendar.dateInterval(of: .month, for: event.startAt)?.start ?? event.startAt
 
         let weekDifference = calendar.dateComponents(
             [.weekOfYear],

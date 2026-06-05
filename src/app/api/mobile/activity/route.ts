@@ -1,7 +1,13 @@
+import { auth } from "@clerk/nextjs/server";
 import { NextResponse } from "next/server";
-import { and, desc, eq, sql } from "drizzle-orm";
+import { and, asc, desc, eq, inArray, sql } from "drizzle-orm";
 import { db } from "@/server/db";
-import { userActivity, userFriends } from "@/server/db/schema";
+import {
+  eventRsvps,
+  userActivity,
+  userFriends,
+  users,
+} from "@/server/db/schema";
 import { mapEventCategoryData } from "@/server/utils/categories";
 
 const VISIBLE_ACTIVITY_TYPES = new Set([
@@ -10,12 +16,37 @@ const VISIBLE_ACTIVITY_TYPES = new Set([
   "rsvp_not_going",
 ]);
 
+function getNotGoingReason(metadata: unknown) {
+  if (!metadata || typeof metadata !== "object") return null;
+  const reason = (metadata as { reason?: unknown }).reason;
+  return typeof reason === "string" ? reason : null;
+}
+
+async function currentMobileUserId() {
+  const { userId } = await auth();
+
+  if (userId) {
+    return userId;
+  }
+
+  const previewUser = await db.query.users.findFirst({
+    where: eq(users.isOnboarding, false),
+    orderBy: [asc(users.createdAt)],
+    columns: {
+      id: true,
+    },
+  });
+
+  return previewUser?.id ?? null;
+}
+
 export async function GET(request: Request) {
   const { searchParams } = new URL(request.url);
   const limitParam = Number(searchParams.get("limit") ?? "40");
   const limit = Number.isFinite(limitParam)
     ? Math.min(Math.max(limitParam, 1), 100)
     : 40;
+  const userId = await currentMobileUserId();
 
   const [friendCountRow] = await db
     .select({ count: sql<number>`count(*)::int` })
@@ -50,13 +81,41 @@ export async function GET(request: Request) {
     },
   });
 
-  const activities = activityList
-    .filter((activity) => {
-      if (!VISIBLE_ACTIVITY_TYPES.has(activity.type)) return false;
-      if (!activity.event) return false;
-      return activity.event.visibility === "public" && activity.event.status === "active";
-    })
-    .map((activity) => {
+  const visibleActivities = activityList.filter((activity) => {
+    if (!VISIBLE_ACTIVITY_TYPES.has(activity.type)) return false;
+    if (!activity.event) return false;
+    return activity.event.visibility === "public" && activity.event.status === "active";
+  });
+
+  const eventIds = visibleActivities
+    .map((activity) => activity.event?.id)
+    .filter((id): id is string => Boolean(id));
+  const currentUserRsvpMap =
+    userId && eventIds.length > 0
+      ? new Map(
+          (
+            await db.query.eventRsvps.findMany({
+              where: and(
+                inArray(eventRsvps.eventId, eventIds),
+                eq(eventRsvps.userId, userId)
+              ),
+              columns: {
+                eventId: true,
+                status: true,
+                notGoingReason: true,
+              },
+            })
+          ).map((rsvp) => [
+            rsvp.eventId,
+            {
+              status: rsvp.status,
+              notGoingReason: rsvp.notGoingReason,
+            },
+          ])
+        )
+      : new Map<string, { status: string; notGoingReason: string | null }>();
+
+  const activities = visibleActivities.map((activity) => {
       const actorName =
         [activity.actor.firstName, activity.actor.lastName]
           .filter(Boolean)
@@ -67,12 +126,18 @@ export async function GET(request: Request) {
 
       const event = mapEventCategoryData(activity.event);
       const venue = event.venue;
+      const currentUserRsvp = currentUserRsvpMap.get(event.id) ?? null;
 
       return {
         id: activity.id,
         type: activity.type,
         actorName,
+        actorGender: activity.actor.gender,
         actorAvatarImageUrl: activity.actor.avatarImageUrl,
+        notGoingReason:
+          activity.type === "rsvp_not_going"
+            ? getNotGoingReason(activity.metadata)
+            : null,
         createdAt: activity.createdAt,
         updatedAt: activity.updatedAt,
         event: {
@@ -86,6 +151,7 @@ export async function GET(request: Request) {
           address: event.address,
           city: event.city,
           state: event.state,
+          timeZone: event.timeZone,
           venueId: event.venueId,
           venueName: venue?.name ?? null,
           venueSlug: venue?.slug ?? null,
@@ -97,6 +163,8 @@ export async function GET(request: Request) {
           categories: event.categories,
           categoryLabels: event.categoryLabels,
           updatedAt: event.updatedAt,
+          userRsvpStatus: currentUserRsvp?.status ?? null,
+          userRsvpNotGoingReason: currentUserRsvp?.notGoingReason ?? null,
           venue: venue
             ? {
                 id: venue.id,

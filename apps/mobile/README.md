@@ -11,7 +11,7 @@ This folder now contains the native SwiftUI app scaffold for WIG.
 
 1. Enable the Native API in Clerk.
 2. Add your iOS app in the Clerk dashboard.
-3. Copy `Config/Local.example.xcconfig` to `Config/Local.xcconfig` and set:
+3. Copy `Config/Local.example.xcconfig` to `Config/Local.xcconfig` for Debug builds and set:
    - `CLERK_PUBLISHABLE_KEY`
    - `CLERK_FRONTEND_API`
    - `API_BASE_URL`
@@ -30,16 +30,19 @@ xcodegen generate
 open WIG.xcodeproj
 ```
 
-### Local config
+### Build config
 
-`Debug.xcconfig` and `Release.xcconfig` both include `Local.xcconfig` if it exists.
+`Debug.xcconfig` includes `Local.xcconfig` if it exists. Use it for local development values like test Clerk keys and ngrok URLs.
+
+`Release.xcconfig` includes `Production.xcconfig` if it exists. Xcode archives use the Release configuration by default, so TestFlight builds should read production Clerk and API values from `Production.xcconfig`.
 
 ```bash
 cd apps/mobile
 cp Config/Local.example.xcconfig Config/Local.xcconfig
+cp Config/Production.example.xcconfig Config/Production.xcconfig
 ```
 
-After editing `Local.xcconfig`, regenerate the project if needed:
+After editing either local config file, regenerate the project if needed:
 
 ```bash
 xcodegen generate

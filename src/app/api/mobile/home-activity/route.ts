@@ -1,9 +1,10 @@
 import { auth } from "@clerk/nextjs/server";
 import { addDays, subDays, startOfDay } from "date-fns";
-import { and, asc, desc, eq, sql } from "drizzle-orm";
+import { and, asc, desc, eq, inArray, sql } from "drizzle-orm";
 import { NextResponse } from "next/server";
 import { db } from "@/server/db";
 import {
+  eventRsvps,
   userActivity,
   userFriends,
   userSurfaceState,
@@ -42,6 +43,12 @@ function activityTimestamp(activity: {
   createdAt: Date;
 }) {
   return activity.updatedAt ?? activity.createdAt;
+}
+
+function getNotGoingReason(metadata: unknown) {
+  if (!metadata || typeof metadata !== "object") return null;
+  const reason = (metadata as { reason?: unknown }).reason;
+  return typeof reason === "string" ? reason : null;
 }
 
 export async function GET(request: Request) {
@@ -191,6 +198,34 @@ export async function GET(request: Request) {
       },
     });
 
+  const eventIds = previewActivities
+    .map((activity) => activity.event?.id)
+    .filter((id): id is string => Boolean(id));
+  const currentUserRsvpMap =
+    eventIds.length > 0
+      ? new Map(
+          (
+            await db.query.eventRsvps.findMany({
+              where: and(
+                inArray(eventRsvps.eventId, eventIds),
+                eq(eventRsvps.userId, userId)
+              ),
+              columns: {
+                eventId: true,
+                status: true,
+                notGoingReason: true,
+              },
+            })
+          ).map((rsvp) => [
+            rsvp.eventId,
+            {
+              status: rsvp.status,
+              notGoingReason: rsvp.notGoingReason,
+            },
+          ])
+        )
+      : new Map<string, { status: string; notGoingReason: string | null }>();
+
   const activities = previewActivities.map((activity) => {
     const actorName =
       [activity.actor.firstName, activity.actor.lastName]
@@ -201,12 +236,18 @@ export async function GET(request: Request) {
       "Someone";
     const event = mapEventCategoryData(activity.event!);
     const venue = event.venue;
+    const currentUserRsvp = currentUserRsvpMap.get(event.id) ?? null;
 
     return {
       id: activity.id,
       type: activity.type,
       actorName,
+      actorGender: activity.actor.gender,
       actorAvatarImageUrl: activity.actor.avatarImageUrl,
+      notGoingReason:
+        activity.type === "rsvp_not_going"
+          ? getNotGoingReason(activity.metadata)
+          : null,
       createdAt: activity.createdAt,
       updatedAt: activity.updatedAt,
       event: {
@@ -220,6 +261,7 @@ export async function GET(request: Request) {
         address: event.address,
         city: event.city,
         state: event.state,
+        timeZone: event.timeZone,
         venueId: event.venueId,
         venueName: venue?.name ?? null,
         venueSlug: venue?.slug ?? null,
@@ -231,6 +273,8 @@ export async function GET(request: Request) {
         categories: event.categories,
         categoryLabels: event.categoryLabels,
         updatedAt: event.updatedAt,
+        userRsvpStatus: currentUserRsvp?.status ?? null,
+        userRsvpNotGoingReason: currentUserRsvp?.notGoingReason ?? null,
         venue: venue
           ? {
               id: venue.id,

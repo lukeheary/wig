@@ -1,0 +1,4 @@
+CLERK_PUBLISHABLE_KEY = pk_live_replace_me
+CLERK_FRONTEND_API = your-production-frontend-api.clerk.accounts.dev
+API_BASE_URL = https:/$()/api.whoisgoing.com
+CLERK_JWT_TEMPLATE =

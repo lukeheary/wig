@@ -5,7 +5,7 @@ settings:
   base:
     SWIFT_VERSION: 5.10
     IPHONEOS_DEPLOYMENT_TARGET: 17.0
-    TARGETED_DEVICE_FAMILY: 1,2
+    TARGETED_DEVICE_FAMILY: 1
     DEVELOPMENT_TEAM: ""
 configs:
   Debug: debug
@@ -23,7 +23,7 @@ targets:
       - path: WIG
     settings:
       base:
-        PRODUCT_BUNDLE_IDENTIFIER: com.wig.app
+        PRODUCT_BUNDLE_IDENTIFIER: com.whoisgoing.app
         PRODUCT_NAME: WIG
         INFOPLIST_FILE: WIG/Support/Info.plist
         CODE_SIGN_ENTITLEMENTS: WIG/Support/WIG.entitlements
@@ -32,11 +32,13 @@ targets:
       configs:
         Debug:
           base:
+            APS_ENVIRONMENT: development
             CODE_SIGN_STYLE: Automatic
           configFiles:
             - Config/Debug.xcconfig
         Release:
           base:
+            APS_ENVIRONMENT: production
             CODE_SIGN_STYLE: Automatic
           configFiles:
             - Config/Release.xcconfig

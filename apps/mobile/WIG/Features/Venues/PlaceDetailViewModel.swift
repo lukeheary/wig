@@ -10,6 +10,7 @@ final class PlaceDetailViewModel: ObservableObject {
     }
 
     @Published private(set) var state: State = .idle
+    @Published private(set) var isUpdatingFollow = false
 
     func load(slug: String, using apiClient: APIClient) async {
         state = .loading
@@ -21,5 +22,31 @@ final class PlaceDetailViewModel: ObservableObject {
             state = .failed(error.localizedDescription)
         }
     }
-}
 
+    func setFollowed(_ isFollowed: Bool, slug: String, using apiClient: APIClient) async {
+        guard case .loaded(var detail) = state else {
+            return
+        }
+
+        let previousDetail = detail
+        detail.isFollowed = isFollowed
+        state = .loaded(detail)
+        isUpdatingFollow = true
+
+        do {
+            let followState: PlaceFollowState
+            if isFollowed {
+                followState = try await apiClient.send(APIClient.followMobilePlace(slug: slug))
+            } else {
+                followState = try await apiClient.send(APIClient.unfollowMobilePlace(slug: slug))
+            }
+
+            detail.isFollowed = followState.isFollowed
+            state = .loaded(detail)
+        } catch {
+            state = .loaded(previousDetail)
+        }
+
+        isUpdatingFollow = false
+    }
+}

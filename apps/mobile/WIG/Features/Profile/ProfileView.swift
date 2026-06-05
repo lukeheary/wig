@@ -1,12 +1,18 @@
 import ClerkKit
 import ClerkKitUI
+import PhotosUI
 import SwiftUI
+import UIKit
 
 struct ProfileView: View {
     @Environment(Clerk.self) private var clerk
     @Environment(\.apiClient) private var apiClient
     @EnvironmentObject private var appSession: AppSession
     @StateObject private var viewModel = ProfileViewModel()
+    @State private var selectedAvatarPhotoItem: PhotosPickerItem?
+    @State private var isAvatarSourceDialogPresented = false
+    @State private var isAvatarPhotoPickerPresented = false
+    @State private var isAvatarCameraPresented = false
 
     var body: some View {
         NavigationStack {
@@ -20,6 +26,58 @@ struct ProfileView: View {
                 }
                 .refreshable {
                     await viewModel.load(using: apiClient)
+                }
+                .confirmationDialog(
+                    "Update profile picture",
+                    isPresented: $isAvatarSourceDialogPresented,
+                    titleVisibility: .visible
+                ) {
+                    Button("Choose Photo") {
+                        isAvatarPhotoPickerPresented = true
+                    }
+
+                    if UIImagePickerController.isSourceTypeAvailable(.camera) {
+                        Button("Take Photo") {
+                            isAvatarCameraPresented = true
+                        }
+                    }
+
+                    Button("Cancel", role: .cancel) {}
+                }
+                .photosPicker(
+                    isPresented: $isAvatarPhotoPickerPresented,
+                    selection: $selectedAvatarPhotoItem,
+                    matching: .images
+                )
+                .sheet(isPresented: $isAvatarCameraPresented) {
+                    CameraImagePicker { image in
+                        Task {
+                            await uploadAvatarImage(image)
+                        }
+                    }
+                    .ignoresSafeArea()
+                }
+                .onChange(of: selectedAvatarPhotoItem) { _, item in
+                    guard let item else { return }
+
+                    Task {
+                        await handleSelectedAvatarPhoto(item)
+                    }
+                }
+                .alert(
+                    "Couldn't Update Photo",
+                    isPresented: Binding(
+                        get: { viewModel.avatarUploadError != nil },
+                        set: { isPresented in
+                            if !isPresented {
+                                viewModel.avatarUploadError = nil
+                            }
+                        }
+                    )
+                ) {
+                    Button("OK", role: .cancel) {}
+                } message: {
+                    Text(viewModel.avatarUploadError ?? "Please try again.")
                 }
         }
     }
@@ -52,7 +110,12 @@ struct ProfileView: View {
         case .loaded(let response):
             ScrollView {
                 VStack(spacing: 22) {
-                    ProfileHeader(profile: response.profile)
+                    ProfileHeader(
+                        profile: response.profile,
+                        isUploadingAvatar: viewModel.isUploadingAvatar
+                    ) {
+                        isAvatarSourceDialogPresented = true
+                    }
 
                     RelationshipSummaryRow(response: response)
 
@@ -69,6 +132,33 @@ struct ProfileView: View {
             .scrollIndicators(.hidden)
             .background(ProfileTheme.background)
         }
+    }
+
+    private func handleSelectedAvatarPhoto(_ item: PhotosPickerItem) async {
+        selectedAvatarPhotoItem = nil
+
+        do {
+            guard
+                let data = try await item.loadTransferable(type: Data.self),
+                let image = UIImage(data: data)
+            else {
+                viewModel.avatarUploadError = "That image couldn't be loaded."
+                return
+            }
+
+            await uploadAvatarImage(image)
+        } catch {
+            viewModel.avatarUploadError = error.localizedDescription
+        }
+    }
+
+    private func uploadAvatarImage(_ image: UIImage) async {
+        guard let data = image.avatarUploadJPEGData(maxBytes: 4 * 1024 * 1024) else {
+            viewModel.avatarUploadError = "That image is too large to upload."
+            return
+        }
+
+        await viewModel.updateAvatar(imageData: data, using: apiClient)
     }
 
     private var accountCard: some View {
@@ -88,6 +178,7 @@ struct ProfileView: View {
 
                 if clerk.user != nil {
                     UserButton()
+                        .environment(Clerk.shared)
                 }
             }
 
@@ -126,10 +217,41 @@ struct ProfileView: View {
 
 private struct ProfileHeader: View {
     let profile: FriendUserSummary?
+    let isUploadingAvatar: Bool
+    let onEditAvatar: () -> Void
 
     var body: some View {
         VStack(spacing: 12) {
-            FriendAvatarView(user: profile, size: 104, seed: 0)
+            ZStack(alignment: .bottomTrailing) {
+                FriendAvatarView(user: profile, size: 104, seed: 0)
+
+                Button(action: onEditAvatar) {
+                    ZStack {
+                        Circle()
+                            .fill(Color(red: 0.14, green: 0.14, blue: 0.16))
+                            .shadow(color: .black.opacity(0.34), radius: 8, x: 0, y: 4)
+
+                        if isUploadingAvatar {
+                            ProgressView()
+                                .scaleEffect(0.72)
+                                .tint(.white)
+                        } else {
+                            Image(systemName: "camera.fill")
+                                .font(.system(size: 14, weight: .bold))
+                                .foregroundStyle(.white)
+                        }
+                    }
+                    .frame(width: 34, height: 34)
+                    .overlay(
+                        Circle()
+                            .stroke(ProfileTheme.background, lineWidth: 3)
+                    )
+                }
+                .buttonStyle(.plain)
+                .disabled(isUploadingAvatar)
+                .accessibilityLabel("Edit profile picture")
+                .offset(x: 2, y: 2)
+            }
 
             if let profile {
                 VStack(spacing: 3) {
@@ -460,6 +582,96 @@ private enum ProfileTheme {
     static let cardBackground = Color(red: 0.11, green: 0.11, blue: 0.13)
 }
 
+private struct CameraImagePicker: UIViewControllerRepresentable {
+    let onImagePicked: (UIImage) -> Void
+    @Environment(\.dismiss) private var dismiss
+
+    func makeUIViewController(context: Context) -> UIImagePickerController {
+        let picker = UIImagePickerController()
+        picker.sourceType = .camera
+        picker.allowsEditing = true
+        picker.delegate = context.coordinator
+        return picker
+    }
+
+    func updateUIViewController(_ uiViewController: UIImagePickerController, context: Context) {}
+
+    func makeCoordinator() -> Coordinator {
+        Coordinator(
+            onImagePicked: onImagePicked,
+            dismiss: { dismiss() }
+        )
+    }
+
+    final class Coordinator: NSObject, UIImagePickerControllerDelegate, UINavigationControllerDelegate {
+        private let onImagePicked: (UIImage) -> Void
+        private let dismiss: () -> Void
+
+        init(onImagePicked: @escaping (UIImage) -> Void, dismiss: @escaping () -> Void) {
+            self.onImagePicked = onImagePicked
+            self.dismiss = dismiss
+        }
+
+        func imagePickerController(
+            _ picker: UIImagePickerController,
+            didFinishPickingMediaWithInfo info: [UIImagePickerController.InfoKey: Any]
+        ) {
+            let image = (info[.editedImage] ?? info[.originalImage]) as? UIImage
+
+            if let image {
+                onImagePicked(image)
+            }
+
+            dismiss()
+        }
+
+        func imagePickerControllerDidCancel(_ picker: UIImagePickerController) {
+            dismiss()
+        }
+    }
+}
+
+private extension UIImage {
+    func avatarUploadJPEGData(maxBytes: Int) -> Data? {
+        let image = resizedForAvatarUpload(maxDimension: 1024)
+
+        for quality in [0.86, 0.72, 0.58, 0.44, 0.32] {
+            guard let data = image.jpegData(compressionQuality: quality) else {
+                continue
+            }
+
+            if data.count <= maxBytes {
+                return data
+            }
+        }
+
+        return nil
+    }
+
+    private func resizedForAvatarUpload(maxDimension: CGFloat) -> UIImage {
+        let longestSide = max(size.width, size.height)
+
+        guard longestSide > maxDimension else {
+            return self
+        }
+
+        let scale = maxDimension / longestSide
+        let targetSize = CGSize(
+            width: size.width * scale,
+            height: size.height * scale
+        )
+
+        let format = UIGraphicsImageRendererFormat.default()
+        format.scale = 1
+        format.opaque = true
+
+        return UIGraphicsImageRenderer(size: targetSize, format: format).image { _ in
+            draw(in: CGRect(origin: .zero, size: targetSize))
+        }
+    }
+}
+
 #Preview {
     ProfileView()
+        .environment(Clerk.preview())
 }

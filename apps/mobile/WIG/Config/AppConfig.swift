@@ -16,7 +16,7 @@ struct AppConfig {
         clerkJWTTemplate = bundle.optionalString(for: "CLERK_JWT_TEMPLATE")
         oauthCallbackScheme = bundle.optionalString(for: "OAUTH_CALLBACK_SCHEME")
             ?? bundle.bundleIdentifier
-            ?? "com.wig.app"
+            ?? "com.whoisgoing.app"
     }
 }
 

@@ -42,7 +42,7 @@ import { HapticPreset, useHaptics } from "@/hooks/use-haptics";
 import { resolveMetroArea } from "@/lib/metro-areas";
 import { withReturnTo } from "@/lib/navigation";
 import { HOME_RECENT_ACTIVITY_SURFACE } from "@/lib/user-surface-state";
-import { cn, formatTime } from "@/lib/utils";
+import { cn, formatEventDate, formatEventTime } from "@/lib/utils";
 import { useToast } from "@/hooks/use-toast";
 import { type EventFilterTab } from "@/types/events";
 import { withImageVersion } from "@/components/events/event-card-helpers";
@@ -586,15 +586,29 @@ function HomePageContent() {
                                   <Clock className="mt-0.5 h-4 w-4 flex-shrink-0 text-muted-foreground" />
                                   <div>
                                     <div className="font-medium">
-                                      {format(
-                                        new Date(event.startAt),
-                                        "EEEE, MMMM d"
+                                      {formatEventDate(
+                                        event.startAt,
+                                        event.timeZone,
+                                        event.state,
+                                        {
+                                          weekday: "long",
+                                          month: "long",
+                                          day: "numeric",
+                                        }
                                       )}
                                     </div>
                                     <div className="text-muted-foreground">
-                                      {formatTime(event.startAt)}
+                                      {formatEventTime(
+                                        event.startAt,
+                                        event.timeZone,
+                                        event.state
+                                      )}
                                       {event.endAt &&
-                                        ` - ${formatTime(event.endAt)}`}
+                                        ` - ${formatEventTime(
+                                          event.endAt,
+                                          event.timeZone,
+                                          event.state
+                                        )}`}
                                     </div>
                                   </div>
                                 </div>

@@ -1,14 +1,21 @@
 import { auth } from "@clerk/nextjs/server";
+import { startOfDay } from "date-fns";
 import { NextResponse } from "next/server";
 import { and, asc, eq, gte, inArray, or } from "drizzle-orm";
 import { db } from "@/server/db";
 import {
+  cities,
   eventRsvps,
   events,
+  metroAreas,
   placeFollows,
   userFriends,
   users,
 } from "@/server/db/schema";
+import {
+  createMobileMetroResolver,
+  mobileMetroAreas,
+} from "@/app/api/mobile/metro";
 import { mapEventCategoryData } from "@/server/utils/categories";
 
 async function currentMobileUserId() {
@@ -37,9 +44,10 @@ export async function GET(request: Request) {
     : 20;
 
   const now = new Date();
+  const today = startOfDay(now);
   const userId = await currentMobileUserId();
 
-  const [currentUser, availableCities] = await Promise.all([
+  const [currentUser, availableMetroAreas, cityCoordinates] = await Promise.all([
     userId
       ? db.query.users.findFirst({
           where: eq(users.id, userId),
@@ -51,26 +59,38 @@ export async function GET(request: Request) {
       : null,
     db
       .select({
-        city: events.city,
-        state: events.state,
+        name: metroAreas.name,
+        state: metroAreas.state,
+        latitude: metroAreas.latitude,
+        longitude: metroAreas.longitude,
+        radiusMiles: metroAreas.radiusMiles,
       })
-      .from(events)
-      .where(
-        and(
-          eq(events.visibility, "public"),
-          eq(events.status, "active"),
-          gte(events.startAt, now)
-        )
-      )
-      .groupBy(events.city, events.state)
-      .orderBy(asc(events.city), asc(events.state)),
+      .from(metroAreas)
+      .orderBy(asc(metroAreas.name), asc(metroAreas.state)),
+    db
+      .select({
+        name: cities.name,
+        state: cities.state,
+        latitude: cities.latitude,
+        longitude: cities.longitude,
+      })
+      .from(cities),
   ]);
+  const resolveMetroArea = createMobileMetroResolver(
+    availableMetroAreas,
+    cityCoordinates
+  );
+  const availableCities = mobileMetroAreas(availableMetroAreas);
+  const currentUserMetroArea =
+    currentUser?.city && currentUser?.state
+      ? resolveMetroArea({ city: currentUser.city, state: currentUser.state })
+      : null;
 
   const eventList = await db.query.events.findMany({
     where: and(
       eq(events.visibility, "public"),
       eq(events.status, "active"),
-      gte(events.startAt, now)
+      gte(events.startAt, today)
     ),
     orderBy: [asc(events.startAt)],
     limit,
@@ -103,6 +123,13 @@ export async function GET(request: Request) {
       isCurrentUser: boolean;
       isFriend: boolean;
     }>
+  >();
+  const currentUserRsvpMap = new Map<
+    string,
+    {
+      status: "going" | "interested" | "not_going";
+      notGoingReason: string | null;
+    }
   >();
 
   const addSocialRsvp = (
@@ -151,8 +178,7 @@ export async function GET(request: Request) {
         db.query.eventRsvps.findMany({
           where: and(
             inArray(eventRsvps.eventId, eventIds),
-            eq(eventRsvps.userId, userId),
-            inArray(eventRsvps.status, ["going", "interested"])
+            eq(eventRsvps.userId, userId)
           ),
           with: {
             user: true,
@@ -196,6 +222,13 @@ export async function GET(request: Request) {
             },
           })
         : [];
+
+    for (const rsvp of currentUserRsvps) {
+      currentUserRsvpMap.set(rsvp.eventId, {
+        status: rsvp.status,
+        notGoingReason: rsvp.notGoingReason,
+      });
+    }
 
     for (const rsvp of [
       ...currentUserRsvps,
@@ -241,6 +274,11 @@ export async function GET(request: Request) {
   const payload = eventList.map((event) => {
     const mapped = mapEventCategoryData(event);
     const socialRsvps = socialRsvpsMap.get(mapped.id) ?? [];
+    const currentUserRsvp = currentUserRsvpMap.get(mapped.id) ?? null;
+    const metroArea = resolveMetroArea({
+      city: mapped.city,
+      state: mapped.state,
+    });
 
     return {
       id: mapped.id,
@@ -253,6 +291,9 @@ export async function GET(request: Request) {
       address: mapped.address,
       city: mapped.city,
       state: mapped.state,
+      timeZone: mapped.timeZone,
+      metroAreaCity: metroArea?.city ?? null,
+      metroAreaState: metroArea?.state ?? null,
       venueId: mapped.venueId,
       venueName: mapped.venue?.name ?? null,
       venueSlug: mapped.venue?.slug ?? null,
@@ -269,6 +310,8 @@ export async function GET(request: Request) {
         (mapped.organizerId ? followedPlaceIds.has(mapped.organizerId) : false),
       isCreatedByCurrentUser:
         Boolean(userId) && mapped.createdByUserId === userId,
+      userRsvpStatus: currentUserRsvp?.status ?? null,
+      userRsvpNotGoingReason: currentUserRsvp?.notGoingReason ?? null,
       friendsGoing: socialRsvps.filter((rsvp) => rsvp.status === "going"),
       friendsInterested: socialRsvps.filter(
         (rsvp) => rsvp.status === "interested"
@@ -279,12 +322,6 @@ export async function GET(request: Request) {
   return NextResponse.json({
     events: payload,
     availableCities,
-    currentUserLocation:
-      currentUser?.city && currentUser?.state
-        ? {
-            city: currentUser.city,
-            state: currentUser.state,
-          }
-        : null,
+    currentUserLocation: currentUserMetroArea,
   });
 }

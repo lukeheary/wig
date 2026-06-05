@@ -2,7 +2,18 @@ import { auth } from "@clerk/nextjs/server";
 import { NextResponse } from "next/server";
 import { and, asc, eq, gte, inArray, sql } from "drizzle-orm";
 import { db } from "@/server/db";
-import { events, placeFollows, places, users } from "@/server/db/schema";
+import {
+  cities,
+  events,
+  metroAreas,
+  placeFollows,
+  places,
+  users,
+} from "@/server/db/schema";
+import {
+  createMobileMetroResolver,
+  mobileMetroAreas,
+} from "@/app/api/mobile/metro";
 
 async function currentMobileUserId() {
   const { userId } = await auth();
@@ -31,7 +42,8 @@ export async function GET(request: Request) {
 
   const userId = await currentMobileUserId();
 
-  const [currentUser, availableCities, placesList] = await Promise.all([
+  const [currentUser, availableMetroAreas, cityCoordinates, placesList] =
+    await Promise.all([
     userId
       ? db.query.users.findFirst({
           where: eq(users.id, userId),
@@ -43,34 +55,43 @@ export async function GET(request: Request) {
       : null,
     db
       .select({
-        city: places.city,
-        state: places.state,
+        name: metroAreas.name,
+        state: metroAreas.state,
+        latitude: metroAreas.latitude,
+        longitude: metroAreas.longitude,
+        radiusMiles: metroAreas.radiusMiles,
       })
-      .from(places)
-      .where(and(sql`${places.city} is not null`, sql`${places.state} is not null`))
-      .groupBy(places.city, places.state)
-      .orderBy(asc(places.city), asc(places.state)),
+      .from(metroAreas)
+      .orderBy(asc(metroAreas.name), asc(metroAreas.state)),
+    db
+      .select({
+        name: cities.name,
+        state: cities.state,
+        latitude: cities.latitude,
+        longitude: cities.longitude,
+      })
+      .from(cities),
     db.query.places.findMany({
       orderBy: [asc(places.name)],
       limit,
     }),
   ]);
 
-  const normalizedAvailableCities = availableCities.flatMap((city) =>
-    city.city && city.state ? [{ city: city.city, state: city.state }] : []
+  const resolveMetroArea = createMobileMetroResolver(
+    availableMetroAreas,
+    cityCoordinates
   );
+  const availableCities = mobileMetroAreas(availableMetroAreas);
+  const currentUserMetroArea =
+    currentUser?.city && currentUser?.state
+      ? resolveMetroArea({ city: currentUser.city, state: currentUser.state })
+      : null;
 
   if (placesList.length === 0) {
     return NextResponse.json({
       places: [],
-      availableCities: normalizedAvailableCities,
-      currentUserLocation:
-        currentUser?.city && currentUser?.state
-          ? {
-              city: currentUser.city,
-              state: currentUser.state,
-            }
-          : null,
+      availableCities,
+      currentUserLocation: currentUserMetroArea,
     });
   }
 
@@ -148,6 +169,10 @@ export async function GET(request: Request) {
 
   const payload = placesList.map((place) => {
     const eventCount = countByPlaceId.get(place.id) ?? 0;
+    const metroArea = resolveMetroArea({
+      city: place.city,
+      state: place.state,
+    });
 
     return {
       id: place.id,
@@ -157,6 +182,8 @@ export async function GET(request: Request) {
       logoImageUrl: place.logoImageUrl,
       city: place.city,
       state: place.state,
+      metroAreaCity: metroArea?.city ?? null,
+      metroAreaState: metroArea?.state ?? null,
       eventCount,
       upcomingEventCount: eventCount,
       updatedAt: place.updatedAt,
@@ -166,13 +193,7 @@ export async function GET(request: Request) {
 
   return NextResponse.json({
     places: payload,
-    availableCities: normalizedAvailableCities,
-    currentUserLocation:
-      currentUser?.city && currentUser?.state
-        ? {
-            city: currentUser.city,
-            state: currentUser.state,
-          }
-        : null,
+    availableCities,
+    currentUserLocation: currentUserMetroArea,
   });
 }

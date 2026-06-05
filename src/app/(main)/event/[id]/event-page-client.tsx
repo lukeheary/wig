@@ -22,7 +22,12 @@ import {
 } from "lucide-react";
 import { useToast } from "@/hooks/use-toast";
 import { differenceInCalendarDays, format, startOfDay } from "date-fns";
-import { cn, splitTrailingParenthetical } from "@/lib/utils";
+import {
+  cn,
+  formatEventDate,
+  formatEventTime,
+  splitTrailingParenthetical,
+} from "@/lib/utils";
 import { AvatarStack } from "@/components/ui/avatar-stack";
 import { useEffect, useMemo, useState } from "react";
 import { getEventStatusLabel } from "@/lib/event-status";
@@ -440,8 +445,16 @@ export default function EventPage() {
     null;
 
   const eventDate = new Date(event.startAt);
-  const formattedDate = format(eventDate, "EEE, MMM d");
-  const timeWithoutTz = format(eventDate, "h:mm a");
+  const formattedDate = formatEventDate(
+    event.startAt,
+    event.timeZone,
+    event.state
+  );
+  const timeWithoutTz = formatEventTime(
+    event.startAt,
+    event.timeZone,
+    event.state
+  );
   const daysUntilEvent = differenceInCalendarDays(
     startOfDay(eventDate),
     startOfDay(new Date())

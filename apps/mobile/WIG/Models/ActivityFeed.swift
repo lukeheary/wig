@@ -10,7 +10,9 @@ struct ActivityFeedItem: Decodable, Identifiable, Hashable, Sendable {
     let id: UUID
     let type: ActivityType
     let actorName: String
+    let actorGender: UserGender?
     let actorAvatarImageURL: URL?
+    let notGoingReason: EventRSVPDeclineReason?
     let createdAt: Date
     let updatedAt: Date?
     let event: ActivityEventSummary
@@ -19,7 +21,9 @@ struct ActivityFeedItem: Decodable, Identifiable, Hashable, Sendable {
         case id
         case type
         case actorName
+        case actorGender
         case actorAvatarImageURL = "actorAvatarImageUrl"
+        case notGoingReason
         case createdAt
         case updatedAt
         case event
@@ -36,6 +40,12 @@ enum ActivityType: String, Decodable, Hashable, Sendable {
     case rsvpNotGoing = "rsvp_not_going"
 }
 
+enum UserGender: String, Decodable, Hashable, Sendable {
+    case male
+    case female
+    case other
+}
+
 struct ActivityEventSummary: Decodable, Identifiable, Hashable, Sendable {
     let id: UUID
     let title: String
@@ -47,6 +57,7 @@ struct ActivityEventSummary: Decodable, Identifiable, Hashable, Sendable {
     let address: String?
     let city: String
     let state: String
+    let timeZone: String?
     let venueID: UUID?
     let venueName: String?
     let venueSlug: String?
@@ -58,6 +69,8 @@ struct ActivityEventSummary: Decodable, Identifiable, Hashable, Sendable {
     let categories: [String]
     let categoryLabels: [String: String]
     let updatedAt: Date?
+    let userRsvpStatus: EventRSVPStatus?
+    let userRsvpNotGoingReason: EventRSVPDeclineReason?
     let venue: PlaceListItem?
 
     enum CodingKeys: String, CodingKey {
@@ -71,6 +84,7 @@ struct ActivityEventSummary: Decodable, Identifiable, Hashable, Sendable {
         case address
         case city
         case state
+        case timeZone
         case venueID = "venueId"
         case venueName
         case venueSlug
@@ -82,6 +96,8 @@ struct ActivityEventSummary: Decodable, Identifiable, Hashable, Sendable {
         case categories
         case categoryLabels
         case updatedAt
+        case userRsvpStatus
+        case userRsvpNotGoingReason
         case venue
     }
 
@@ -105,6 +121,7 @@ struct ActivityEventSummary: Decodable, Identifiable, Hashable, Sendable {
             address: address,
             city: city,
             state: state,
+            timeZone: timeZone,
             venueID: venueID,
             venueName: venueName,
             venueSlug: venueSlug,
@@ -115,7 +132,9 @@ struct ActivityEventSummary: Decodable, Identifiable, Hashable, Sendable {
             organizerLogoImageURL: organizerLogoImageURL,
             categories: categories,
             categoryLabels: categoryLabels,
-            updatedAt: updatedAt
+            updatedAt: updatedAt,
+            userRsvpStatus: userRsvpStatus,
+            userRsvpNotGoingReason: userRsvpNotGoingReason
         )
     }
 }
@@ -127,7 +146,9 @@ extension ActivityFeedItem {
         id = try container.decode(UUID.self, forKey: .id)
         type = try container.decode(ActivityType.self, forKey: .type)
         actorName = try container.decode(String.self, forKey: .actorName)
+        actorGender = try container.decodeIfPresent(UserGender.self, forKey: .actorGender)
         actorAvatarImageURL = try container.decodeOptionalURL(forKey: .actorAvatarImageURL)
+        notGoingReason = try container.decodeIfPresent(EventRSVPDeclineReason.self, forKey: .notGoingReason)
         createdAt = try container.decode(Date.self, forKey: .createdAt)
         updatedAt = try container.decodeIfPresent(Date.self, forKey: .updatedAt)
         event = try container.decode(ActivityEventSummary.self, forKey: .event)
@@ -148,6 +169,7 @@ extension ActivityEventSummary {
         address = try container.decodeIfPresent(String.self, forKey: .address)
         city = try container.decode(String.self, forKey: .city)
         state = try container.decode(String.self, forKey: .state)
+        timeZone = try container.decodeIfPresent(String.self, forKey: .timeZone)
         venueID = try container.decodeIfPresent(UUID.self, forKey: .venueID)
         venueName = try container.decodeIfPresent(String.self, forKey: .venueName)
         venueSlug = try container.decodeIfPresent(String.self, forKey: .venueSlug)
@@ -159,6 +181,11 @@ extension ActivityEventSummary {
         categories = try container.decodeIfPresent([String].self, forKey: .categories) ?? []
         categoryLabels = try container.decodeIfPresent([String: String].self, forKey: .categoryLabels) ?? [:]
         updatedAt = try container.decodeIfPresent(Date.self, forKey: .updatedAt)
+        userRsvpStatus = try container.decodeIfPresent(EventRSVPStatus.self, forKey: .userRsvpStatus)
+        userRsvpNotGoingReason = try container.decodeIfPresent(
+            EventRSVPDeclineReason.self,
+            forKey: .userRsvpNotGoingReason
+        )
         venue = try container.decodeIfPresent(PlaceListItem.self, forKey: .venue)
     }
 }

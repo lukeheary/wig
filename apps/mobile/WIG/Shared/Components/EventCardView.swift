@@ -1,16 +1,14 @@
+import ClerkKit
 import SwiftUI
 
 struct EventCardView: View {
     let event: EventFeedItem
+    @Environment(Clerk.self) private var clerk
+    @EnvironmentObject private var appSession: AppSession
     private let cardHeight: CGFloat = 312
     private let posterSize: CGFloat = 200
     private let imageCornerRadius: CGFloat = 14
     private let cardCornerRadius: CGFloat = 18
-    private static let cardDateFormatter: DateFormatter = {
-        let formatter = DateFormatter()
-        formatter.dateFormat = "MMM d 'at' h:mm a"
-        return formatter
-    }()
 
     var body: some View {
         VStack(alignment: .leading, spacing: 10) {
@@ -25,7 +23,7 @@ struct EventCardView: View {
                     .lineSpacing(1)
                     .frame(maxWidth: .infinity, alignment: .leading)
 
-                Text(Self.cardDateFormatter.string(from: event.startAt))
+                Text(event.formattedStart(format: "MMM d 'at' h:mm a"))
                     .font(.system(size: 13, weight: .semibold))
                     .foregroundStyle(Color(red: 0.46, green: 0.76, blue: 1.0))
                     .lineLimit(1)
@@ -81,9 +79,15 @@ struct EventCardView: View {
         .frame(width: posterSize, height: posterSize)
         .clipShape(RoundedRectangle(cornerRadius: imageCornerRadius, style: .continuous))
         .overlay {
-            EventSocialOverlayView(attendees: event.socialAttendees, size: .card)
-                .clipShape(RoundedRectangle(cornerRadius: imageCornerRadius, style: .continuous))
+            if isAuthenticated {
+                EventSocialOverlayView(attendees: event.socialAttendees, size: .card)
+                    .clipShape(RoundedRectangle(cornerRadius: imageCornerRadius, style: .continuous))
+            }
         }
+    }
+
+    private var isAuthenticated: Bool {
+        appSession.isAuthBypassed || clerk.user != nil
     }
 
     private var posterPlaceholder: some View {
@@ -215,18 +219,18 @@ struct EventSocialOverlayView: View {
         var avatarSize: CGFloat {
             switch self {
             case .card:
-                return 32
-            case .detail:
                 return 40
+            case .detail:
+                return 54
             }
         }
 
         var avatarSpacing: CGFloat {
             switch self {
             case .card:
-                return -8
-            case .detail:
                 return -10
+            case .detail:
+                return -14
             }
         }
 
@@ -259,9 +263,9 @@ struct EventSocialOverlayView: View {
         var overflowFontSize: CGFloat {
             switch self {
             case .card:
-                return 11
-            case .detail:
                 return 13
+            case .detail:
+                return 15
             }
         }
     }
