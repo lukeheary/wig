@@ -40,6 +40,8 @@ struct WIGApp: App {
         WindowGroup {
             ZStack {
                 AppRootView()
+                ClerkEnvironmentSessionGuard()
+                    .allowsHitTesting(false)
                 PushNotificationSyncView()
                     .allowsHitTesting(false)
             }
@@ -49,6 +51,29 @@ struct WIGApp: App {
                 .environmentObject(appSession)
                 .environmentObject(pushNotificationManager)
         }
+    }
+}
+
+private struct ClerkEnvironmentSessionGuard: View {
+    @Environment(Clerk.self) private var clerk
+
+    private let configuredPublishableKey = AppConfig.shared.clerkPublishableKey
+    private let storedPublishableKeyDefaultsKey = "wig.clerk.configured-publishable-key"
+
+    var body: some View {
+        Color.clear
+            .task(id: configuredPublishableKey) {
+                let defaults = UserDefaults.standard
+                let previousPublishableKey = defaults.string(forKey: storedPublishableKeyDefaultsKey)
+
+                if let previousPublishableKey,
+                   previousPublishableKey != configuredPublishableKey
+                {
+                    try? await clerk.auth.signOut()
+                }
+
+                defaults.set(configuredPublishableKey, forKey: storedPublishableKeyDefaultsKey)
+            }
     }
 }
 

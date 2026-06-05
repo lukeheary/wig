@@ -13,27 +13,27 @@ final class EventFeedViewModel: ObservableObject {
         case failed(String)
     }
 
-    private static var cachedResponse: MobileEventsResponse?
-    private static var inFlightLoad: Task<MobileEventsResponse, Error>?
-    private static var inFlightToken: UUID?
+    private static var inFlightLoads = [Date: Task<MobileEventsResponse, Error>]()
+    private static var inFlightTokens = [Date: UUID]()
 
     @Published private(set) var state: State
 
     init() {
-        if let cachedResponse = Self.cachedResponse {
-            state = .loaded(cachedResponse)
-        } else {
-            state = .idle
-        }
+        state = .idle
     }
 
     func load(using apiClient: APIClient, forceRefresh: Bool = false) async {
-        if !forceRefresh, let cachedResponse = Self.cachedResponse {
-            state = .loaded(cachedResponse)
-            return
-        }
+        await load(weekStart: Self.cacheKey(for: .now), using: apiClient, forceRefresh: forceRefresh)
+    }
 
-        if !forceRefresh, let inFlightLoad = Self.inFlightLoad {
+    func load(
+        weekStart: Date,
+        using apiClient: APIClient,
+        forceRefresh: Bool = false
+    ) async {
+        let cacheKey = Self.cacheKey(for: weekStart)
+
+        if !forceRefresh, let inFlightLoad = Self.inFlightLoads[cacheKey] {
             state = .loading
 
             do {
@@ -59,14 +59,23 @@ final class EventFeedViewModel: ObservableObject {
                 state = .loading
             }
 
-            let loadTask = Task {
-                try await apiClient.send(APIClient.mobileEventsPreview(limit: 50))
+            guard let weekEnd = Self.weekCalendar.date(byAdding: .day, value: 7, to: cacheKey) else {
+                throw EventFeedError.invalidWeekRange
             }
-            Self.inFlightLoad = loadTask
-            Self.inFlightToken = token
+
+            let loadTask = Task {
+                try await apiClient.send(
+                    APIClient.mobileEventsPreview(
+                        startDate: cacheKey,
+                        endDate: weekEnd,
+                        limit: 500
+                    )
+                )
+            }
+            Self.inFlightLoads[cacheKey] = loadTask
+            Self.inFlightTokens[cacheKey] = token
 
             let response = try await loadTask.value
-            Self.cachedResponse = response
             state = .loaded(response)
         } catch {
             if shouldShowFullScreenLoading {
@@ -74,9 +83,27 @@ final class EventFeedViewModel: ObservableObject {
             }
         }
 
-        if Self.inFlightToken == token {
-            Self.inFlightLoad = nil
-            Self.inFlightToken = nil
+        if Self.inFlightTokens[cacheKey] == token {
+            Self.inFlightLoads[cacheKey] = nil
+            Self.inFlightTokens[cacheKey] = nil
         }
+    }
+
+    private static func cacheKey(for date: Date) -> Date {
+        weekCalendar.startOfDay(for: date)
+    }
+
+    private static var weekCalendar: Calendar {
+        var calendar = Calendar(identifier: .gregorian)
+        calendar.firstWeekday = 2
+        return calendar
+    }
+}
+
+private enum EventFeedError: LocalizedError {
+    case invalidWeekRange
+
+    var errorDescription: String? {
+        "Couldn't calculate the selected week."
     }
 }

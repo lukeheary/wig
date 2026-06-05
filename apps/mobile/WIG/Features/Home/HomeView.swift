@@ -54,11 +54,11 @@ struct HomeView: View {
                 .toolbar(.hidden, for: .navigationBar)
                 .task {
                     if case .idle = viewModel.state {
-                        await loadHome(using: apiClient)
+                        await loadHome(for: selectedWeekStart, using: apiClient)
                     }
                 }
                 .refreshable {
-                    await loadHome(using: apiClient, forceRefresh: true)
+                    await loadHome(for: selectedWeekStart, using: apiClient, forceRefresh: true)
                 }
                 .onAppear {
                     if showsNativeSearch && isSearchPresentedOnAppear {
@@ -67,7 +67,12 @@ struct HomeView: View {
                 }
                 .onReceive(NotificationCenter.default.publisher(for: .eventRSVPDidChange)) { _ in
                     Task {
-                        await loadHome(using: apiClient, forceRefresh: true)
+                        await loadHome(for: selectedWeekStart, using: apiClient, forceRefresh: true)
+                    }
+                }
+                .onChange(of: selectedWeekStart) { _, weekStart in
+                    Task {
+                        await loadHome(for: weekStart, using: apiClient)
                     }
                 }
                 .onChange(of: isSearchPresented) { _, isPresented in
@@ -124,7 +129,7 @@ struct HomeView: View {
             } actions: {
                 Button("Try Again") {
                     Task {
-                        await loadHome(using: apiClient)
+                        await loadHome(for: selectedWeekStart, using: apiClient, forceRefresh: true)
                     }
                 }
                 .foregroundStyle(.white)
@@ -135,27 +140,18 @@ struct HomeView: View {
             .background(feedBackground)
 
         case .loaded(let response):
-            if response.events.isEmpty {
-                ContentUnavailableView {
-                    Label("No Upcoming Events", systemImage: "calendar")
-                } description: {
-                    Text("The mobile feed is connected, but there are no public upcoming events right now.")
+            ZStack(alignment: .top) {
+                if isShowingSearchResults {
+                    searchResultsContent
+                } else {
+                    weeklyContent
+                        .id(selectedWeekStart)
+                        .transition(isWeekTransitionEnabled ? weekTransition : .identity)
                 }
-                .background(feedBackground)
-            } else {
-                ZStack(alignment: .top) {
-                    if isShowingSearchResults {
-                        searchResultsContent
-                    } else {
-                        weeklyContent
-                            .id(selectedWeekStart)
-                            .transition(isWeekTransitionEnabled ? weekTransition : .identity)
-                    }
 
-                    homeTopControls
-                }
-                .background(feedBackground)
+                homeTopControls
             }
+            .background(feedBackground)
         }
     }
 
@@ -342,7 +338,7 @@ struct HomeView: View {
 
     private var groupedEvents: [EventSection] {
         let grouped = Dictionary(grouping: eventsForSelectedWeek) { event in
-            event.localStartOfDay()
+            visibleSectionDay(for: event)
         }
 
         return grouped
@@ -358,7 +354,14 @@ struct HomeView: View {
 
     private var eventsForSelectedWeek: [EventFeedItem] {
         return filteredCurrentEvents.filter { event in
-            event.isInLocalWeek(startingAt: selectedWeekStart)
+            let eventDay = visibleSectionDay(for: event)
+            guard let nextWeekStart = Self.weekCalendar.date(byAdding: .day, value: 7, to: selectedWeekStart) else {
+                return shouldIncludeInCurrentWeekFeed(event)
+            }
+
+            return eventDay >= selectedWeekStart &&
+                eventDay < nextWeekStart &&
+                shouldIncludeInCurrentWeekFeed(event)
         }
     }
 
@@ -514,8 +517,12 @@ struct HomeView: View {
         )
     }
 
-    private func loadHome(using apiClient: APIClient, forceRefresh: Bool = false) async {
-        await viewModel.load(using: apiClient, forceRefresh: forceRefresh)
+    private func loadHome(
+        for weekStart: Date,
+        using apiClient: APIClient,
+        forceRefresh: Bool = false
+    ) async {
+        await viewModel.load(weekStart: weekStart, using: apiClient, forceRefresh: forceRefresh)
 
         guard isAuthenticated else {
             recentActivityViewModel.clear()
@@ -576,6 +583,34 @@ struct HomeView: View {
         }
 
         return 2
+    }
+
+    private func visibleSectionDay(for event: EventFeedItem) -> Date {
+        Self.weekCalendar.startOfDay(for: event.startAt)
+    }
+
+    private func shouldIncludeInCurrentWeekFeed(_ event: EventFeedItem) -> Bool {
+        guard !isViewingFutureWeek else {
+            return true
+        }
+
+        let now = Date()
+        let startOfToday = Self.weekCalendar.startOfDay(for: now)
+        let eventDay = visibleSectionDay(for: event)
+
+        if eventDay >= startOfToday {
+            return true
+        }
+
+        let isEarlyMorning = Self.weekCalendar.component(.hour, from: now) < 6
+
+        guard isEarlyMorning,
+              let yesterday = Self.weekCalendar.date(byAdding: .day, value: -1, to: startOfToday)
+        else {
+            return false
+        }
+
+        return Self.weekCalendar.isDate(eventDay, inSameDayAs: yesterday)
     }
 
     private func sectionTitle(for day: Date) -> String {

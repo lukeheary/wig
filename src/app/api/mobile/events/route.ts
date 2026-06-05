@@ -1,7 +1,6 @@
 import { auth } from "@clerk/nextjs/server";
-import { startOfDay } from "date-fns";
 import { NextResponse } from "next/server";
-import { and, asc, eq, gte, inArray, or } from "drizzle-orm";
+import { and, asc, eq, gte, inArray, lt, or } from "drizzle-orm";
 import { db } from "@/server/db";
 import {
   cities,
@@ -16,7 +15,108 @@ import {
   createMobileMetroResolver,
   mobileMetroAreas,
 } from "@/app/api/mobile/metro";
+import { eventTimeZone } from "@/lib/utils";
 import { mapEventCategoryData } from "@/server/utils/categories";
+
+const DEFAULT_MOBILE_FEED_TIME_ZONE = "America/New_York";
+const timeZoneFormatterCache = new Map<string, Intl.DateTimeFormat>();
+
+interface TimeZoneDateTimeParts {
+  year: number;
+  month: number;
+  day: number;
+  hour: number;
+  minute: number;
+  second: number;
+}
+
+function getTimeZoneDateTimeParts(
+  date: Date,
+  timeZone: string
+): TimeZoneDateTimeParts | null {
+  try {
+    let formatter = timeZoneFormatterCache.get(timeZone);
+    if (!formatter) {
+      formatter = new Intl.DateTimeFormat("en-US", {
+        timeZone,
+        hour12: false,
+        year: "numeric",
+        month: "2-digit",
+        day: "2-digit",
+        hour: "2-digit",
+        minute: "2-digit",
+        second: "2-digit",
+      });
+      timeZoneFormatterCache.set(timeZone, formatter);
+    }
+
+    const values = Object.fromEntries(
+      formatter
+        .formatToParts(date)
+        .filter((part) => part.type !== "literal")
+        .map((part) => [part.type, part.value])
+    );
+
+    const year = Number(values.year);
+    const month = Number(values.month);
+    const day = Number(values.day);
+    const hour = Number(values.hour);
+    const minute = Number(values.minute);
+    const second = Number(values.second);
+
+    if (
+      Number.isNaN(year) ||
+      Number.isNaN(month) ||
+      Number.isNaN(day) ||
+      Number.isNaN(hour) ||
+      Number.isNaN(minute) ||
+      Number.isNaN(second)
+    ) {
+      return null;
+    }
+
+    return { year, month, day, hour, minute, second };
+  } catch {
+    return null;
+  }
+}
+
+function getTimeZoneOffsetMs(date: Date, timeZone: string) {
+  const parts = getTimeZoneDateTimeParts(date, timeZone);
+  if (!parts) return null;
+
+  const asUtc = Date.UTC(
+    parts.year,
+    parts.month - 1,
+    parts.day,
+    parts.hour,
+    parts.minute,
+    parts.second
+  );
+
+  return asUtc - date.getTime();
+}
+
+function startOfDayInTimeZone(date: Date, timeZone: string) {
+  const parts = getTimeZoneDateTimeParts(date, timeZone);
+  if (!parts) {
+    const fallback = new Date(date);
+    fallback.setHours(0, 0, 0, 0);
+    return fallback;
+  }
+
+  const naiveUtcMidnight = new Date(Date.UTC(parts.year, parts.month - 1, parts.day));
+  const offset = getTimeZoneOffsetMs(naiveUtcMidnight, timeZone) ?? 0;
+
+  return new Date(naiveUtcMidnight.getTime() - offset);
+}
+
+function parseDateParam(value: string | null) {
+  if (!value) return null;
+
+  const date = new Date(value);
+  return Number.isNaN(date.getTime()) ? null : date;
+}
 
 async function currentMobileUserId() {
   const { userId } = await auth();
@@ -40,11 +140,10 @@ export async function GET(request: Request) {
   const { searchParams } = new URL(request.url);
   const limitParam = Number(searchParams.get("limit") ?? "20");
   const limit = Number.isFinite(limitParam)
-    ? Math.min(Math.max(limitParam, 1), 50)
+    ? Math.min(Math.max(limitParam, 1), 500)
     : 20;
 
   const now = new Date();
-  const today = startOfDay(now);
   const userId = await currentMobileUserId();
 
   const [currentUser, availableMetroAreas, cityCoordinates] = await Promise.all([
@@ -85,12 +184,30 @@ export async function GET(request: Request) {
     currentUser?.city && currentUser?.state
       ? resolveMetroArea({ city: currentUser.city, state: currentUser.state })
       : null;
+  const feedTimeZone =
+    eventTimeZone(undefined, currentUserMetroArea?.state) ??
+    DEFAULT_MOBILE_FEED_TIME_ZONE;
+  const today = startOfDayInTimeZone(now, feedTimeZone);
+  const currentFeedTime = getTimeZoneDateTimeParts(now, feedTimeZone);
+  const feedStartFloor =
+    currentFeedTime && currentFeedTime.hour < 6
+      ? new Date(today.getTime() - 24 * 60 * 60 * 1000)
+      : today;
+  const requestedStartDate = parseDateParam(searchParams.get("startDate"));
+  const startDate =
+    requestedStartDate && requestedStartDate > feedStartFloor
+      ? requestedStartDate
+      : feedStartFloor;
+  const endDate =
+    parseDateParam(searchParams.get("endDate")) ??
+    new Date(startDate.getTime() + 7 * 24 * 60 * 60 * 1000);
 
   const eventList = await db.query.events.findMany({
     where: and(
       eq(events.visibility, "public"),
       eq(events.status, "active"),
-      gte(events.startAt, today)
+      gte(events.startAt, startDate),
+      lt(events.startAt, endDate)
     ),
     orderBy: [asc(events.startAt)],
     limit,

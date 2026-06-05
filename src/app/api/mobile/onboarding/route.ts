@@ -39,6 +39,31 @@ function preferredOnboardingUsername(username: string | null | undefined): strin
   return username.startsWith("user_") ? "" : username;
 }
 
+function hasCompletedMobileProfile(user: {
+  username: string | null;
+  dateOfBirth: string | Date | null;
+}): boolean {
+  return Boolean(
+    user.username &&
+      !user.username.startsWith("user_") &&
+      user.dateOfBirth
+  );
+}
+
+function onboardingDebugPayload(input: {
+  reason: string;
+  userId: string;
+  matchedUserId?: string | null;
+  matchedByEmail?: boolean;
+}) {
+  return {
+    reason: input.reason,
+    userId: input.userId,
+    matchedUserId: input.matchedUserId ?? null,
+    matchedByEmail: input.matchedByEmail ?? false,
+  };
+}
+
 export async function GET() {
   try {
     const { userId } = await auth();
@@ -52,24 +77,62 @@ export async function GET() {
     });
 
     if (existingUser) {
+      const hasCompletedProfile = hasCompletedMobileProfile(existingUser);
+      const isOnboarding = existingUser.isOnboarding && !hasCompletedProfile;
+
+      if (existingUser.isOnboarding && hasCompletedProfile) {
+        await db
+          .update(users)
+          .set({
+            isOnboarding: false,
+            updatedAt: new Date(),
+          })
+          .where(eq(users.id, userId));
+      }
+
       return NextResponse.json({
-        isOnboarding: existingUser.isOnboarding,
-        username: existingUser.isOnboarding
+        isOnboarding,
+        username: isOnboarding
           ? preferredOnboardingUsername(existingUser.username)
           : existingUser.username,
         dateOfBirth: existingUser.dateOfBirth,
         avatarImageUrl: existingUser.avatarImageUrl,
+        debug: onboardingDebugPayload({
+          reason: isOnboarding
+            ? "matched_user_id_incomplete"
+            : "matched_user_id_complete",
+          userId,
+          matchedUserId: existingUser.id,
+        }),
       });
     }
 
     const clerk = await clerkClient();
     const clerkUser = await clerk.users.getUser(userId);
+    const primaryEmail =
+      clerkUser.emailAddresses.find(
+        (email) => email.id === clerkUser.primaryEmailAddressId
+      )?.emailAddress ?? clerkUser.emailAddresses[0]?.emailAddress;
+    const normalizedEmail = primaryEmail?.toLowerCase().trim();
+    const existingUserByEmail = normalizedEmail
+      ? await db.query.users.findFirst({
+          where: eq(users.email, normalizedEmail),
+        })
+      : null;
 
     return NextResponse.json({
       isOnboarding: true,
       username: preferredOnboardingUsername(clerkUser.username),
       dateOfBirth: null,
       avatarImageUrl: clerkUser.hasImage ? clerkUser.imageUrl : null,
+      debug: onboardingDebugPayload({
+        reason: existingUserByEmail
+          ? "no_user_id_match_but_email_exists"
+          : "no_user_id_match",
+        userId,
+        matchedUserId: existingUserByEmail?.id,
+        matchedByEmail: Boolean(existingUserByEmail),
+      }),
     });
   } catch (error) {
     console.error("Mobile onboarding fetch error:", error);
@@ -142,17 +205,6 @@ export async function POST(request: NextRequest) {
     });
 
     if (!existingUser) {
-      const existingUserByEmail = await db.query.users.findFirst({
-        where: eq(users.email, normalizedEmail),
-      });
-
-      if (existingUserByEmail && existingUserByEmail.id !== userId) {
-        return NextResponse.json(
-          { error: "An account with this email already exists" },
-          { status: 409 }
-        );
-      }
-
       await db.insert(users).values({
         id: userId,
         email: normalizedEmail,

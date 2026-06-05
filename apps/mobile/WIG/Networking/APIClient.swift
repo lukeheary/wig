@@ -84,10 +84,24 @@ struct APIClient: Sendable {
         APIClient(baseURL: baseURL, tokenProvider: tokenProvider)
     }
 
-    static func mobileEventsPreview(limit: Int = 20) -> Endpoint<MobileEventsResponse> {
-        Endpoint(
+    static func mobileEventsPreview(
+        startDate: Date? = nil,
+        endDate: Date? = nil,
+        limit: Int = 20
+    ) -> Endpoint<MobileEventsResponse> {
+        var queryItems = [URLQueryItem(name: "limit", value: String(limit))]
+
+        if let startDate {
+            queryItems.append(URLQueryItem(name: "startDate", value: ISO8601DateFormatter.wigStandard.string(from: startDate)))
+        }
+
+        if let endDate {
+            queryItems.append(URLQueryItem(name: "endDate", value: ISO8601DateFormatter.wigStandard.string(from: endDate)))
+        }
+
+        return Endpoint<MobileEventsResponse>(
             path: "/api/mobile/events",
-            queryItems: [URLQueryItem(name: "limit", value: String(limit))],
+            queryItems: queryItems,
             requiresAuthentication: false,
             includesAuthenticationIfAvailable: true
         )
@@ -385,16 +399,32 @@ struct ProfileAvatarUpdateResponse: Decodable, Hashable, Sendable {
 }
 
 struct MobileOnboardingState: Decodable, Hashable, Sendable {
+    struct DebugInfo: Decodable, Hashable, Sendable {
+        let reason: String
+        let userID: String
+        let matchedUserID: String?
+        let matchedByEmail: Bool
+
+        enum CodingKeys: String, CodingKey {
+            case reason
+            case userID = "userId"
+            case matchedUserID = "matchedUserId"
+            case matchedByEmail
+        }
+    }
+
     let isOnboarding: Bool
     let username: String
     let dateOfBirth: String?
     let avatarImageURL: URL?
+    let debug: DebugInfo?
 
     enum CodingKeys: String, CodingKey {
         case isOnboarding
         case username
         case dateOfBirth
         case avatarImageURL = "avatarImageUrl"
+        case debug
     }
 }
 
