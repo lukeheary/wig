@@ -281,7 +281,12 @@ private struct PlaceKindFilterMenu: View {
                 }
             }
         } label: {
-            PlaceMenuPillLabel(title: selection.title)
+            Image(systemName: "line.3.horizontal.decrease")
+                .font(.system(size: 18, weight: .semibold))
+                .foregroundStyle(selection == .all ? .primary : AppTheme.accentBlue)
+                .frame(width: 44, height: 44)
+                .contentShape(Circle())
+                .placeLiquidGlass(in: Circle())
         }
         .buttonStyle(.plain)
     }

@@ -8,6 +8,7 @@ import {
   userFriends,
   users,
 } from "../db/schema";
+import { sendPushNotificationToUsers } from "./push-notifications";
 
 type NotificationType = (typeof notificationTypeEnum.enumValues)[number];
 type NotificationEntityType =
@@ -174,8 +175,10 @@ export async function notifyFriendsOfRsvp(
     actor?.username ||
     "Your friend";
   const verb = status === "going" ? "RSVP'd going to" : "is interested in";
+  const body = `${actorName} ${verb} ${event.title}`;
+  const actionUrl = `/event/${event.id}`;
 
-  return createNotifications(
+  const createdNotifications = await createNotifications(
     recipientIds.map((userId) => ({
       userId,
       actorUserId,
@@ -183,8 +186,8 @@ export async function notifyFriendsOfRsvp(
       entityType: "event",
       entityId: event.id,
       title: "Friend RSVP update",
-      body: `${actorName} ${verb} ${event.title}`,
-      actionUrl: `/event/${event.id}`,
+      body,
+      actionUrl,
       metadata: {
         source: "friend_rsvp",
         status,
@@ -194,4 +197,22 @@ export async function notifyFriendsOfRsvp(
     })),
     database
   );
+
+  await sendPushNotificationToUsers(
+    recipientIds,
+    {
+      title: "Friend RSVP update",
+      body,
+      data: {
+        type: "event_update",
+        entityId: event.id,
+        actionUrl,
+        source: "friend_rsvp",
+        status,
+      },
+    },
+    database
+  );
+
+  return createdNotifications;
 }

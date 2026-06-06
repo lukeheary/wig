@@ -61,8 +61,13 @@ struct EventDetailView: View {
                 return
             }
 
-            await rsvpViewModel.load(eventID: event.id, using: apiClient)
-            await loadPartner(using: apiClient)
+            async let rsvpLoad: Void = rsvpViewModel.load(eventID: event.id, using: apiClient)
+            async let partnerLoad: Void = loadPartner(using: apiClient)
+            _ = await (rsvpLoad, partnerLoad)
+
+            if partnerRelationship?.isAccepted == true, rsvpViewModel.status == nil {
+                rsvpViewModel.setIncludePartner(true)
+            }
         }
         .onChange(of: isAuthenticated) { _, isAuthenticated in
             guard !isAuthenticated else {
@@ -614,7 +619,12 @@ private struct EventAttendeeSection: View {
 
             VStack(spacing: 0) {
                 ForEach(Array(attendees.enumerated()), id: \.element.user.id) { index, attendee in
-                    EventAttendeeRow(attendee: attendee)
+                    NavigationLink {
+                        UserProfileView(userID: attendee.user.id)
+                    } label: {
+                        EventAttendeeRow(attendee: attendee)
+                    }
+                    .buttonStyle(.plain)
 
                     if index != attendees.count - 1 {
                         Divider()

@@ -181,32 +181,22 @@ struct PlaceDetailView: View {
                     }
                 }
             } label: {
-                PlaceEventFilterPill(title: selection.title)
+                PlaceEventFilterIcon(isActive: selection != .upcoming)
             }
             .buttonStyle(.plain)
         }
     }
 
-    private struct PlaceEventFilterPill: View {
-        let title: String
+    private struct PlaceEventFilterIcon: View {
+        let isActive: Bool
 
         var body: some View {
-            HStack(spacing: 10) {
-                Text(title)
-                    .font(.system(size: 15, weight: .semibold))
-                    .lineLimit(1)
-                    .minimumScaleFactor(0.78)
-
-                Image(systemName: "chevron.down")
-                    .font(.system(size: 12, weight: .semibold))
-                    .opacity(0.62)
-            }
-            .foregroundStyle(.primary)
-            .padding(.horizontal, 15)
-            .frame(height: 44)
-            .fixedSize(horizontal: true, vertical: false)
-            .contentShape(Capsule())
-            .placeDetailLiquidGlass(in: Capsule())
+            Image(systemName: "line.3.horizontal.decrease")
+                .font(.system(size: 18, weight: .semibold))
+                .foregroundStyle(isActive ? AppTheme.accentBlue : .primary)
+                .frame(width: 44, height: 44)
+                .contentShape(Circle())
+                .placeDetailLiquidGlass(in: Circle())
         }
     }
 

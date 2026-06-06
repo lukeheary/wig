@@ -3,6 +3,7 @@ import { and, asc, eq, gte, inArray, ne, or, sql } from "drizzle-orm";
 import { NextResponse } from "next/server";
 import { db } from "@/server/db";
 import { events, placeFollows, places, userFriends, users } from "@/server/db/schema";
+import { mapEventCategoryData } from "@/server/utils/categories";
 
 export async function GET(request: Request) {
   try {
@@ -14,7 +15,7 @@ export async function GET(request: Request) {
       : 12;
 
     if (!query) {
-      return NextResponse.json({ users: [], places: [] });
+      return NextResponse.json({ events: [], users: [], places: [] });
     }
 
     const { userId } = await auth();
@@ -80,6 +81,30 @@ export async function GET(request: Request) {
       ),
       orderBy: [asc(places.name)],
       limit,
+    });
+    const matchingEvents = await db.query.events.findMany({
+      where: and(
+        eq(events.visibility, "public"),
+        eq(events.status, "active"),
+        gte(events.startAt, new Date()),
+        or(
+          sql`LOWER(${events.title}) LIKE LOWER(${searchPattern})`,
+          sql`LOWER(COALESCE(${events.description}, '')) LIKE LOWER(${searchPattern})`,
+          sql`LOWER(COALESCE(${events.city}, '')) LIKE LOWER(${searchPattern})`,
+          sql`LOWER(COALESCE(${events.state}, '')) LIKE LOWER(${searchPattern})`
+        )
+      ),
+      orderBy: [asc(events.startAt)],
+      limit,
+      with: {
+        venue: true,
+        organizer: true,
+        categoryLinks: {
+          with: {
+            category: true,
+          },
+        },
+      },
     });
 
     const placeIds = matchingPlaces.map((place) => place.id);
@@ -149,6 +174,45 @@ export async function GET(request: Request) {
     }
 
     return NextResponse.json({
+      events: matchingEvents.map((event) => {
+        const mapped = mapEventCategoryData(event);
+
+        return {
+          id: mapped.id,
+          title: mapped.title,
+          description: mapped.description,
+          coverImageUrl: mapped.coverImageUrl,
+          eventUrl: mapped.eventUrl,
+          startAt: mapped.startAt,
+          endAt: mapped.endAt,
+          address: mapped.address,
+          city: mapped.city,
+          state: mapped.state,
+          timeZone: mapped.timeZone,
+          metroAreaCity: null,
+          metroAreaState: null,
+          venueId: mapped.venueId,
+          venueName: mapped.venue?.name ?? null,
+          venueSlug: mapped.venue?.slug ?? null,
+          organizerId: mapped.organizerId,
+          organizerName: mapped.organizer?.name ?? null,
+          organizerSlug: mapped.organizer?.slug ?? null,
+          venueLogoImageUrl: mapped.venue?.logoImageUrl ?? null,
+          organizerLogoImageUrl: mapped.organizer?.logoImageUrl ?? null,
+          categories: mapped.categories,
+          categoryLabels: mapped.categoryLabels,
+          updatedAt: mapped.updatedAt,
+          canEdit: false,
+          isFollowed:
+            (mapped.venueId ? followedPlaceIdSet.has(mapped.venueId) : false) ||
+            (mapped.organizerId ? followedPlaceIdSet.has(mapped.organizerId) : false),
+          isCreatedByCurrentUser: false,
+          userRsvpStatus: null,
+          userRsvpNotGoingReason: null,
+          friendsGoing: [],
+          friendsInterested: [],
+        };
+      }),
       users: matchingUsers.map((user) => ({
         id: user.id,
         name:

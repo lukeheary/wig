@@ -3,15 +3,20 @@ import Foundation
 struct ActivityFeedResponse: Decodable, Sendable {
     let friendCount: Int
     let requestCount: Int
+    let currentUserLocation: EventCity?
     let activities: [ActivityFeedItem]
 }
 
 struct ActivityFeedItem: Decodable, Identifiable, Hashable, Sendable {
     let id: UUID
     let type: ActivityType
+    let actorUserID: String
     let actorName: String
+    let actorFirstName: String?
     let actorGender: UserGender?
     let actorAvatarImageURL: URL?
+    let partnerFirstName: String?
+    let partnerUserID: String?
     let notGoingReason: EventRSVPDeclineReason?
     let createdAt: Date
     let updatedAt: Date?
@@ -20,9 +25,13 @@ struct ActivityFeedItem: Decodable, Identifiable, Hashable, Sendable {
     enum CodingKeys: String, CodingKey {
         case id
         case type
+        case actorUserID = "actorUserId"
         case actorName
+        case actorFirstName
         case actorGender
         case actorAvatarImageURL = "actorAvatarImageUrl"
+        case partnerFirstName
+        case partnerUserID = "partnerUserId"
         case notGoingReason
         case createdAt
         case updatedAt
@@ -70,8 +79,11 @@ struct ActivityEventSummary: Decodable, Identifiable, Hashable, Sendable {
     let categoryLabels: [String: String]
     let updatedAt: Date?
     let canEdit: Bool
+    let isFollowed: Bool
     let userRsvpStatus: EventRSVPStatus?
     let userRsvpNotGoingReason: EventRSVPDeclineReason?
+    let friendsGoing: [EventSocialRSVP]
+    let friendsInterested: [EventSocialRSVP]
     let venue: PlaceListItem?
 
     enum CodingKeys: String, CodingKey {
@@ -98,8 +110,11 @@ struct ActivityEventSummary: Decodable, Identifiable, Hashable, Sendable {
         case categoryLabels
         case updatedAt
         case canEdit
+        case isFollowed
         case userRsvpStatus
         case userRsvpNotGoingReason
+        case friendsGoing
+        case friendsInterested
         case venue
     }
 
@@ -136,8 +151,11 @@ struct ActivityEventSummary: Decodable, Identifiable, Hashable, Sendable {
             categoryLabels: categoryLabels,
             updatedAt: updatedAt,
             canEdit: canEdit,
+            isFollowed: isFollowed,
             userRsvpStatus: userRsvpStatus,
-            userRsvpNotGoingReason: userRsvpNotGoingReason
+            userRsvpNotGoingReason: userRsvpNotGoingReason,
+            friendsGoing: friendsGoing,
+            friendsInterested: friendsInterested
         )
     }
 }
@@ -148,9 +166,13 @@ extension ActivityFeedItem {
 
         id = try container.decode(UUID.self, forKey: .id)
         type = try container.decode(ActivityType.self, forKey: .type)
+        actorUserID = try container.decode(String.self, forKey: .actorUserID)
         actorName = try container.decode(String.self, forKey: .actorName)
+        actorFirstName = try container.decodeIfPresent(String.self, forKey: .actorFirstName)
         actorGender = try container.decodeIfPresent(UserGender.self, forKey: .actorGender)
         actorAvatarImageURL = try container.decodeOptionalURL(forKey: .actorAvatarImageURL)
+        partnerFirstName = try container.decodeIfPresent(String.self, forKey: .partnerFirstName)
+        partnerUserID = try container.decodeIfPresent(String.self, forKey: .partnerUserID)
         notGoingReason = try container.decodeIfPresent(EventRSVPDeclineReason.self, forKey: .notGoingReason)
         createdAt = try container.decode(Date.self, forKey: .createdAt)
         updatedAt = try container.decodeIfPresent(Date.self, forKey: .updatedAt)
@@ -185,11 +207,14 @@ extension ActivityEventSummary {
         categoryLabels = try container.decodeIfPresent([String: String].self, forKey: .categoryLabels) ?? [:]
         updatedAt = try container.decodeIfPresent(Date.self, forKey: .updatedAt)
         canEdit = try container.decodeIfPresent(Bool.self, forKey: .canEdit) ?? false
+        isFollowed = try container.decodeIfPresent(Bool.self, forKey: .isFollowed) ?? false
         userRsvpStatus = try container.decodeIfPresent(EventRSVPStatus.self, forKey: .userRsvpStatus)
         userRsvpNotGoingReason = try container.decodeIfPresent(
             EventRSVPDeclineReason.self,
             forKey: .userRsvpNotGoingReason
         )
+        friendsGoing = try container.decodeIfPresent([EventSocialRSVP].self, forKey: .friendsGoing) ?? []
+        friendsInterested = try container.decodeIfPresent([EventSocialRSVP].self, forKey: .friendsInterested) ?? []
         venue = try container.decodeIfPresent(PlaceListItem.self, forKey: .venue)
     }
 }

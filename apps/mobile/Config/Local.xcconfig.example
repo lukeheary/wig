@@ -1,0 +1,19 @@
+# Copy this file to Local.xcconfig and fill in your iOS app values.
+# This file is read by Debug.xcconfig for local Xcode builds.
+#
+# APNS_* values do NOT belong here. Those are backend/server secrets used by:
+#   src/server/utils/push-notifications.ts
+#
+# The one APNs-related value that should match your iOS app is:
+#   PRODUCT_BUNDLE_IDENTIFIER
+
+# App identity
+PRODUCT_BUNDLE_IDENTIFIER = com.yourname.wig
+PRODUCT_NAME = WIG
+
+# Mobile app runtime config
+CLERK_PUBLISHABLE_KEY = pk_test_replace_me
+CLERK_FRONTEND_API = your-frontend-api.clerk.accounts.dev
+API_BASE_URL = https://api.example.com
+CLERK_JWT_TEMPLATE =
+OAUTH_CALLBACK_SCHEME = $(PRODUCT_BUNDLE_IDENTIFIER)

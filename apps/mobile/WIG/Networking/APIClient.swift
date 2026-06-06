@@ -168,6 +168,14 @@ struct APIClient: Sendable {
         )
     }
 
+    static func mobileUserProfile(userID: String) -> Endpoint<UserProfileResponse> {
+        Endpoint(
+            path: "/api/mobile/users/\(userID)",
+            requiresAuthentication: false,
+            includesAuthenticationIfAvailable: true
+        )
+    }
+
     static func sendMobileFriendRequest(friendUserID: String) throws -> Endpoint<MobileFriendRequestResponse> {
         Endpoint(
             path: "/api/mobile/friends/request",
@@ -442,6 +450,7 @@ struct MobileOnboardingState: Decodable, Hashable, Sendable {
 }
 
 struct MobileSearchResponse: Decodable, Hashable, Sendable {
+    let events: [EventFeedItem]
     let users: [FriendUserSummary]
     let places: [PlaceListItem]
 }

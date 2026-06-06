@@ -7,6 +7,8 @@ struct FriendsFeedResponse: Decodable, Sendable {
     let friends: [FriendUserSummary]
     let receivedRequests: [FriendUserSummary]
     let sentRequests: [FriendUserSummary]
+    let upcomingEvents: [EventFeedItem]
+    let pastEvents: [EventFeedItem]
 
     init(
         profile: FriendUserSummary?,
@@ -14,7 +16,9 @@ struct FriendsFeedResponse: Decodable, Sendable {
         requestCount: Int,
         friends: [FriendUserSummary],
         receivedRequests: [FriendUserSummary],
-        sentRequests: [FriendUserSummary]
+        sentRequests: [FriendUserSummary],
+        upcomingEvents: [EventFeedItem] = [],
+        pastEvents: [EventFeedItem] = []
     ) {
         self.profile = profile
         self.friendCount = friendCount
@@ -22,7 +26,17 @@ struct FriendsFeedResponse: Decodable, Sendable {
         self.friends = friends
         self.receivedRequests = receivedRequests
         self.sentRequests = sentRequests
+        self.upcomingEvents = upcomingEvents
+        self.pastEvents = pastEvents
     }
+}
+
+struct UserProfileResponse: Decodable, Sendable {
+    let profile: FriendUserSummary?
+    let friendCount: Int
+    let friends: [FriendUserSummary]
+    let upcomingEvents: [EventFeedItem]
+    let pastEvents: [EventFeedItem]
 }
 
 struct FriendUserSummary: Decodable, Identifiable, Hashable, Sendable {
@@ -74,7 +88,9 @@ extension FriendsFeedResponse {
             requestCount: requestCount,
             friends: friends,
             receivedRequests: receivedRequests,
-            sentRequests: sentRequests
+            sentRequests: sentRequests,
+            upcomingEvents: upcomingEvents,
+            pastEvents: pastEvents
         )
     }
 }

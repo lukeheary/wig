@@ -5,6 +5,7 @@ struct ActivityView: View {
     @Environment(\.apiClient) private var apiClient
     @StateObject private var viewModel = ActivityViewModel()
     @State private var selectedFilter: ActivityFeedFilter = .upcoming
+    @State private var selectedCityFilter: ActivityCityFilter?
 
     private let background = Color(red: 0.07, green: 0.07, blue: 0.08)
 
@@ -14,7 +15,19 @@ struct ActivityView: View {
                 .background(background.ignoresSafeArea())
                 .toolbar(.hidden, for: .navigationBar)
                 .overlay(alignment: .topLeading) {
-                    ActivityFilterDropdown(selection: $selectedFilter)
+                    HStack(spacing: 10) {
+                        if case .loaded(let response) = viewModel.state {
+                            ActivityCityFilterDropdown(
+                                selection: Binding(
+                                    get: { effectiveCityFilter(for: response) },
+                                    set: { selectedCityFilter = $0 }
+                                ),
+                                cities: availableCityFilters
+                            )
+                        }
+
+                        ActivityFilterDropdown(selection: $selectedFilter)
+                    }
                         .padding(.leading, 16)
                         .padding(.top, 14)
                 }
@@ -54,7 +67,9 @@ struct ActivityView: View {
                 .background(background)
 
         case .loaded(let response):
-            let activities = selectedFilter.filtered(response.activities)
+            let activities = effectiveCityFilter(for: response).filtered(
+                selectedFilter.filtered(response.activities)
+            )
 
             if response.activities.isEmpty {
                 ContentUnavailableView {
@@ -125,6 +140,55 @@ struct ActivityView: View {
         let weeksAgo = max(daysAgo / 7, 1)
         return weeksAgo == 1 ? "1 Week ago" : "\(weeksAgo) Weeks ago"
     }
+
+    private var availableCityFilters: [ActivityCityFilter] {
+        guard case .loaded(let response) = viewModel.state else {
+            return [.all]
+        }
+
+        let cities = response.activities.reduce(into: [ActivityCityFilter]()) { filters, activity in
+            let filter = ActivityCityFilter.city(
+                city: activity.event.city,
+                state: activity.event.state
+            )
+
+            guard !filters.contains(filter) else {
+                return
+            }
+
+            filters.append(filter)
+        }
+        .sorted { lhs, rhs in
+            lhs.title.localizedCaseInsensitiveCompare(rhs.title) == .orderedAscending
+        }
+
+        if let currentUserLocation = response.currentUserLocation {
+            let userFilter = ActivityCityFilter.city(
+                city: currentUserLocation.city,
+                state: currentUserLocation.state
+            )
+
+            if !cities.contains(userFilter) {
+                return [userFilter, .all] + cities
+            }
+        }
+
+        return [.all] + cities
+    }
+
+    private func effectiveCityFilter(for response: ActivityFeedResponse) -> ActivityCityFilter {
+        let cities = availableCityFilters
+
+        if let selectedCityFilter, cities.contains(selectedCityFilter) {
+            return selectedCityFilter
+        }
+
+        if let currentUserLocation = response.currentUserLocation {
+            return .city(city: currentUserLocation.city, state: currentUserLocation.state)
+        }
+
+        return cities.first { $0 != .all } ?? .all
+    }
 }
 
 private struct ActivityFilterDropdown: View {
@@ -144,6 +208,35 @@ private struct ActivityFilterDropdown: View {
                 }
             }
         } label: {
+            Image(systemName: "line.3.horizontal.decrease")
+                .font(.system(size: 18, weight: .semibold))
+                .foregroundStyle(selection == .upcoming ? .primary : AppTheme.accentBlue)
+                .frame(width: 44, height: 44)
+                .contentShape(Circle())
+                .activityLiquidGlass(in: Circle())
+        }
+        .buttonStyle(.plain)
+    }
+}
+
+private struct ActivityCityFilterDropdown: View {
+    @Binding var selection: ActivityCityFilter
+    let cities: [ActivityCityFilter]
+
+    var body: some View {
+        Menu {
+            ForEach(cities) { city in
+                Button {
+                    selection = city
+                } label: {
+                    if city == selection {
+                        Label(city.title, systemImage: "checkmark")
+                    } else {
+                        Text(city.title)
+                    }
+                }
+            }
+        } label: {
             ActivityFilterPill(title: selection.title)
         }
         .buttonStyle(.plain)
@@ -155,9 +248,6 @@ private struct ActivityFilterPill: View {
 
     var body: some View {
         HStack(spacing: 10) {
-            Image(systemName: "line.3.horizontal.decrease")
-                .font(.system(size: 13, weight: .bold))
-
             Text(title)
                 .font(.system(size: 15, weight: .semibold))
                 .lineLimit(1)
@@ -224,6 +314,41 @@ private enum ActivityFeedFilter: String, CaseIterable, Identifiable {
             return activities.filter { $0.event.startAt < .now }
         case .all:
             return activities
+        }
+    }
+}
+
+private enum ActivityCityFilter: Hashable, Identifiable {
+    case all
+    case city(city: String, state: String)
+
+    var id: String {
+        switch self {
+        case .all:
+            return "all"
+        case .city(let city, let state):
+            return "\(city)|\(state)"
+        }
+    }
+
+    var title: String {
+        switch self {
+        case .all:
+            return "All Cities"
+        case .city(let city, _):
+            return city
+        }
+    }
+
+    func filtered(_ activities: [ActivityFeedItem]) -> [ActivityFeedItem] {
+        switch self {
+        case .all:
+            return activities
+        case .city(let city, let state):
+            return activities.filter { activity in
+                activity.event.city.localizedCaseInsensitiveCompare(city) == .orderedSame &&
+                    activity.event.state.localizedCaseInsensitiveCompare(state) == .orderedSame
+            }
         }
     }
 }
@@ -295,6 +420,7 @@ private struct ActivityRowView: View {
     let activity: ActivityFeedItem
     @State private var selectedEvent: EventFeedItem?
     @State private var selectedVenue: PlaceListItem?
+    @State private var selectedUserProfile: SelectedUserProfile?
 
     private static let relativeFormatter: RelativeDateTimeFormatter = {
         let formatter = RelativeDateTimeFormatter()
@@ -314,6 +440,9 @@ private struct ActivityRowView: View {
                     },
                     onTapVenue: { venue in
                         selectedVenue = venue
+                    },
+                    onTapUser: { userID in
+                        selectedUserProfile = SelectedUserProfile(id: userID)
                     }
                 )
                     .frame(maxWidth: .infinity, alignment: .leading)
@@ -330,14 +459,22 @@ private struct ActivityRowView: View {
         .navigationDestination(item: $selectedVenue) { venue in
             PlaceDetailView(place: venue)
         }
+        .navigationDestination(item: $selectedUserProfile) { selection in
+            UserProfileView(userID: selection.id)
+        }
     }
 
+}
+
+private struct SelectedUserProfile: Identifiable, Hashable {
+    let id: String
 }
 
 struct InlineLinkedActivityText: UIViewRepresentable {
     let activity: ActivityFeedItem
     let onTapEvent: () -> Void
     let onTapVenue: (PlaceListItem) -> Void
+    let onTapUser: (String) -> Void
 
     func makeCoordinator() -> Coordinator {
         Coordinator(parent: self)
@@ -405,12 +542,29 @@ struct InlineLinkedActivityText: UIViewRepresentable {
         let mutedColor = UIColor.white.withAlphaComponent(0.62)
         let text = NSMutableAttributedString()
 
-        text.append(
-            NSAttributedString(
-                string: activity.actorName,
-                attributes: [.font: mediumFont, .foregroundColor: UIColor.white]
+        if let partnerFirstName = activity.partnerFirstName {
+            text.append(linkedNameText(actorDisplayName, userID: activity.actorUserID, font: mediumFont))
+            text.append(
+                NSAttributedString(
+                    string: " and ",
+                    attributes: [.font: font, .foregroundColor: mutedColor]
+                )
             )
-        )
+
+            if let partnerUserID = activity.partnerUserID {
+                text.append(linkedNameText(partnerFirstName, userID: partnerUserID, font: mediumFont))
+            } else {
+                text.append(
+                    NSAttributedString(
+                        string: partnerFirstName,
+                        attributes: [.font: mediumFont, .foregroundColor: UIColor.white]
+                    )
+                )
+            }
+        } else {
+            text.append(linkedNameText(activity.actorName, userID: activity.actorUserID, font: mediumFont))
+        }
+
         text.append(
             NSAttributedString(
                 string: " \(actionPhrase) \u{2009}",
@@ -465,9 +619,12 @@ struct InlineLinkedActivityText: UIViewRepresentable {
         if activity.type == .rsvpNotGoing,
            let reasonPhrase = activity.notGoingReason?.activityPhrase
         {
+            let reasonText = activity.partnerFirstName == nil
+                ? "because \(activity.actorGender.contractedBe) \(reasonPhrase)"
+                : "because they're \(reasonPhrase)"
             text.append(
                 NSAttributedString(
-                    string: " because \(activity.actorGender.contractedBe) \(reasonPhrase)",
+                    string: " \(reasonText)",
                     attributes: [.font: font, .foregroundColor: mutedColor]
                 )
             )
@@ -478,6 +635,21 @@ struct InlineLinkedActivityText: UIViewRepresentable {
         paragraphStyle.lineBreakMode = .byWordWrapping
         text.addAttribute(.paragraphStyle, value: paragraphStyle, range: NSRange(location: 0, length: text.length))
         return text
+    }
+
+    private var actorDisplayName: String {
+        activity.actorFirstName ?? activity.actorName.components(separatedBy: " ").first ?? activity.actorName
+    }
+
+    private func linkedNameText(_ name: String, userID: String, font: UIFont) -> NSAttributedString {
+        NSAttributedString(
+            string: name,
+            attributes: [
+                .font: font,
+                .foregroundColor: UIColor.white,
+                .link: URL(string: "wig-user://\(userID)")!,
+            ]
+        )
     }
 
     private func thumbnailAttachment(image: UIImage?) -> NSAttributedString {
@@ -517,11 +689,17 @@ struct InlineLinkedActivityText: UIViewRepresentable {
     }
 
     private var actionPhrase: String {
+        let isPluralSubject = activity.partnerFirstName != nil
+
         switch activity.type {
         case .rsvpGoing:
-            return activity.event.startAt < .now ? "went to" : "is going to"
+            return activity.event.startAt < .now
+                ? "went to"
+                : (isPluralSubject ? "are going to" : "is going to")
         case .rsvpInterested:
-            return activity.event.startAt < .now ? "was interested in" : "is interested in"
+            return activity.event.startAt < .now
+                ? (isPluralSubject ? "were interested in" : "was interested in")
+                : (isPluralSubject ? "are interested in" : "is interested in")
         case .rsvpNotGoing:
             return activity.event.startAt < .now ? "couldn't go to" : "can't go to"
         }
@@ -557,6 +735,14 @@ struct InlineLinkedActivityText: UIViewRepresentable {
                         }
 
                         self?.parent.onTapVenue(venue)
+                    }
+                case "wig-user":
+                    return UIAction { [weak self] _ in
+                        guard let userID = url.host(percentEncoded: false), !userID.isEmpty else {
+                            return
+                        }
+
+                        self?.parent.onTapUser(userID)
                     }
                 default:
                     return defaultAction

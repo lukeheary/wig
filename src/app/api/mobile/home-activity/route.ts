@@ -1,12 +1,16 @@
 import { auth } from "@clerk/nextjs/server";
 import { addDays, subDays } from "date-fns";
-import { and, asc, desc, eq, inArray, sql } from "drizzle-orm";
+import { and, asc, desc, eq, inArray, or, sql } from "drizzle-orm";
 import { NextResponse } from "next/server";
 import { db } from "@/server/db";
 import {
+  cities,
   eventRsvps,
+  metroAreas,
+  placeFollows,
   userActivity,
   userFriends,
+  userPartners,
   userSurfaceState,
   users,
 } from "@/server/db/schema";
@@ -15,6 +19,10 @@ import {
   canEditMobileEvent,
   resolveMobileEventEditPermissions,
 } from "@/app/api/mobile/event-edit-permissions";
+import {
+  createMobileMetroResolver,
+  mobileMetroAreas,
+} from "@/app/api/mobile/metro";
 
 const HOME_RECENT_ACTIVITY_SURFACE = "home_recent_activity";
 const HOME_ACTIVITY_WINDOW_DAYS = 1;
@@ -75,16 +83,52 @@ export async function GET(request: Request) {
   const now = new Date();
   const recentCutoff = subDays(now, HOME_ACTIVITY_WINDOW_DAYS).getTime();
 
-  const [friendCountRow] = await db
-    .select({ count: sql<number>`count(*)::int` })
-    .from(userFriends)
-    .where(eq(userFriends.status, "accepted"));
-
-  const [requestCountRow, surfaceState, activityList] = await Promise.all([
+  const [
+    currentUser,
+    availableMetroAreas,
+    cityCoordinates,
+    friendConnections,
+    requestCountRow,
+    surfaceState,
+    activityList,
+  ] = await Promise.all([
+    db.query.users.findFirst({
+      where: eq(users.id, userId),
+      columns: {
+        city: true,
+        state: true,
+      },
+    }),
+    db
+      .select({
+        name: metroAreas.name,
+        state: metroAreas.state,
+        latitude: metroAreas.latitude,
+        longitude: metroAreas.longitude,
+        radiusMiles: metroAreas.radiusMiles,
+      })
+      .from(metroAreas)
+      .orderBy(asc(metroAreas.name), asc(metroAreas.state)),
+    db
+      .select({
+        name: cities.name,
+        state: cities.state,
+        latitude: cities.latitude,
+        longitude: cities.longitude,
+      })
+      .from(cities),
+    db.query.userFriends.findMany({
+      where: and(
+        or(eq(userFriends.userId, userId), eq(userFriends.friendUserId, userId)),
+        eq(userFriends.status, "accepted")
+      ),
+    }),
     db
       .select({ count: sql<number>`count(*)::int` })
       .from(userFriends)
-      .where(eq(userFriends.status, "pending"))
+      .where(
+        and(eq(userFriends.status, "pending"), eq(userFriends.friendUserId, userId))
+      )
       .then(([row]) => row),
     db.query.userSurfaceState.findFirst({
       where: and(
@@ -116,10 +160,25 @@ export async function GET(request: Request) {
     }),
   ]);
 
+  const resolveMetroArea = createMobileMetroResolver(
+    availableMetroAreas,
+    cityCoordinates
+  );
+  const currentUserLocation =
+    currentUser?.city && currentUser?.state
+      ? resolveMetroArea({ city: currentUser.city, state: currentUser.state }) ??
+        { city: currentUser.city, state: currentUser.state }
+      : null;
+  const friendIds = friendConnections.map((friendship) =>
+    friendship.userId === userId ? friendship.friendUserId : friendship.userId
+  );
+  const friendIdSet = new Set(friendIds);
+
   const visibleActivities = activityList
     .filter((activity) => {
       if (!VISIBLE_ACTIVITY_TYPES.has(activity.type)) return false;
       if (!activity.event) return false;
+      if (activity.actorUserId === userId) return false;
       if (activity.event.visibility !== "public" || activity.event.status !== "active") {
         return false;
       }
@@ -204,30 +263,197 @@ export async function GET(request: Request) {
   const eventIds = previewActivities
     .map((activity) => activity.event?.id)
     .filter((id): id is string => Boolean(id));
-  const currentUserRsvpMap =
+  const actorIdsWithPartnerIncluded = [
+    ...new Set(
+      previewActivities
+        .filter((activity) => {
+          const includePartner =
+            (activity.metadata as { includePartner?: boolean } | null)
+              ?.includePartner === true;
+          return includePartner && VISIBLE_ACTIVITY_TYPES.has(activity.type);
+        })
+        .map((activity) => activity.actorUserId)
+    ),
+  ];
+  const socialRsvpsMap = new Map<
+    string,
+    Array<{
+      status: "going" | "interested";
+      user: {
+        id: string;
+        firstName: string | null;
+        lastName: string | null;
+        avatarImageUrl: string | null;
+        isCurrentUser: boolean;
+        isFriend: boolean;
+      };
+    }>
+  >();
+  const currentUserRsvpMap = new Map<
+    string,
+    { status: string; notGoingReason: string | null }
+  >();
+  const addSocialRsvp = (
+    eventId: string,
+    rsvp: {
+      userId: string;
+      status: "going" | "interested";
+      user: {
+        id: string;
+        firstName: string | null;
+        lastName: string | null;
+        avatarImageUrl: string | null;
+        isCurrentUser: boolean;
+        isFriend: boolean;
+      };
+    }
+  ) => {
+    if (!socialRsvpsMap.has(eventId)) {
+      socialRsvpsMap.set(eventId, []);
+    }
+
+    const attendees = socialRsvpsMap.get(eventId)!;
+    const existingIndex = attendees.findIndex(
+      (attendee) => attendee.user.id === rsvp.userId
+    );
+
+    if (existingIndex >= 0) {
+      if (
+        attendees[existingIndex].status === "interested" &&
+        rsvp.status === "going"
+      ) {
+        attendees[existingIndex] = {
+          status: rsvp.status,
+          user: rsvp.user,
+        };
+      }
+      return;
+    }
+
+    attendees.push({
+      status: rsvp.status,
+      user: rsvp.user,
+    });
+  };
+  const [
+    currentUserRsvps,
+    mirroredPartnerRsvps,
+    friendRsvps,
+    followedPlaces,
+    partnerRelationships,
+  ] = await Promise.all([
     eventIds.length > 0
-      ? new Map(
-          (
-            await db.query.eventRsvps.findMany({
-              where: and(
-                inArray(eventRsvps.eventId, eventIds),
-                eq(eventRsvps.userId, userId)
-              ),
-              columns: {
-                eventId: true,
-                status: true,
-                notGoingReason: true,
-              },
-            })
-          ).map((rsvp) => [
-            rsvp.eventId,
-            {
-              status: rsvp.status,
-              notGoingReason: rsvp.notGoingReason,
-            },
-          ])
-        )
-      : new Map<string, { status: string; notGoingReason: string | null }>();
+      ? db.query.eventRsvps.findMany({
+          where: and(
+            inArray(eventRsvps.eventId, eventIds),
+            eq(eventRsvps.userId, userId)
+          ),
+          with: {
+            user: true,
+          },
+        })
+      : Promise.resolve([]),
+    eventIds.length > 0
+      ? db.query.eventRsvps.findMany({
+          where: and(
+            inArray(eventRsvps.eventId, eventIds),
+            eq(eventRsvps.partnerRsvpByUserId, userId),
+            inArray(eventRsvps.status, ["going", "interested"])
+          ),
+          with: {
+            user: true,
+          },
+        })
+      : Promise.resolve([]),
+    eventIds.length > 0 && friendIds.length > 0
+      ? db.query.eventRsvps.findMany({
+          where: and(
+            inArray(eventRsvps.eventId, eventIds),
+            inArray(eventRsvps.userId, friendIds),
+            inArray(eventRsvps.status, ["going", "interested"])
+          ),
+          with: {
+            user: true,
+          },
+        })
+      : Promise.resolve([]),
+    db.query.placeFollows.findMany({
+      where: eq(placeFollows.userId, userId),
+      columns: {
+        placeId: true,
+      },
+    }),
+    actorIdsWithPartnerIncluded.length > 0
+      ? db.query.userPartners.findMany({
+          where: and(
+            eq(userPartners.status, "accepted"),
+            or(
+              inArray(userPartners.requesterId, actorIdsWithPartnerIncluded),
+              inArray(userPartners.recipientId, actorIdsWithPartnerIncluded)
+            )
+          ),
+          with: {
+            requester: true,
+            recipient: true,
+          },
+        })
+      : Promise.resolve([]),
+  ]);
+
+  for (const rsvp of currentUserRsvps) {
+    currentUserRsvpMap.set(rsvp.eventId, {
+      status: rsvp.status,
+      notGoingReason: rsvp.notGoingReason,
+    });
+  }
+
+  for (const rsvp of [...currentUserRsvps, ...mirroredPartnerRsvps, ...friendRsvps]) {
+    if (!rsvp.user || (rsvp.status !== "going" && rsvp.status !== "interested")) {
+      continue;
+    }
+
+    addSocialRsvp(rsvp.eventId, {
+      userId: rsvp.userId,
+      status: rsvp.status,
+      user: {
+        id: rsvp.user.id,
+        firstName: rsvp.user.firstName,
+        lastName: rsvp.user.lastName,
+        avatarImageUrl: rsvp.user.avatarImageUrl,
+        isCurrentUser: rsvp.userId === userId,
+        isFriend: friendIdSet.has(rsvp.userId),
+      },
+    });
+  }
+
+  const followedPlaceIds = new Set(followedPlaces.map((follow) => follow.placeId));
+  const partnerFirstNameByActorId = new Map<string, string>();
+  const partnerUserIdByActorId = new Map<string, string>();
+  for (const relationship of partnerRelationships) {
+    if (
+      actorIdsWithPartnerIncluded.includes(relationship.requesterId) &&
+      relationship.recipient &&
+      friendIdSet.has(relationship.recipientId)
+    ) {
+      partnerFirstNameByActorId.set(
+        relationship.requesterId,
+        relationship.recipient.firstName || "their partner"
+      );
+      partnerUserIdByActorId.set(relationship.requesterId, relationship.recipientId);
+    }
+
+    if (
+      actorIdsWithPartnerIncluded.includes(relationship.recipientId) &&
+      relationship.requester &&
+      friendIdSet.has(relationship.requesterId)
+    ) {
+      partnerFirstNameByActorId.set(
+        relationship.recipientId,
+        relationship.requester.firstName || "their partner"
+      );
+      partnerUserIdByActorId.set(relationship.recipientId, relationship.requesterId);
+    }
+  }
   const editPermissions = await resolveMobileEventEditPermissions(userId);
 
   const activities = previewActivities.map((activity) => {
@@ -245,9 +471,13 @@ export async function GET(request: Request) {
     return {
       id: activity.id,
       type: activity.type,
+      actorUserId: activity.actorUserId,
       actorName,
+      actorFirstName: activity.actor.firstName,
       actorGender: activity.actor.gender,
       actorAvatarImageUrl: activity.actor.avatarImageUrl,
+      partnerFirstName: partnerFirstNameByActorId.get(activity.actorUserId) ?? null,
+      partnerUserId: partnerUserIdByActorId.get(activity.actorUserId) ?? null,
       notGoingReason:
         activity.type === "rsvp_not_going"
           ? getNotGoingReason(activity.metadata)
@@ -281,8 +511,17 @@ export async function GET(request: Request) {
           venueId: event.venueId,
           organizerId: event.organizerId,
         }),
+        isFollowed:
+          (event.venueId ? followedPlaceIds.has(event.venueId) : false) ||
+          (event.organizerId ? followedPlaceIds.has(event.organizerId) : false),
         userRsvpStatus: currentUserRsvp?.status ?? null,
         userRsvpNotGoingReason: currentUserRsvp?.notGoingReason ?? null,
+        friendsGoing: (socialRsvpsMap.get(event.id) ?? []).filter(
+          (rsvp) => rsvp.status === "going"
+        ),
+        friendsInterested: (socialRsvpsMap.get(event.id) ?? []).filter(
+          (rsvp) => rsvp.status === "interested"
+        ),
         venue: venue
           ? {
               id: venue.id,
@@ -301,8 +540,9 @@ export async function GET(request: Request) {
   });
 
   return NextResponse.json({
-    friendCount: friendCountRow?.count ?? 0,
+    friendCount: friendIds.length,
     requestCount: requestCountRow?.count ?? 0,
+    currentUserLocation,
     activities,
   });
 }

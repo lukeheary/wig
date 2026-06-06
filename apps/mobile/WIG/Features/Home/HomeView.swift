@@ -281,14 +281,19 @@ struct HomeView: View {
                                 .padding(.horizontal, 16)
 
                             ForEach(Array(searchUserResults.enumerated()), id: \.element.id) { index, user in
-                                SearchUserRow(
-                                    user: user,
-                                    seed: index,
-                                    isSendingRequest: sendingFriendRequestUserIDs.contains(user.id),
-                                    onAddFriend: {
-                                        sendFriendRequest(to: user.id)
-                                    }
-                                )
+                                NavigationLink {
+                                    UserProfileView(userID: user.id)
+                                } label: {
+                                    SearchUserRow(
+                                        user: user,
+                                        seed: index,
+                                        isSendingRequest: sendingFriendRequestUserIDs.contains(user.id),
+                                        onAddFriend: {
+                                            sendFriendRequest(to: user.id)
+                                        }
+                                    )
+                                }
+                                .buttonStyle(.plain)
                                     .padding(.horizontal, 16)
                             }
                         }
@@ -343,13 +348,15 @@ struct HomeView: View {
     private var homeTopControls: some View {
         HStack(alignment: .top, spacing: 10) {
             if !isSearchPresented {
-                HomeLocationFilterDropdown(
-                    selection: Binding(
-                        get: { effectiveLocationFilter },
-                        set: { selectedLocationFilter = $0 }
-                    ),
-                    locations: availableLocationFilters
-                )
+                if shouldShowLocationFilterControl {
+                    HomeLocationFilterDropdown(
+                        selection: Binding(
+                            get: { effectiveLocationFilter },
+                            set: { selectedLocationFilter = $0 }
+                        ),
+                        locations: availableLocationFilters
+                    )
+                }
 
                 HomeFiltersMenuButton(
                     selectedEventFilter: $selectedEventFilter,
@@ -435,21 +442,22 @@ struct HomeView: View {
 
     private var searchEvents: [EventFeedItem] {
         let query = normalizedSearchQuery
-        let upcomingEvents = filteredCurrentEvents
+        let localMatches = filteredCurrentEvents
             .filter { $0.startAt >= .now }
+            .filter { event in
+                event.matchesSearch(query)
+            }
             .sorted(by: { $0.startAt < $1.startAt })
 
         guard !query.isEmpty else {
             return []
         }
 
-        return Array(
-            upcomingEvents
-                .filter { event in
-                    event.matchesSearch(query)
-                }
-                .prefix(20)
-        )
+        var seenEventIDs = Set<UUID>()
+        return (searchViewModel.events + localMatches)
+            .filter { event in
+                seenEventIDs.insert(event.id).inserted
+            }
     }
 
     private var currentEvents: [EventFeedItem] {
@@ -485,6 +493,10 @@ struct HomeView: View {
 
     private var searchVenueResults: [PlaceListItem] {
         searchViewModel.places
+    }
+
+    private var shouldShowLocationFilterControl: Bool {
+        currentResponse != nil || currentUserLocation != nil
     }
 
     private var availableLocationFilters: [HomeLocationFilter] {
@@ -988,6 +1000,7 @@ private struct HomeRecentActivityRow: View {
     let activity: ActivityFeedItem
     @State private var selectedEvent: EventFeedItem?
     @State private var selectedVenue: PlaceListItem?
+    @State private var selectedUserProfile: RecentActivitySelectedUserProfile?
 
     private static let relativeFormatter: RelativeDateTimeFormatter = {
         let formatter = RelativeDateTimeFormatter()
@@ -1007,6 +1020,9 @@ private struct HomeRecentActivityRow: View {
                     },
                     onTapVenue: { venue in
                         selectedVenue = venue
+                    },
+                    onTapUser: { userID in
+                        selectedUserProfile = RecentActivitySelectedUserProfile(id: userID)
                     }
                 )
                 .frame(maxWidth: .infinity, alignment: .leading)
@@ -1023,7 +1039,14 @@ private struct HomeRecentActivityRow: View {
         .navigationDestination(item: $selectedVenue) { venue in
             PlaceDetailView(place: venue)
         }
+        .navigationDestination(item: $selectedUserProfile) { selection in
+            UserProfileView(userID: selection.id)
+        }
     }
+}
+
+private struct RecentActivitySelectedUserProfile: Identifiable, Hashable {
+    let id: String
 }
 
 private struct EventSearchRow: View {
@@ -1312,6 +1335,7 @@ private final class HomeSearchDirectoryViewModel: ObservableObject {
 
     @Published private(set) var users: [FriendUserSummary] = []
     @Published private(set) var places: [PlaceListItem] = []
+    @Published private(set) var events: [EventFeedItem] = []
     @Published private(set) var phase: Phase = .idle
     private var activeQuery = ""
 
@@ -1326,6 +1350,7 @@ private final class HomeSearchDirectoryViewModel: ObservableObject {
         if normalizedQuery.isEmpty {
             users = []
             places = []
+            events = []
             phase = .idle
         } else {
             phase = .loading
@@ -1339,6 +1364,7 @@ private final class HomeSearchDirectoryViewModel: ObservableObject {
             activeQuery = ""
             users = []
             places = []
+            events = []
             phase = .idle
             return
         }
@@ -1357,6 +1383,7 @@ private final class HomeSearchDirectoryViewModel: ObservableObject {
 
             users = response.users
             places = response.places
+            events = response.events
         } catch {
             guard activeQuery == normalizedQuery else {
                 return
@@ -1364,6 +1391,7 @@ private final class HomeSearchDirectoryViewModel: ObservableObject {
 
             users = []
             places = []
+            events = []
         }
 
         if activeQuery == normalizedQuery {

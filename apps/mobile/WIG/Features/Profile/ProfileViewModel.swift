@@ -47,3 +47,34 @@ final class ProfileViewModel: ObservableObject {
         isUploadingAvatar = false
     }
 }
+
+@MainActor
+final class UserProfileViewModel: ObservableObject {
+    enum State {
+        case idle
+        case loading
+        case loaded(UserProfileResponse)
+        case failed(String)
+    }
+
+    @Published private(set) var state: State = .idle
+
+    var canShowEventsFilter: Bool {
+        guard case .loaded(let response) = state else {
+            return false
+        }
+
+        return !response.upcomingEvents.isEmpty || !response.pastEvents.isEmpty
+    }
+
+    func load(userID: String, using apiClient: APIClient) async {
+        state = .loading
+
+        do {
+            let response = try await apiClient.send(APIClient.mobileUserProfile(userID: userID))
+            state = .loaded(response)
+        } catch {
+            state = .failed(error.localizedDescription)
+        }
+    }
+}
