@@ -17,6 +17,9 @@ final class EventFeedViewModel: ObservableObject {
     private static var inFlightTokens = [Date: UUID]()
 
     @Published private(set) var state: State
+    @Published private(set) var responsesByWeek = [Date: MobileEventsResponse]()
+    @Published private(set) var loadingWeekStarts = Set<Date>()
+    @Published private(set) var currentUserLocation: EventCity?
 
     init() {
         state = .idle
@@ -33,28 +36,42 @@ final class EventFeedViewModel: ObservableObject {
     ) async {
         let cacheKey = Self.cacheKey(for: weekStart)
 
+        if !forceRefresh, let cachedResponse = responsesByWeek[cacheKey] {
+            rememberCurrentUserLocation(from: cachedResponse)
+            state = .loaded(cachedResponse)
+            return
+        }
+
         if !forceRefresh, let inFlightLoad = Self.inFlightLoads[cacheKey] {
-            state = .loading
+            loadingWeekStarts.insert(cacheKey)
+            defer {
+                loadingWeekStarts.remove(cacheKey)
+            }
+
+            if responsesByWeek.isEmpty {
+                state = .loading
+            }
 
             do {
                 let response = try await inFlightLoad.value
+                responsesByWeek[cacheKey] = response
+                rememberCurrentUserLocation(from: response)
                 state = .loaded(response)
             } catch {
-                state = .failed(error.localizedDescription)
+                if responsesByWeek.isEmpty {
+                    state = .failed(error.localizedDescription)
+                }
             }
 
             return
         }
 
         let token = UUID()
-        let shouldShowFullScreenLoading: Bool
-        if case .loaded = state, forceRefresh {
-            shouldShowFullScreenLoading = false
-        } else {
-            shouldShowFullScreenLoading = true
-        }
+        let shouldShowFullScreenLoading = responsesByWeek.isEmpty
 
         do {
+            loadingWeekStarts.insert(cacheKey)
+
             if shouldShowFullScreenLoading {
                 state = .loading
             }
@@ -76,6 +93,8 @@ final class EventFeedViewModel: ObservableObject {
             Self.inFlightTokens[cacheKey] = token
 
             let response = try await loadTask.value
+            responsesByWeek[cacheKey] = response
+            rememberCurrentUserLocation(from: response)
             state = .loaded(response)
         } catch {
             if shouldShowFullScreenLoading {
@@ -83,10 +102,28 @@ final class EventFeedViewModel: ObservableObject {
             }
         }
 
+        loadingWeekStarts.remove(cacheKey)
+
         if Self.inFlightTokens[cacheKey] == token {
             Self.inFlightLoads[cacheKey] = nil
             Self.inFlightTokens[cacheKey] = nil
         }
+    }
+
+    func response(for weekStart: Date) -> MobileEventsResponse? {
+        responsesByWeek[Self.cacheKey(for: weekStart)]
+    }
+
+    func isLoading(weekStart: Date) -> Bool {
+        loadingWeekStarts.contains(Self.cacheKey(for: weekStart))
+    }
+
+    private func rememberCurrentUserLocation(from response: MobileEventsResponse) {
+        guard let location = response.currentUserLocation else {
+            return
+        }
+
+        currentUserLocation = location
     }
 
     private static func cacheKey(for date: Date) -> Date {

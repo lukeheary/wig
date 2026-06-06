@@ -260,14 +260,27 @@ struct APIClient: Sendable {
     static func updateMobileEventRSVP(
         eventID: UUID,
         status: EventRSVPStatus,
-        notGoingReason: EventRSVPDeclineReason? = nil
+        notGoingReason: EventRSVPDeclineReason? = nil,
+        includePartner: Bool = false
     ) throws -> Endpoint<EventRSVPState> {
         Endpoint(
             path: "/api/mobile/events/\(eventID.uuidString)/rsvp",
             method: .post,
             body: try JSONEncoder().encode(
-                EventRSVPUpdateRequest(status: status, notGoingReason: notGoingReason)
+                EventRSVPUpdateRequest(
+                    status: status,
+                    notGoingReason: notGoingReason,
+                    includePartner: includePartner
+                )
             ),
+            requiresAuthentication: false,
+            includesAuthenticationIfAvailable: true
+        )
+    }
+
+    static func mobileMyPartner() -> Endpoint<MobilePartnerResponse> {
+        Endpoint(
+            path: "/api/mobile/partners/me",
             requiresAuthentication: false,
             includesAuthenticationIfAvailable: true
         )
@@ -467,12 +480,45 @@ enum EventRSVPDeclineReason: String, Codable, CaseIterable, Hashable, Sendable {
 struct EventRSVPState: Decodable, Hashable, Sendable {
     let status: EventRSVPStatus?
     let notGoingReason: EventRSVPDeclineReason?
+    let includePartner: Bool
     let updatedAt: Date?
 }
 
 private struct EventRSVPUpdateRequest: Encodable {
     let status: EventRSVPStatus
     let notGoingReason: EventRSVPDeclineReason?
+    let includePartner: Bool
+}
+
+struct MobilePartnerResponse: Decodable, Hashable, Sendable {
+    let relationship: MobilePartnerRelationship?
+}
+
+struct MobilePartnerRelationship: Decodable, Hashable, Sendable {
+    let id: String
+    let status: String
+    let isRequester: Bool
+    let partner: MobilePartnerUser
+
+    var isAccepted: Bool {
+        status == "accepted"
+    }
+}
+
+struct MobilePartnerUser: Decodable, Hashable, Sendable {
+    let id: String
+    let firstName: String?
+    let lastName: String?
+    let username: String
+    let avatarImageURL: URL?
+
+    enum CodingKeys: String, CodingKey {
+        case id
+        case firstName
+        case lastName
+        case username
+        case avatarImageURL = "avatarImageUrl"
+    }
 }
 
 private struct MobileOnboardingUpdateRequest: Encodable {

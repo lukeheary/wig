@@ -1,5 +1,5 @@
 import { auth } from "@clerk/nextjs/server";
-import { addDays, subDays, startOfDay } from "date-fns";
+import { addDays, subDays } from "date-fns";
 import { and, asc, desc, eq, inArray, sql } from "drizzle-orm";
 import { NextResponse } from "next/server";
 import { db } from "@/server/db";
@@ -11,6 +11,10 @@ import {
   users,
 } from "@/server/db/schema";
 import { mapEventCategoryData } from "@/server/utils/categories";
+import {
+  canEditMobileEvent,
+  resolveMobileEventEditPermissions,
+} from "@/app/api/mobile/event-edit-permissions";
 
 const HOME_RECENT_ACTIVITY_SURFACE = "home_recent_activity";
 const HOME_ACTIVITY_WINDOW_DAYS = 1;
@@ -70,7 +74,6 @@ export async function GET(request: Request) {
 
   const now = new Date();
   const recentCutoff = subDays(now, HOME_ACTIVITY_WINDOW_DAYS).getTime();
-  const today = startOfDay(now);
 
   const [friendCountRow] = await db
     .select({ count: sql<number>`count(*)::int` })
@@ -121,7 +124,7 @@ export async function GET(request: Request) {
         return false;
       }
 
-      return startOfDay(activity.event.startAt) >= today;
+      return activity.event.startAt > now;
     })
     .sort((a, b) => activityTimestamp(b).getTime() - activityTimestamp(a).getTime());
 
@@ -225,6 +228,7 @@ export async function GET(request: Request) {
           ])
         )
       : new Map<string, { status: string; notGoingReason: string | null }>();
+  const editPermissions = await resolveMobileEventEditPermissions(userId);
 
   const activities = previewActivities.map((activity) => {
     const actorName =
@@ -273,6 +277,10 @@ export async function GET(request: Request) {
         categories: event.categories,
         categoryLabels: event.categoryLabels,
         updatedAt: event.updatedAt,
+        canEdit: canEditMobileEvent(editPermissions, {
+          venueId: event.venueId,
+          organizerId: event.organizerId,
+        }),
         userRsvpStatus: currentUserRsvp?.status ?? null,
         userRsvpNotGoingReason: currentUserRsvp?.notGoingReason ?? null,
         venue: venue

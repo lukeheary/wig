@@ -44,6 +44,7 @@ struct EventFeedItem: Codable, Identifiable, Hashable, Sendable {
     let categories: [String]
     let categoryLabels: [String: String]
     let updatedAt: Date?
+    var canEdit = false
     var isFollowed = false
     var isCreatedByCurrentUser = false
     var userRsvpStatus: EventRSVPStatus? = nil
@@ -76,6 +77,7 @@ struct EventFeedItem: Codable, Identifiable, Hashable, Sendable {
         case categories
         case categoryLabels
         case updatedAt
+        case canEdit
         case isFollowed
         case isCreatedByCurrentUser
         case userRsvpStatus
@@ -148,6 +150,24 @@ struct EventFeedItem: Codable, Identifiable, Hashable, Sendable {
 
     func localStartOfDay() -> Date {
         EventFeedItem.calendar(timeZone: displayTimeZone).startOfDay(for: startAt)
+    }
+
+    var relativeStartDayText: String {
+        let calendar = EventFeedItem.calendar(timeZone: displayTimeZone)
+        let startOfToday = calendar.startOfDay(for: Date())
+        let startOfEventDay = calendar.startOfDay(for: startAt)
+        let dayOffset = calendar.dateComponents([.day], from: startOfToday, to: startOfEventDay).day ?? 0
+
+        switch dayOffset {
+        case ..<0:
+            return ""
+        case 0:
+            return " (today)"
+        case 1:
+            return " (tomorrow)"
+        default:
+            return " (in \(dayOffset) days)"
+        }
     }
 
     func isInLocalWeek(startingAt weekStart: Date) -> Bool {
@@ -278,6 +298,7 @@ extension EventFeedItem {
         categories = try container.decodeIfPresent([String].self, forKey: .categories) ?? []
         categoryLabels = try container.decodeIfPresent([String: String].self, forKey: .categoryLabels) ?? [:]
         updatedAt = try container.decodeIfPresent(Date.self, forKey: .updatedAt)
+        canEdit = try container.decodeIfPresent(Bool.self, forKey: .canEdit) ?? false
         isFollowed = try container.decodeIfPresent(Bool.self, forKey: .isFollowed) ?? false
         isCreatedByCurrentUser = try container.decodeIfPresent(Bool.self, forKey: .isCreatedByCurrentUser) ?? false
         userRsvpStatus = try container.decodeIfPresent(EventRSVPStatus.self, forKey: .userRsvpStatus)

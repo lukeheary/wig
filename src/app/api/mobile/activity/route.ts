@@ -9,6 +9,10 @@ import {
   users,
 } from "@/server/db/schema";
 import { mapEventCategoryData } from "@/server/utils/categories";
+import {
+  canEditMobileEvent,
+  resolveMobileEventEditPermissions,
+} from "@/app/api/mobile/event-edit-permissions";
 
 const VISIBLE_ACTIVITY_TYPES = new Set([
   "rsvp_going",
@@ -114,6 +118,7 @@ export async function GET(request: Request) {
           ])
         )
       : new Map<string, { status: string; notGoingReason: string | null }>();
+  const editPermissions = await resolveMobileEventEditPermissions(userId);
 
   const activities = visibleActivities.map((activity) => {
       const actorName =
@@ -163,6 +168,10 @@ export async function GET(request: Request) {
           categories: event.categories,
           categoryLabels: event.categoryLabels,
           updatedAt: event.updatedAt,
+          canEdit: canEditMobileEvent(editPermissions, {
+            venueId: event.venueId,
+            organizerId: event.organizerId,
+          }),
           userRsvpStatus: currentUserRsvp?.status ?? null,
           userRsvpNotGoingReason: currentUserRsvp?.notGoingReason ?? null,
           venue: venue

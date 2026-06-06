@@ -69,6 +69,7 @@ struct ActivityEventSummary: Decodable, Identifiable, Hashable, Sendable {
     let categories: [String]
     let categoryLabels: [String: String]
     let updatedAt: Date?
+    let canEdit: Bool
     let userRsvpStatus: EventRSVPStatus?
     let userRsvpNotGoingReason: EventRSVPDeclineReason?
     let venue: PlaceListItem?
@@ -96,6 +97,7 @@ struct ActivityEventSummary: Decodable, Identifiable, Hashable, Sendable {
         case categories
         case categoryLabels
         case updatedAt
+        case canEdit
         case userRsvpStatus
         case userRsvpNotGoingReason
         case venue
@@ -133,6 +135,7 @@ struct ActivityEventSummary: Decodable, Identifiable, Hashable, Sendable {
             categories: categories,
             categoryLabels: categoryLabels,
             updatedAt: updatedAt,
+            canEdit: canEdit,
             userRsvpStatus: userRsvpStatus,
             userRsvpNotGoingReason: userRsvpNotGoingReason
         )
@@ -181,6 +184,7 @@ extension ActivityEventSummary {
         categories = try container.decodeIfPresent([String].self, forKey: .categories) ?? []
         categoryLabels = try container.decodeIfPresent([String: String].self, forKey: .categoryLabels) ?? [:]
         updatedAt = try container.decodeIfPresent(Date.self, forKey: .updatedAt)
+        canEdit = try container.decodeIfPresent(Bool.self, forKey: .canEdit) ?? false
         userRsvpStatus = try container.decodeIfPresent(EventRSVPStatus.self, forKey: .userRsvpStatus)
         userRsvpNotGoingReason = try container.decodeIfPresent(
             EventRSVPDeclineReason.self,

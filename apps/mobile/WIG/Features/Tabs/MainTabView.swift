@@ -8,6 +8,7 @@ struct MainTabView: View {
     @State private var selectedTab: AppTab = .home
     @State private var previousNonSearchTab: AppTab = .home
     @State private var isAuthSheetPresented = false
+    @State private var homeResetTrigger = 0
 
     var body: some View {
         if #available(iOS 26.0, *) {
@@ -23,11 +24,14 @@ struct MainTabView: View {
             AppTheme.background
                 .ignoresSafeArea()
 
-            TabView(selection: $selectedTab) {
+            TabView(selection: tabSelection) {
                 Tab("Home", systemImage: "house", value: AppTab.home) {
-                    HomeView(onShowActivity: {
-                        showActivityOrAuth()
-                    })
+                    HomeView(
+                        resetToCurrentWeekTrigger: homeResetTrigger,
+                        onShowActivity: {
+                            showActivityOrAuth()
+                        }
+                    )
                 }
 
                 Tab("Venues", systemImage: "building.2", value: AppTab.venues) {
@@ -85,10 +89,13 @@ struct MainTabView: View {
             AppTheme.background
                 .ignoresSafeArea()
 
-            TabView(selection: $selectedTab) {
-                HomeView(onShowActivity: {
-                    showActivityOrAuth()
-                })
+            TabView(selection: tabSelection) {
+                HomeView(
+                    resetToCurrentWeekTrigger: homeResetTrigger,
+                    onShowActivity: {
+                        showActivityOrAuth()
+                    }
+                )
                     .tabItem {
                         Label("Home", systemImage: "house")
                     }
@@ -169,6 +176,19 @@ struct MainTabView: View {
 
     private var isAuthenticated: Bool {
         appSession.isAuthBypassed || clerk.user != nil
+    }
+
+    private var tabSelection: Binding<AppTab> {
+        Binding(
+            get: { selectedTab },
+            set: { newValue in
+                if selectedTab == .home && newValue == .home {
+                    homeResetTrigger += 1
+                }
+
+                selectedTab = newValue
+            }
+        )
     }
 
     @ViewBuilder

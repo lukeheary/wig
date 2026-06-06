@@ -38,13 +38,7 @@ struct WIGApp: App {
 
     var body: some Scene {
         WindowGroup {
-            ZStack {
-                AppRootView()
-                ClerkEnvironmentSessionGuard()
-                    .allowsHitTesting(false)
-                PushNotificationSyncView()
-                    .allowsHitTesting(false)
-            }
+            ConfiguredAppRootView()
                 .preferredColorScheme(.dark)
                 .environment(Clerk.shared)
                 .environment(\.apiClient, apiClient)
@@ -54,15 +48,33 @@ struct WIGApp: App {
     }
 }
 
-private struct ClerkEnvironmentSessionGuard: View {
+private struct ConfiguredAppRootView: View {
     @Environment(Clerk.self) private var clerk
 
     private let configuredPublishableKey = AppConfig.shared.clerkPublishableKey
     private let storedPublishableKeyDefaultsKey = "wig.clerk.configured-publishable-key"
+    @State private var isReady = false
 
     var body: some View {
-        Color.clear
+        Group {
+            if isReady {
+                ZStack {
+                    AppRootView()
+                    PushNotificationSyncView()
+                        .allowsHitTesting(false)
+                }
+            } else {
+                AppTheme.background
+                    .ignoresSafeArea()
+                    .overlay {
+                        ProgressView()
+                            .tint(.white)
+                    }
+            }
+        }
             .task(id: configuredPublishableKey) {
+                isReady = false
+
                 let defaults = UserDefaults.standard
                 let previousPublishableKey = defaults.string(forKey: storedPublishableKeyDefaultsKey)
 
@@ -73,6 +85,7 @@ private struct ClerkEnvironmentSessionGuard: View {
                 }
 
                 defaults.set(configuredPublishableKey, forKey: storedPublishableKeyDefaultsKey)
+                isReady = true
             }
     }
 }

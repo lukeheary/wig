@@ -1,1 +1,0 @@
-ALTER TABLE "venues" ADD COLUMN "hours" jsonb;

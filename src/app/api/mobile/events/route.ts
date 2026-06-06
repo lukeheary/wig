@@ -15,6 +15,10 @@ import {
   createMobileMetroResolver,
   mobileMetroAreas,
 } from "@/app/api/mobile/metro";
+import {
+  canEditMobileEvent,
+  resolveMobileEventEditPermissions,
+} from "@/app/api/mobile/event-edit-permissions";
 import { eventTimeZone } from "@/lib/utils";
 import { mapEventCategoryData } from "@/server/utils/categories";
 
@@ -387,6 +391,7 @@ export async function GET(request: Request) {
           ).map((follow) => follow.placeId)
         )
       : new Set<string>();
+  const editPermissions = await resolveMobileEventEditPermissions(userId);
 
   const payload = eventList.map((event) => {
     const mapped = mapEventCategoryData(event);
@@ -422,6 +427,10 @@ export async function GET(request: Request) {
       categories: mapped.categories,
       categoryLabels: mapped.categoryLabels,
       updatedAt: mapped.updatedAt,
+      canEdit: canEditMobileEvent(editPermissions, {
+        venueId: mapped.venueId,
+        organizerId: mapped.organizerId,
+      }),
       isFollowed:
         (mapped.venueId ? followedPlaceIds.has(mapped.venueId) : false) ||
         (mapped.organizerId ? followedPlaceIds.has(mapped.organizerId) : false),

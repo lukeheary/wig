@@ -356,14 +356,14 @@ private struct PlaceDetailHeader: View {
         Button(action: onFollowToggle) {
             Text(isFollowed ? "Following" : "Follow")
                 .font(.system(size: 15, weight: .bold))
-                .foregroundStyle(isFollowed ? .black : .white)
+                .foregroundStyle(isFollowed ? .white : .black)
                 .padding(.horizontal, 20)
                 .frame(height: 44)
                 .contentShape(Capsule())
                 .background {
-                    if isFollowed {
+                    if !isFollowed {
                         Capsule()
-                            .fill(Color(red: 0.25, green: 1.0, blue: 0.86))
+                            .fill(.white)
                     }
                 }
                 .placeDetailLiquidGlass(in: Capsule())

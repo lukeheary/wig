@@ -1,10 +1,10 @@
 import { auth } from "@clerk/nextjs/server";
-import { and, asc, eq } from "drizzle-orm";
+import { and, asc, eq, or } from "drizzle-orm";
 import { NextResponse } from "next/server";
 import { z } from "zod";
 import { RSVP_DECLINE_REASON_VALUES } from "@/lib/rsvp";
 import { db } from "@/server/db";
-import { eventRsvps, events, users } from "@/server/db/schema";
+import { eventRsvps, events, userPartners, users } from "@/server/db/schema";
 import {
   clearRsvpActivity,
   upsertRsvpActivity,
@@ -19,6 +19,7 @@ const updateSchema = z.object({
   status: z.enum(["going", "interested", "not_going"]),
   notGoingReason: z.enum(RSVP_DECLINE_REASON_VALUES).nullable().optional(),
   reason: z.enum(RSVP_DECLINE_REASON_VALUES).nullable().optional(),
+  includePartner: z.boolean().optional(),
 });
 
 type RouteContext = {
@@ -55,7 +56,12 @@ export async function GET(_request: Request, context: RouteContext) {
   const userId = await currentMobileUserId();
 
   if (!userId) {
-    return NextResponse.json({ status: null });
+    return NextResponse.json({
+      status: null,
+      notGoingReason: null,
+      includePartner: false,
+      updatedAt: null,
+    });
   }
 
   const rsvp = await db.query.eventRsvps.findFirst({
@@ -63,13 +69,45 @@ export async function GET(_request: Request, context: RouteContext) {
     columns: {
       status: true,
       notGoingReason: true,
+      partnerRsvpByUserId: true,
       updatedAt: true,
     },
   });
 
+  const partnerRelationship = await db.query.userPartners.findFirst({
+    where: and(
+      eq(userPartners.status, "accepted"),
+      or(eq(userPartners.requesterId, userId), eq(userPartners.recipientId, userId))
+    ),
+  });
+
+  const partnerUserId = partnerRelationship
+    ? partnerRelationship.requesterId === userId
+      ? partnerRelationship.recipientId
+      : partnerRelationship.requesterId
+    : null;
+  const mirroredPartnerRsvpExists = partnerUserId && rsvp?.status
+    ? await db.query.eventRsvps.findFirst({
+        where: and(
+          eq(eventRsvps.userId, partnerUserId),
+          eq(eventRsvps.eventId, eventId),
+          eq(eventRsvps.partnerRsvpByUserId, userId),
+          eq(eventRsvps.status, rsvp.status)
+        ),
+        columns: {
+          userId: true,
+        },
+      })
+    : null;
+
+  const includePartner =
+    Boolean(partnerUserId) &&
+    (rsvp?.partnerRsvpByUserId === partnerUserId || Boolean(mirroredPartnerRsvpExists));
+
   return NextResponse.json({
     status: rsvp?.status ?? null,
     notGoingReason: rsvp?.notGoingReason ?? null,
+    includePartner,
     updatedAt: rsvp?.updatedAt ?? null,
   });
 }
@@ -101,10 +139,27 @@ export async function POST(request: Request, context: RouteContext) {
     },
   });
 
+  const partnerRelationship = await db.query.userPartners.findFirst({
+    where: and(
+      eq(userPartners.status, "accepted"),
+      or(eq(userPartners.requesterId, userId), eq(userPartners.recipientId, userId))
+    ),
+  });
+
+  const partnerUserId = partnerRelationship
+    ? partnerRelationship.requesterId === userId
+      ? partnerRelationship.recipientId
+      : partnerRelationship.requesterId
+    : null;
+  const shouldMirrorPartnerRsvp =
+    Boolean(partnerUserId) && body.includePartner === true;
+
   const notGoingReason =
     body.status === "not_going"
       ? (body.notGoingReason ?? body.reason ?? null)
       : null;
+
+  let includedPartnerInRsvp = false;
 
   const [rsvp] = await db
     .insert(eventRsvps)
@@ -127,8 +182,56 @@ export async function POST(request: Request, context: RouteContext) {
     .returning({
       status: eventRsvps.status,
       notGoingReason: eventRsvps.notGoingReason,
+      partnerRsvpByUserId: eventRsvps.partnerRsvpByUserId,
       updatedAt: eventRsvps.updatedAt,
     });
+
+  if (partnerUserId) {
+    if (shouldMirrorPartnerRsvp) {
+      const existingPartnerRsvp = await db.query.eventRsvps.findFirst({
+        where: and(
+          eq(eventRsvps.userId, partnerUserId),
+          eq(eventRsvps.eventId, eventId)
+        ),
+      });
+
+      const canWriteMirroredRsvp =
+        !existingPartnerRsvp ||
+        existingPartnerRsvp.partnerRsvpByUserId === userId;
+
+      if (canWriteMirroredRsvp) {
+        includedPartnerInRsvp = true;
+        await db
+          .insert(eventRsvps)
+          .values({
+            userId: partnerUserId,
+            eventId,
+            status: body.status,
+            notGoingReason,
+            partnerRsvpByUserId: userId,
+          })
+          .onConflictDoUpdate({
+            target: [eventRsvps.userId, eventRsvps.eventId],
+            set: {
+              status: body.status,
+              notGoingReason,
+              partnerRsvpByUserId: userId,
+              updatedAt: new Date(),
+            },
+          });
+      }
+    } else {
+      await db
+        .delete(eventRsvps)
+        .where(
+          and(
+            eq(eventRsvps.userId, partnerUserId),
+            eq(eventRsvps.eventId, eventId),
+            eq(eventRsvps.partnerRsvpByUserId, userId)
+          )
+        );
+    }
+  }
 
   const activityType =
     body.status === "going"
@@ -143,7 +246,7 @@ export async function POST(request: Request, context: RouteContext) {
     type: activityType,
     metadata: {
       status: body.status,
-      includePartner: false,
+      includePartner: includedPartnerInRsvp,
       reason: notGoingReason,
     },
   });
@@ -165,6 +268,7 @@ export async function POST(request: Request, context: RouteContext) {
   return NextResponse.json({
     status: rsvp?.status ?? body.status,
     notGoingReason: rsvp?.notGoingReason ?? notGoingReason,
+    includePartner: includedPartnerInRsvp,
     updatedAt: rsvp?.updatedAt ?? new Date(),
   });
 }
@@ -181,6 +285,31 @@ export async function DELETE(_request: Request, context: RouteContext) {
     .delete(eventRsvps)
     .where(and(eq(eventRsvps.userId, userId), eq(eventRsvps.eventId, eventId)));
 
+  const partnerRelationship = await db.query.userPartners.findFirst({
+    where: and(
+      eq(userPartners.status, "accepted"),
+      or(eq(userPartners.requesterId, userId), eq(userPartners.recipientId, userId))
+    ),
+  });
+
+  const partnerUserId = partnerRelationship
+    ? partnerRelationship.requesterId === userId
+      ? partnerRelationship.recipientId
+      : partnerRelationship.requesterId
+    : null;
+
+  if (partnerUserId) {
+    await db
+      .delete(eventRsvps)
+      .where(
+        and(
+          eq(eventRsvps.userId, partnerUserId),
+          eq(eventRsvps.eventId, eventId),
+          eq(eventRsvps.partnerRsvpByUserId, userId)
+        )
+      );
+  }
+
   void clearRsvpActivity({
     actorUserId: userId,
     entityId: eventId,
@@ -189,6 +318,7 @@ export async function DELETE(_request: Request, context: RouteContext) {
   return NextResponse.json({
     status: null,
     notGoingReason: null,
+    includePartner: false,
     updatedAt: null,
   });
 }

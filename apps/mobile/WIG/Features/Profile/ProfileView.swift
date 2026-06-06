@@ -1,5 +1,4 @@
 import ClerkKit
-import ClerkKitUI
 import PhotosUI
 import SwiftUI
 import UIKit
@@ -110,6 +109,12 @@ struct ProfileView: View {
         case .loaded(let response):
             ScrollView {
                 VStack(spacing: 22) {
+                    HStack {
+                        Spacer()
+
+                        signOutButton
+                    }
+
                     ProfileHeader(
                         profile: response.profile,
                         isUploadingAvatar: viewModel.isUploadingAvatar
@@ -118,8 +123,6 @@ struct ProfileView: View {
                     }
 
                     RelationshipSummaryRow(response: response)
-
-                    accountCard
 
                     if appSession.isAuthBypassed {
                         localDevelopmentCard
@@ -161,38 +164,6 @@ struct ProfileView: View {
         await viewModel.updateAvatar(imageData: data, using: apiClient)
     }
 
-    private var accountCard: some View {
-        VStack(alignment: .leading, spacing: 10) {
-            HStack(spacing: 12) {
-                VStack(alignment: .leading, spacing: 4) {
-                    Text("Account")
-                        .font(.system(size: 17, weight: .bold))
-                        .foregroundStyle(.white)
-
-                    Text("Manage your Clerk profile and session.")
-                        .font(.system(size: 14, weight: .medium))
-                        .foregroundStyle(.white.opacity(0.62))
-                }
-
-                Spacer()
-
-                if clerk.user != nil {
-                    UserButton()
-                        .environment(Clerk.shared)
-                }
-            }
-
-            Text(AppConfig.shared.apiBaseURL.absoluteString)
-                .font(.system(size: 12, weight: .medium))
-                .foregroundStyle(.white.opacity(0.38))
-                .lineLimit(1)
-                .truncationMode(.middle)
-        }
-        .padding(16)
-        .frame(maxWidth: .infinity, alignment: .leading)
-        .background(ProfileTheme.cardBackground, in: RoundedRectangle(cornerRadius: 18, style: .continuous))
-    }
-
     private var localDevelopmentCard: some View {
         VStack(alignment: .leading, spacing: 12) {
             Text("Local Development")
@@ -212,6 +183,23 @@ struct ProfileView: View {
         .padding(16)
         .frame(maxWidth: .infinity, alignment: .leading)
         .background(ProfileTheme.cardBackground, in: RoundedRectangle(cornerRadius: 18, style: .continuous))
+    }
+
+    private var signOutButton: some View {
+        Button {
+            Task {
+                try? await clerk.auth.signOut(sessionId: clerk.session?.id)
+            }
+        } label: {
+            Text("Sign out")
+                .font(.system(size: 14, weight: .bold))
+                .foregroundStyle(.white)
+                .padding(.horizontal, 16)
+                .frame(height: 40)
+                .contentShape(Capsule())
+                .profileLiquidGlass(in: Capsule())
+        }
+        .buttonStyle(.plain)
     }
 }
 
@@ -580,6 +568,24 @@ private struct FriendAvatarView: View {
 private enum ProfileTheme {
     static let background = Color(red: 0.07, green: 0.07, blue: 0.08)
     static let cardBackground = Color(red: 0.11, green: 0.11, blue: 0.13)
+}
+
+private extension View {
+    @ViewBuilder
+    func profileLiquidGlass<S: InsettableShape>(in shape: S) -> some View {
+        if #available(iOS 26.1, *) {
+            glassEffect(.regular.interactive(), in: shape)
+        } else if #available(iOS 26.0, *) {
+            glassEffect(.regular, in: shape)
+        } else {
+            background(.black.opacity(0.20), in: shape)
+                .background(.ultraThinMaterial, in: shape)
+                .overlay(
+                    shape.strokeBorder(.white.opacity(0.18), lineWidth: 1)
+                )
+                .shadow(color: .black.opacity(0.22), radius: 16, x: 0, y: 8)
+        }
+    }
 }
 
 private struct CameraImagePicker: UIViewControllerRepresentable {

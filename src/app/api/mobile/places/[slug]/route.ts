@@ -4,6 +4,11 @@ import { and, asc, desc, eq, gte, inArray, lt } from "drizzle-orm";
 import { db } from "@/server/db";
 import { eventRsvps, events, placeFollows, places, users } from "@/server/db/schema";
 import { mapEventCategoryData, mapPlaceCategoryData } from "@/server/utils/categories";
+import {
+  canEditMobileEvent,
+  resolveMobileEventEditPermissions,
+  type MobileEventEditPermissions,
+} from "@/app/api/mobile/event-edit-permissions";
 
 async function currentMobileUserId() {
   const { userId } = await auth();
@@ -25,6 +30,7 @@ async function currentMobileUserId() {
 
 function mapMobileEvent(
   event: any,
+  permissions: MobileEventEditPermissions,
   currentUserRsvp?: {
     status: "going" | "interested" | "not_going";
     notGoingReason: string | null;
@@ -51,6 +57,10 @@ function mapMobileEvent(
     categories: mapped.categories,
     categoryLabels: mapped.categoryLabels,
     updatedAt: mapped.updatedAt,
+    canEdit: canEditMobileEvent(permissions, {
+      venueId: mapped.venueId,
+      organizerId: mapped.organizerId,
+    }),
     userRsvpStatus: currentUserRsvp?.status ?? null,
     userRsvpNotGoingReason: currentUserRsvp?.notGoingReason ?? null,
   };
@@ -123,6 +133,7 @@ export async function GET(
 
   const mappedPlace = mapPlaceCategoryData(place);
   const userId = await currentMobileUserId();
+  const editPermissions = await resolveMobileEventEditPermissions(userId);
   const allEvents = [...upcomingEvents, ...pastEvents];
   const eventIds = allEvents.map((event) => event.id);
   const currentUserRsvpMap =
@@ -180,10 +191,10 @@ export async function GET(
     updatedAt: mappedPlace.updatedAt,
     isFollowed: Boolean(follow),
     events: upcomingEvents.map((event) =>
-      mapMobileEvent(event, currentUserRsvpMap.get(event.id))
+      mapMobileEvent(event, editPermissions, currentUserRsvpMap.get(event.id))
     ),
     pastEvents: pastEvents.map((event) =>
-      mapMobileEvent(event, currentUserRsvpMap.get(event.id))
+      mapMobileEvent(event, editPermissions, currentUserRsvpMap.get(event.id))
     ),
   });
 }

@@ -4,6 +4,7 @@ import SwiftUI
 struct HomeView: View {
     let showsNativeSearch: Bool
     let isSearchPresentedOnAppear: Bool
+    let resetToCurrentWeekTrigger: Int
     let onShowActivity: () -> Void
     let onSearchDismiss: () -> Void
 
@@ -18,8 +19,7 @@ struct HomeView: View {
     @State private var searchText = ""
     @State private var selectedLocationFilter: HomeLocationFilter?
     @State private var selectedEventFilter: HomeEventFilter = .all
-    @State private var weekNavigationDirection = 1
-    @State private var isWeekTransitionEnabled = false
+    @State private var selectedCategoryFilterID: String?
     @State private var sendingFriendRequestUserIDs = Set<String>()
 
     private static let sectionTitleFormatter: DateFormatter = {
@@ -38,11 +38,13 @@ struct HomeView: View {
     init(
         showsNativeSearch: Bool = false,
         isSearchPresentedOnAppear: Bool = false,
+        resetToCurrentWeekTrigger: Int = 0,
         onShowActivity: @escaping () -> Void = {},
         onSearchDismiss: @escaping () -> Void = {}
     ) {
         self.showsNativeSearch = showsNativeSearch
         self.isSearchPresentedOnAppear = isSearchPresentedOnAppear
+        self.resetToCurrentWeekTrigger = resetToCurrentWeekTrigger
         self.onShowActivity = onShowActivity
         self.onSearchDismiss = onSearchDismiss
     }
@@ -75,6 +77,9 @@ struct HomeView: View {
                         await loadHome(for: weekStart, using: apiClient)
                     }
                 }
+                .onChange(of: resetToCurrentWeekTrigger) { _, _ in
+                    resetToCurrentWeek()
+                }
                 .onChange(of: isSearchPresented) { _, isPresented in
                     guard showsNativeSearch,
                           !isPresented,
@@ -83,7 +88,6 @@ struct HomeView: View {
                         return
                     }
 
-                    isWeekTransitionEnabled = false
                     onSearchDismiss()
                 }
                 .task(id: normalizedSearchQuery) {
@@ -115,44 +119,60 @@ struct HomeView: View {
     private var content: some View {
         switch viewModel.state {
         case .idle, .loading:
-            ProgressView("Loading events...")
-                .frame(maxWidth: .infinity, maxHeight: .infinity)
-                .tint(.white)
-                .foregroundStyle(.white)
-                .background(feedBackground)
+            if currentResponse != nil || viewModel.isLoading(weekStart: selectedWeekStart) {
+                homeContentShell
+            } else {
+                ProgressView("Loading events...")
+                    .frame(maxWidth: .infinity, maxHeight: .infinity)
+                    .tint(.white)
+                    .foregroundStyle(.white)
+                    .background(feedBackground)
+            }
 
         case .failed(let message):
-            ContentUnavailableView {
-                Label("Couldn’t Load Events", systemImage: "wifi.exclamationmark")
-            } description: {
-                Text(message)
-            } actions: {
-                Button("Try Again") {
-                    Task {
-                        await loadHome(for: selectedWeekStart, using: apiClient, forceRefresh: true)
+            if currentResponse != nil {
+                homeContentShell
+            } else {
+                ContentUnavailableView {
+                    Label("Couldn’t Load Events", systemImage: "wifi.exclamationmark")
+                } description: {
+                    Text(message)
+                } actions: {
+                    Button("Try Again") {
+                        Task {
+                            await loadHome(for: selectedWeekStart, using: apiClient, forceRefresh: true)
+                        }
                     }
+                    .foregroundStyle(.white)
+                    .buttonStyle(.borderedProminent)
+                    .tint(.black)
                 }
                 .foregroundStyle(.white)
-                .buttonStyle(.borderedProminent)
-                .tint(.black)
+                .background(feedBackground)
             }
-            .foregroundStyle(.white)
-            .background(feedBackground)
 
-        case .loaded(let response):
-            ZStack(alignment: .top) {
-                if isShowingSearchResults {
-                    searchResultsContent
+        case .loaded:
+            homeContentShell
+        }
+    }
+
+    private var homeContentShell: some View {
+        ZStack(alignment: .top) {
+            if isShowingSearchResults {
+                searchResultsContent
+            } else {
+                if shouldShowWeekSkeletons {
+                    weekSkeletonContent
+                        .id("skeleton-\(selectedWeekStart.timeIntervalSinceReferenceDate)")
                 } else {
                     weeklyContent
-                        .id(selectedWeekStart)
-                        .transition(isWeekTransitionEnabled ? weekTransition : .identity)
+                        .id("events-\(selectedWeekStart.timeIntervalSinceReferenceDate)")
                 }
-
-                homeTopControls
             }
-            .background(feedBackground)
+
+            homeTopControls
         }
+        .background(feedBackground)
     }
 
     private var weeklyContent: some View {
@@ -166,23 +186,17 @@ struct HomeView: View {
                     .padding(.top, 18)
                 }
 
-                if groupedEvents.isEmpty {
-                    ContentUnavailableView {
-                        Label("No Events This Week", systemImage: "calendar")
-                    } description: {
-                        Text("Use the arrow to browse upcoming weeks.")
-                    }
-                    .foregroundStyle(.white)
-                    .frame(maxWidth: .infinity)
-                    .padding(.top, 56)
-                } else {
-                    ForEach(Array(groupedEvents.enumerated()), id: \.element.day) { index, section in
-                        VStack(alignment: .leading, spacing: 12) {
-                            Text(section.title)
-                                .font(.system(size: 20, weight: .bold))
-                                .foregroundStyle(.white)
-                                .padding(.horizontal, 16)
+                ForEach(Array(groupedEvents.enumerated()), id: \.element.day) { index, section in
+                    VStack(alignment: .leading, spacing: 12) {
+                        Text(section.title)
+                            .font(.system(size: 20, weight: .bold))
+                            .foregroundStyle(.white)
+                            .padding(.horizontal, 16)
 
+                        if section.events.isEmpty {
+                            EmptyEventDayPlaceholder()
+                                .padding(.horizontal, 16)
+                        } else {
                             ScrollView(.horizontal) {
                                 LazyHStack(alignment: .top, spacing: 12) {
                                     ForEach(section.events) { event in
@@ -199,8 +213,25 @@ struct HomeView: View {
                             }
                             .scrollIndicators(.hidden)
                         }
-                        .padding(.top, index == 0 && !shouldShowRecentActivity ? 16 : 0)
                     }
+                    .padding(.top, index == 0 && !shouldShowRecentActivity ? 16 : 0)
+                }
+            }
+            .padding(.top, 64)
+            .padding(.bottom, 48)
+        }
+        .scrollIndicators(.hidden)
+    }
+
+    private var weekSkeletonContent: some View {
+        ScrollView {
+            VStack(alignment: .leading, spacing: 24) {
+                ForEach(Array(skeletonSectionDays.enumerated()), id: \.element) { index, day in
+                    EventSkeletonSectionView(
+                        title: sectionTitle(for: day),
+                        cardWidth: eventCardWidth
+                    )
+                    .padding(.top, index == 0 ? 16 : 0)
                 }
             }
             .padding(.top, 64)
@@ -214,9 +245,16 @@ struct HomeView: View {
             LazyVStack(alignment: .leading, spacing: 14) {
                 if normalizedSearchQuery.isEmpty {
                     ContentUnavailableView {
-                        Label("Search Events and People", systemImage: "magnifyingglass")
+                        Label(
+                            isAuthenticated ? "Search Events and People" : "Search Events and Venues",
+                            systemImage: "magnifyingglass"
+                        )
                     } description: {
-                        Text("Type a name, username, venue, or event.")
+                        Text(
+                            isAuthenticated
+                                ? "Type a name, username, venue, or event."
+                                : "Type a venue or event."
+                        )
                     }
                     .foregroundStyle(.white)
                     .frame(maxWidth: .infinity)
@@ -313,7 +351,14 @@ struct HomeView: View {
                     locations: availableLocationFilters
                 )
 
-                HomeEventFilterDropdown(selection: $selectedEventFilter)
+                HomeFiltersMenuButton(
+                    selectedEventFilter: $selectedEventFilter,
+                    categories: availableCategoryFilters,
+                    selectedCategoryID: effectiveCategoryFilterID,
+                    onSelectCategory: { filterID in
+                        selectedCategoryFilterID = filterID
+                    }
+                )
             }
 
             Spacer()
@@ -341,15 +386,38 @@ struct HomeView: View {
             visibleSectionDay(for: event)
         }
 
-        return grouped
-            .map { day, events in
-                EventSection(
-                    day: day,
-                    title: sectionTitle(for: day),
-                    events: events.sorted(by: sortEventsForDayRow)
-                )
+        return visibleWeekDays.map { day in
+            let events = grouped[day] ?? []
+
+            return EventSection(
+                day: day,
+                title: sectionTitle(for: day),
+                events: events.sorted(by: sortEventsForDayRow)
+            )
+        }
+    }
+
+    private var visibleWeekDays: [Date] {
+        let today = Self.weekCalendar.startOfDay(for: .now)
+        let firstDay = max(selectedWeekStart, today)
+        let weekEnd = Self.weekCalendar.date(byAdding: .day, value: 7, to: selectedWeekStart) ?? firstDay
+
+        return (0 ..< 7).compactMap { offset in
+            guard let day = Self.weekCalendar.date(byAdding: .day, value: offset, to: firstDay) else {
+                return nil
             }
-            .sorted(by: { $0.day < $1.day })
+
+            let normalizedDay = Self.weekCalendar.startOfDay(for: day)
+            guard normalizedDay < weekEnd else {
+                return nil
+            }
+
+            return normalizedDay
+        }
+    }
+
+    private var skeletonSectionDays: [Date] {
+        Array(visibleWeekDays.prefix(3))
     }
 
     private var eventsForSelectedWeek: [EventFeedItem] {
@@ -385,22 +453,27 @@ struct HomeView: View {
     }
 
     private var currentEvents: [EventFeedItem] {
-        guard case .loaded(let response) = viewModel.state else {
-            return []
-        }
-
-        return response.events
+        currentResponse?.events ?? []
     }
 
     private var currentUserLocation: EventCity? {
-        guard case .loaded(let response) = viewModel.state else {
-            return nil
-        }
+        currentResponse?.currentUserLocation ?? viewModel.currentUserLocation
+    }
 
-        return response.currentUserLocation
+    private var currentResponse: MobileEventsResponse? {
+        viewModel.response(for: selectedWeekStart)
+    }
+
+    private var shouldShowWeekSkeletons: Bool {
+        currentResponse == nil && viewModel.isLoading(weekStart: selectedWeekStart)
     }
 
     private var filteredCurrentEvents: [EventFeedItem] {
+        filteredCurrentEventsBeforeCategory
+            .filter(categoryFilterIncludes)
+    }
+
+    private var filteredCurrentEventsBeforeCategory: [EventFeedItem] {
         currentEvents
             .filter(effectiveLocationFilter.includes)
             .filter(selectedEventFilter.includes)
@@ -415,11 +488,7 @@ struct HomeView: View {
     }
 
     private var availableLocationFilters: [HomeLocationFilter] {
-        guard case .loaded(let response) = viewModel.state else {
-            return [.all]
-        }
-
-        var cityFilters = response.availableCities.reduce(into: [HomeLocationFilter]()) { filters, city in
+        var cityFilters = (currentResponse?.availableCities ?? []).reduce(into: [HomeLocationFilter]()) { filters, city in
             let filter = HomeLocationFilter.city(city: city.city, state: city.state)
 
             guard !filters.contains(filter) else {
@@ -446,6 +515,30 @@ struct HomeView: View {
         return [.all] + cityFilters
     }
 
+    private var availableCategoryFilters: [HomeCategoryFilter] {
+        let counts = filteredCurrentEventsBeforeCategory.reduce(into: [String: Int]()) { counts, event in
+            for category in event.categories {
+                counts[category, default: 0] += 1
+            }
+        }
+
+        return counts.keys
+            .map { category in
+                HomeCategoryFilter(
+                    id: category,
+                    title: categoryTitle(for: category),
+                    count: counts[category] ?? 0
+                )
+            }
+            .sorted { lhs, rhs in
+                if lhs.count != rhs.count {
+                    return lhs.count > rhs.count
+                }
+
+                return lhs.title.localizedCaseInsensitiveCompare(rhs.title) == .orderedAscending
+            }
+    }
+
     private var effectiveLocationFilter: HomeLocationFilter {
         guard let selectedLocationFilter else {
             return defaultLocationFilter
@@ -456,6 +549,16 @@ struct HomeView: View {
         }
 
         return defaultLocationFilter
+    }
+
+    private var effectiveCategoryFilterID: String? {
+        guard let selectedCategoryFilterID else {
+            return nil
+        }
+
+        return availableCategoryFilters.contains(where: { $0.id == selectedCategoryFilterID })
+            ? selectedCategoryFilterID
+            : nil
     }
 
     private var defaultLocationFilter: HomeLocationFilter {
@@ -483,8 +586,18 @@ struct HomeView: View {
         selectedWeekStart > Self.startOfWeek(for: .now)
     }
 
+    private func categoryTitle(for category: String) -> String {
+        currentEvents
+            .compactMap { $0.categoryLabels[category] }
+            .first(where: { !$0.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty })
+            ?? category.capitalized
+    }
+
     private var shouldShowRecentActivity: Bool {
-        isAuthenticated && !isViewingFutureWeek && !recentActivityViewModel.activities.isEmpty
+        isAuthenticated &&
+            effectiveCategoryFilterID == nil &&
+            !isViewingFutureWeek &&
+            !recentActivityViewModel.activities.isEmpty
     }
 
     private var isShowingSearchResults: Bool {
@@ -500,21 +613,19 @@ struct HomeView: View {
             return
         }
 
-        withAnimation(.snappy(duration: 0.24)) {
-            isWeekTransitionEnabled = true
-            weekNavigationDirection = offset >= 0 ? 1 : -1
-            selectedWeekStart = max(weekStart, Self.startOfWeek(for: .now))
-        }
+        selectedWeekStart = max(weekStart, Self.startOfWeek(for: .now))
     }
 
-    private var weekTransition: AnyTransition {
-        let insertionEdge: Edge = weekNavigationDirection >= 0 ? .trailing : .leading
-        let removalEdge: Edge = weekNavigationDirection >= 0 ? .leading : .trailing
+    private func categoryFilterIncludes(_ event: EventFeedItem) -> Bool {
+        guard let effectiveCategoryFilterID else {
+            return true
+        }
 
-        return .asymmetric(
-            insertion: .move(edge: insertionEdge).combined(with: .opacity),
-            removal: .move(edge: removalEdge).combined(with: .opacity)
-        )
+        return event.categories.contains(effectiveCategoryFilterID)
+    }
+
+    private func resetToCurrentWeek() {
+        selectedWeekStart = Self.startOfWeek(for: .now)
     }
 
     private func loadHome(
@@ -563,22 +674,26 @@ struct HomeView: View {
     }
 
     private func sortEventsForDayRow(_ lhs: EventFeedItem, _ rhs: EventFeedItem) -> Bool {
-        let lhsPriority = socialPriority(for: lhs)
-        let rhsPriority = socialPriority(for: rhs)
+        let lhsPriority = dayRowPriority(for: lhs)
+        let rhsPriority = dayRowPriority(for: rhs)
 
         if lhsPriority != rhsPriority {
             return lhsPriority < rhsPriority
         }
 
-        return lhs.startAt < rhs.startAt
+        if lhs.startAt != rhs.startAt {
+            return lhs.startAt < rhs.startAt
+        }
+
+        return lhs.title.localizedCaseInsensitiveCompare(rhs.title) == .orderedAscending
     }
 
-    private func socialPriority(for event: EventFeedItem) -> Int {
-        if !event.friendsGoing.isEmpty {
+    private func dayRowPriority(for event: EventFeedItem) -> Int {
+        if event.hasCurrentUserSocialRSVP || event.hasFriendSocialRSVP {
             return 0
         }
 
-        if !event.friendsInterested.isEmpty {
+        if event.isFollowed {
             return 1
         }
 
@@ -697,20 +812,17 @@ private enum HomeEventFilter: String, CaseIterable, Identifiable {
     case all
     case following
     case friends
-    case mine
 
     var id: String { rawValue }
 
-    var title: String {
+    var menuTitle: String {
         switch self {
         case .all:
             return "All Events"
         case .following:
             return "Following"
         case .friends:
-            return "Friends' Events"
-        case .mine:
-            return "My Events"
+            return "Friends"
         }
     }
 
@@ -722,10 +834,14 @@ private enum HomeEventFilter: String, CaseIterable, Identifiable {
             return event.isFollowed
         case .friends:
             return event.hasFriendSocialRSVP
-        case .mine:
-            return event.isCreatedByCurrentUser || event.hasCurrentUserSocialRSVP
         }
     }
+}
+
+private struct HomeCategoryFilter: Identifiable, Hashable {
+    let id: String
+    let title: String
+    let count: Int
 }
 
 private struct HomeLocationFilterDropdown: View {
@@ -752,24 +868,64 @@ private struct HomeLocationFilterDropdown: View {
     }
 }
 
-private struct HomeEventFilterDropdown: View {
-    @Binding var selection: HomeEventFilter
+private struct HomeFiltersMenuButton: View {
+    @Binding var selectedEventFilter: HomeEventFilter
+    let categories: [HomeCategoryFilter]
+    let selectedCategoryID: String?
+    let onSelectCategory: (String?) -> Void
+
+    private var hasActiveFilters: Bool {
+        selectedEventFilter != .all || selectedCategoryID != nil
+    }
 
     var body: some View {
         Menu {
-            ForEach(HomeEventFilter.allCases) { filter in
-                Button {
-                    selection = filter
-                } label: {
-                    if filter == selection {
-                        Label(filter.title, systemImage: "checkmark")
-                    } else {
-                        Text(filter.title)
+            Section("Events") {
+                ForEach(HomeEventFilter.allCases) { filter in
+                    Button {
+                        selectedEventFilter = filter
+                    } label: {
+                        if filter == selectedEventFilter {
+                            Label(filter.menuTitle, systemImage: "checkmark")
+                        } else {
+                            Text(filter.menuTitle)
+                        }
+                    }
+                }
+            }
+
+            if !categories.isEmpty {
+                Section("Categories") {
+                    Button {
+                        onSelectCategory(nil)
+                    } label: {
+                        if selectedCategoryID == nil {
+                            Label("All Categories", systemImage: "checkmark")
+                        } else {
+                            Text("All Categories")
+                        }
+                    }
+
+                    ForEach(categories) { category in
+                        Button {
+                            onSelectCategory(selectedCategoryID == category.id ? nil : category.id)
+                        } label: {
+                            if selectedCategoryID == category.id {
+                                Label(category.title, systemImage: "checkmark")
+                            } else {
+                                Text(category.title)
+                            }
+                        }
                     }
                 }
             }
         } label: {
-            HomeMenuPillLabel(title: selection.title)
+            Image(systemName: "line.3.horizontal.decrease")
+                .font(.system(size: 18, weight: .semibold))
+                .foregroundStyle(hasActiveFilters ? AppTheme.accentBlue : .primary)
+                .frame(width: 44, height: 44)
+                .contentShape(Circle())
+                .homeLiquidGlass(in: Circle())
         }
         .buttonStyle(.plain)
     }
@@ -1157,6 +1313,7 @@ private final class HomeSearchDirectoryViewModel: ObservableObject {
     @Published private(set) var users: [FriendUserSummary] = []
     @Published private(set) var places: [PlaceListItem] = []
     @Published private(set) var phase: Phase = .idle
+    private var activeQuery = ""
 
     var isLoading: Bool {
         phase == .loading
@@ -1164,6 +1321,7 @@ private final class HomeSearchDirectoryViewModel: ObservableObject {
 
     func prepare(query: String) {
         let normalizedQuery = query.trimmingCharacters(in: .whitespacesAndNewlines)
+        activeQuery = normalizedQuery
 
         if normalizedQuery.isEmpty {
             users = []
@@ -1178,26 +1336,39 @@ private final class HomeSearchDirectoryViewModel: ObservableObject {
         let normalizedQuery = query.trimmingCharacters(in: .whitespacesAndNewlines)
 
         guard !normalizedQuery.isEmpty else {
+            activeQuery = ""
             users = []
             places = []
             phase = .idle
             return
         }
 
+        activeQuery = normalizedQuery
         phase = .loading
 
         do {
             let response = try await apiClient.send(
                 APIClient.mobileSearch(query: normalizedQuery)
             )
+
+            guard activeQuery == normalizedQuery else {
+                return
+            }
+
             users = response.users
             places = response.places
         } catch {
+            guard activeQuery == normalizedQuery else {
+                return
+            }
+
             users = []
             places = []
         }
 
-        phase = .loaded
+        if activeQuery == normalizedQuery {
+            phase = .loaded
+        }
     }
 
     func updateFriendStatus(for userID: String, status: FriendUserSummary.FriendStatus) {
@@ -1219,7 +1390,11 @@ private final class HomeSearchDirectoryViewModel: ObservableObject {
 
 private extension EventFeedItem {
     var hasCurrentUserSocialRSVP: Bool {
-        (friendsGoing + friendsInterested).contains { rsvp in
+        if userRsvpStatus == .going || userRsvpStatus == .interested {
+            return true
+        }
+
+        return (friendsGoing + friendsInterested).contains { rsvp in
             rsvp.user.isCurrentUser
         }
     }
@@ -1243,6 +1418,131 @@ private extension EventFeedItem {
         .contains { value in
             value.localizedCaseInsensitiveContains(query)
         }
+    }
+}
+
+private struct EventSkeletonSectionView: View {
+    let title: String
+    let cardWidth: CGFloat
+
+    var body: some View {
+        VStack(alignment: .leading, spacing: 12) {
+            Text(title)
+                .font(.system(size: 20, weight: .bold))
+                .foregroundStyle(.white)
+                .padding(.horizontal, 16)
+
+            ScrollView(.horizontal) {
+                HStack(alignment: .top, spacing: 12) {
+                    ForEach(0 ..< 3, id: \.self) { index in
+                        EventCardSkeletonView(seed: index)
+                            .frame(width: cardWidth)
+                    }
+                }
+                .padding(.horizontal, 16)
+            }
+            .scrollIndicators(.hidden)
+            .allowsHitTesting(false)
+        }
+    }
+}
+
+private struct EmptyEventDayPlaceholder: View {
+    var body: some View {
+        RoundedRectangle(cornerRadius: 20, style: .continuous)
+            .fill(Color.clear)
+            .frame(maxWidth: .infinity)
+            .frame(height: 140)
+            .overlay {
+                Text("No events scheduled")
+                    .font(.system(size: 18, weight: .medium))
+                    .foregroundStyle(.white.opacity(0.58))
+                    .multilineTextAlignment(.center)
+                    .padding(.horizontal, 24)
+            }
+            .overlay {
+                RoundedRectangle(cornerRadius: 20, style: .continuous)
+                    .strokeBorder(
+                        style: StrokeStyle(
+                            lineWidth: 1,
+                            dash: [5, 5]
+                        )
+                    )
+                    .foregroundStyle(.white.opacity(0.10))
+            }
+            .background(
+                RoundedRectangle(cornerRadius: 20, style: .continuous)
+                    .fill(Color.white.opacity(0.015))
+            )
+    }
+}
+
+private struct EventCardSkeletonView: View {
+    let seed: Int
+    @State private var isHighlighted = false
+
+    private let cardHeight: CGFloat = 312
+    private let posterSize: CGFloat = 200
+    private let imageCornerRadius: CGFloat = 14
+    private let cardCornerRadius: CGFloat = 18
+
+    var body: some View {
+        VStack(alignment: .leading, spacing: 10) {
+            skeletonBlock(cornerRadius: imageCornerRadius)
+                .frame(width: posterSize, height: posterSize)
+
+            VStack(alignment: .leading, spacing: 7) {
+                skeletonBlock(cornerRadius: 5)
+                    .frame(height: 14)
+                    .padding(.trailing, CGFloat(14 + seed * 11))
+
+                skeletonBlock(cornerRadius: 5)
+                    .frame(height: 14)
+                    .padding(.trailing, CGFloat(54 - seed * 7))
+
+                skeletonBlock(cornerRadius: 5)
+                    .frame(width: 132, height: 13)
+
+                skeletonBlock(cornerRadius: 5)
+                    .frame(width: 164, height: 13)
+                    .padding(.top, 1)
+            }
+        }
+        .padding(10)
+        .frame(maxWidth: .infinity, minHeight: cardHeight, maxHeight: cardHeight, alignment: .topLeading)
+        .clipped()
+        .background(
+            RoundedRectangle(cornerRadius: cardCornerRadius, style: .continuous)
+                .fill(Color(red: 0.11, green: 0.11, blue: 0.13))
+        )
+        .overlay(
+            RoundedRectangle(cornerRadius: cardCornerRadius, style: .continuous)
+                .strokeBorder(.white.opacity(0.03), lineWidth: 1)
+        )
+        .onAppear {
+            withAnimation(
+                .easeInOut(duration: 0.92)
+                    .repeatForever(autoreverses: true)
+                    .delay(Double(seed) * 0.08)
+            ) {
+                isHighlighted = true
+            }
+        }
+    }
+
+    private func skeletonBlock(cornerRadius: CGFloat) -> some View {
+        RoundedRectangle(cornerRadius: cornerRadius, style: .continuous)
+            .fill(
+                LinearGradient(
+                    colors: [
+                        Color.white.opacity(isHighlighted ? 0.11 : 0.055),
+                        Color.white.opacity(isHighlighted ? 0.17 : 0.085),
+                        Color.white.opacity(isHighlighted ? 0.10 : 0.05),
+                    ],
+                    startPoint: .topLeading,
+                    endPoint: .bottomTrailing
+                )
+            )
     }
 }
 

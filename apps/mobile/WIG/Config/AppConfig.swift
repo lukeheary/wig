@@ -10,19 +10,39 @@ struct AppConfig {
     let oauthCallbackScheme: String
 
     private init(bundle: Bundle = .main) {
-        clerkPublishableKey = bundle.requiredString(for: "CLERK_PUBLISHABLE_KEY")
-        clerkFrontendAPI = bundle.requiredString(for: "CLERK_FRONTEND_API")
-        apiBaseURL = bundle.requiredURL(for: "API_BASE_URL")
-        clerkJWTTemplate = bundle.optionalString(for: "CLERK_JWT_TEMPLATE")
-        oauthCallbackScheme = bundle.optionalString(for: "OAUTH_CALLBACK_SCHEME")
+        let environment = ProcessInfo.processInfo.environment
+
+        clerkPublishableKey = bundle.requiredString(
+            for: "CLERK_PUBLISHABLE_KEY",
+            environment: environment
+        )
+        clerkFrontendAPI = bundle.requiredString(
+            for: "CLERK_FRONTEND_API",
+            environment: environment
+        )
+        apiBaseURL = bundle.requiredURL(
+            for: "API_BASE_URL",
+            environment: environment
+        )
+        clerkJWTTemplate = bundle.optionalString(
+            for: "CLERK_JWT_TEMPLATE",
+            environment: environment
+        )
+        oauthCallbackScheme = bundle.optionalString(
+            for: "OAUTH_CALLBACK_SCHEME",
+            environment: environment
+        )
             ?? bundle.bundleIdentifier
             ?? "com.whoisgoing.app"
     }
 }
 
 private extension Bundle {
-    func requiredString(for key: String) -> String {
-        guard let value = object(forInfoDictionaryKey: key) as? String, !value.isEmpty else {
+    func requiredString(
+        for key: String,
+        environment: [String: String] = ProcessInfo.processInfo.environment
+    ) -> String {
+        guard let value = optionalString(for: key, environment: environment) else {
             assertionFailure("Missing required Info.plist value for \(key).")
             return "MISSING_\(key)"
         }
@@ -30,7 +50,16 @@ private extension Bundle {
         return value
     }
 
-    func optionalString(for key: String) -> String? {
+    func optionalString(
+        for key: String,
+        environment: [String: String] = ProcessInfo.processInfo.environment
+    ) -> String? {
+        if let value = environment[key]?.trimmingCharacters(in: .whitespacesAndNewlines),
+           !value.isEmpty
+        {
+            return value
+        }
+
         guard let value = object(forInfoDictionaryKey: key) as? String, !value.isEmpty else {
             return nil
         }
@@ -38,8 +67,11 @@ private extension Bundle {
         return value
     }
 
-    func requiredURL(for key: String) -> URL {
-        let value = requiredString(for: key)
+    func requiredURL(
+        for key: String,
+        environment: [String: String] = ProcessInfo.processInfo.environment
+    ) -> URL {
+        let value = requiredString(for: key, environment: environment)
             .replacingOccurrences(of: ":/$()/", with: "://")
 
         guard let url = URL(string: value), url.scheme != nil, url.host != nil else {

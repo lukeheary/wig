@@ -1,2 +1,0 @@
-CREATE TYPE "public"."place_member_role" AS ENUM('owner', 'manager', 'promoter', 'staff');--> statement-breakpoint
-ALTER TABLE "place_members" ADD COLUMN "role" "place_member_role" DEFAULT 'staff' NOT NULL;

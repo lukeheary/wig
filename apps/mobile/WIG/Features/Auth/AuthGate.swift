@@ -172,7 +172,7 @@ private struct MobileOnboardingView: View {
 
                     #if DEBUG
                     if let debug = initialState.debug {
-                        Text("debug: \(debug.reason) user=\(debug.userID) matched=\(debug.matchedUserID ?? "none") email=\(debug.matchedByEmail ? "yes" : "no")")
+                        Text("debug: \(debug.reason) user=\(debug.userID) matched=\(debug.matchedUserID ?? "none") email=\(debug.matchedByEmail ? "yes" : "no") api=\(AppConfig.shared.apiBaseURL.host ?? "unknown") clerk=\(AppConfig.shared.clerkFrontendAPI)")
                             .font(.system(size: 11, weight: .medium))
                             .foregroundStyle(.white.opacity(0.36))
                             .textSelection(.enabled)
