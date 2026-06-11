@@ -22,14 +22,15 @@ struct ActivityView: View {
                                     get: { effectiveCityFilter(for: response) },
                                     set: { selectedCityFilter = $0 }
                                 ),
-                                cities: availableCityFilters
+                                cities: availableCityFilters,
+                                hasActiveSelection: effectiveCityFilter(for: response) != defaultCityFilter(for: response)
                             )
                         }
 
                         ActivityFilterDropdown(selection: $selectedFilter)
                     }
                         .padding(.leading, 16)
-                        .padding(.top, 14)
+                        .padding(.top, 0)
                 }
                 .task {
                     if case .idle = viewModel.state {
@@ -138,7 +139,7 @@ struct ActivityView: View {
         }
 
         let weeksAgo = max(daysAgo / 7, 1)
-        return weeksAgo == 1 ? "1 Week ago" : "\(weeksAgo) Weeks ago"
+        return weeksAgo == 1 ? "1 Week Ago" : "\(weeksAgo) Weeks Ago"
     }
 
     private var availableCityFilters: [ActivityCityFilter] {
@@ -183,11 +184,15 @@ struct ActivityView: View {
             return selectedCityFilter
         }
 
+        return defaultCityFilter(for: response)
+    }
+
+    private func defaultCityFilter(for response: ActivityFeedResponse) -> ActivityCityFilter {
         if let currentUserLocation = response.currentUserLocation {
             return .city(city: currentUserLocation.city, state: currentUserLocation.state)
         }
 
-        return cities.first { $0 != .all } ?? .all
+        return availableCityFilters.first { $0 != .all } ?? .all
     }
 }
 
@@ -211,7 +216,7 @@ private struct ActivityFilterDropdown: View {
             Image(systemName: "line.3.horizontal.decrease")
                 .font(.system(size: 18, weight: .semibold))
                 .foregroundStyle(selection == .upcoming ? .primary : AppTheme.accentBlue)
-                .frame(width: 44, height: 44)
+                .frame(width: 46, height: 46)
                 .contentShape(Circle())
                 .activityLiquidGlass(in: Circle())
         }
@@ -222,6 +227,7 @@ private struct ActivityFilterDropdown: View {
 private struct ActivityCityFilterDropdown: View {
     @Binding var selection: ActivityCityFilter
     let cities: [ActivityCityFilter]
+    let hasActiveSelection: Bool
 
     var body: some View {
         Menu {
@@ -237,7 +243,12 @@ private struct ActivityCityFilterDropdown: View {
                 }
             }
         } label: {
-            ActivityFilterPill(title: selection.title)
+            Image(systemName: "map")
+                .font(.system(size: 18, weight: .semibold))
+                .foregroundStyle(hasActiveSelection ? AppTheme.accentBlue : .primary)
+                .frame(width: 46, height: 46)
+                .contentShape(Circle())
+                .activityLiquidGlass(in: Circle())
         }
         .buttonStyle(.plain)
     }
@@ -259,7 +270,7 @@ private struct ActivityFilterPill: View {
         }
         .foregroundStyle(.primary)
         .padding(.horizontal, 15)
-        .frame(height: 44)
+        .frame(height: 46)
         .fixedSize(horizontal: true, vertical: false)
         .contentShape(Capsule())
         .activityLiquidGlass(in: Capsule())
@@ -447,7 +458,11 @@ private struct ActivityRowView: View {
                 )
                     .frame(maxWidth: .infinity, alignment: .leading)
 
-                Text(Self.relativeFormatter.localizedString(for: activity.timestamp, relativeTo: .now))
+                Text(
+                    Self.relativeFormatter
+                        .localizedString(for: activity.timestamp, relativeTo: .now)
+                        .capitalizingRelativeAgo()
+                )
                     .font(.system(size: 11, weight: .medium))
                     .foregroundStyle(.white.opacity(0.42))
             }

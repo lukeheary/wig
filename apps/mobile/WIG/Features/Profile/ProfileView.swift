@@ -13,6 +13,11 @@ struct ProfileView: View {
     @State private var isAvatarPhotoPickerPresented = false
     @State private var isAvatarCameraPresented = false
     @State private var selectedEventsTab: ProfileEventsTab = .upcoming
+    @State private var partnerRelationship: MobilePartnerRelationship?
+    @State private var isPartnerPickerPresented = false
+    @State private var isPartnerActionInFlight = false
+    @State private var isRemovingPartnerConfirmationPresented = false
+    @State private var partnerErrorMessage: String?
 
     var body: some View {
         NavigationStack {
@@ -21,11 +26,11 @@ struct ProfileView: View {
                 .toolbar(.hidden, for: .navigationBar)
                 .task {
                     if case .idle = viewModel.state {
-                        await viewModel.load(using: apiClient)
+                        await loadProfileScreen()
                     }
                 }
                 .refreshable {
-                    await viewModel.load(using: apiClient)
+                    await loadProfileScreen()
                 }
                 .confirmationDialog(
                     "Update profile picture",
@@ -79,6 +84,52 @@ struct ProfileView: View {
                 } message: {
                     Text(viewModel.avatarUploadError ?? "Please try again.")
                 }
+                .confirmationDialog(
+                    "Partner Actions",
+                    isPresented: $isRemovingPartnerConfirmationPresented,
+                    titleVisibility: .visible
+                ) {
+                    Button("Remove Partner", role: .destructive) {
+                        Task {
+                            await removePartner()
+                        }
+                    }
+
+                    Button("Cancel", role: .cancel) {}
+                } message: {
+                    if let partnerRelationship {
+                        Text("Remove \(partnerRelationship.partner.firstName ?? partnerRelationship.partner.username) as your partner?")
+                    }
+                }
+                .alert(
+                    "Partner Update Failed",
+                    isPresented: Binding(
+                        get: { partnerErrorMessage != nil },
+                        set: { isPresented in
+                            if !isPresented {
+                                partnerErrorMessage = nil
+                            }
+                        }
+                    )
+                ) {
+                    Button("OK", role: .cancel) {}
+                } message: {
+                    Text(partnerErrorMessage ?? "Please try again.")
+                }
+                .sheet(isPresented: $isPartnerPickerPresented) {
+                    if case .loaded(let response) = viewModel.state {
+                        PartnerPickerSheet(
+                            friends: availablePartnerCandidates(from: response),
+                            onSelectFriend: { friend in
+                                Task {
+                                    await sendPartnerRequest(to: friend)
+                                }
+                            }
+                        )
+                        .presentationDetents([.medium, .large])
+                        .presentationDragIndicator(.visible)
+                    }
+                }
         }
     }
 
@@ -100,7 +151,7 @@ struct ProfileView: View {
             } actions: {
                 Button("Try Again") {
                     Task {
-                        await viewModel.load(using: apiClient)
+                        await loadProfileScreen()
                     }
                 }
             }
@@ -129,6 +180,38 @@ struct ProfileView: View {
 
                     RelationshipSummaryRow(response: response)
 
+                    PartnerManagementCard(
+                        relationship: partnerRelationship,
+                        availableFriendCount: availablePartnerCandidates(from: response).count,
+                        isBusy: isPartnerActionInFlight,
+                        onChoosePartner: {
+                            isPartnerPickerPresented = true
+                        },
+                        onAccept: {
+                            Task {
+                                await acceptPartnerRequest()
+                            }
+                        },
+                        onDecline: {
+                            Task {
+                                await declinePartnerRequest()
+                            }
+                        },
+                        onCancelRequest: {
+                            Task {
+                                await declinePartnerRequest()
+                            }
+                        },
+                        onChangePartner: {
+                            Task {
+                                await changePartner()
+                            }
+                        },
+                        onRemovePartner: {
+                            isRemovingPartnerConfirmationPresented = true
+                        }
+                    )
+
                     profileEventsSection(response: response)
 
                     if appSession.isAuthBypassed {
@@ -136,7 +219,7 @@ struct ProfileView: View {
                     }
                 }
                 .padding(.horizontal, 16)
-                .padding(.top, 24)
+                .padding(.top, 0)
                 .padding(.bottom, 104)
             }
             .scrollIndicators(.hidden)
@@ -174,6 +257,7 @@ struct ProfileView: View {
                                     } label: {
                                         EventCardView(event: event)
                                             .frame(width: 220)
+                                            .contentShape(Rectangle())
                                     }
                                     .buttonStyle(.plain)
                                 }
@@ -219,6 +303,119 @@ struct ProfileView: View {
         await viewModel.updateAvatar(imageData: data, using: apiClient)
     }
 
+    private func loadProfileScreen() async {
+        await viewModel.load(using: apiClient)
+        await loadPartner(using: apiClient)
+    }
+
+    private func loadPartner(using apiClient: APIClient) async {
+        do {
+            let response = try await apiClient.send(APIClient.mobileMyPartner())
+            partnerRelationship = response.relationship
+        } catch {
+            partnerRelationship = nil
+            partnerErrorMessage = error.localizedDescription
+        }
+    }
+
+    private func availablePartnerCandidates(from response: FriendsFeedResponse) -> [FriendUserSummary] {
+        let excludedUserID = partnerRelationship?.partner.id
+
+        return response.friends.filter { friend in
+            friend.id != excludedUserID
+        }
+    }
+
+    private func sendPartnerRequest(to friend: FriendUserSummary) async {
+        guard !isPartnerActionInFlight else { return }
+
+        isPartnerActionInFlight = true
+        partnerErrorMessage = nil
+
+        do {
+            try await apiClient.send(APIClient.sendMobilePartnerRequest(recipientID: friend.id))
+            isPartnerPickerPresented = false
+            await loadProfileScreen()
+        } catch {
+            partnerErrorMessage = error.localizedDescription
+        }
+
+        isPartnerActionInFlight = false
+    }
+
+    private func acceptPartnerRequest() async {
+        guard !isPartnerActionInFlight, let partnerRelationship else { return }
+
+        isPartnerActionInFlight = true
+        partnerErrorMessage = nil
+
+        do {
+            try await apiClient.send(APIClient.acceptMobilePartnerRequest(partnerID: partnerRelationship.id))
+            await loadProfileScreen()
+        } catch {
+            partnerErrorMessage = error.localizedDescription
+        }
+
+        isPartnerActionInFlight = false
+    }
+
+    private func declinePartnerRequest() async {
+        guard !isPartnerActionInFlight, let partnerRelationship else { return }
+
+        isPartnerActionInFlight = true
+        partnerErrorMessage = nil
+
+        do {
+            try await apiClient.send(APIClient.declineMobilePartnerRequest(partnerID: partnerRelationship.id))
+            await loadProfileScreen()
+        } catch {
+            partnerErrorMessage = error.localizedDescription
+        }
+
+        isPartnerActionInFlight = false
+    }
+
+    private func removePartner() async {
+        guard !isPartnerActionInFlight else { return }
+
+        isPartnerActionInFlight = true
+        partnerErrorMessage = nil
+
+        do {
+            try await apiClient.send(APIClient.removeMobilePartner())
+            await loadProfileScreen()
+        } catch {
+            partnerErrorMessage = error.localizedDescription
+        }
+
+        isPartnerActionInFlight = false
+    }
+
+    private func changePartner() async {
+        guard !isPartnerActionInFlight else { return }
+
+        isPartnerActionInFlight = true
+        partnerErrorMessage = nil
+
+        do {
+            if let partnerRelationship {
+                if partnerRelationship.isAccepted {
+                    try await apiClient.send(APIClient.removeMobilePartner())
+                } else {
+                    try await apiClient.send(APIClient.declineMobilePartnerRequest(partnerID: partnerRelationship.id))
+                }
+            }
+
+            partnerRelationship = nil
+            await viewModel.load(using: apiClient)
+            isPartnerPickerPresented = true
+        } catch {
+            partnerErrorMessage = error.localizedDescription
+        }
+
+        isPartnerActionInFlight = false
+    }
+
     private var localDevelopmentCard: some View {
         VStack(alignment: .leading, spacing: 12) {
             Text("Local Development")
@@ -241,18 +438,19 @@ struct ProfileView: View {
     }
 
     private var signOutButton: some View {
-        Button {
-            Task {
-                try? await clerk.auth.signOut(sessionId: clerk.session?.id)
+        Menu {
+            Button("Sign Out") {
+                Task {
+                    try? await clerk.auth.signOut(sessionId: clerk.session?.id)
+                }
             }
         } label: {
-            Text("Sign out")
-                .font(.system(size: 14, weight: .bold))
+            Image(systemName: "ellipsis")
+                .font(.system(size: 18, weight: .bold))
                 .foregroundStyle(.white)
-                .padding(.horizontal, 16)
-                .frame(height: 40)
-                .contentShape(Capsule())
-                .profileLiquidGlass(in: Capsule())
+                .frame(width: 46, height: 46)
+                .contentShape(Circle())
+                .profileLiquidGlass(in: Circle())
         }
         .buttonStyle(.plain)
     }
@@ -348,7 +546,7 @@ struct UserProfileView: View {
             }
         }
         .padding(.horizontal, 16)
-        .padding(.top, 14)
+        .padding(.top, 0)
     }
 }
 
@@ -399,7 +597,7 @@ private struct ProfileEventsFilterButton: View {
             Image(systemName: "line.3.horizontal.decrease")
                 .font(.system(size: 18, weight: .semibold))
                 .foregroundStyle(selection == .upcoming ? .primary : AppTheme.accentBlue)
-                .frame(width: 44, height: 44)
+                .frame(width: 46, height: 46)
                 .contentShape(Circle())
                 .profileLiquidGlass(in: Circle())
         }
@@ -611,6 +809,246 @@ private struct RelationshipSummaryRow: View {
                 RelationshipSummaryPill(count: response.requestCount, label: "Requests")
             }
             .buttonStyle(.plain)
+        }
+    }
+}
+
+private struct PartnerManagementCard: View {
+    let relationship: MobilePartnerRelationship?
+    let availableFriendCount: Int
+    let isBusy: Bool
+    let onChoosePartner: () -> Void
+    let onAccept: () -> Void
+    let onDecline: () -> Void
+    let onCancelRequest: () -> Void
+    let onChangePartner: () -> Void
+    let onRemovePartner: () -> Void
+
+    var body: some View {
+        VStack(alignment: .leading, spacing: 16) {
+            Text("Partner")
+                .font(.system(size: 18, weight: .bold))
+                .foregroundStyle(.white)
+
+            if let relationship {
+                partnerStateView(relationship)
+            } else {
+                VStack(alignment: .leading, spacing: 14) {
+                    Text(
+                        availableFriendCount == 0
+                            ? "You need an accepted friend before you can choose a partner."
+                            : "Choose a partner from your accepted friends."
+                    )
+                    .font(.system(size: 14, weight: .medium))
+                    .foregroundStyle(.white.opacity(0.64))
+
+                    Button("Add Partner") {
+                        onChoosePartner()
+                    }
+                    .profileActionButtonStyle(
+                        kind: .primary,
+                        isDisabled: availableFriendCount == 0 || isBusy
+                    )
+                    .disabled(availableFriendCount == 0 || isBusy)
+                }
+            }
+        }
+        .padding(18)
+        .frame(maxWidth: .infinity, alignment: .leading)
+        .background(ProfileTheme.cardBackground, in: RoundedRectangle(cornerRadius: 22, style: .continuous))
+    }
+
+    @ViewBuilder
+    private func partnerStateView(_ relationship: MobilePartnerRelationship) -> some View {
+        let partner = relationship.partner
+
+        VStack(alignment: .leading, spacing: 14) {
+            HStack(spacing: 12) {
+                FriendAvatarView(
+                    user: FriendUserSummary(
+                        id: partner.id,
+                        name: [partner.firstName, partner.lastName].compactMap { $0 }.joined(separator: " ").trimmingCharacters(in: .whitespacesAndNewlines).ifEmpty(partner.username),
+                        username: partner.username,
+                        avatarImageURL: partner.avatarImageURL
+                    ),
+                    size: 52,
+                    seed: 0
+                )
+
+                VStack(alignment: .leading, spacing: 3) {
+                    Text(
+                        [partner.firstName, partner.lastName]
+                            .compactMap { $0 }
+                            .joined(separator: " ")
+                            .trimmingCharacters(in: .whitespacesAndNewlines)
+                            .ifEmpty(partner.username)
+                    )
+                    .font(.system(size: 16, weight: .bold))
+                    .foregroundStyle(.white)
+
+                    Text("@\(partner.username)")
+                        .font(.system(size: 14, weight: .medium))
+                        .foregroundStyle(.white.opacity(0.56))
+                }
+
+                Spacer(minLength: 8)
+            }
+
+            switch relationship.status {
+            case "accepted":
+                Text("You and \(partner.firstName ?? partner.username) are partners.")
+                    .font(.system(size: 14, weight: .medium))
+                    .foregroundStyle(.white.opacity(0.64))
+
+                HStack(spacing: 10) {
+                    Button("Change") {
+                        onChangePartner()
+                    }
+                    .profileActionButtonStyle(kind: .secondary, isDisabled: isBusy)
+                    .disabled(isBusy)
+
+                    Button("Remove") {
+                        onRemovePartner()
+                    }
+                    .profileActionButtonStyle(kind: .destructive, isDisabled: isBusy)
+                    .disabled(isBusy)
+                }
+
+            case "pending":
+                if relationship.isRequester {
+                    Text("Partner request pending, waiting for \(partner.firstName ?? partner.username) to accept.")
+                        .font(.system(size: 14, weight: .medium))
+                        .foregroundStyle(.white.opacity(0.64))
+
+                    HStack(spacing: 10) {
+                        Button("Choose Someone Else") {
+                            onChangePartner()
+                        }
+                        .profileActionButtonStyle(kind: .secondary, isDisabled: isBusy)
+                        .disabled(isBusy)
+
+                        Button("Cancel Request") {
+                            onCancelRequest()
+                        }
+                        .profileActionButtonStyle(kind: .destructive, isDisabled: isBusy)
+                        .disabled(isBusy)
+                    }
+                } else {
+                    Text("\(partner.firstName ?? partner.username) sent you a partner request.")
+                        .font(.system(size: 14, weight: .medium))
+                        .foregroundStyle(.white.opacity(0.64))
+
+                    HStack(spacing: 10) {
+                        Button("Accept") {
+                            onAccept()
+                        }
+                        .profileActionButtonStyle(kind: .primary, isDisabled: isBusy)
+                        .disabled(isBusy)
+
+                        Button("Decline") {
+                            onDecline()
+                        }
+                        .profileActionButtonStyle(kind: .secondary, isDisabled: isBusy)
+                        .disabled(isBusy)
+                    }
+                }
+
+            default:
+                EmptyView()
+            }
+        }
+    }
+}
+
+private struct PartnerPickerSheet: View {
+    let friends: [FriendUserSummary]
+    let onSelectFriend: (FriendUserSummary) -> Void
+
+    @Environment(\.dismiss) private var dismiss
+    @State private var searchText = ""
+
+    private var filteredFriends: [FriendUserSummary] {
+        let query = searchText.trimmingCharacters(in: .whitespacesAndNewlines)
+        guard !query.isEmpty else {
+            return friends
+        }
+
+        return friends.filter { friend in
+            friend.name.localizedCaseInsensitiveContains(query) ||
+            friend.username.localizedCaseInsensitiveContains(query)
+        }
+    }
+
+    var body: some View {
+        NavigationStack {
+            ScrollView {
+                VStack(alignment: .leading, spacing: 18) {
+                    TextField("Search accepted friends...", text: $searchText)
+                        .font(.system(size: 16, weight: .medium))
+                        .foregroundStyle(.white)
+                        .textInputAutocapitalization(.never)
+                        .autocorrectionDisabled()
+                        .padding(.horizontal, 16)
+                        .frame(height: 50)
+                        .background(
+                            RoundedRectangle(cornerRadius: 18, style: .continuous)
+                                .fill(ProfileTheme.cardBackground)
+                        )
+
+                    if friends.isEmpty {
+                        EmptyRelationshipCard(
+                            systemImage: "person.2",
+                            message: "No accepted friends available"
+                        )
+                    } else if filteredFriends.isEmpty {
+                        EmptyRelationshipCard(
+                            systemImage: "magnifyingglass",
+                            message: "No friends found"
+                        )
+                    } else {
+                        RelationshipCard {
+                            ForEach(Array(filteredFriends.enumerated()), id: \.element.id) { index, friend in
+                                HStack(spacing: 12) {
+                                    FriendRowView(user: friend, seed: index)
+
+                                    Button("Send Request") {
+                                        onSelectFriend(friend)
+                                        dismiss()
+                                    }
+                                    .font(.system(size: 14, weight: .bold))
+                                    .foregroundStyle(AppTheme.accentBlue)
+                                }
+
+                                if friend.id != filteredFriends.last?.id {
+                                    Divider()
+                                        .overlay(.white.opacity(0.08))
+                                        .padding(.leading, 62)
+                                }
+                            }
+                        }
+                    }
+                }
+                .padding(16)
+                .padding(.top, 12)
+                .padding(.bottom, 40)
+            }
+            .background(ProfileTheme.background.ignoresSafeArea())
+            .toolbar {
+                ToolbarItem(placement: .topBarLeading) {
+                    Button("Close") {
+                        dismiss()
+                    }
+                    .font(.system(size: 16, weight: .semibold))
+                }
+
+                ToolbarItem(placement: .principal) {
+                    Text("Choose Partner")
+                        .font(.system(size: 17, weight: .bold))
+                        .foregroundStyle(.white)
+                }
+            }
+            .toolbarBackground(ProfileTheme.background, for: .navigationBar)
+            .toolbarColorScheme(.dark, for: .navigationBar)
         }
     }
 }
@@ -934,7 +1372,26 @@ private enum ProfileTheme {
     static let cardBackground = Color(red: 0.11, green: 0.11, blue: 0.13)
 }
 
+private enum ProfileActionButtonKind {
+    case primary
+    case secondary
+    case destructive
+}
+
+private extension String {
+    func ifEmpty(_ fallback: String) -> String {
+        trimmingCharacters(in: .whitespacesAndNewlines).isEmpty ? fallback : self
+    }
+}
+
 private extension View {
+    func profileActionButtonStyle(
+        kind: ProfileActionButtonKind,
+        isDisabled: Bool = false
+    ) -> some View {
+        modifier(ProfileActionButtonModifier(kind: kind, isDisabled: isDisabled))
+    }
+
     @ViewBuilder
     func profileLiquidGlass<S: InsettableShape>(in shape: S) -> some View {
         if #available(iOS 26.1, *) {
@@ -949,6 +1406,47 @@ private extension View {
                 )
                 .shadow(color: .black.opacity(0.22), radius: 16, x: 0, y: 8)
         }
+    }
+}
+
+private struct ProfileActionButtonModifier: ViewModifier {
+    let kind: ProfileActionButtonKind
+    let isDisabled: Bool
+
+    private var foregroundColor: Color {
+        switch kind {
+        case .primary:
+            return .black
+        case .secondary:
+            return .white
+        case .destructive:
+            return Color(red: 1.0, green: 0.48, blue: 0.48)
+        }
+    }
+
+    private var backgroundColor: Color {
+        switch kind {
+        case .primary:
+            return .white
+        case .secondary, .destructive:
+            return .white.opacity(0.08)
+        }
+    }
+
+    func body(content: Content) -> some View {
+        content
+            .font(.system(size: 14, weight: .bold))
+            .foregroundStyle(foregroundColor.opacity(isDisabled ? 0.5 : 1))
+            .padding(.horizontal, 15)
+            .frame(height: 40)
+            .background(
+                Capsule()
+                    .fill(backgroundColor.opacity(isDisabled ? 0.55 : 1))
+            )
+            .overlay(
+                Capsule()
+                    .strokeBorder(.white.opacity(kind == .primary ? 0 : 0.08), lineWidth: 1)
+            )
     }
 }
 
@@ -997,46 +1495,6 @@ private struct CameraImagePicker: UIViewControllerRepresentable {
 
         func imagePickerControllerDidCancel(_ picker: UIImagePickerController) {
             dismiss()
-        }
-    }
-}
-
-private extension UIImage {
-    func avatarUploadJPEGData(maxBytes: Int) -> Data? {
-        let image = resizedForAvatarUpload(maxDimension: 1024)
-
-        for quality in [0.86, 0.72, 0.58, 0.44, 0.32] {
-            guard let data = image.jpegData(compressionQuality: quality) else {
-                continue
-            }
-
-            if data.count <= maxBytes {
-                return data
-            }
-        }
-
-        return nil
-    }
-
-    private func resizedForAvatarUpload(maxDimension: CGFloat) -> UIImage {
-        let longestSide = max(size.width, size.height)
-
-        guard longestSide > maxDimension else {
-            return self
-        }
-
-        let scale = maxDimension / longestSide
-        let targetSize = CGSize(
-            width: size.width * scale,
-            height: size.height * scale
-        )
-
-        let format = UIGraphicsImageRendererFormat.default()
-        format.scale = 1
-        format.opaque = true
-
-        return UIGraphicsImageRenderer(size: targetSize, format: format).image { _ in
-            draw(in: CGRect(origin: .zero, size: targetSize))
         }
     }
 }

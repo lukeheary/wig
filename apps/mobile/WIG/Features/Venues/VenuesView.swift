@@ -19,6 +19,11 @@ struct VenuesView: View {
                 .refreshable {
                     await viewModel.load(using: apiClient, forceRefresh: true)
                 }
+                .onReceive(NotificationCenter.default.publisher(for: .mobilePlaceDidChange)) { _ in
+                    Task {
+                        await viewModel.load(using: apiClient, forceRefresh: true)
+                    }
+                }
         }
     }
 
@@ -85,7 +90,7 @@ struct VenuesView: View {
                 .overlay(alignment: .topLeading) {
                     filterControls(for: response)
                         .padding(.horizontal, 16)
-                        .padding(.top, 14)
+                        .padding(.top, 0)
                 }
                 .scrollIndicators(.hidden)
                 .background(venuesBackground)
@@ -105,7 +110,8 @@ struct VenuesView: View {
                     get: { effectiveLocationFilter(for: response) },
                     set: { selectedLocationFilter = $0 }
                 ),
-                locations: availableLocationFilters(for: response)
+                locations: availableLocationFilters(for: response),
+                hasActiveSelection: effectiveLocationFilter(for: response) != defaultLocationFilter(for: response)
             )
 
             PlaceKindFilterMenu(selection: $selectedPlaceFilter)
@@ -154,6 +160,12 @@ struct VenuesView: View {
         if let selectedLocationFilter, locations.contains(selectedLocationFilter) {
             return selectedLocationFilter
         }
+
+        return defaultLocationFilter(for: response)
+    }
+
+    private func defaultLocationFilter(for response: MobilePlacesResponse) -> PlaceLocationFilter {
+        let locations = availableLocationFilters(for: response)
 
         if let currentUserLocation = response.currentUserLocation {
             return .city(city: currentUserLocation.city, state: currentUserLocation.state)
@@ -243,6 +255,7 @@ private enum PlaceKindFilter: String, CaseIterable, Identifiable {
 private struct PlaceLocationFilterMenu: View {
     @Binding var selection: PlaceLocationFilter
     let locations: [PlaceLocationFilter]
+    let hasActiveSelection: Bool
 
     var body: some View {
         Menu {
@@ -258,7 +271,12 @@ private struct PlaceLocationFilterMenu: View {
                 }
             }
         } label: {
-            PlaceMenuPillLabel(title: selection.title)
+            Image(systemName: "map")
+                .font(.system(size: 18, weight: .semibold))
+                .foregroundStyle(hasActiveSelection ? AppTheme.accentBlue : .primary)
+                .frame(width: 46, height: 46)
+                .contentShape(Circle())
+                .placeLiquidGlass(in: Circle())
         }
         .buttonStyle(.plain)
     }
@@ -284,7 +302,7 @@ private struct PlaceKindFilterMenu: View {
             Image(systemName: "line.3.horizontal.decrease")
                 .font(.system(size: 18, weight: .semibold))
                 .foregroundStyle(selection == .all ? .primary : AppTheme.accentBlue)
-                .frame(width: 44, height: 44)
+                .frame(width: 46, height: 46)
                 .contentShape(Circle())
                 .placeLiquidGlass(in: Circle())
         }
@@ -308,7 +326,7 @@ private struct PlaceMenuPillLabel: View {
                 .foregroundStyle(.primary.opacity(0.58))
         }
         .padding(.horizontal, 15)
-        .frame(height: 44)
+        .frame(height: 46)
         .fixedSize(horizontal: true, vertical: false)
         .contentShape(Capsule())
         .placeLiquidGlass(in: Capsule())

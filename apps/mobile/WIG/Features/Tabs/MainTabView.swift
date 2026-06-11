@@ -9,6 +9,11 @@ struct MainTabView: View {
     @State private var previousNonSearchTab: AppTab = .home
     @State private var isAuthSheetPresented = false
     @State private var homeResetTrigger = 0
+    @State private var isEventCreationSheetPresented = false
+    @State private var presentedPlaceCreationType: PlaceListItem.PlaceType?
+
+    private let floatingCreationButtonSize: CGFloat = 48
+    private let floatingCreationButtonBottomPadding: CGFloat = 60
 
     var body: some View {
         if #available(iOS 26.0, *) {
@@ -53,6 +58,7 @@ struct MainTabView: View {
                 }
             }
 
+            creationMenuButton
             guestAuthButton
         }
         .background(AppTheme.background.ignoresSafeArea())
@@ -79,6 +85,16 @@ struct MainTabView: View {
         .sheet(isPresented: $isAuthSheetPresented) {
             AuthView(isDismissable: true)
                 .environment(Clerk.shared)
+                .presentationDetents([.large])
+                .presentationDragIndicator(.visible)
+        }
+        .sheet(isPresented: $isEventCreationSheetPresented) {
+            MobileEventCreationView()
+                .presentationDetents([.large])
+                .presentationDragIndicator(.visible)
+        }
+        .sheet(item: $presentedPlaceCreationType) { type in
+            MobilePlaceCreationView(type: type)
                 .presentationDetents([.large])
                 .presentationDragIndicator(.visible)
         }
@@ -128,6 +144,7 @@ struct MainTabView: View {
                     .tag(AppTab.search)
             }
 
+            creationMenuButton
             guestAuthButton
         }
         .background(AppTheme.background.ignoresSafeArea())
@@ -157,12 +174,21 @@ struct MainTabView: View {
                 .presentationDetents([.large])
                 .presentationDragIndicator(.visible)
         }
+        .sheet(isPresented: $isEventCreationSheetPresented) {
+            MobileEventCreationView()
+                .presentationDetents([.large])
+                .presentationDragIndicator(.visible)
+        }
+        .sheet(item: $presentedPlaceCreationType) { type in
+            MobilePlaceCreationView(type: type)
+                .presentationDetents([.large])
+                .presentationDragIndicator(.visible)
+        }
     }
 
     private var searchHomeView: some View {
         HomeView(
             showsNativeSearch: true,
-            isSearchPresentedOnAppear: true,
             onShowActivity: {
                 showActivityOrAuth()
             },
@@ -215,6 +241,52 @@ struct MainTabView: View {
             .frame(maxWidth: .infinity, maxHeight: .infinity)
             .allowsHitTesting(true)
             .transition(.move(edge: .bottom).combined(with: .opacity))
+        }
+    }
+
+    @ViewBuilder
+    private var creationMenuButton: some View {
+        if isAuthenticated && appSession.shouldShowFloatingCreationButton && selectedTab != .search {
+            VStack {
+                Spacer()
+
+                HStack {
+                    Spacer()
+
+                    Menu {
+                        Button {
+                            isEventCreationSheetPresented = true
+                        } label: {
+                            Label("Add Event", systemImage: "calendar.badge.plus")
+                        }
+
+                        Button {
+                            presentedPlaceCreationType = .venue
+                        } label: {
+                            Label("Add Venue", systemImage: "building.2.badge.plus")
+                        }
+
+                        Button {
+                            presentedPlaceCreationType = .organizer
+                        } label: {
+                            Label("Add Organizer", systemImage: "person.badge.plus")
+                        }
+                    } label: {
+                        Image(systemName: "plus")
+                            .font(.system(size: 17, weight: .bold))
+                            .foregroundStyle(.primary)
+                            .frame(width: floatingCreationButtonSize, height: floatingCreationButtonSize)
+                            .contentShape(Circle())
+                            .mainTabLiquidGlass(in: Circle())
+                    }
+                    .buttonStyle(.plain)
+                    .padding(.trailing, 16)
+                    .padding(.bottom, floatingCreationButtonBottomPadding)
+                }
+            }
+            .frame(maxWidth: .infinity, maxHeight: .infinity)
+            .allowsHitTesting(true)
+            .transition(.move(edge: .trailing).combined(with: .opacity))
         }
     }
 

@@ -12,9 +12,11 @@ struct EventDetailView: View {
     @StateObject private var rsvpViewModel = EventRSVPViewModel()
     @State private var isShareSheetPresented = false
     @State private var isImageViewerPresented = false
+    @State private var isEditEventPresented = false
     @State private var isRSVPMenuExpanded = false
     @State private var rsvpMenuMode: RSVPMenuMode = .rsvp
     @State private var partnerRelationship: MobilePartnerRelationship?
+    @State private var editedEvent: EventFeedItem?
 
     init(event: EventFeedItem) {
         self.event = event
@@ -56,12 +58,12 @@ struct EventDetailView: View {
                 floatingRSVPMenu
             }
         }
-        .task(id: "\(event.id.uuidString)-\(isAuthenticated)") {
+        .task(id: "\(currentEvent.id.uuidString)-\(isAuthenticated)") {
             guard isAuthenticated else {
                 return
             }
 
-            async let rsvpLoad: Void = rsvpViewModel.load(eventID: event.id, using: apiClient)
+            async let rsvpLoad: Void = rsvpViewModel.load(eventID: currentEvent.id, using: apiClient)
             async let partnerLoad: Void = loadPartner(using: apiClient)
             _ = await (rsvpLoad, partnerLoad)
 
@@ -77,12 +79,23 @@ struct EventDetailView: View {
             partnerRelationship = nil
             closeRSVPMenu()
         }
+        .onAppear {
+            appSession.beginEventDetailPresentation()
+        }
+        .onDisappear {
+            appSession.endEventDetailPresentation()
+        }
         .sheet(isPresented: $isShareSheetPresented) {
             ShareSheet(activityItems: [shareURL])
                 .presentationDetents([.medium, .large])
         }
+        .sheet(isPresented: $isEditEventPresented) {
+            MobileEventCreationView(mode: .edit(currentEvent)) { updatedEvent in
+                editedEvent = mergeUpdatedEvent(updatedEvent)
+            }
+        }
         .fullScreenCover(isPresented: $isImageViewerPresented) {
-            if let posterImageURL = event.posterImageURL {
+            if let posterImageURL = currentEvent.posterImageURL {
                 EventArtworkViewer(imageURL: posterImageURL)
             }
         }
@@ -93,7 +106,7 @@ struct EventDetailView: View {
             let side = proxy.size.width
 
             Button {
-                guard event.posterImageURL != nil else {
+                guard currentEvent.posterImageURL != nil else {
                     return
                 }
 
@@ -104,7 +117,7 @@ struct EventDetailView: View {
                     .clipShape(RoundedRectangle(cornerRadius: 24, style: .continuous))
                     .overlay {
                         if isAuthenticated {
-                            EventSocialOverlayView(attendees: event.socialAttendees, size: .detail)
+                            EventSocialOverlayView(attendees: currentEvent.socialAttendees, size: .detail)
                                 .clipShape(RoundedRectangle(cornerRadius: 24, style: .continuous))
                         }
                     }
@@ -122,8 +135,10 @@ struct EventDetailView: View {
 
             Spacer()
 
-            if event.canEdit {
-                FloatingGlassIconButton(systemImage: "square.and.pencil") {}
+            if currentEvent.canEdit {
+                FloatingGlassIconButton(systemImage: "square.and.pencil") {
+                    isEditEventPresented = true
+                }
             }
 
             FloatingGlassIconButton(systemImage: "square.and.arrow.up") {
@@ -131,12 +146,12 @@ struct EventDetailView: View {
             }
         }
         .padding(.horizontal, 26)
-        .padding(.top, 12)
+        .padding(.top, 0)
     }
 
     @ViewBuilder
     private var eventArtwork: some View {
-        if let imageURL = event.posterImageURL {
+        if let imageURL = currentEvent.posterImageURL {
             AsyncImage(url: imageURL) { phase in
                 switch phase {
                 case .empty:
@@ -177,17 +192,17 @@ struct EventDetailView: View {
 
     private var details: some View {
         VStack(alignment: .leading, spacing: 9) {
-            Text(event.title)
+            Text(currentEvent.title)
                 .font(.system(size: 29, weight: .bold))
                 .foregroundStyle(.white)
                 .lineSpacing(1)
 
             HStack(alignment: .firstTextBaseline, spacing: 6) {
-                Text(event.formattedStart(format: "EEE, MMM d 'at' h:mm a"))
+                Text(currentEvent.formattedStart(format: "EEE, MMM d 'at' h:mm a"))
                     .font(.system(size: 18, weight: .bold))
                     .foregroundStyle(Color(red: 0.48, green: 0.77, blue: 1.0))
 
-                Text(event.relativeStartDayText)
+                Text(currentEvent.relativeStartDayText)
                     .font(.system(size: 14, weight: .semibold))
                     .foregroundStyle(.white.opacity(0.58))
             }
@@ -204,13 +219,13 @@ struct EventDetailView: View {
                     }
                     .buttonStyle(.plain)
                 } else {
-                    Text(event.primaryLocation)
+                    Text(currentEvent.primaryLocation)
                         .font(.system(size: 18, weight: .bold))
                         .foregroundStyle(.white)
                         .lineLimit(1)
                 }
 
-                if let category = event.primaryCategoryLabel {
+                if let category = currentEvent.primaryCategoryLabel {
                     Text(category)
                         .font(.system(size: 12, weight: .semibold))
                         .foregroundStyle(.white.opacity(0.78))
@@ -220,7 +235,7 @@ struct EventDetailView: View {
                 }
             }
 
-            if let sourceName = event.externalSourceName {
+            if let sourceName = currentEvent.externalSourceName {
                 Button {
                     openExternalEvent()
                 } label: {
@@ -237,9 +252,9 @@ struct EventDetailView: View {
     }
 
     private var linkedPlace: PlaceListItem? {
-        if let id = event.venueID,
-           let slug = event.venueSlug,
-           let name = event.venueName,
+        if let id = currentEvent.venueID,
+           let slug = currentEvent.venueSlug,
+           let name = currentEvent.venueName,
            !slug.isEmpty,
            !name.isEmpty
         {
@@ -248,24 +263,24 @@ struct EventDetailView: View {
                 type: .venue,
                 slug: slug,
                 name: name,
-                logoImageURL: event.venueLogoImageURL,
-                city: event.city,
-                state: event.state,
+                logoImageURL: currentEvent.venueLogoImageURL,
+                city: currentEvent.city,
+                state: currentEvent.state,
                 upcomingEventCount: 0,
-                updatedAt: event.updatedAt,
-                isFollowed: event.isFollowed
+                updatedAt: currentEvent.updatedAt,
+                isFollowed: currentEvent.isFollowed
             )
         }
 
         let hasVenueName =
-            event.venueName?.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty == false
+            currentEvent.venueName?.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty == false
         guard !hasVenueName else {
             return nil
         }
 
-        if let id = event.organizerID,
-           let slug = event.organizerSlug,
-           let name = event.organizerName,
+        if let id = currentEvent.organizerID,
+           let slug = currentEvent.organizerSlug,
+           let name = currentEvent.organizerName,
            !slug.isEmpty,
            !name.isEmpty
         {
@@ -274,12 +289,12 @@ struct EventDetailView: View {
                 type: .organizer,
                 slug: slug,
                 name: name,
-                logoImageURL: event.organizerLogoImageURL,
-                city: event.city,
-                state: event.state,
+                logoImageURL: currentEvent.organizerLogoImageURL,
+                city: currentEvent.city,
+                state: currentEvent.state,
                 upcomingEventCount: 0,
-                updatedAt: event.updatedAt,
-                isFollowed: event.isFollowed
+                updatedAt: currentEvent.updatedAt,
+                isFollowed: currentEvent.isFollowed
             )
         }
 
@@ -420,7 +435,7 @@ struct EventDetailView: View {
                 .font(.system(size: 23, weight: .bold))
                 .foregroundStyle(.white)
 
-            if let description = event.description?.trimmingCharacters(in: .whitespacesAndNewlines),
+            if let description = currentEvent.description?.trimmingCharacters(in: .whitespacesAndNewlines),
                !description.isEmpty
             {
                 Text(description)
@@ -429,7 +444,7 @@ struct EventDetailView: View {
                     .lineSpacing(5)
             }
 
-            ForEach(event.formattedAddressLines, id: \.self) { line in
+            ForEach(currentEvent.formattedAddressLines, id: \.self) { line in
                 Text(line)
                     .font(.system(size: 15, weight: .medium))
                     .foregroundStyle(.white.opacity(0.64))
@@ -439,19 +454,19 @@ struct EventDetailView: View {
 
     @ViewBuilder
     private var attendeeSections: some View {
-        if !event.friendsGoing.isEmpty || !event.friendsInterested.isEmpty {
+        if !currentEvent.friendsGoing.isEmpty || !currentEvent.friendsInterested.isEmpty {
             VStack(alignment: .leading, spacing: 18) {
-                if !event.friendsGoing.isEmpty {
+                if !currentEvent.friendsGoing.isEmpty {
                     EventAttendeeSection(
                         title: "Who's Going",
-                        attendees: event.friendsGoing
+                        attendees: currentEvent.friendsGoing
                     )
                 }
 
-                if !event.friendsInterested.isEmpty {
+                if !currentEvent.friendsInterested.isEmpty {
                     EventAttendeeSection(
                         title: "Interested",
-                        attendees: event.friendsInterested
+                        attendees: currentEvent.friendsInterested
                     )
                 }
             }
@@ -459,7 +474,7 @@ struct EventDetailView: View {
     }
 
     private func openExternalEvent() {
-        guard let eventURL = event.eventURL else {
+        guard let eventURL = currentEvent.eventURL else {
             return
         }
 
@@ -484,11 +499,11 @@ struct EventDetailView: View {
         Task {
             if await rsvpViewModel.toggle(
                 status,
-                eventID: event.id,
+                eventID: currentEvent.id,
                 using: apiClient,
                 includePartner: partnerRelationship?.isAccepted == true && rsvpViewModel.includePartner
             ) {
-                NotificationCenter.default.post(name: .eventRSVPDidChange, object: event.id)
+                NotificationCenter.default.post(name: .eventRSVPDidChange, object: currentEvent.id)
             }
         }
     }
@@ -505,12 +520,12 @@ struct EventDetailView: View {
         Task {
             if await rsvpViewModel.toggle(
                 .notGoing,
-                eventID: event.id,
+                eventID: currentEvent.id,
                 using: apiClient,
                 includePartner: partnerRelationship?.isAccepted == true && rsvpViewModel.includePartner,
                 notGoingReason: reason
             ) {
-                NotificationCenter.default.post(name: .eventRSVPDidChange, object: event.id)
+                NotificationCenter.default.post(name: .eventRSVPDidChange, object: currentEvent.id)
             }
         }
     }
@@ -551,7 +566,7 @@ struct EventDetailView: View {
         Task {
             let didUpdate = await rsvpViewModel.toggle(
                 currentStatus,
-                eventID: event.id,
+                eventID: currentEvent.id,
                 using: apiClient,
                 includePartner: nextValue,
                 forceUpdate: true,
@@ -559,7 +574,7 @@ struct EventDetailView: View {
             )
 
             if didUpdate {
-                NotificationCenter.default.post(name: .eventRSVPDidChange, object: event.id)
+                NotificationCenter.default.post(name: .eventRSVPDidChange, object: currentEvent.id)
             }
         }
     }
@@ -602,8 +617,49 @@ struct EventDetailView: View {
         appSession.isAuthBypassed || clerk.user != nil
     }
 
+    private var currentEvent: EventFeedItem {
+        editedEvent ?? event
+    }
+
     private var shareURL: URL {
-        URL(string: "https://www.whoisgoing.com/event/\(event.id.uuidString)")!
+        URL(string: "https://www.whoisgoing.com/event/\(currentEvent.id.uuidString)")!
+    }
+
+    private func mergeUpdatedEvent(_ updatedEvent: EventFeedItem) -> EventFeedItem {
+        EventFeedItem(
+            id: updatedEvent.id,
+            title: updatedEvent.title,
+            description: updatedEvent.description,
+            coverImageURL: updatedEvent.coverImageURL,
+            eventURL: updatedEvent.eventURL,
+            startAt: updatedEvent.startAt,
+            endAt: updatedEvent.endAt,
+            address: updatedEvent.address,
+            city: updatedEvent.city,
+            state: updatedEvent.state,
+            timeZone: updatedEvent.timeZone,
+            metroAreaCity: updatedEvent.metroAreaCity ?? currentEvent.metroAreaCity,
+            metroAreaState: updatedEvent.metroAreaState ?? currentEvent.metroAreaState,
+            venueID: updatedEvent.venueID,
+            venueName: updatedEvent.venueName,
+            venueSlug: updatedEvent.venueSlug,
+            organizerID: updatedEvent.organizerID,
+            organizerName: updatedEvent.organizerName,
+            organizerSlug: updatedEvent.organizerSlug,
+            venueLogoImageURL: updatedEvent.venueLogoImageURL,
+            organizerLogoImageURL: updatedEvent.organizerLogoImageURL,
+            categories: updatedEvent.categories,
+            categoryLabels: updatedEvent.categoryLabels,
+            status: updatedEvent.status,
+            updatedAt: updatedEvent.updatedAt,
+            canEdit: updatedEvent.canEdit,
+            isFollowed: currentEvent.isFollowed,
+            isCreatedByCurrentUser: currentEvent.isCreatedByCurrentUser,
+            userRsvpStatus: currentEvent.userRsvpStatus,
+            userRsvpNotGoingReason: currentEvent.userRsvpNotGoingReason,
+            friendsGoing: currentEvent.friendsGoing,
+            friendsInterested: currentEvent.friendsInterested
+        )
     }
 }
 
@@ -819,7 +875,7 @@ private struct EventArtworkViewer: View {
             FloatingGlassIconButton(systemImage: "xmark") {
                 dismiss()
             }
-            .padding(.top, 12)
+            .padding(.top, 0)
             .padding(.trailing, 26)
         }
         .statusBarHidden()
@@ -1166,6 +1222,7 @@ private final class EventRSVPViewModel: ObservableObject {
             organizerLogoImageURL: nil,
             categories: ["concerts"],
             categoryLabels: ["concerts": "Concerts"],
+            status: .active,
             updatedAt: nil
         )
     )

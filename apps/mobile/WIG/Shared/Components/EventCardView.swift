@@ -55,23 +55,9 @@ struct EventCardView: View {
                 .fill(Color(red: 0.18, green: 0.18, blue: 0.20))
 
             if let imageURL = event.posterImageURL {
-                AsyncImage(url: imageURL) { phase in
-                    switch phase {
-                    case .empty:
-                        posterPlaceholder
-                    case .success(let image):
-                        image
-                            .resizable()
-                            .scaledToFill()
-                    case .failure:
-                        posterPlaceholder
-                    @unknown default:
-                        posterPlaceholder
-                    }
-                }
-                .frame(maxWidth: .infinity, maxHeight: .infinity)
+                fullBleedArtwork(url: imageURL)
             } else if let imageURL = event.brandingImageURL {
-                posterBranding(url: imageURL)
+                fullBleedArtwork(url: imageURL)
             } else {
                 posterPlaceholder
             }
@@ -110,33 +96,21 @@ struct EventCardView: View {
         .clipShape(RoundedRectangle(cornerRadius: imageCornerRadius, style: .continuous))
     }
 
-    private func posterBranding(url: URL) -> some View {
-        ZStack {
-            LinearGradient(
-                colors: [
-                    Color(red: 0.12, green: 0.13, blue: 0.19),
-                    Color(red: 0.19, green: 0.17, blue: 0.28),
-                    Color(red: 0.10, green: 0.10, blue: 0.12),
-                ],
-                startPoint: .topLeading,
-                endPoint: .bottomTrailing
-            )
-
-            AsyncImage(url: url) { phase in
-                switch phase {
-                case .empty:
-                    ProgressView()
-                        .tint(.white.opacity(0.7))
-                case .success(let image):
-                    image
-                        .resizable()
-                        .scaledToFit()
-                        .padding(24)
-                case .failure:
-                    posterPlaceholder
-                @unknown default:
-                    posterPlaceholder
-                }
+    private func fullBleedArtwork(url: URL) -> some View {
+        AsyncImage(url: url) { phase in
+            switch phase {
+            case .empty:
+                posterPlaceholder
+            case .success(let image):
+                image
+                    .resizable()
+                    .scaledToFill()
+                    .frame(maxWidth: .infinity, maxHeight: .infinity)
+                    .clipped()
+            case .failure:
+                posterPlaceholder
+            @unknown default:
+                posterPlaceholder
             }
         }
         .frame(maxWidth: .infinity, maxHeight: .infinity)
@@ -368,6 +342,7 @@ private struct EventSocialAvatarView: View {
             organizerLogoImageURL: nil,
             categories: ["music"],
             categoryLabels: ["music": "Music"],
+            status: .active,
             updatedAt: nil
         )
     )

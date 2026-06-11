@@ -3,7 +3,6 @@ import SwiftUI
 
 struct HomeView: View {
     let showsNativeSearch: Bool
-    let isSearchPresentedOnAppear: Bool
     let resetToCurrentWeekTrigger: Int
     let onShowActivity: () -> Void
     let onSearchDismiss: () -> Void
@@ -17,6 +16,8 @@ struct HomeView: View {
     @State private var selectedWeekStart = Self.startOfWeek(for: .now)
     @State private var isSearchPresented = false
     @State private var searchText = ""
+    @FocusState private var isSearchFieldFocused: Bool
+    @State private var isSearchKeyboardDismissEnabled = false
     @State private var selectedLocationFilter: HomeLocationFilter?
     @State private var selectedEventFilter: HomeEventFilter = .all
     @State private var selectedCategoryFilterID: String?
@@ -25,6 +26,16 @@ struct HomeView: View {
     private static let sectionTitleFormatter: DateFormatter = {
         let formatter = DateFormatter()
         formatter.dateFormat = "EEE, MMM d"
+        return formatter
+    }()
+    private static let weekRangeMonthFormatter: DateFormatter = {
+        let formatter = DateFormatter()
+        formatter.dateFormat = "MMM d"
+        return formatter
+    }()
+    private static let weekRangeDayFormatter: DateFormatter = {
+        let formatter = DateFormatter()
+        formatter.dateFormat = "d"
         return formatter
     }()
     private static var weekCalendar: Calendar = {
@@ -37,13 +48,11 @@ struct HomeView: View {
 
     init(
         showsNativeSearch: Bool = false,
-        isSearchPresentedOnAppear: Bool = false,
         resetToCurrentWeekTrigger: Int = 0,
         onShowActivity: @escaping () -> Void = {},
         onSearchDismiss: @escaping () -> Void = {}
     ) {
         self.showsNativeSearch = showsNativeSearch
-        self.isSearchPresentedOnAppear = isSearchPresentedOnAppear
         self.resetToCurrentWeekTrigger = resetToCurrentWeekTrigger
         self.onShowActivity = onShowActivity
         self.onSearchDismiss = onSearchDismiss
@@ -63,11 +72,17 @@ struct HomeView: View {
                     await loadHome(for: selectedWeekStart, using: apiClient, forceRefresh: true)
                 }
                 .onAppear {
-                    if showsNativeSearch && isSearchPresentedOnAppear {
+                    if showsNativeSearch {
                         isSearchPresented = true
+                        isSearchFieldFocused = false
                     }
                 }
                 .onReceive(NotificationCenter.default.publisher(for: .eventRSVPDidChange)) { _ in
+                    Task {
+                        await loadHome(for: selectedWeekStart, using: apiClient, forceRefresh: true)
+                    }
+                }
+                .onReceive(NotificationCenter.default.publisher(for: .mobileEventDidChange)) { _ in
                     Task {
                         await loadHome(for: selectedWeekStart, using: apiClient, forceRefresh: true)
                     }
@@ -106,6 +121,21 @@ struct HomeView: View {
                     }
 
                     searchViewModel.prepare(query: value)
+                }
+                .onChange(of: isSearchFieldFocused) { _, isFocused in
+                    if isFocused {
+                        isSearchKeyboardDismissEnabled = false
+
+                        Task { @MainActor in
+                            try? await Task.sleep(for: .milliseconds(350))
+
+                            if isSearchFieldFocused {
+                                isSearchKeyboardDismissEnabled = true
+                            }
+                        }
+                    } else {
+                        isSearchKeyboardDismissEnabled = false
+                    }
                 }
         }
         .nativeSearch(
@@ -205,6 +235,7 @@ struct HomeView: View {
                                         } label: {
                                             EventCardView(event: event)
                                                 .frame(width: eventCardWidth)
+                                                .contentShape(Rectangle())
                                         }
                                         .buttonStyle(.plain)
                                     }
@@ -243,6 +274,11 @@ struct HomeView: View {
     private var searchResultsContent: some View {
         ScrollView {
             LazyVStack(alignment: .leading, spacing: 14) {
+                if showsNativeSearch {
+                    searchInputBar
+                        .padding(.horizontal, 16)
+                }
+
                 if normalizedSearchQuery.isEmpty {
                     ContentUnavailableView {
                         Label(
@@ -294,7 +330,7 @@ struct HomeView: View {
                                     )
                                 }
                                 .buttonStyle(.plain)
-                                    .padding(.horizontal, 16)
+                                        .padding(.horizontal, 16)
                             }
                         }
 
@@ -339,53 +375,142 @@ struct HomeView: View {
                     }
                 }
             }
-            .padding(.top, showsNativeSearch ? 18 : 74)
+            .frame(maxWidth: .infinity)
+            .padding(.top, showsNativeSearch ? 0 : 74)
             .padding(.bottom, 104)
         }
         .scrollIndicators(.hidden)
+        .scrollDismissesKeyboard(.interactively)
+        .simultaneousGesture(
+            TapGesture().onEnded {
+                guard isSearchFieldFocused, isSearchKeyboardDismissEnabled else {
+                    return
+                }
+
+                isSearchFieldFocused = false
+            }
+        )
+    }
+
+    private var searchInputBar: some View {
+        HStack(spacing: 12) {
+            HStack(spacing: 10) {
+                Image(systemName: "magnifyingglass")
+                    .font(.system(size: 20, weight: .medium))
+                    .foregroundStyle(.white.opacity(0.92))
+
+                TextField("", text: $searchText, prompt: Text("Events, people, venues...").foregroundStyle(.white.opacity(0.42)))
+                    .font(.system(size: 17, weight: .medium))
+                    .foregroundStyle(.white)
+                    .textInputAutocapitalization(.never)
+                    .autocorrectionDisabled()
+                    .submitLabel(.search)
+                    .focused($isSearchFieldFocused)
+
+                if !searchText.isEmpty {
+                    Button {
+                        searchText = ""
+                        isSearchFieldFocused = true
+                    } label: {
+                        Image(systemName: "xmark.circle.fill")
+                            .font(.system(size: 18, weight: .semibold))
+                            .foregroundStyle(.white.opacity(0.5))
+                    }
+                    .buttonStyle(.plain)
+                }
+            }
+            .padding(.horizontal, 16)
+            .frame(height: 48)
+            .contentShape(Capsule())
+            .homeLiquidGlass(in: Capsule())
+        }
     }
 
     private var homeTopControls: some View {
-        HStack(alignment: .top, spacing: 10) {
-            if !isSearchPresented {
-                if shouldShowLocationFilterControl {
-                    HomeLocationFilterDropdown(
-                        selection: Binding(
-                            get: { effectiveLocationFilter },
-                            set: { selectedLocationFilter = $0 }
-                        ),
-                        locations: availableLocationFilters
+        ZStack {
+            HStack(alignment: .center, spacing: 10) {
+                if !isSearchPresented {
+                    if shouldShowLocationFilterControl {
+                        HomeLocationFilterDropdown(
+                            selection: Binding(
+                                get: { effectiveLocationFilter },
+                                set: { selectedLocationFilter = $0 }
+                            ),
+                            locations: availableLocationFilters,
+                            hasActiveSelection: effectiveLocationFilter != defaultLocationFilter
+                        )
+                    }
+
+                    HomeFiltersMenuButton(
+                        selectedEventFilter: $selectedEventFilter,
+                        categories: availableCategoryFilters,
+                        selectedCategoryID: effectiveCategoryFilterID,
+                        onSelectCategory: { filterID in
+                            selectedCategoryFilterID = filterID
+                        }
                     )
                 }
 
-                HomeFiltersMenuButton(
-                    selectedEventFilter: $selectedEventFilter,
-                    categories: availableCategoryFilters,
-                    selectedCategoryID: effectiveCategoryFilterID,
-                    onSelectCategory: { filterID in
-                        selectedCategoryFilterID = filterID
-                    }
-                )
+                Spacer()
+
+                if !isSearchPresented {
+                    weekPagerControl
+                }
             }
 
-            Spacer()
-
             if !isSearchPresented {
-                if isViewingFutureWeek {
-                    FloatingGlassIconButton(systemImage: "chevron.left") {
-                        UIImpactFeedbackGenerator(style: .light).impactOccurred()
-                        moveWeek(by: -1)
-                    }
-                }
-
-                FloatingGlassIconButton(systemImage: "chevron.right") {
-                    UIImpactFeedbackGenerator(style: .light).impactOccurred()
-                    moveWeek(by: 1)
-                }
+                Text(visibleWeekRangeTitle)
+                    .font(.system(size: 16, weight: .semibold))
+                    .foregroundStyle(.white.opacity(0.88))
+                    .lineLimit(1)
+                    .minimumScaleFactor(0.8)
+                    .frame(maxWidth: .infinity)
+                    .allowsHitTesting(false)
             }
         }
         .padding(.horizontal, 16)
-        .padding(.top, 14)
+        .padding(.top, 0)
+    }
+
+    private var weekPagerControl: some View {
+        HStack(spacing: 0) {
+            Button {
+                UIImpactFeedbackGenerator(style: .light).impactOccurred()
+                moveWeek(by: -1)
+            } label: {
+                pagerChevron(systemImage: "chevron.left", isEnabled: isViewingFutureWeek)
+            }
+            .buttonStyle(.plain)
+            .disabled(!isViewingFutureWeek)
+
+            Rectangle()
+                .fill(Color.white.opacity(0.18))
+                .frame(width: 1, height: 24)
+
+            Button {
+                UIImpactFeedbackGenerator(style: .light).impactOccurred()
+                moveWeek(by: 1)
+            } label: {
+                pagerChevron(systemImage: "chevron.right", isEnabled: true)
+            }
+            .buttonStyle(.plain)
+        }
+        .frame(height: 46)
+        .clipShape(Capsule())
+        .homePagerLiquidGlass(in: Capsule())
+        .overlay(
+            Capsule()
+                .strokeBorder(Color.white.opacity(0.16), lineWidth: 1)
+        )
+        .shadow(color: .black.opacity(0.12), radius: 14, x: 0, y: 8)
+    }
+
+    private func pagerChevron(systemImage: String, isEnabled: Bool) -> some View {
+        Image(systemName: systemImage)
+            .font(.system(size: 19, weight: .semibold))
+            .foregroundStyle(isEnabled ? Color.primary : Color.secondary.opacity(0.55))
+            .frame(width: 46, height: 46)
+            .contentShape(Rectangle())
     }
 
     private var groupedEvents: [EventSection] {
@@ -405,22 +530,37 @@ struct HomeView: View {
     }
 
     private var visibleWeekDays: [Date] {
-        let today = Self.weekCalendar.startOfDay(for: .now)
-        let firstDay = max(selectedWeekStart, today)
-        let weekEnd = Self.weekCalendar.date(byAdding: .day, value: 7, to: selectedWeekStart) ?? firstDay
+        let startDate = EventFeedViewModel.displayRangeStartDate(for: selectedWeekStart)
+        let weekEnd = EventFeedViewModel.weekEndDate(for: selectedWeekStart) ?? startDate
+        let dayCount = max(
+            Self.weekCalendar.dateComponents([.day], from: startDate, to: weekEnd).day ?? 0,
+            0
+        )
 
-        return (0 ..< 7).compactMap { offset in
-            guard let day = Self.weekCalendar.date(byAdding: .day, value: offset, to: firstDay) else {
+        return (0 ..< dayCount).compactMap { offset in
+            guard let day = Self.weekCalendar.date(byAdding: .day, value: offset, to: startDate) else {
                 return nil
             }
 
-            let normalizedDay = Self.weekCalendar.startOfDay(for: day)
-            guard normalizedDay < weekEnd else {
-                return nil
-            }
-
-            return normalizedDay
+            return Self.weekCalendar.startOfDay(for: day)
         }
+    }
+
+    private var visibleWeekRangeTitle: String {
+        let startDate = EventFeedViewModel.displayRangeStartDate(for: selectedWeekStart)
+        let weekEnd = EventFeedViewModel.weekEndDate(for: selectedWeekStart) ?? startDate
+        let inclusiveEndDate = Self.weekCalendar.date(byAdding: .day, value: -1, to: weekEnd) ?? startDate
+
+        let sameMonth = Self.weekCalendar.component(.month, from: startDate) ==
+            Self.weekCalendar.component(.month, from: inclusiveEndDate)
+        let sameYear = Self.weekCalendar.component(.year, from: startDate) ==
+            Self.weekCalendar.component(.year, from: inclusiveEndDate)
+
+        if sameMonth && sameYear {
+            return "\(Self.weekRangeMonthFormatter.string(from: startDate)) - \(Self.weekRangeDayFormatter.string(from: inclusiveEndDate))"
+        }
+
+        return "\(Self.weekRangeMonthFormatter.string(from: startDate)) - \(Self.weekRangeMonthFormatter.string(from: inclusiveEndDate))"
     }
 
     private var skeletonSectionDays: [Date] {
@@ -428,15 +568,17 @@ struct HomeView: View {
     }
 
     private var eventsForSelectedWeek: [EventFeedItem] {
+        let startDate = EventFeedViewModel.displayRangeStartDate(for: selectedWeekStart)
+        let weekEnd = EventFeedViewModel.weekEndDate(for: selectedWeekStart)
+
         return filteredCurrentEvents.filter { event in
             let eventDay = visibleSectionDay(for: event)
-            guard let nextWeekStart = Self.weekCalendar.date(byAdding: .day, value: 7, to: selectedWeekStart) else {
-                return shouldIncludeInCurrentWeekFeed(event)
+            guard let weekEnd else {
+                return eventDay >= startDate
             }
 
-            return eventDay >= selectedWeekStart &&
-                eventDay < nextWeekStart &&
-                shouldIncludeInCurrentWeekFeed(event)
+            return eventDay >= startDate &&
+                eventDay < weekEnd
         }
     }
 
@@ -716,30 +858,6 @@ struct HomeView: View {
         Self.weekCalendar.startOfDay(for: event.startAt)
     }
 
-    private func shouldIncludeInCurrentWeekFeed(_ event: EventFeedItem) -> Bool {
-        guard !isViewingFutureWeek else {
-            return true
-        }
-
-        let now = Date()
-        let startOfToday = Self.weekCalendar.startOfDay(for: now)
-        let eventDay = visibleSectionDay(for: event)
-
-        if eventDay >= startOfToday {
-            return true
-        }
-
-        let isEarlyMorning = Self.weekCalendar.component(.hour, from: now) < 6
-
-        guard isEarlyMorning,
-              let yesterday = Self.weekCalendar.date(byAdding: .day, value: -1, to: startOfToday)
-        else {
-            return false
-        }
-
-        return Self.weekCalendar.isDate(eventDay, inSameDayAs: yesterday)
-    }
-
     private func sectionTitle(for day: Date) -> String {
         let now = Date()
         let startOfToday = Self.weekCalendar.startOfDay(for: now)
@@ -773,6 +891,20 @@ struct HomeView: View {
     private var feedBackground: some View {
         Color(red: 0.07, green: 0.07, blue: 0.08)
             .ignoresSafeArea()
+    }
+}
+
+private extension View {
+    @ViewBuilder
+    func homePagerLiquidGlass<S: InsettableShape>(in shape: S) -> some View {
+        if #available(iOS 26.1, *) {
+            glassEffect(.regular.interactive(), in: shape)
+        } else if #available(iOS 26.0, *) {
+            glassEffect(.regular, in: shape)
+        } else {
+            background(.white.opacity(0.08), in: shape)
+                .background(.ultraThinMaterial, in: shape)
+        }
     }
 }
 
@@ -859,6 +991,7 @@ private struct HomeCategoryFilter: Identifiable, Hashable {
 private struct HomeLocationFilterDropdown: View {
     @Binding var selection: HomeLocationFilter
     let locations: [HomeLocationFilter]
+    let hasActiveSelection: Bool
 
     var body: some View {
         Menu {
@@ -874,7 +1007,12 @@ private struct HomeLocationFilterDropdown: View {
                 }
             }
         } label: {
-            HomeMenuPillLabel(title: selection.title)
+            Image(systemName: "map")
+                .font(.system(size: 18, weight: .semibold))
+                .foregroundStyle(hasActiveSelection ? AppTheme.accentBlue : .primary)
+                .frame(width: 46, height: 46)
+                .contentShape(Circle())
+                .homeLiquidGlass(in: Circle())
         }
         .buttonStyle(.plain)
     }
@@ -935,7 +1073,7 @@ private struct HomeFiltersMenuButton: View {
             Image(systemName: "line.3.horizontal.decrease")
                 .font(.system(size: 18, weight: .semibold))
                 .foregroundStyle(hasActiveFilters ? AppTheme.accentBlue : .primary)
-                .frame(width: 44, height: 44)
+                .frame(width: 46, height: 46)
                 .contentShape(Circle())
                 .homeLiquidGlass(in: Circle())
         }
@@ -959,7 +1097,7 @@ private struct HomeMenuPillLabel: View {
                 .foregroundStyle(.primary.opacity(0.58))
         }
         .padding(.horizontal, 15)
-        .frame(height: 44)
+        .frame(height: 46)
         .fixedSize(horizontal: true, vertical: false)
         .contentShape(Capsule())
         .homeLiquidGlass(in: Capsule())
@@ -1027,7 +1165,11 @@ private struct HomeRecentActivityRow: View {
                 )
                 .frame(maxWidth: .infinity, alignment: .leading)
 
-                Text(Self.relativeFormatter.localizedString(for: activity.timestamp, relativeTo: .now))
+                Text(
+                    Self.relativeFormatter
+                        .localizedString(for: activity.timestamp, relativeTo: .now)
+                        .capitalizingRelativeAgo()
+                )
                     .font(.system(size: 11, weight: .medium))
                     .foregroundStyle(.white.opacity(0.42))
             }
@@ -1601,15 +1743,6 @@ private extension View {
         text: Binding<String>,
         isPresented: Binding<Bool>
     ) -> some View {
-        if isEnabled {
-            searchable(
-                text: text,
-                isPresented: isPresented,
-                placement: .automatic,
-                prompt: "Search events..."
-            )
-        } else {
-            self
-        }
+        self
     }
 }

@@ -7,9 +7,11 @@ struct MobilePlacesResponse: Decodable, Hashable, Sendable {
 }
 
 struct PlaceListItem: Decodable, Identifiable, Hashable, Sendable {
-    enum PlaceType: String, Decodable, Sendable {
+    enum PlaceType: String, Decodable, Hashable, Identifiable, Sendable {
         case venue
         case organizer
+
+        var id: String { rawValue }
 
         var displayName: String {
             switch self {

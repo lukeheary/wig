@@ -24,6 +24,10 @@
 		0A7F46F19B1D4A6CA4200014 /* ActivityViewModel.swift in Sources */ = {isa = PBXBuildFile; fileRef = 0A7F46F19B1D4A6CA4100014 /* ActivityViewModel.swift */; };
 		0A7F46F19B1D4A6CA4200015 /* FriendsFeed.swift in Sources */ = {isa = PBXBuildFile; fileRef = 0A7F46F19B1D4A6CA4100015 /* FriendsFeed.swift */; };
 		0A7F46F19B1D4A6CA4200016 /* ProfileViewModel.swift in Sources */ = {isa = PBXBuildFile; fileRef = 0A7F46F19B1D4A6CA4100016 /* ProfileViewModel.swift */; };
+		1A2B3C4D5E6F708192A0C001 /* MobileEventCreationView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 1A2B3C4D5E6F708192A0B001 /* MobileEventCreationView.swift */; };
+		1A2B3C4D5E6F708192A0C002 /* UIImage+Upload.swift in Sources */ = {isa = PBXBuildFile; fileRef = 1A2B3C4D5E6F708192A0B002 /* UIImage+Upload.swift */; };
+		1A2B3C4D5E6F708192A0C003 /* String+RelativeFormatting.swift in Sources */ = {isa = PBXBuildFile; fileRef = 1A2B3C4D5E6F708192A0B003 /* String+RelativeFormatting.swift */; };
+		1A2B3C4D5E6F708192A0C004 /* MobilePlaceCreationView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 1A2B3C4D5E6F708192A0B004 /* MobilePlaceCreationView.swift */; };
 		0E61E35C6BC9885882E28017 /* APIClient.swift in Sources */ = {isa = PBXBuildFile; fileRef = 209CCAB342734F97FABBA5D2 /* APIClient.swift */; };
 		1D348DDF86D014D61E9BAB1F /* GiftList.swift in Sources */ = {isa = PBXBuildFile; fileRef = 426D21E06189626A1AF56246 /* GiftList.swift */; };
 		59D822A7D7ADCABFCF108A54 /* Assets.xcassets in Resources */ = {isa = PBXBuildFile; fileRef = C0D13CF91B0EECB51C7BEBC0 /* Assets.xcassets */; };
@@ -64,6 +68,10 @@
 		0A7F46F19B1D4A6CA4100015 /* FriendsFeed.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = FriendsFeed.swift; sourceTree = "<group>"; };
 		0A7F46F19B1D4A6CA4100016 /* ProfileViewModel.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ProfileViewModel.swift; sourceTree = "<group>"; };
 		184FF519AEEF1B3325EA5631 /* UserProfile.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = UserProfile.swift; sourceTree = "<group>"; };
+		1A2B3C4D5E6F708192A0B001 /* MobileEventCreationView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = "MobileEventCreationView.swift"; sourceTree = "<group>"; };
+		1A2B3C4D5E6F708192A0B002 /* UIImage+Upload.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = "UIImage+Upload.swift"; sourceTree = "<group>"; };
+		1A2B3C4D5E6F708192A0B003 /* String+RelativeFormatting.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = "String+RelativeFormatting.swift"; sourceTree = "<group>"; };
+		1A2B3C4D5E6F708192A0B004 /* MobilePlaceCreationView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = "MobilePlaceCreationView.swift"; sourceTree = "<group>"; };
 		1A7D0D9C9A7444D4B6D8D001 /* Debug.xcconfig */ = {isa = PBXFileReference; lastKnownFileType = text.xcconfig; name = Debug.xcconfig; path = Config/Debug.xcconfig; sourceTree = SOURCE_ROOT; };
 		1A7D0D9C9A7444D4B6D8D002 /* Release.xcconfig */ = {isa = PBXFileReference; lastKnownFileType = text.xcconfig; name = Release.xcconfig; path = Config/Release.xcconfig; sourceTree = SOURCE_ROOT; };
 		205A0A05764438AFB15835AF /* Info.plist */ = {isa = PBXFileReference; lastKnownFileType = text.plist; path = Info.plist; sourceTree = "<group>"; };
@@ -196,6 +204,8 @@
 			children = (
 				0A7F46F19B1D4A6CA4100005 /* EventDetailView.swift */,
 				0A7F46F19B1D4A6CA4100002 /* EventFeedViewModel.swift */,
+				1A2B3C4D5E6F708192A0B001 /* MobileEventCreationView.swift */,
+				1A2B3C4D5E6F708192A0B004 /* MobilePlaceCreationView.swift */,
 				038FCA44E637DF7C72B0236B /* HomeView.swift */,
 			);
 			path = Home;
@@ -232,6 +242,8 @@
 			isa = PBXGroup;
 			children = (
 				0A7F46F19B1D4A6CA4100004 /* AppSession.swift */,
+				1A2B3C4D5E6F708192A0B003 /* String+RelativeFormatting.swift */,
+				1A2B3C4D5E6F708192A0B002 /* UIImage+Upload.swift */,
 				7D1A2200B7C3478AA43C90F1 /* PushNotificationManager.swift */,
 				9ACD920D60DEE53882F3D505 /* Components */,
 			);
@@ -373,6 +385,8 @@
 				0A7F46F19B1D4A6CA4200015 /* FriendsFeed.swift in Sources */,
 				1D348DDF86D014D61E9BAB1F /* GiftList.swift in Sources */,
 				90C9663BDAC608D5EA336BE0 /* HomeView.swift in Sources */,
+				1A2B3C4D5E6F708192A0C001 /* MobileEventCreationView.swift in Sources */,
+				1A2B3C4D5E6F708192A0C004 /* MobilePlaceCreationView.swift in Sources */,
 				F9BAE145020603897D733455 /* ActivityView.swift in Sources */,
 				CA9B0D3B6C19273F055C584F /* MainTabView.swift in Sources */,
 				0A7F46F19B1D4A6CA4200008 /* PlaceDetail.swift in Sources */,
@@ -387,6 +401,8 @@
 				0A7F46F19B1D4A6CA4200012 /* SwipeBackEnabler.swift in Sources */,
 				BD73EB6C507EE9857E553F78 /* ProfileView.swift in Sources */,
 				0A7F46F19B1D4A6CA4200016 /* ProfileViewModel.swift in Sources */,
+				1A2B3C4D5E6F708192A0C003 /* String+RelativeFormatting.swift in Sources */,
+				1A2B3C4D5E6F708192A0C002 /* UIImage+Upload.swift in Sources */,
 				9BA970A1210F0773F55CEC94 /* SignedOutView.swift in Sources */,
 				AC3DAD789D77E9A30DAA2162 /* UserProfile.swift in Sources */,
 				E54C4A2CC0F52DBAFB632E94 /* WIGApp.swift in Sources */,

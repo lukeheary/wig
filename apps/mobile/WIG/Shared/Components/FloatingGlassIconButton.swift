@@ -8,9 +8,9 @@ struct FloatingGlassIconButton: View {
     var body: some View {
         Button(action: action) {
             Image(systemName: systemImage)
-                .font(.system(size: 16, weight: .bold))
+                .font(.system(size: 17, weight: .semibold))
                 .foregroundStyle(foregroundColor)
-                .frame(width: 44, height: 44)
+                .frame(width: 46, height: 46)
                 .contentShape(Circle())
                 .floatingGlassCircle()
         }

@@ -149,6 +149,7 @@ struct ActivityEventSummary: Decodable, Identifiable, Hashable, Sendable {
             organizerLogoImageURL: organizerLogoImageURL,
             categories: categories,
             categoryLabels: categoryLabels,
+            status: .active,
             updatedAt: updatedAt,
             canEdit: canEdit,
             isFollowed: isFollowed,
