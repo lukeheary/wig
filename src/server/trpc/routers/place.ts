@@ -36,6 +36,7 @@ import {
   PLACE_SLUG_ERROR,
   PLACE_SLUG_REGEX,
 } from "@/lib/place-identifiers";
+import { accentInsensitiveLike } from "@/server/db/search";
 
 const placeTypeSchema = z.enum(["venue", "organizer"]);
 
@@ -50,7 +51,7 @@ export const placeRouter = router({
     .query(async ({ ctx, input }) => {
       const conditions = [];
       if (input.query) {
-        conditions.push(ilike(places.name, `%${input.query}%`));
+        conditions.push(accentInsensitiveLike(places.name, input.query));
       }
       if (input.type) {
         conditions.push(eq(places.type, input.type));
@@ -101,7 +102,7 @@ export const placeRouter = router({
 
       const titleQuery = input.query.trim();
       const titleCondition = titleQuery
-        ? ilike(events.title, `%${titleQuery}%`)
+        ? accentInsensitiveLike(events.title, titleQuery)
         : undefined;
 
       const eventRows = await ctx.db.query.events.findMany({
@@ -306,7 +307,7 @@ export const placeRouter = router({
       if (input.state && !input.city)
         conditions.push(eq(places.state, input.state));
       if (input.search) {
-        conditions.push(ilike(places.name, `%${input.search}%`));
+        conditions.push(accentInsensitiveLike(places.name, input.search));
       }
 
       if (input.followedOnly) {

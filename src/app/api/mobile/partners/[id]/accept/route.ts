@@ -100,8 +100,8 @@ export async function POST(_: Request, context: RouteContext) {
       type: "partner_request_accepted",
       entityType: "partner_request",
       entityId: id,
-      title: "Partner Request Accepted",
-      body: `${accepterName} is now your partner`,
+      title: accepterName,
+      body: "Is now your partner",
       actionUrl: "/profile",
       metadata: {
         requestId: id,
@@ -112,8 +112,8 @@ export async function POST(_: Request, context: RouteContext) {
   );
 
   await sendPushNotificationToUsers([partnerRequest.requesterId], {
-    title: "Partner Request Accepted",
-    body: `${accepterName} is now your partner`,
+    title: accepterName,
+    body: "Is now your partner",
     data: {
       type: "partner_request_accepted",
       entityId: id,

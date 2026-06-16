@@ -155,8 +155,8 @@ export async function POST(request: Request) {
       type: "partner_request",
       entityType: "partner_request",
       entityId: partnerRequest.id,
-      title: "Partner Request",
-      body: `${senderName} sent you a partner request`,
+      title: senderName,
+      body: "Sent you a partner request",
       metadata: {
         requestId: partnerRequest.id,
         requestType: "partner",
@@ -166,8 +166,8 @@ export async function POST(request: Request) {
   );
 
   await sendPushNotificationToUsers([recipientId], {
-    title: "Partner Request",
-    body: `${senderName} sent you a partner request`,
+    title: senderName,
+    body: "Sent you a partner request",
     data: {
       type: "partner_request",
       entityId: partnerRequest.id,

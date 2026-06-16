@@ -4,6 +4,7 @@ import { NextResponse } from "next/server";
 import { db } from "@/server/db";
 import { events, placeFollows, places, userFriends, users } from "@/server/db/schema";
 import { mapEventCategoryData } from "@/server/utils/categories";
+import { accentInsensitiveLike } from "@/server/db/search";
 
 export async function GET(request: Request) {
   try {
@@ -19,7 +20,6 @@ export async function GET(request: Request) {
     }
 
     const { userId } = await auth();
-    const searchPattern = `%${query}%`;
     const matchedUsers = userId
       ? await db.query.userFriends.findMany({
           where: or(
@@ -37,15 +37,19 @@ export async function GET(request: Request) {
 
     const matchingUsers = userId
       ? await db.query.users.findMany({
-          where: and(
-            eq(users.isOnboarding, false),
-            ne(users.id, userId),
-            or(
-              sql`LOWER(${users.username}) LIKE LOWER(${searchPattern})`,
-              sql`LOWER(COALESCE(${users.firstName}, '')) LIKE LOWER(${searchPattern})`,
-              sql`LOWER(COALESCE(${users.lastName}, '')) LIKE LOWER(${searchPattern})`
-            )
-          ),
+        where: and(
+          eq(users.isOnboarding, false),
+          ne(users.id, userId),
+          or(
+              accentInsensitiveLike(users.username, query),
+              accentInsensitiveLike(users.firstName, query, {
+                coalesceToEmpty: true,
+              }),
+              accentInsensitiveLike(users.lastName, query, {
+                coalesceToEmpty: true,
+              })
+          )
+        ),
           columns: {
             id: true,
             username: true,
@@ -74,10 +78,14 @@ export async function GET(request: Request) {
 
     const matchingPlaces = await db.query.places.findMany({
       where: or(
-        sql`LOWER(${places.name}) LIKE LOWER(${searchPattern})`,
-        sql`LOWER(${places.slug}) LIKE LOWER(${searchPattern})`,
-        sql`LOWER(COALESCE(${places.city}, '')) LIKE LOWER(${searchPattern})`,
-        sql`LOWER(COALESCE(${places.state}, '')) LIKE LOWER(${searchPattern})`
+        accentInsensitiveLike(places.name, query),
+        accentInsensitiveLike(places.slug, query),
+        accentInsensitiveLike(places.city, query, {
+          coalesceToEmpty: true,
+        }),
+        accentInsensitiveLike(places.state, query, {
+          coalesceToEmpty: true,
+        })
       ),
       orderBy: [asc(places.name)],
       limit,
@@ -88,10 +96,16 @@ export async function GET(request: Request) {
         eq(events.status, "active"),
         gte(events.startAt, new Date()),
         or(
-          sql`LOWER(${events.title}) LIKE LOWER(${searchPattern})`,
-          sql`LOWER(COALESCE(${events.description}, '')) LIKE LOWER(${searchPattern})`,
-          sql`LOWER(COALESCE(${events.city}, '')) LIKE LOWER(${searchPattern})`,
-          sql`LOWER(COALESCE(${events.state}, '')) LIKE LOWER(${searchPattern})`
+          accentInsensitiveLike(events.title, query),
+          accentInsensitiveLike(events.description, query, {
+            coalesceToEmpty: true,
+          }),
+          accentInsensitiveLike(events.city, query, {
+            coalesceToEmpty: true,
+          }),
+          accentInsensitiveLike(events.state, query, {
+            coalesceToEmpty: true,
+          })
         )
       ),
       orderBy: [asc(events.startAt)],

@@ -4,6 +4,7 @@ import SwiftUI
 
 struct MainTabView: View {
     @Environment(Clerk.self) private var clerk
+    @Environment(\.apiClient) private var apiClient
     @EnvironmentObject private var appSession: AppSession
     @StateObject private var activityRequestStore = ActivityRequestStore()
     @State private var selectedTab: AppTab = .home
@@ -84,6 +85,13 @@ struct MainTabView: View {
 
             selectedTab = .home
             previousNonSearchTab = .home
+        }
+        .task(id: preloadTaskID) {
+            guard isAuthenticated else {
+                return
+            }
+
+            await preloadAuthenticatedTabs()
         }
         .sheet(isPresented: $isAuthSheetPresented) {
             AuthView(isDismissable: true)
@@ -171,6 +179,13 @@ struct MainTabView: View {
             selectedTab = .home
             previousNonSearchTab = .home
         }
+        .task(id: preloadTaskID) {
+            guard isAuthenticated else {
+                return
+            }
+
+            await preloadAuthenticatedTabs()
+        }
         .sheet(isPresented: $isAuthSheetPresented) {
             AuthView(isDismissable: true)
                 .environment(Clerk.shared)
@@ -205,6 +220,10 @@ struct MainTabView: View {
 
     private var isAuthenticated: Bool {
         appSession.isAuthBypassed || clerk.user != nil
+    }
+
+    private var preloadTaskID: String {
+        "\(clerk.user?.id ?? "guest")-\(appSession.isAuthBypassed)"
     }
 
     private var tabSelection: Binding<AppTab> {
@@ -245,6 +264,14 @@ struct MainTabView: View {
             .allowsHitTesting(true)
             .transition(.move(edge: .bottom).combined(with: .opacity))
         }
+    }
+
+    private func preloadAuthenticatedTabs() async {
+        async let venues: Void = VenuesViewModel.preload(using: apiClient)
+        async let activity: Void = ActivityViewModel.preload(using: apiClient)
+        async let profile: Void = ProfileViewModel.preload(using: apiClient)
+
+        _ = await (venues, activity, profile)
     }
 
     @ViewBuilder

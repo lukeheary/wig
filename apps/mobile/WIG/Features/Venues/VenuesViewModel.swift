@@ -10,8 +10,29 @@ final class VenuesViewModel: ObservableObject {
     }
 
     @Published private(set) var state: State = .idle
+    private static var cachedResponse: MobilePlacesResponse?
+    private static var inFlightLoad: Task<MobilePlacesResponse, Error>?
 
     func load(using apiClient: APIClient, forceRefresh: Bool = false) async {
+        if !forceRefresh, let cachedResponse = Self.cachedResponse {
+            state = .loaded(cachedResponse)
+            return
+        }
+
+        if !forceRefresh, let inFlightLoad = Self.inFlightLoad {
+            state = .loading
+
+            do {
+                let response = try await inFlightLoad.value
+                Self.cachedResponse = response
+                state = .loaded(response)
+            } catch {
+                state = .failed(error.localizedDescription)
+            }
+
+            return
+        }
+
         let shouldShowFullScreenLoading: Bool
         if case .loaded = state, forceRefresh {
             shouldShowFullScreenLoading = false
@@ -24,14 +45,48 @@ final class VenuesViewModel: ObservableObject {
         }
 
         do {
-            let response = try await apiClient.send(
-                APIClient.mobilePlaces(limit: 150)
-            )
+            let loadTask = Task {
+                try await apiClient.send(
+                    APIClient.mobilePlaces(limit: 150)
+                )
+            }
+            Self.inFlightLoad = loadTask
+
+            let response = try await loadTask.value
+            Self.cachedResponse = response
             state = .loaded(response)
         } catch {
             if shouldShowFullScreenLoading {
                 state = .failed(error.localizedDescription)
             }
         }
+
+        Self.inFlightLoad = nil
+    }
+
+    static func preload(using apiClient: APIClient) async {
+        if cachedResponse != nil {
+            return
+        }
+
+        if let inFlightLoad {
+            _ = try? await inFlightLoad.value
+            return
+        }
+
+        let loadTask = Task {
+            try await apiClient.send(
+                APIClient.mobilePlaces(limit: 150)
+            )
+        }
+        inFlightLoad = loadTask
+
+        do {
+            cachedResponse = try await loadTask.value
+        } catch {
+            // Ignore preload failures; the screen can still load normally later.
+        }
+
+        inFlightLoad = nil
     }
 }

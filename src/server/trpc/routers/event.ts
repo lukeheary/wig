@@ -57,6 +57,7 @@ import {
   notifyFriendsOfRsvp,
 } from "@/server/utils/notifications";
 import { sendPushNotificationToUsers } from "@/server/utils/push-notifications";
+import { accentInsensitiveLike } from "@/server/db/search";
 import { RSVP_DECLINE_REASON_VALUES } from "@/lib/rsvp";
 
 function resolveEventUpdateActivityType(
@@ -135,11 +136,11 @@ async function notifyPartnerOfMirroredRsvp({
     [actor?.firstName, actor?.lastName].filter(Boolean).join(" ").trim() ||
     actor?.username ||
     "Your partner";
-  const title = "Partner RSVP";
+  const title = actorName;
   const body =
     status === "going"
-      ? `${actorName} is going with you to ${event.title}${partnerRsvpDate ? ` on ${partnerRsvpDate}` : ""}`
-      : `${actorName} is interested in ${event.title} with you${partnerRsvpDate ? ` on ${partnerRsvpDate}` : ""}`;
+      ? `Is going with you to ${event.title}${partnerRsvpDate ? ` on ${partnerRsvpDate}` : ""}`
+      : `Is interested in ${event.title} with you${partnerRsvpDate ? ` on ${partnerRsvpDate}` : ""}`;
   const actionUrl = `/event/${event.id}`;
 
   await createNotification(
@@ -1434,13 +1435,20 @@ export const eventRouter = router({
 
       // Add search filter
       if (input.search?.trim()) {
-        const searchTerm = `%${input.search.trim()}%`;
+        const searchQuery = input.search.trim();
         const matchingVenueRows = await ctx.db
           .select({ id: places.id })
           .from(places)
-          .where(and(eq(places.type, "venue"), ilike(places.name, searchTerm)));
+          .where(
+            and(
+              eq(places.type, "venue"),
+              accentInsensitiveLike(places.name, searchQuery)
+            )
+          );
 
-        const searchConditions = [ilike(events.title, searchTerm)];
+        const searchConditions = [
+          accentInsensitiveLike(events.title, searchQuery),
+        ];
 
         if (matchingVenueRows.length > 0) {
           searchConditions.push(
@@ -2380,13 +2388,20 @@ export const eventRouter = router({
       }
 
       if (input.search?.trim()) {
-        const searchTerm = `%${input.search.trim()}%`;
+        const searchQuery = input.search.trim();
         const matchingVenueRows = await ctx.db
           .select({ id: places.id })
           .from(places)
-          .where(and(eq(places.type, "venue"), ilike(places.name, searchTerm)));
+          .where(
+            and(
+              eq(places.type, "venue"),
+              accentInsensitiveLike(places.name, searchQuery)
+            )
+          );
 
-        const searchConditions = [ilike(events.title, searchTerm)];
+        const searchConditions = [
+          accentInsensitiveLike(events.title, searchQuery),
+        ];
 
         if (matchingVenueRows.length > 0) {
           searchConditions.push(
@@ -2509,13 +2524,20 @@ export const eventRouter = router({
       }
 
       if (input.search?.trim()) {
-        const searchTerm = `%${input.search.trim()}%`;
+        const searchQuery = input.search.trim();
         const matchingVenueRows = await ctx.db
           .select({ id: places.id })
           .from(places)
-          .where(and(eq(places.type, "venue"), ilike(places.name, searchTerm)));
+          .where(
+            and(
+              eq(places.type, "venue"),
+              accentInsensitiveLike(places.name, searchQuery)
+            )
+          );
 
-        const searchConditions = [ilike(events.title, searchTerm)];
+        const searchConditions = [
+          accentInsensitiveLike(events.title, searchQuery),
+        ];
 
         if (matchingVenueRows.length > 0) {
           searchConditions.push(

@@ -140,8 +140,8 @@ export const partnersRouter = router({
           type: "partner_request",
           entityType: "partner_request",
           entityId: partnerRequest.id,
-          title: "Partner Request",
-          body: `${senderName} sent you a partner request`,
+          title: senderName,
+          body: "Sent you a partner request",
           metadata: {
             requestId: partnerRequest.id,
             requestType: "partner",
@@ -153,8 +153,8 @@ export const partnersRouter = router({
       await sendPushNotificationToUsers(
         [input.recipientId],
         {
-          title: "Partner Request",
-          body: `${senderName} sent you a partner request`,
+          title: senderName,
+          body: "Sent you a partner request",
           data: {
             type: "partner_request",
             entityId: partnerRequest.id,
@@ -237,8 +237,8 @@ export const partnersRouter = router({
           type: "partner_request_accepted",
           entityType: "partner_request",
           entityId: input.partnerId,
-          title: "Partner Request Accepted",
-          body: `${accepterName} is now your partner`,
+          title: accepterName,
+          body: "Is now your partner",
           actionUrl: "/profile",
           metadata: {
             requestId: input.partnerId,
@@ -251,8 +251,8 @@ export const partnersRouter = router({
       await sendPushNotificationToUsers(
         [partnerRequest.requesterId],
         {
-          title: "Partner Request Accepted",
-          body: `${accepterName} is now your partner`,
+          title: accepterName,
+          body: "Is now your partner",
           data: {
             type: "partner_request_accepted",
             entityId: input.partnerId,

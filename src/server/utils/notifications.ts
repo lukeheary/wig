@@ -34,22 +34,20 @@ const friendRsvpDateFormatter = new Intl.DateTimeFormat("en-US", {
 });
 
 function formatFriendRsvpBody({
-  actorName,
   eventTitle,
   eventStartAt,
   status,
 }: {
-  actorName: string;
   eventTitle: string;
   eventStartAt: Date | null;
   status: "going" | "interested";
 }) {
-  const verb = status === "going" ? "is going to" : "is interested in";
+  const verb = status === "going" ? "Is going to" : "Is interested in";
   const dateSuffix = eventStartAt
     ? ` on ${friendRsvpDateFormatter.format(eventStartAt)}`
     : "";
 
-  return `${actorName} ${verb} ${eventTitle}${dateSuffix}`;
+  return `${verb} ${eventTitle}${dateSuffix}`;
 }
 
 export async function createNotification(
@@ -200,7 +198,6 @@ export async function notifyFriendsOfRsvp(
     actor?.username ||
     "Your friend";
   const body = formatFriendRsvpBody({
-    actorName,
     eventTitle: event.title,
     eventStartAt: event.startAt,
     status,
@@ -214,7 +211,7 @@ export async function notifyFriendsOfRsvp(
       type: "event_update",
       entityType: "event",
       entityId: event.id,
-      title: "Friend RSVP",
+      title: actorName,
       body,
       actionUrl,
       metadata: {
@@ -230,7 +227,7 @@ export async function notifyFriendsOfRsvp(
   await sendPushNotificationToUsers(
     recipientIds,
     {
-      title: "Friend RSVP",
+      title: actorName,
       body,
       data: {
         type: "event_update",
