@@ -147,7 +147,7 @@ export const friendsRouter = router({
           type: "friend_request",
           entityType: "friend_request",
           entityId: friendRequest.id,
-          title: "Friend request",
+          title: "Friend Request",
           body: `${senderName} sent you a friend request`,
           metadata: {
             requestId: friendRequest.id,
@@ -160,7 +160,7 @@ export const friendsRouter = router({
       await sendPushNotificationToUsers(
         [input.friendUserId],
         {
-          title: "Friend request",
+          title: "Friend Request",
           body: `${senderName} sent you a friend request`,
           data: {
             type: "friend_request",
@@ -246,12 +246,26 @@ export const friendsRouter = router({
           type: "friend_request_accepted",
           entityType: "friend_request",
           entityId: input.friendRequestId,
-          title: "Friend request accepted",
+          title: "Friend Request Accepted",
           body: `${accepterName} accepted your friend request`,
           actionUrl: "/friends/list",
           metadata: {
             requestId: input.friendRequestId,
             requestType: "friend",
+          },
+        },
+        ctx.db
+      );
+
+      await sendPushNotificationToUsers(
+        [friendRequest.userId],
+        {
+          title: "Friend Request Accepted",
+          body: `${accepterName} accepted your friend request`,
+          data: {
+            type: "friend_request_accepted",
+            entityId: input.friendRequestId,
+            actionUrl: "/friends/list",
           },
         },
         ctx.db

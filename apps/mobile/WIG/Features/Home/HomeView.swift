@@ -9,6 +9,7 @@ struct HomeView: View {
 
     @Environment(Clerk.self) private var clerk
     @Environment(\.apiClient) private var apiClient
+    @Environment(\.scenePhase) private var scenePhase
     @EnvironmentObject private var appSession: AppSession
     @StateObject private var viewModel = EventFeedViewModel()
     @StateObject private var recentActivityViewModel = HomeRecentActivityViewModel()
@@ -90,6 +91,19 @@ struct HomeView: View {
                 .onChange(of: selectedWeekStart) { _, weekStart in
                     Task {
                         await loadHome(for: weekStart, using: apiClient)
+                    }
+                }
+                .onChange(of: scenePhase) { _, phase in
+                    guard phase == .active else {
+                        return
+                    }
+
+                    Task {
+                        await loadHome(
+                            for: selectedWeekStart,
+                            using: apiClient,
+                            forceRefresh: true
+                        )
                     }
                 }
                 .onChange(of: resetToCurrentWeekTrigger) { _, _ in
@@ -211,7 +225,26 @@ struct HomeView: View {
                 if shouldShowRecentActivity {
                     HomeRecentActivitySection(
                         activities: recentActivityViewModel.activities,
-                        onShowActivity: onShowActivity
+                        onShowActivity: onShowActivity,
+                        onRespondToRequest: { activity, response in
+                            do {
+                                switch (activity.type, response) {
+                                case (.friendRequestReceived, .accept):
+                                    try await apiClient.send(APIClient.acceptMobileFriendRequest(friendRequestID: activity.id.uuidString))
+                                case (.friendRequestReceived, .decline):
+                                    try await apiClient.send(APIClient.declineMobileFriendRequest(friendRequestID: activity.id.uuidString))
+                                case (.partnerRequestReceived, .accept):
+                                    try await apiClient.send(APIClient.acceptMobilePartnerRequest(partnerID: activity.id.uuidString))
+                                case (.partnerRequestReceived, .decline):
+                                    try await apiClient.send(APIClient.declineMobilePartnerRequest(partnerID: activity.id.uuidString))
+                                default:
+                                    return
+                                }
+                                await recentActivityViewModel.load(using: apiClient)
+                            } catch {
+                                // silently ignore — user can retry via activity tab
+                            }
+                        }
                     )
                     .padding(.top, 18)
                 }
@@ -430,18 +463,13 @@ struct HomeView: View {
         ZStack {
             HStack(alignment: .center, spacing: 10) {
                 if !isSearchPresented {
-                    if shouldShowLocationFilterControl {
-                        HomeLocationFilterDropdown(
-                            selection: Binding(
-                                get: { effectiveLocationFilter },
-                                set: { selectedLocationFilter = $0 }
-                            ),
-                            locations: availableLocationFilters,
-                            hasActiveSelection: effectiveLocationFilter != defaultLocationFilter
-                        )
-                    }
-
-                    HomeFiltersMenuButton(
+                    HomeLeadingControls(
+                        locationSelection: Binding(
+                            get: { effectiveLocationFilter },
+                            set: { selectedLocationFilter = $0 }
+                        ),
+                        locations: availableLocationFilters,
+                        hasActiveLocationSelection: effectiveLocationFilter != defaultLocationFilter,
                         selectedEventFilter: $selectedEventFilter,
                         categories: availableCategoryFilters,
                         selectedCategoryID: effectiveCategoryFilterID,
@@ -459,13 +487,24 @@ struct HomeView: View {
             }
 
             if !isSearchPresented {
-                Text(visibleWeekRangeTitle)
-                    .font(.system(size: 16, weight: .semibold))
-                    .foregroundStyle(.white.opacity(0.88))
-                    .lineLimit(1)
-                    .minimumScaleFactor(0.8)
-                    .frame(maxWidth: .infinity)
-                    .allowsHitTesting(false)
+                VStack(spacing: -1) {
+                    Text(visibleWeekRelativeTitle)
+                        .font(.system(size: 9, weight: .semibold))
+                        .foregroundStyle(.white.opacity(0.56))
+                        .lineLimit(1)
+
+                    Text(visibleWeekRangeTitle)
+                        .font(.system(size: 12, weight: .semibold))
+                        .foregroundStyle(.white.opacity(0.88))
+                        .lineLimit(1)
+                        .minimumScaleFactor(0.8)
+                }
+                .padding(.horizontal, 18)
+                .frame(height: 46)
+                .contentShape(Capsule())
+                .homeLiquidGlass(in: Capsule())
+                .frame(maxWidth: .infinity)
+                .allowsHitTesting(false)
             }
         }
         .padding(.horizontal, 16)
@@ -563,6 +602,28 @@ struct HomeView: View {
         return "\(Self.weekRangeMonthFormatter.string(from: startDate)) - \(Self.weekRangeMonthFormatter.string(from: inclusiveEndDate))"
     }
 
+    private var visibleWeekRelativeTitle: String {
+        let currentWeekStart = Self.startOfWeek(for: .now)
+        let weeksFromCurrent = Self.weekCalendar.dateComponents(
+            [.weekOfYear],
+            from: currentWeekStart,
+            to: selectedWeekStart
+        ).weekOfYear ?? 0
+
+        switch weeksFromCurrent {
+        case ...(-2):
+            return "\(-weeksFromCurrent) Weeks Ago"
+        case -1:
+            return "Last Week"
+        case 0:
+            return "This Week"
+        case 1:
+            return "Next Week"
+        default:
+            return "In \(weeksFromCurrent) Weeks"
+        }
+    }
+
     private var skeletonSectionDays: [Date] {
         Array(visibleWeekDays.prefix(3))
     }
@@ -635,10 +696,6 @@ struct HomeView: View {
 
     private var searchVenueResults: [PlaceListItem] {
         searchViewModel.places
-    }
-
-    private var shouldShowLocationFilterControl: Bool {
-        currentResponse != nil || currentUserLocation != nil
     }
 
     private var availableLocationFilters: [HomeLocationFilter] {
@@ -874,7 +931,7 @@ struct HomeView: View {
         }
 
         if Self.weekCalendar.isDate(startOfDay, inSameDayAs: startOfToday) {
-            return isEvening ? "Tonight's Events" : "Today's Events"
+            return isEvening ? "Tonight" : "Today"
         }
 
         return Self.sectionTitleFormatter.string(from: day)
@@ -992,6 +1049,7 @@ private struct HomeLocationFilterDropdown: View {
     @Binding var selection: HomeLocationFilter
     let locations: [HomeLocationFilter]
     let hasActiveSelection: Bool
+    var useCombinedStyle = false
 
     var body: some View {
         Menu {
@@ -1007,14 +1065,51 @@ private struct HomeLocationFilterDropdown: View {
                 }
             }
         } label: {
-            Image(systemName: "map")
-                .font(.system(size: 18, weight: .semibold))
-                .foregroundStyle(hasActiveSelection ? AppTheme.accentBlue : .primary)
-                .frame(width: 46, height: 46)
-                .contentShape(Circle())
-                .homeLiquidGlass(in: Circle())
+            labelContent
         }
         .buttonStyle(.plain)
+    }
+
+    private var labelContent: some View {
+        Image(systemName: "map")
+            .font(.system(size: 18, weight: .semibold))
+            .foregroundStyle(hasActiveSelection ? AppTheme.accentBlue : .primary)
+            .frame(width: 46, height: 46)
+            .contentShape(Rectangle())
+            .modifier(HomeStandaloneControlStyle(isStandalone: !useCombinedStyle))
+    }
+}
+
+private struct HomeLeadingControls: View {
+    @Binding var locationSelection: HomeLocationFilter
+    let locations: [HomeLocationFilter]
+    let hasActiveLocationSelection: Bool
+    @Binding var selectedEventFilter: HomeEventFilter
+    let categories: [HomeCategoryFilter]
+    let selectedCategoryID: String?
+    let onSelectCategory: (String?) -> Void
+
+    var body: some View {
+        HStack(spacing: 0) {
+            HomeLocationFilterDropdown(
+                selection: $locationSelection,
+                locations: locations,
+                hasActiveSelection: hasActiveLocationSelection,
+                useCombinedStyle: true
+            )
+
+            HomeFiltersMenuButton(
+                selectedEventFilter: $selectedEventFilter,
+                categories: categories,
+                selectedCategoryID: selectedCategoryID,
+                onSelectCategory: onSelectCategory,
+                useCombinedStyle: true
+            )
+        }
+        .frame(height: 46)
+        .clipShape(Capsule())
+        .homePagerLiquidGlass(in: Capsule())
+        .shadow(color: .black.opacity(0.12), radius: 14, x: 0, y: 8)
     }
 }
 
@@ -1023,6 +1118,7 @@ private struct HomeFiltersMenuButton: View {
     let categories: [HomeCategoryFilter]
     let selectedCategoryID: String?
     let onSelectCategory: (String?) -> Void
+    var useCombinedStyle = false
 
     private var hasActiveFilters: Bool {
         selectedEventFilter != .all || selectedCategoryID != nil
@@ -1074,10 +1170,23 @@ private struct HomeFiltersMenuButton: View {
                 .font(.system(size: 18, weight: .semibold))
                 .foregroundStyle(hasActiveFilters ? AppTheme.accentBlue : .primary)
                 .frame(width: 46, height: 46)
-                .contentShape(Circle())
-                .homeLiquidGlass(in: Circle())
+                .contentShape(Rectangle())
+                .modifier(HomeStandaloneControlStyle(isStandalone: !useCombinedStyle))
         }
         .buttonStyle(.plain)
+    }
+}
+
+private struct HomeStandaloneControlStyle: ViewModifier {
+    let isStandalone: Bool
+
+    @ViewBuilder
+    func body(content: Content) -> some View {
+        if isStandalone {
+            content.homeLiquidGlass(in: Circle())
+        } else {
+            content
+        }
     }
 }
 
@@ -1107,38 +1216,56 @@ private struct HomeMenuPillLabel: View {
 private struct HomeRecentActivitySection: View {
     let activities: [ActivityFeedItem]
     let onShowActivity: () -> Void
+    let onRespondToRequest: (ActivityFeedItem, ActivityRequestResponse) async -> Void
+    @EnvironmentObject private var requestStore: ActivityRequestStore
+
+    private var visibleActivities: [ActivityFeedItem] {
+        activities.filter { activity in
+            guard activity.type.isRequest else { return true }
+            return requestStore.response(for: activity.id) == nil
+        }
+    }
 
     var body: some View {
-        VStack(alignment: .leading, spacing: 14) {
-            Button(action: onShowActivity) {
-                HStack(spacing: 6) {
-                    Text("Recent Activity")
-                        .font(.system(size: 20, weight: .bold))
-                        .foregroundStyle(.white)
+        let visible = visibleActivities
+        if !visible.isEmpty {
+            VStack(alignment: .leading, spacing: 14) {
+                Button(action: onShowActivity) {
+                    HStack(spacing: 6) {
+                        Text("Recent Activity")
+                            .font(.system(size: 20, weight: .bold))
+                            .foregroundStyle(.white)
 
-                    Image(systemName: "chevron.right")
-                        .font(.system(size: 16, weight: .bold))
-                        .foregroundStyle(.white.opacity(0.78))
+                        Image(systemName: "chevron.right")
+                            .font(.system(size: 16, weight: .bold))
+                            .foregroundStyle(.white.opacity(0.78))
+                    }
                 }
-            }
-            .buttonStyle(.plain)
-            .padding(.horizontal, 16)
+                .buttonStyle(.plain)
+                .padding(.horizontal, 16)
 
-            VStack(alignment: .leading, spacing: 16) {
-                ForEach(activities) { activity in
-                    HomeRecentActivityRow(activity: activity)
+                VStack(alignment: .leading, spacing: 16) {
+                    ForEach(visible) { activity in
+                        HomeRecentActivityRow(
+                            activity: activity,
+                            onRespondToRequest: onRespondToRequest
+                        )
+                    }
                 }
+                .padding(.horizontal, 16)
             }
-            .padding(.horizontal, 16)
         }
     }
 }
 
 private struct HomeRecentActivityRow: View {
     let activity: ActivityFeedItem
+    let onRespondToRequest: (ActivityFeedItem, ActivityRequestResponse) async -> Void
+    @EnvironmentObject private var requestStore: ActivityRequestStore
     @State private var selectedEvent: EventFeedItem?
     @State private var selectedVenue: PlaceListItem?
     @State private var selectedUserProfile: RecentActivitySelectedUserProfile?
+    @State private var isSubmittingResponse = false
 
     private static let relativeFormatter: RelativeDateTimeFormatter = {
         let formatter = RelativeDateTimeFormatter()
@@ -1147,33 +1274,37 @@ private struct HomeRecentActivityRow: View {
     }()
 
     var body: some View {
-        HStack(alignment: .top, spacing: 12) {
+        HStack(alignment: .center, spacing: 12) {
             ActivityAvatarView(activity: activity)
 
-            VStack(alignment: .leading, spacing: 4) {
-                InlineLinkedActivityText(
-                    activity: activity,
-                    onTapEvent: {
-                        selectedEvent = activity.event.eventFeedItem
-                    },
-                    onTapVenue: { venue in
-                        selectedVenue = venue
-                    },
-                    onTapUser: { userID in
-                        selectedUserProfile = RecentActivitySelectedUserProfile(id: userID)
-                    }
-                )
-                .frame(maxWidth: .infinity, alignment: .leading)
+            if activity.type.isRequest {
+                requestContent
+            } else {
+                VStack(alignment: .leading, spacing: 4) {
+                    InlineLinkedActivityText(
+                        activity: activity,
+                        onTapEvent: {
+                            selectedEvent = activity.event?.eventFeedItem
+                        },
+                        onTapVenue: { venue in
+                            selectedVenue = venue
+                        },
+                        onTapUser: { userID in
+                            selectedUserProfile = RecentActivitySelectedUserProfile(id: userID)
+                        }
+                    )
+                    .frame(maxWidth: .infinity, alignment: .leading)
 
-                Text(
-                    Self.relativeFormatter
-                        .localizedString(for: activity.timestamp, relativeTo: .now)
-                        .capitalizingRelativeAgo()
-                )
+                    Text(
+                        Self.relativeFormatter
+                            .localizedString(for: activity.timestamp, relativeTo: .now)
+                            .capitalizingRelativeAgo()
+                    )
                     .font(.system(size: 11, weight: .medium))
                     .foregroundStyle(.white.opacity(0.42))
+                }
+                .frame(maxWidth: .infinity, alignment: .leading)
             }
-            .frame(maxWidth: .infinity, alignment: .leading)
         }
         .navigationDestination(item: $selectedEvent) { event in
             EventDetailView(event: event)
@@ -1183,6 +1314,71 @@ private struct HomeRecentActivityRow: View {
         }
         .navigationDestination(item: $selectedUserProfile) { selection in
             UserProfileView(userID: selection.id)
+        }
+    }
+
+    private var requestContent: some View {
+        HStack(alignment: .center, spacing: 14) {
+            VStack(alignment: .leading, spacing: 4) {
+                (
+                    Text(activity.actorName)
+                        .fontWeight(.medium)
+                        .foregroundColor(.white)
+                    +
+                    Text(
+                        activity.type == .partnerRequestReceived
+                            ? " sent you a partner request."
+                            : " sent you a friend request."
+                    )
+                    .foregroundColor(.white.opacity(0.62))
+                )
+                .font(.system(size: 14))
+                .lineSpacing(3)
+
+                Text(
+                    Self.relativeFormatter
+                        .localizedString(for: activity.timestamp, relativeTo: .now)
+                        .capitalizingRelativeAgo()
+                )
+                .font(.system(size: 11, weight: .medium))
+                .foregroundStyle(.white.opacity(0.42))
+            }
+            .frame(maxWidth: .infinity, alignment: .leading)
+
+            HStack(spacing: 10) {
+                Button {
+                    submitResponse(.decline)
+                } label: {
+                    Image(systemName: "xmark")
+                        .font(.system(size: 13, weight: .bold))
+                        .foregroundStyle(.white.opacity(0.75))
+                        .frame(width: 36, height: 36)
+                        .background(Circle().fill(Color.white.opacity(0.1)))
+                }
+                .disabled(isSubmittingResponse)
+
+                Button {
+                    submitResponse(.accept)
+                } label: {
+                    Image(systemName: "checkmark")
+                        .font(.system(size: 15, weight: .bold))
+                        .foregroundStyle(.white)
+                        .frame(width: 42, height: 42)
+                        .background(Circle().fill(AppTheme.accentBlue))
+                }
+                .disabled(isSubmittingResponse)
+            }
+            .opacity(isSubmittingResponse ? 0.5 : 1)
+        }
+    }
+
+    private func submitResponse(_ response: ActivityRequestResponse) {
+        guard !isSubmittingResponse else { return }
+        isSubmittingResponse = true
+        Task {
+            await onRespondToRequest(activity, response)
+            requestStore.record(response, for: activity.id)
+            isSubmittingResponse = false
         }
     }
 }
@@ -1625,7 +1821,7 @@ private struct EmptyEventDayPlaceholder: View {
             .frame(height: 140)
             .overlay {
                 Text("No events scheduled")
-                    .font(.system(size: 18, weight: .medium))
+                    .font(.system(size: 15, weight: .medium))
                     .foregroundStyle(.white.opacity(0.58))
                     .multilineTextAlignment(.center)
                     .padding(.horizontal, 24)

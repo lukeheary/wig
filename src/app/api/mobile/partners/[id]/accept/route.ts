@@ -7,6 +7,7 @@ import {
   createNotification,
   deleteNotificationsForEntity,
 } from "@/server/utils/notifications";
+import { sendPushNotificationToUsers } from "@/server/utils/push-notifications";
 
 async function currentMobileUserId() {
   const { userId } = await auth();
@@ -99,8 +100,8 @@ export async function POST(_: Request, context: RouteContext) {
       type: "partner_request_accepted",
       entityType: "partner_request",
       entityId: id,
-      title: "Partner request accepted",
-      body: `${accepterName} accepted your partner request`,
+      title: "Partner Request Accepted",
+      body: `${accepterName} is now your partner`,
       actionUrl: "/profile",
       metadata: {
         requestId: id,
@@ -109,6 +110,16 @@ export async function POST(_: Request, context: RouteContext) {
     },
     db
   );
+
+  await sendPushNotificationToUsers([partnerRequest.requesterId], {
+    title: "Partner Request Accepted",
+    body: `${accepterName} is now your partner`,
+    data: {
+      type: "partner_request_accepted",
+      entityId: id,
+      actionUrl: "/profile",
+    },
+  });
 
   return NextResponse.json({});
 }

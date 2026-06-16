@@ -178,26 +178,25 @@ struct ProfileView: View {
                         isAvatarSourceDialogPresented = true
                     }
 
-                    RelationshipSummaryRow(response: response)
-
-                    PartnerManagementCard(
-                        relationship: partnerRelationship,
-                        availableFriendCount: availablePartnerCandidates(from: response).count,
-                        isBusy: isPartnerActionInFlight,
+                    RelationshipSummaryRow(
+                        response: response,
+                        partnerRelationship: partnerRelationship,
+                        availablePartnerCount: availablePartnerCandidates(from: response).count,
+                        isPartnerBusy: isPartnerActionInFlight,
                         onChoosePartner: {
                             isPartnerPickerPresented = true
                         },
-                        onAccept: {
+                        onAcceptPartner: {
                             Task {
                                 await acceptPartnerRequest()
                             }
                         },
-                        onDecline: {
+                        onDeclinePartner: {
                             Task {
                                 await declinePartnerRequest()
                             }
                         },
-                        onCancelRequest: {
+                        onCancelPartnerRequest: {
                             Task {
                                 await declinePartnerRequest()
                             }
@@ -209,6 +208,11 @@ struct ProfileView: View {
                         },
                         onRemovePartner: {
                             isRemovingPartnerConfirmationPresented = true
+                        },
+                        onRemoveFriend: { friend in
+                            Task {
+                                await removeFriend(friend)
+                            }
                         }
                     )
 
@@ -331,12 +335,26 @@ struct ProfileView: View {
 
         isPartnerActionInFlight = true
         partnerErrorMessage = nil
+        let previousRelationship = partnerRelationship
+
+        partnerRelationship = MobilePartnerRelationship(
+            id: friend.id,
+            status: "pending",
+            isRequester: true,
+            partner: MobilePartnerUser(
+                id: friend.id,
+                firstName: friend.name.partnerFirstName,
+                lastName: friend.name.partnerLastName,
+                username: friend.username,
+                avatarImageURL: friend.avatarImageURL
+            )
+        )
 
         do {
             try await apiClient.send(APIClient.sendMobilePartnerRequest(recipientID: friend.id))
             isPartnerPickerPresented = false
-            await loadProfileScreen()
         } catch {
+            partnerRelationship = previousRelationship
             partnerErrorMessage = error.localizedDescription
         }
 
@@ -364,11 +382,13 @@ struct ProfileView: View {
 
         isPartnerActionInFlight = true
         partnerErrorMessage = nil
+        let previousRelationship = partnerRelationship
+        self.partnerRelationship = nil
 
         do {
             try await apiClient.send(APIClient.declineMobilePartnerRequest(partnerID: partnerRelationship.id))
-            await loadProfileScreen()
         } catch {
+            self.partnerRelationship = previousRelationship
             partnerErrorMessage = error.localizedDescription
         }
 
@@ -414,6 +434,26 @@ struct ProfileView: View {
         }
 
         isPartnerActionInFlight = false
+    }
+
+    private func removeFriend(_ friend: FriendUserSummary) async {
+        guard
+            let friendshipID = friend.friendshipID,
+            !friendshipID.isEmpty
+        else {
+            return
+        }
+
+        let previousResponse = viewModel.snapshotLoadedResponse()
+        viewModel.removeFriend(userID: friend.id)
+
+        do {
+            try await apiClient.send(APIClient.declineMobileFriendRequest(friendRequestID: friendshipID))
+        } catch {
+            if let previousResponse {
+                viewModel.restoreLoadedResponse(previousResponse)
+            }
+        }
     }
 
     private var localDevelopmentCard: some View {
@@ -790,11 +830,33 @@ private struct ProfileHeader: View {
 
 private struct RelationshipSummaryRow: View {
     let response: FriendsFeedResponse
+    let partnerRelationship: MobilePartnerRelationship?
+    let availablePartnerCount: Int
+    let isPartnerBusy: Bool
+    let onChoosePartner: () -> Void
+    let onAcceptPartner: () -> Void
+    let onDeclinePartner: () -> Void
+    let onCancelPartnerRequest: () -> Void
+    let onChangePartner: () -> Void
+    let onRemovePartner: () -> Void
+    let onRemoveFriend: (FriendUserSummary) -> Void
 
     var body: some View {
         HStack(spacing: 12) {
             NavigationLink {
-                FriendsListView(title: "My Friends", friends: response.friends)
+                MyFriendsView(
+                    response: response,
+                    partnerRelationship: partnerRelationship,
+                    availablePartnerCount: availablePartnerCount,
+                    isPartnerBusy: isPartnerBusy,
+                    onChoosePartner: onChoosePartner,
+                    onAcceptPartner: onAcceptPartner,
+                    onDeclinePartner: onDeclinePartner,
+                    onCancelPartnerRequest: onCancelPartnerRequest,
+                    onChangePartner: onChangePartner,
+                    onRemovePartner: onRemovePartner,
+                    onRemoveFriend: onRemoveFriend
+                )
             } label: {
                 RelationshipSummaryPill(count: response.friendCount, label: "Friends")
             }
@@ -813,6 +875,51 @@ private struct RelationshipSummaryRow: View {
     }
 }
 
+private struct MyFriendsView: View {
+    let response: FriendsFeedResponse
+    let partnerRelationship: MobilePartnerRelationship?
+    let availablePartnerCount: Int
+    let isPartnerBusy: Bool
+    let onChoosePartner: () -> Void
+    let onAcceptPartner: () -> Void
+    let onDeclinePartner: () -> Void
+    let onCancelPartnerRequest: () -> Void
+    let onChangePartner: () -> Void
+    let onRemovePartner: () -> Void
+    let onRemoveFriend: (FriendUserSummary) -> Void
+
+    var body: some View {
+        RelationshipListScreen {
+            VStack(alignment: .leading, spacing: 18) {
+                VStack(alignment: .leading, spacing: 14) {
+                    RelationshipSectionHeader(title: "Partner")
+
+                    PartnerManagementCard(
+                        relationship: partnerRelationship,
+                        availableFriendCount: availablePartnerCount,
+                        isBusy: isPartnerBusy,
+                        onChoosePartner: onChoosePartner,
+                        onAccept: onAcceptPartner,
+                        onDecline: onDeclinePartner,
+                        onCancelRequest: onCancelPartnerRequest,
+                        onChangePartner: onChangePartner,
+                        onRemovePartner: onRemovePartner
+                    )
+                }
+
+                VStack(alignment: .leading, spacing: 14) {
+                    RelationshipSectionHeader(title: "My Friends")
+
+                    FriendsListViewContent(
+                        friends: response.friends,
+                        onRemoveFriend: onRemoveFriend
+                    )
+                }
+            }
+        }
+    }
+}
+
 private struct PartnerManagementCard: View {
     let relationship: MobilePartnerRelationship?
     let availableFriendCount: Int
@@ -826,10 +933,6 @@ private struct PartnerManagementCard: View {
 
     var body: some View {
         VStack(alignment: .leading, spacing: 16) {
-            Text("Partner")
-                .font(.system(size: 18, weight: .bold))
-                .foregroundStyle(.white)
-
             if let relationship {
                 partnerStateView(relationship)
             } else {
@@ -859,81 +962,81 @@ private struct PartnerManagementCard: View {
     }
 
     @ViewBuilder
+    private func partnerAvatarRow(_ partner: MobilePartnerUser, trailing: AnyView? = nil) -> some View {
+        HStack(spacing: 12) {
+            FriendAvatarView(
+                user: FriendUserSummary(
+                    id: partner.id,
+                    name: [partner.firstName, partner.lastName].compactMap { $0 }.joined(separator: " ").trimmingCharacters(in: .whitespacesAndNewlines).ifEmpty(partner.username),
+                    username: partner.username,
+                    avatarImageURL: partner.avatarImageURL
+                ),
+                size: 52,
+                seed: 0
+            )
+
+            VStack(alignment: .leading, spacing: 3) {
+                Text(
+                    [partner.firstName, partner.lastName]
+                        .compactMap { $0 }
+                        .joined(separator: " ")
+                        .trimmingCharacters(in: .whitespacesAndNewlines)
+                        .ifEmpty(partner.username)
+                )
+                .font(.system(size: 16, weight: .bold))
+                .foregroundStyle(.white)
+
+                Text("@\(partner.username)")
+                    .font(.system(size: 14, weight: .medium))
+                    .foregroundStyle(.white.opacity(0.56))
+            }
+
+            Spacer(minLength: 8)
+
+            trailing
+        }
+    }
+
+    @ViewBuilder
     private func partnerStateView(_ relationship: MobilePartnerRelationship) -> some View {
         let partner = relationship.partner
 
         VStack(alignment: .leading, spacing: 14) {
-            HStack(spacing: 12) {
-                FriendAvatarView(
-                    user: FriendUserSummary(
-                        id: partner.id,
-                        name: [partner.firstName, partner.lastName].compactMap { $0 }.joined(separator: " ").trimmingCharacters(in: .whitespacesAndNewlines).ifEmpty(partner.username),
-                        username: partner.username,
-                        avatarImageURL: partner.avatarImageURL
-                    ),
-                    size: 52,
-                    seed: 0
-                )
-
-                VStack(alignment: .leading, spacing: 3) {
-                    Text(
-                        [partner.firstName, partner.lastName]
-                            .compactMap { $0 }
-                            .joined(separator: " ")
-                            .trimmingCharacters(in: .whitespacesAndNewlines)
-                            .ifEmpty(partner.username)
-                    )
-                    .font(.system(size: 16, weight: .bold))
-                    .foregroundStyle(.white)
-
-                    Text("@\(partner.username)")
-                        .font(.system(size: 14, weight: .medium))
-                        .foregroundStyle(.white.opacity(0.56))
-                }
-
-                Spacer(minLength: 8)
-            }
-
             switch relationship.status {
             case "accepted":
-                Text("You and \(partner.firstName ?? partner.username) are partners.")
-                    .font(.system(size: 14, weight: .medium))
-                    .foregroundStyle(.white.opacity(0.64))
-
-                HStack(spacing: 10) {
-                    Button("Change") {
-                        onChangePartner()
-                    }
-                    .profileActionButtonStyle(kind: .secondary, isDisabled: isBusy)
-                    .disabled(isBusy)
-
-                    Button("Remove") {
-                        onRemovePartner()
-                    }
-                    .profileActionButtonStyle(kind: .destructive, isDisabled: isBusy)
-                    .disabled(isBusy)
-                }
+                partnerAvatarRow(
+                    partner,
+                    trailing: AnyView(
+                        Menu {
+                            Button("Remove", role: .destructive) {
+                                onRemovePartner()
+                            }
+                        } label: {
+                            Image(systemName: "ellipsis")
+                                .font(.system(size: 18, weight: .bold))
+                                .foregroundStyle(.white.opacity(isBusy ? 0.4 : 0.9))
+                                .frame(width: 32, height: 32)
+                                .contentShape(Circle())
+                        }
+                        .disabled(isBusy)
+                    )
+                )
 
             case "pending":
                 if relationship.isRequester {
-                    Text("Partner request pending, waiting for \(partner.firstName ?? partner.username) to accept.")
-                        .font(.system(size: 14, weight: .medium))
-                        .foregroundStyle(.white.opacity(0.64))
-
-                    HStack(spacing: 10) {
-                        Button("Choose Someone Else") {
-                            onChangePartner()
-                        }
-                        .profileActionButtonStyle(kind: .secondary, isDisabled: isBusy)
-                        .disabled(isBusy)
-
-                        Button("Cancel Request") {
-                            onCancelRequest()
-                        }
-                        .profileActionButtonStyle(kind: .destructive, isDisabled: isBusy)
-                        .disabled(isBusy)
-                    }
+                    partnerAvatarRow(
+                        partner,
+                        trailing: AnyView(
+                            Button("Cancel") {
+                                onCancelRequest()
+                            }
+                            .font(.system(size: 14, weight: .semibold))
+                            .foregroundStyle(.red.opacity(0.85))
+                            .disabled(isBusy)
+                        )
+                    )
                 } else {
+                    partnerAvatarRow(partner)
                     Text("\(partner.firstName ?? partner.username) sent you a partner request.")
                         .font(.system(size: 14, weight: .medium))
                         .foregroundStyle(.white.opacity(0.64))
@@ -980,7 +1083,14 @@ private struct PartnerPickerSheet: View {
     }
 
     var body: some View {
-        NavigationStack {
+        VStack(spacing: 0) {
+            Text("Choose Partner")
+                .font(.system(size: 17, weight: .bold))
+                .foregroundStyle(.white)
+                .frame(maxWidth: .infinity)
+                .padding(.top, 10)
+                .padding(.bottom, 14)
+
             ScrollView {
                 VStack(alignment: .leading, spacing: 18) {
                     TextField("Search accepted friends...", text: $searchText)
@@ -1011,7 +1121,7 @@ private struct PartnerPickerSheet: View {
                                 HStack(spacing: 12) {
                                     FriendRowView(user: friend, seed: index)
 
-                                    Button("Send Request") {
+                                    Button("Send") {
                                         onSelectFriend(friend)
                                         dismiss()
                                     }
@@ -1029,27 +1139,10 @@ private struct PartnerPickerSheet: View {
                     }
                 }
                 .padding(16)
-                .padding(.top, 12)
                 .padding(.bottom, 40)
             }
-            .background(ProfileTheme.background.ignoresSafeArea())
-            .toolbar {
-                ToolbarItem(placement: .topBarLeading) {
-                    Button("Close") {
-                        dismiss()
-                    }
-                    .font(.system(size: 16, weight: .semibold))
-                }
-
-                ToolbarItem(placement: .principal) {
-                    Text("Choose Partner")
-                        .font(.system(size: 17, weight: .bold))
-                        .foregroundStyle(.white)
-                }
-            }
-            .toolbarBackground(ProfileTheme.background, for: .navigationBar)
-            .toolbarColorScheme(.dark, for: .navigationBar)
         }
+        .background(ProfileTheme.background.ignoresSafeArea())
     }
 }
 
@@ -1099,26 +1192,62 @@ private struct RelationshipSummaryPill: View {
     }
 }
 
+private struct RelationshipSectionHeader: View {
+    let title: String
+
+    var body: some View {
+        Text(title)
+            .font(.system(size: 20, weight: .bold))
+            .foregroundStyle(.white)
+    }
+}
+
 private struct FriendsListView: View {
     let title: String
     let friends: [FriendUserSummary]
 
     var body: some View {
         RelationshipListScreen(title: title) {
-            if friends.isEmpty {
-                EmptyRelationshipCard(
-                    systemImage: "person.2",
-                    message: "No friends yet"
-                )
-            } else {
+            FriendsListViewContent(friends: friends)
+        }
+    }
+}
+
+private struct FriendsListViewContent: View {
+    let friends: [FriendUserSummary]
+    var onRemoveFriend: ((FriendUserSummary) -> Void)? = nil
+
+    var body: some View {
+        if friends.isEmpty {
+            EmptyRelationshipCard(
+                systemImage: "person.2",
+                message: "No friends yet"
+            )
+        } else {
                 RelationshipCard {
                     ForEach(Array(friends.enumerated()), id: \.element.id) { index, friend in
+                    HStack(spacing: 12) {
                         NavigationLink {
                             UserProfileView(userID: friend.id)
                         } label: {
                             FriendRowView(user: friend, seed: index)
                         }
                         .buttonStyle(.plain)
+
+                        if let onRemoveFriend, friend.friendshipID != nil {
+                            Menu {
+                                Button("Remove", role: .destructive) {
+                                    onRemoveFriend(friend)
+                                }
+                            } label: {
+                                Image(systemName: "ellipsis")
+                                    .font(.system(size: 18, weight: .bold))
+                                    .foregroundStyle(.white.opacity(0.9))
+                                    .frame(width: 32, height: 32)
+                                    .contentShape(Circle())
+                            }
+                        }
+                    }
 
                         if friend.id != friends.last?.id {
                             Divider()
@@ -1128,7 +1257,6 @@ private struct FriendsListView: View {
                     }
                 }
             }
-        }
     }
 }
 
@@ -1198,10 +1326,10 @@ private struct FriendRequestsView: View {
 }
 
 private struct RelationshipListScreen<Content: View>: View {
-    let title: String
+    let title: String?
     let content: Content
 
-    init(title: String, @ViewBuilder content: () -> Content) {
+    init(title: String? = nil, @ViewBuilder content: () -> Content) {
         self.title = title
         self.content = content()
     }
@@ -1209,9 +1337,11 @@ private struct RelationshipListScreen<Content: View>: View {
     var body: some View {
         ScrollView {
             VStack(alignment: .leading, spacing: 18) {
-                Text(title)
-                    .font(.system(size: 26, weight: .bold))
-                    .foregroundStyle(.white)
+                if let title {
+                    Text(title)
+                        .font(.system(size: 26, weight: .bold))
+                        .foregroundStyle(.white)
+                }
 
                 content
             }
@@ -1288,7 +1418,7 @@ private struct FriendRowView: View {
             VStack(alignment: .leading, spacing: 3) {
                 HStack(spacing: 10) {
                     Text(user.name)
-                        .font(.system(size: 17, weight: .medium))
+                        .font(.system(size: 15, weight: .medium))
                         .foregroundStyle(.white)
                         .lineLimit(1)
 
@@ -1306,7 +1436,7 @@ private struct FriendRowView: View {
                 }
 
                 Text(user.usernameText)
-                    .font(.system(size: 15, weight: .medium))
+                    .font(.system(size: 13, weight: .medium))
                     .foregroundStyle(.white.opacity(0.58))
                     .lineLimit(1)
             }
@@ -1406,6 +1536,28 @@ private extension View {
                 )
                 .shadow(color: .black.opacity(0.22), radius: 16, x: 0, y: 8)
         }
+    }
+}
+
+private extension String {
+    var partnerFirstName: String? {
+        let parts = trimmingCharacters(in: .whitespacesAndNewlines)
+            .split(separator: " ")
+            .map(String.init)
+
+        return parts.first
+    }
+
+    var partnerLastName: String? {
+        let parts = trimmingCharacters(in: .whitespacesAndNewlines)
+            .split(separator: " ")
+            .map(String.init)
+
+        guard parts.count > 1 else {
+            return nil
+        }
+
+        return parts.dropFirst().joined(separator: " ")
     }
 }
 

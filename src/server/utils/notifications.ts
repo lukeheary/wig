@@ -28,6 +28,30 @@ export interface NotificationInsert {
 
 type DatabaseClient = typeof db;
 
+const friendRsvpDateFormatter = new Intl.DateTimeFormat("en-US", {
+  month: "short",
+  day: "numeric",
+});
+
+function formatFriendRsvpBody({
+  actorName,
+  eventTitle,
+  eventStartAt,
+  status,
+}: {
+  actorName: string;
+  eventTitle: string;
+  eventStartAt: Date | null;
+  status: "going" | "interested";
+}) {
+  const verb = status === "going" ? "is going to" : "is interested in";
+  const dateSuffix = eventStartAt
+    ? ` on ${friendRsvpDateFormatter.format(eventStartAt)}`
+    : "";
+
+  return `${actorName} ${verb} ${eventTitle}${dateSuffix}`;
+}
+
 export async function createNotification(
   notification: NotificationInsert,
   database: DatabaseClient = db
@@ -133,6 +157,7 @@ export async function notifyFriendsOfRsvp(
       columns: {
         id: true,
         title: true,
+        startAt: true,
       },
     }),
     database.query.userFriends.findMany({
@@ -174,8 +199,12 @@ export async function notifyFriendsOfRsvp(
     [actor?.firstName, actor?.lastName].filter(Boolean).join(" ").trim() ||
     actor?.username ||
     "Your friend";
-  const verb = status === "going" ? "RSVP'd going to" : "is interested in";
-  const body = `${actorName} ${verb} ${event.title}`;
+  const body = formatFriendRsvpBody({
+    actorName,
+    eventTitle: event.title,
+    eventStartAt: event.startAt,
+    status,
+  });
   const actionUrl = `/event/${event.id}`;
 
   const createdNotifications = await createNotifications(
@@ -185,7 +214,7 @@ export async function notifyFriendsOfRsvp(
       type: "event_update",
       entityType: "event",
       entityId: event.id,
-      title: "Friend RSVP update",
+      title: "Friend RSVP",
       body,
       actionUrl,
       metadata: {
@@ -201,7 +230,7 @@ export async function notifyFriendsOfRsvp(
   await sendPushNotificationToUsers(
     recipientIds,
     {
-      title: "Friend RSVP update",
+      title: "Friend RSVP",
       body,
       data: {
         type: "event_update",

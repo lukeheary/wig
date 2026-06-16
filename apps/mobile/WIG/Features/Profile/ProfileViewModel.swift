@@ -46,6 +46,43 @@ final class ProfileViewModel: ObservableObject {
 
         isUploadingAvatar = false
     }
+
+    func updateLoadedResponse(
+        _ transform: (FriendsFeedResponse) -> FriendsFeedResponse
+    ) {
+        guard case .loaded(let response) = state else {
+            return
+        }
+
+        state = .loaded(transform(response))
+    }
+
+    func removeFriend(userID: String) {
+        updateLoadedResponse { response in
+            FriendsFeedResponse(
+                profile: response.profile,
+                friendCount: max(response.friendCount - 1, 0),
+                requestCount: response.requestCount,
+                friends: response.friends.filter { $0.id != userID },
+                receivedRequests: response.receivedRequests,
+                sentRequests: response.sentRequests,
+                upcomingEvents: response.upcomingEvents,
+                pastEvents: response.pastEvents
+            )
+        }
+    }
+
+    func snapshotLoadedResponse() -> FriendsFeedResponse? {
+        guard case .loaded(let response) = state else {
+            return nil
+        }
+
+        return response
+    }
+
+    func restoreLoadedResponse(_ response: FriendsFeedResponse) {
+        state = .loaded(response)
+    }
 }
 
 @MainActor

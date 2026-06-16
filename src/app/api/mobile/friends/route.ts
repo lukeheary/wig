@@ -22,6 +22,7 @@ import { mapEventCategoryData } from "@/server/utils/categories";
 
 type UserSummary = {
   id: string;
+  friendshipId?: string | null;
   name: string;
   username: string;
   avatarImageUrl: string | null;
@@ -236,7 +237,12 @@ export async function GET() {
         friendship.userId === userId ? friendship.friend : friendship.user;
       const friend = userSummary(otherUser);
 
-      if (friend) acceptedByUserId.set(friend.id, friend);
+      if (friend) {
+        acceptedByUserId.set(friend.id, {
+          ...friend,
+          friendshipId: friendship.id,
+        });
+      }
       continue;
     }
 

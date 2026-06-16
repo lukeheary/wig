@@ -5,6 +5,7 @@ import SwiftUI
 struct MainTabView: View {
     @Environment(Clerk.self) private var clerk
     @EnvironmentObject private var appSession: AppSession
+    @StateObject private var activityRequestStore = ActivityRequestStore()
     @State private var selectedTab: AppTab = .home
     @State private var previousNonSearchTab: AppTab = .home
     @State private var isAuthSheetPresented = false
@@ -18,8 +19,10 @@ struct MainTabView: View {
     var body: some View {
         if #available(iOS 26.0, *) {
             liquidGlassTabView
+                .environmentObject(activityRequestStore)
         } else {
             legacyTabView
+                .environmentObject(activityRequestStore)
         }
     }
 

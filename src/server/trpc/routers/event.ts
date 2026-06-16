@@ -56,6 +56,7 @@ import {
   createNotification,
   notifyFriendsOfRsvp,
 } from "@/server/utils/notifications";
+import { sendPushNotificationToUsers } from "@/server/utils/push-notifications";
 import { RSVP_DECLINE_REASON_VALUES } from "@/lib/rsvp";
 
 function resolveEventUpdateActivityType(
@@ -117,17 +118,29 @@ async function notifyPartnerOfMirroredRsvp({
       columns: {
         id: true,
         title: true,
+        startAt: true,
       },
     }),
   ]);
 
   if (!event) return;
 
+  const partnerRsvpDate = event.startAt
+    ? new Intl.DateTimeFormat("en-US", {
+        month: "short",
+        day: "numeric",
+      }).format(event.startAt)
+    : null;
   const actorName =
     [actor?.firstName, actor?.lastName].filter(Boolean).join(" ").trim() ||
     actor?.username ||
     "Your partner";
-  const verb = status === "going" ? "RSVP'd going to" : "RSVP'd interested in";
+  const title = "Partner RSVP";
+  const body =
+    status === "going"
+      ? `${actorName} is going with you to ${event.title}${partnerRsvpDate ? ` on ${partnerRsvpDate}` : ""}`
+      : `${actorName} is interested in ${event.title} with you${partnerRsvpDate ? ` on ${partnerRsvpDate}` : ""}`;
+  const actionUrl = `/event/${event.id}`;
 
   await createNotification(
     {
@@ -136,14 +149,30 @@ async function notifyPartnerOfMirroredRsvp({
       type: "event_update",
       entityType: "event",
       entityId: event.id,
-      title: "Partner RSVP update",
-      body: `${actorName} ${verb} ${event.title} for both of you`,
-      actionUrl: `/event/${event.id}`,
+      title,
+      body,
+      actionUrl,
       metadata: {
         source: "partner_rsvp",
         status,
         eventId: event.id,
         eventTitle: event.title,
+      },
+    },
+    ctx.db
+  );
+
+  await sendPushNotificationToUsers(
+    [partnerUserId],
+    {
+      title,
+      body,
+      data: {
+        type: "event_update",
+        entityId: event.id,
+        actionUrl,
+        source: "partner_rsvp",
+        status,
       },
     },
     ctx.db
@@ -1881,7 +1910,7 @@ export const eventRouter = router({
         partnerUserId &&
         (input.status === "going" || input.status === "interested")
       ) {
-        void notifyPartnerOfMirroredRsvp({
+        await notifyPartnerOfMirroredRsvp({
           ctx,
           actorUserId: ctx.auth.userId,
           partnerUserId,
@@ -1905,7 +1934,7 @@ export const eventRouter = router({
         });
 
         if (existingUserRsvp?.status !== input.status) {
-          void notifyFriendsOfRsvp(
+          await notifyFriendsOfRsvp(
             {
               actorUserId: ctx.auth.userId,
               eventId: input.eventId,

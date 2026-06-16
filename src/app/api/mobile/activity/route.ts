@@ -75,6 +75,10 @@ export async function GET(request: Request) {
     cityCoordinates,
     friendConnections,
     activityList,
+    pendingFriendRequests,
+    pendingPartnerRequests,
+    acceptedFriendRequests,
+    acceptedPartnerRequests,
   ] = await Promise.all([
     userId
       ? db.query.users.findFirst({
@@ -133,6 +137,54 @@ export async function GET(request: Request) {
         },
       },
     }),
+    userId
+      ? db.query.userFriends.findMany({
+          where: and(
+            eq(userFriends.friendUserId, userId),
+            eq(userFriends.status, "pending")
+          ),
+          orderBy: [desc(userFriends.createdAt)],
+          with: {
+            user: true,
+          },
+        })
+      : Promise.resolve([]),
+    userId
+      ? db.query.userPartners.findMany({
+          where: and(
+            eq(userPartners.recipientId, userId),
+            eq(userPartners.status, "pending")
+          ),
+          orderBy: [desc(userPartners.createdAt)],
+          with: {
+            requester: true,
+          },
+        })
+      : Promise.resolve([]),
+    userId
+      ? db.query.userFriends.findMany({
+          where: and(
+            eq(userFriends.friendUserId, userId),
+            eq(userFriends.status, "accepted")
+          ),
+          orderBy: [desc(userFriends.updatedAt)],
+          with: {
+            user: true,
+          },
+        })
+      : Promise.resolve([]),
+    userId
+      ? db.query.userPartners.findMany({
+          where: and(
+            eq(userPartners.recipientId, userId),
+            eq(userPartners.status, "accepted")
+          ),
+          orderBy: [desc(userPartners.updatedAt)],
+          with: {
+            requester: true,
+          },
+        })
+      : Promise.resolve([]),
   ]);
 
   const resolveMetroArea = createMobileMetroResolver(
@@ -351,7 +403,7 @@ export async function GET(request: Request) {
   }
   const editPermissions = await resolveMobileEventEditPermissions(userId);
 
-  const activities = visibleActivities.map((activity) => {
+  const eventActivities = visibleActivities.map((activity) => {
       const actorName =
         [activity.actor.firstName, activity.actor.lastName]
           .filter(Boolean)
@@ -434,6 +486,121 @@ export async function GET(request: Request) {
         },
       };
     });
+
+  const requestActivities = [
+    ...pendingFriendRequests.map((request) => {
+      const actorName =
+        [request.user?.firstName, request.user?.lastName]
+          .filter(Boolean)
+          .join(" ")
+          .trim() ||
+        request.user?.username ||
+        "Someone";
+
+      return {
+        id: request.id,
+        type: "friend_request_received",
+        actorUserId: request.userId,
+        actorName,
+        actorFirstName: request.user?.firstName ?? null,
+        actorGender: request.user?.gender ?? null,
+        actorAvatarImageUrl: request.user?.avatarImageUrl ?? null,
+        partnerFirstName: null,
+        partnerUserId: null,
+        notGoingReason: null,
+        createdAt: request.createdAt,
+        updatedAt: request.updatedAt,
+        event: null,
+      };
+    }),
+    ...pendingPartnerRequests.map((request) => {
+      const actorName =
+        [request.requester?.firstName, request.requester?.lastName]
+          .filter(Boolean)
+          .join(" ")
+          .trim() ||
+        request.requester?.username ||
+        "Someone";
+
+      return {
+        id: request.id,
+        type: "partner_request_received",
+        actorUserId: request.requesterId,
+        actorName,
+        actorFirstName: request.requester?.firstName ?? null,
+        actorGender: request.requester?.gender ?? null,
+        actorAvatarImageUrl: request.requester?.avatarImageUrl ?? null,
+        partnerFirstName: null,
+        partnerUserId: null,
+        notGoingReason: null,
+        createdAt: request.createdAt,
+        updatedAt: request.updatedAt,
+        event: null,
+      };
+    }),
+    ...acceptedFriendRequests
+      .filter((request) => request.updatedAt.getTime() > request.createdAt.getTime())
+      .map((request) => {
+        const actorName =
+          [request.user?.firstName, request.user?.lastName]
+            .filter(Boolean)
+            .join(" ")
+            .trim() ||
+          request.user?.username ||
+          "Someone";
+
+        return {
+          id: request.id,
+          type: "friend_request_accepted",
+          actorUserId: request.userId,
+          actorName,
+          actorFirstName: request.user?.firstName ?? null,
+          actorGender: request.user?.gender ?? null,
+          actorAvatarImageUrl: request.user?.avatarImageUrl ?? null,
+          partnerFirstName: null,
+          partnerUserId: null,
+          notGoingReason: null,
+          createdAt: request.createdAt,
+          updatedAt: request.updatedAt,
+          event: null,
+        };
+      }),
+    ...acceptedPartnerRequests
+      .filter((request) => request.updatedAt.getTime() > request.createdAt.getTime())
+      .map((request) => {
+        const actorName =
+          [request.requester?.firstName, request.requester?.lastName]
+            .filter(Boolean)
+            .join(" ")
+            .trim() ||
+          request.requester?.username ||
+          "Someone";
+
+        return {
+          id: request.id,
+          type: "partner_request_accepted",
+          actorUserId: request.requesterId,
+          actorName,
+          actorFirstName: request.requester?.firstName ?? null,
+          actorGender: request.requester?.gender ?? null,
+          actorAvatarImageUrl: request.requester?.avatarImageUrl ?? null,
+          partnerFirstName: null,
+          partnerUserId: null,
+          notGoingReason: null,
+          createdAt: request.createdAt,
+          updatedAt: request.updatedAt,
+          event: null,
+        };
+      }),
+  ];
+
+  const activities = [...requestActivities, ...eventActivities]
+    .sort(
+      (lhs, rhs) =>
+        new Date(rhs.updatedAt ?? rhs.createdAt).getTime() -
+        new Date(lhs.updatedAt ?? lhs.createdAt).getTime()
+    )
+    .slice(0, limit);
 
   return NextResponse.json({
     friendCount: friendIds.length,

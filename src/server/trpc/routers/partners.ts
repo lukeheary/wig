@@ -7,6 +7,7 @@ import {
   createNotification,
   deleteNotificationsForEntity,
 } from "@/server/utils/notifications";
+import { sendPushNotificationToUsers } from "@/server/utils/push-notifications";
 
 export const partnersRouter = router({
   sendPartnerRequest: protectedProcedure
@@ -139,11 +140,25 @@ export const partnersRouter = router({
           type: "partner_request",
           entityType: "partner_request",
           entityId: partnerRequest.id,
-          title: "Partner request",
-          body: `${senderName} wants to be your partner`,
+          title: "Partner Request",
+          body: `${senderName} sent you a partner request`,
           metadata: {
             requestId: partnerRequest.id,
             requestType: "partner",
+          },
+        },
+        ctx.db
+      );
+
+      await sendPushNotificationToUsers(
+        [input.recipientId],
+        {
+          title: "Partner Request",
+          body: `${senderName} sent you a partner request`,
+          data: {
+            type: "partner_request",
+            entityId: partnerRequest.id,
+            actionUrl: "/profile",
           },
         },
         ctx.db
@@ -222,12 +237,26 @@ export const partnersRouter = router({
           type: "partner_request_accepted",
           entityType: "partner_request",
           entityId: input.partnerId,
-          title: "Partner request accepted",
-          body: `${accepterName} accepted your partner request`,
+          title: "Partner Request Accepted",
+          body: `${accepterName} is now your partner`,
           actionUrl: "/profile",
           metadata: {
             requestId: input.partnerId,
             requestType: "partner",
+          },
+        },
+        ctx.db
+      );
+
+      await sendPushNotificationToUsers(
+        [partnerRequest.requesterId],
+        {
+          title: "Partner Request Accepted",
+          body: `${accepterName} is now your partner`,
+          data: {
+            type: "partner_request_accepted",
+            entityId: input.partnerId,
+            actionUrl: "/profile",
           },
         },
         ctx.db

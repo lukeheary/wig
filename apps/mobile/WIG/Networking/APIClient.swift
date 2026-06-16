@@ -196,6 +196,24 @@ struct APIClient: Sendable {
         )
     }
 
+    static func acceptMobileFriendRequest(friendRequestID: String) -> Endpoint<EmptyResponse> {
+        Endpoint(
+            path: "/api/mobile/friends/\(friendRequestID)/accept",
+            method: .post,
+            requiresAuthentication: false,
+            includesAuthenticationIfAvailable: true
+        )
+    }
+
+    static func declineMobileFriendRequest(friendRequestID: String) -> Endpoint<EmptyResponse> {
+        Endpoint(
+            path: "/api/mobile/friends/\(friendRequestID)",
+            method: .delete,
+            requiresAuthentication: false,
+            includesAuthenticationIfAvailable: true
+        )
+    }
+
     static func registerMobilePushToken(token: String, platform: String) throws -> Endpoint<EmptyResponse> {
         Endpoint(
             path: "/api/mobile/push-token",

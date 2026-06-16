@@ -7,6 +7,7 @@ import { userFriends, userPartners, users } from "@/server/db/schema";
 import {
   createNotification,
 } from "@/server/utils/notifications";
+import { sendPushNotificationToUsers } from "@/server/utils/push-notifications";
 
 const bodySchema = z.object({
   recipientId: z.string(),
@@ -154,8 +155,8 @@ export async function POST(request: Request) {
       type: "partner_request",
       entityType: "partner_request",
       entityId: partnerRequest.id,
-      title: "Partner request",
-      body: `${senderName} wants to be your partner`,
+      title: "Partner Request",
+      body: `${senderName} sent you a partner request`,
       metadata: {
         requestId: partnerRequest.id,
         requestType: "partner",
@@ -163,6 +164,16 @@ export async function POST(request: Request) {
     },
     db
   );
+
+  await sendPushNotificationToUsers([recipientId], {
+    title: "Partner Request",
+    body: `${senderName} sent you a partner request`,
+    data: {
+      type: "partner_request",
+      entityId: partnerRequest.id,
+      actionUrl: "/profile",
+    },
+  });
 
   return NextResponse.json({});
 }

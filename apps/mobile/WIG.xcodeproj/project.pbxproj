@@ -24,11 +24,11 @@
 		0A7F46F19B1D4A6CA4200014 /* ActivityViewModel.swift in Sources */ = {isa = PBXBuildFile; fileRef = 0A7F46F19B1D4A6CA4100014 /* ActivityViewModel.swift */; };
 		0A7F46F19B1D4A6CA4200015 /* FriendsFeed.swift in Sources */ = {isa = PBXBuildFile; fileRef = 0A7F46F19B1D4A6CA4100015 /* FriendsFeed.swift */; };
 		0A7F46F19B1D4A6CA4200016 /* ProfileViewModel.swift in Sources */ = {isa = PBXBuildFile; fileRef = 0A7F46F19B1D4A6CA4100016 /* ProfileViewModel.swift */; };
+		0E61E35C6BC9885882E28017 /* APIClient.swift in Sources */ = {isa = PBXBuildFile; fileRef = 209CCAB342734F97FABBA5D2 /* APIClient.swift */; };
 		1A2B3C4D5E6F708192A0C001 /* MobileEventCreationView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 1A2B3C4D5E6F708192A0B001 /* MobileEventCreationView.swift */; };
 		1A2B3C4D5E6F708192A0C002 /* UIImage+Upload.swift in Sources */ = {isa = PBXBuildFile; fileRef = 1A2B3C4D5E6F708192A0B002 /* UIImage+Upload.swift */; };
 		1A2B3C4D5E6F708192A0C003 /* String+RelativeFormatting.swift in Sources */ = {isa = PBXBuildFile; fileRef = 1A2B3C4D5E6F708192A0B003 /* String+RelativeFormatting.swift */; };
 		1A2B3C4D5E6F708192A0C004 /* MobilePlaceCreationView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 1A2B3C4D5E6F708192A0B004 /* MobilePlaceCreationView.swift */; };
-		0E61E35C6BC9885882E28017 /* APIClient.swift in Sources */ = {isa = PBXBuildFile; fileRef = 209CCAB342734F97FABBA5D2 /* APIClient.swift */; };
 		1D348DDF86D014D61E9BAB1F /* GiftList.swift in Sources */ = {isa = PBXBuildFile; fileRef = 426D21E06189626A1AF56246 /* GiftList.swift */; };
 		59D822A7D7ADCABFCF108A54 /* Assets.xcassets in Resources */ = {isa = PBXBuildFile; fileRef = C0D13CF91B0EECB51C7BEBC0 /* Assets.xcassets */; };
 		68C7C86049E10AB91E4389A2 /* VenuesView.swift in Sources */ = {isa = PBXBuildFile; fileRef = BBBA8FF5228C20D71528FB71 /* VenuesView.swift */; };
@@ -68,10 +68,10 @@
 		0A7F46F19B1D4A6CA4100015 /* FriendsFeed.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = FriendsFeed.swift; sourceTree = "<group>"; };
 		0A7F46F19B1D4A6CA4100016 /* ProfileViewModel.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ProfileViewModel.swift; sourceTree = "<group>"; };
 		184FF519AEEF1B3325EA5631 /* UserProfile.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = UserProfile.swift; sourceTree = "<group>"; };
-		1A2B3C4D5E6F708192A0B001 /* MobileEventCreationView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = "MobileEventCreationView.swift"; sourceTree = "<group>"; };
+		1A2B3C4D5E6F708192A0B001 /* MobileEventCreationView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = MobileEventCreationView.swift; sourceTree = "<group>"; };
 		1A2B3C4D5E6F708192A0B002 /* UIImage+Upload.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = "UIImage+Upload.swift"; sourceTree = "<group>"; };
 		1A2B3C4D5E6F708192A0B003 /* String+RelativeFormatting.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = "String+RelativeFormatting.swift"; sourceTree = "<group>"; };
-		1A2B3C4D5E6F708192A0B004 /* MobilePlaceCreationView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = "MobilePlaceCreationView.swift"; sourceTree = "<group>"; };
+		1A2B3C4D5E6F708192A0B004 /* MobilePlaceCreationView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = MobilePlaceCreationView.swift; sourceTree = "<group>"; };
 		1A7D0D9C9A7444D4B6D8D001 /* Debug.xcconfig */ = {isa = PBXFileReference; lastKnownFileType = text.xcconfig; name = Debug.xcconfig; path = Config/Debug.xcconfig; sourceTree = SOURCE_ROOT; };
 		1A7D0D9C9A7444D4B6D8D002 /* Release.xcconfig */ = {isa = PBXFileReference; lastKnownFileType = text.xcconfig; name = Release.xcconfig; path = Config/Release.xcconfig; sourceTree = SOURCE_ROOT; };
 		205A0A05764438AFB15835AF /* Info.plist */ = {isa = PBXFileReference; lastKnownFileType = text.plist; path = Info.plist; sourceTree = "<group>"; };
@@ -558,7 +558,9 @@
 				PRODUCT_BUNDLE_IDENTIFIER = com.whoisgoing.app;
 				PRODUCT_NAME = WIG;
 				SDKROOT = iphoneos;
-				TARGETED_DEVICE_FAMILY = 1;
+				SUPPORTED_PLATFORMS = "iphoneos iphonesimulator";
+				SUPPORTS_MACCATALYST = NO;
+				TARGETED_DEVICE_FAMILY = "1,2";
 			};
 			name = Debug;
 		};
@@ -585,7 +587,9 @@
 				PRODUCT_BUNDLE_IDENTIFIER = com.whoisgoing.app;
 				PRODUCT_NAME = WIG;
 				SDKROOT = iphoneos;
-				TARGETED_DEVICE_FAMILY = 1;
+				SUPPORTED_PLATFORMS = "iphoneos iphonesimulator";
+				SUPPORTS_MACCATALYST = NO;
+				TARGETED_DEVICE_FAMILY = "1,2";
 			};
 			name = Release;
 		};

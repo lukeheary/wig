@@ -4,6 +4,7 @@ import UIKit
 
 struct EventDetailView: View {
     let event: EventFeedItem
+    private let heroTopOffset: CGFloat = -10
 
     @Environment(Clerk.self) private var clerk
     @Environment(\.apiClient) private var apiClient
@@ -119,12 +120,14 @@ struct EventDetailView: View {
                         if isAuthenticated {
                             EventSocialOverlayView(attendees: currentEvent.socialAttendees, size: .detail)
                                 .clipShape(RoundedRectangle(cornerRadius: 24, style: .continuous))
-                        }
+                            }
                     }
             }
             .buttonStyle(.plain)
+            .offset(y: heroTopOffset)
         }
         .aspectRatio(1, contentMode: .fit)
+        .padding(.bottom, heroTopOffset)
     }
 
     private var topControls: some View {

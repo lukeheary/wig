@@ -91,6 +91,8 @@ export async function GET(request: Request) {
     requestCountRow,
     surfaceState,
     activityList,
+    pendingFriendRequests,
+    pendingPartnerRequests,
   ] = await Promise.all([
     db.query.users.findFirst({
       where: eq(users.id, userId),
@@ -156,6 +158,26 @@ export async function GET(request: Request) {
             },
           },
         },
+      },
+    }),
+    db.query.userFriends.findMany({
+      where: and(
+        eq(userFriends.friendUserId, userId),
+        eq(userFriends.status, "pending")
+      ),
+      orderBy: [desc(userFriends.createdAt)],
+      with: {
+        user: true,
+      },
+    }),
+    db.query.userPartners.findMany({
+      where: and(
+        eq(userPartners.recipientId, userId),
+        eq(userPartners.status, "pending")
+      ),
+      orderBy: [desc(userPartners.createdAt)],
+      with: {
+        requester: true,
       },
     }),
   ]);
@@ -539,10 +561,71 @@ export async function GET(request: Request) {
     };
   });
 
+  const requestActivities = [
+    ...pendingFriendRequests.map((request) => {
+      const actorName =
+        [request.user?.firstName, request.user?.lastName]
+          .filter(Boolean)
+          .join(" ")
+          .trim() ||
+        request.user?.username ||
+        "Someone";
+
+      return {
+        id: request.id,
+        type: "friend_request_received",
+        actorUserId: request.userId,
+        actorName,
+        actorFirstName: request.user?.firstName ?? null,
+        actorGender: request.user?.gender ?? null,
+        actorAvatarImageUrl: request.user?.avatarImageUrl ?? null,
+        partnerFirstName: null,
+        partnerUserId: null,
+        notGoingReason: null,
+        createdAt: request.createdAt,
+        updatedAt: request.updatedAt,
+        event: null,
+      };
+    }),
+    ...pendingPartnerRequests.map((request) => {
+      const actorName =
+        [request.requester?.firstName, request.requester?.lastName]
+          .filter(Boolean)
+          .join(" ")
+          .trim() ||
+        request.requester?.username ||
+        "Someone";
+
+      return {
+        id: request.id,
+        type: "partner_request_received",
+        actorUserId: request.requesterId,
+        actorName,
+        actorFirstName: request.requester?.firstName ?? null,
+        actorGender: request.requester?.gender ?? null,
+        actorAvatarImageUrl: request.requester?.avatarImageUrl ?? null,
+        partnerFirstName: null,
+        partnerUserId: null,
+        notGoingReason: null,
+        createdAt: request.createdAt,
+        updatedAt: request.updatedAt,
+        event: null,
+      };
+    }),
+  ];
+
+  const allActivities = [...requestActivities, ...activities]
+    .sort(
+      (a, b) =>
+        new Date(b.updatedAt ?? b.createdAt).getTime() -
+        new Date(a.updatedAt ?? a.createdAt).getTime()
+    )
+    .slice(0, limit);
+
   return NextResponse.json({
     friendCount: friendIds.length,
     requestCount: requestCountRow?.count ?? 0,
     currentUserLocation,
-    activities,
+    activities: allActivities,
   });
 }

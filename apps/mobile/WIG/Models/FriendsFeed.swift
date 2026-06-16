@@ -48,6 +48,7 @@ struct FriendUserSummary: Decodable, Identifiable, Hashable, Sendable {
     }
 
     let id: String
+    let friendshipID: String?
     let name: String
     let username: String
     let avatarImageURL: URL?
@@ -55,6 +56,7 @@ struct FriendUserSummary: Decodable, Identifiable, Hashable, Sendable {
 
     enum CodingKeys: String, CodingKey {
         case id
+        case friendshipID = "friendshipId"
         case name
         case username
         case avatarImageURL = "avatarImageUrl"
@@ -63,12 +65,14 @@ struct FriendUserSummary: Decodable, Identifiable, Hashable, Sendable {
 
     init(
         id: String,
+        friendshipID: String? = nil,
         name: String,
         username: String,
         avatarImageURL: URL?,
         friendStatus: FriendStatus? = nil
     ) {
         self.id = id
+        self.friendshipID = friendshipID
         self.name = name
         self.username = username
         self.avatarImageURL = avatarImageURL
@@ -99,6 +103,7 @@ extension FriendUserSummary {
     func updatingAvatarImageURL(_ avatarImageURL: URL?) -> FriendUserSummary {
         FriendUserSummary(
             id: id,
+            friendshipID: friendshipID,
             name: name,
             username: username,
             avatarImageURL: avatarImageURL,
@@ -112,6 +117,7 @@ extension FriendUserSummary {
         let container = try decoder.container(keyedBy: CodingKeys.self)
 
         id = try container.decode(String.self, forKey: .id)
+        friendshipID = try container.decodeIfPresent(String.self, forKey: .friendshipID)
         name = try container.decode(String.self, forKey: .name)
         username = try container.decode(String.self, forKey: .username)
         avatarImageURL = try container.decodeOptionalURL(forKey: .avatarImageURL)
