@@ -37,12 +37,20 @@ function formatFriendRsvpBody({
   eventTitle,
   eventStartAt,
   status,
+  includesPartner,
 }: {
   eventTitle: string;
   eventStartAt: Date | null;
   status: "going" | "interested";
+  includesPartner: boolean;
 }) {
-  const verb = status === "going" ? "Is going to" : "Is interested in";
+  const verb = includesPartner
+    ? status === "going"
+      ? "Are going to"
+      : "Are interested in"
+    : status === "going"
+      ? "Is going to"
+      : "Is interested in";
   const dateSuffix = eventStartAt
     ? ` on ${friendRsvpDateFormatter.format(eventStartAt)}`
     : "";
@@ -134,14 +142,16 @@ export async function notifyFriendsOfRsvp(
     actorUserId,
     eventId,
     status,
+    partnerUserId,
   }: {
     actorUserId: string;
     eventId: string;
     status: "going" | "interested";
+    partnerUserId?: string | null;
   },
   database: DatabaseClient = db
 ) {
-  const [actor, event, friendConnections] = await Promise.all([
+  const [actor, partner, event, friendConnections] = await Promise.all([
     database.query.users.findFirst({
       where: eq(users.id, actorUserId),
       columns: {
@@ -150,6 +160,16 @@ export async function notifyFriendsOfRsvp(
         username: true,
       },
     }),
+    partnerUserId
+      ? database.query.users.findFirst({
+          where: eq(users.id, partnerUserId),
+          columns: {
+            firstName: true,
+            lastName: true,
+            username: true,
+          },
+        })
+      : Promise.resolve(null),
     database.query.events.findFirst({
       where: eq(events.id, eventId),
       columns: {
@@ -197,10 +217,17 @@ export async function notifyFriendsOfRsvp(
     [actor?.firstName, actor?.lastName].filter(Boolean).join(" ").trim() ||
     actor?.username ||
     "Your friend";
+  const partnerName =
+    [partner?.firstName, partner?.lastName].filter(Boolean).join(" ").trim() ||
+    partner?.username ||
+    null;
+  const includesPartner = Boolean(partnerName);
+  const title = includesPartner ? `${actorName} & ${partnerName}` : actorName;
   const body = formatFriendRsvpBody({
     eventTitle: event.title,
     eventStartAt: event.startAt,
     status,
+    includesPartner,
   });
   const actionUrl = `/event/${event.id}`;
 
@@ -211,7 +238,7 @@ export async function notifyFriendsOfRsvp(
       type: "event_update",
       entityType: "event",
       entityId: event.id,
-      title: actorName,
+      title,
       body,
       actionUrl,
       metadata: {
@@ -219,6 +246,8 @@ export async function notifyFriendsOfRsvp(
         status,
         eventId: event.id,
         eventTitle: event.title,
+        partnerUserId: partnerUserId ?? null,
+        partnerName,
       },
     })),
     database
@@ -227,7 +256,7 @@ export async function notifyFriendsOfRsvp(
   await sendPushNotificationToUsers(
     recipientIds,
     {
-      title: actorName,
+      title,
       body,
       data: {
         type: "event_update",
@@ -235,6 +264,8 @@ export async function notifyFriendsOfRsvp(
         actionUrl,
         source: "friend_rsvp",
         status,
+        partnerUserId: partnerUserId ?? null,
+        partnerName,
       },
     },
     database

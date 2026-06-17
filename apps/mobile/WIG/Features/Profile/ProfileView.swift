@@ -520,6 +520,7 @@ struct UserProfileView: View {
     @Environment(\.dismiss) private var dismiss
     @StateObject private var viewModel = UserProfileViewModel()
     @State private var selectedEventsTab: ProfileEventsTab = .upcoming
+    @State private var isSendingFriendRequest = false
 
     var body: some View {
         content
@@ -574,6 +575,8 @@ struct UserProfileView: View {
                         onEditAvatar: nil
                     )
 
+                    userFriendAction(response: response)
+
                     UserRelationshipSummaryRow(response: response)
 
                     UserProfileEventsSection(
@@ -582,7 +585,7 @@ struct UserProfileView: View {
                     )
                 }
                 .padding(.horizontal, 16)
-                .padding(.top, 24)
+                .padding(.top, 68)
                 .padding(.bottom, 104)
             }
             .scrollIndicators(.hidden)
@@ -604,6 +607,70 @@ struct UserProfileView: View {
         }
         .padding(.horizontal, 16)
         .padding(.top, 0)
+    }
+
+    @ViewBuilder
+    private func userFriendAction(response: UserProfileResponse) -> some View {
+        if let profile = response.profile {
+            switch profile.friendStatus ?? .none {
+            case .none:
+                Button("Add Friend") {
+                    sendFriendRequest(to: profile.id)
+                }
+                .profileActionButtonStyle(kind: .primary, isDisabled: isSendingFriendRequest)
+                .disabled(isSendingFriendRequest)
+            case .pendingSent:
+                Button("Request Sent") {}
+                    .profileActionButtonStyle(kind: .secondary, isDisabled: true)
+                    .disabled(true)
+            case .pendingReceived:
+                Button("Respond in Activity") {}
+                    .profileActionButtonStyle(kind: .secondary, isDisabled: true)
+                    .disabled(true)
+            case .accepted:
+                EmptyView()
+            }
+        }
+    }
+
+    private func sendFriendRequest(to userID: String) {
+        guard !isSendingFriendRequest else {
+            return
+        }
+
+        isSendingFriendRequest = true
+
+        Task {
+            defer {
+                isSendingFriendRequest = false
+            }
+
+            do {
+                let response = try await apiClient.send(
+                    APIClient.sendMobileFriendRequest(friendUserID: userID)
+                )
+                viewModel.updateLoadedResponse { current in
+                    UserProfileResponse(
+                        profile: current.profile.map {
+                            FriendUserSummary(
+                                id: $0.id,
+                                friendshipID: $0.friendshipID,
+                                name: $0.name,
+                                username: $0.username,
+                                avatarImageURL: $0.avatarImageURL,
+                                friendStatus: response.friendStatus
+                            )
+                        },
+                        friendCount: current.friendCount,
+                        friends: current.friends,
+                        upcomingEvents: current.upcomingEvents,
+                        pastEvents: current.pastEvents
+                    )
+                }
+            } catch {
+                // Keep the current profile visible without interrupting the screen.
+            }
+        }
     }
 }
 

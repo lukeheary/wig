@@ -17,12 +17,12 @@ struct HomeView: View {
     @State private var selectedWeekStart = Self.startOfWeek(for: .now)
     @State private var isSearchPresented = false
     @State private var searchText = ""
+    @State private var selectedSearchFilter: SearchFilter = .all
     @FocusState private var isSearchFieldFocused: Bool
     @State private var isSearchKeyboardDismissEnabled = false
     @State private var selectedLocationFilter: HomeLocationFilter?
     @State private var selectedEventFilter: HomeEventFilter = .all
     @State private var selectedCategoryFilterID: String?
-    @State private var sendingFriendRequestUserIDs = Set<String>()
 
     private static let sectionTitleFormatter: DateFormatter = {
         let formatter = DateFormatter()
@@ -313,27 +313,92 @@ struct HomeView: View {
                 }
 
                 if normalizedSearchQuery.isEmpty {
-                    VStack {
-                        Spacer(minLength: 0)
+                    VStack(alignment: .leading, spacing: 16) {
+                        if !emptyStateRecentUsers.isEmpty {
+                            SearchSectionHeader(title: "People")
+                                .padding(.horizontal, 16)
+                                .padding(.top, 8)
 
-                        ContentUnavailableView {
-                            Label(
-                                isAuthenticated ? "Search Anything" : "Search Events and Venues",
-                                systemImage: "magnifyingglass"
-                            )
-                        } description: {
-                            Text(
-                                isAuthenticated
-                                    ? "Search for an event, person, username, or venue."
-                                    : "Search for an event or venue."
-                            )
+                            ForEach(Array(emptyStateRecentUsers.enumerated()), id: \.element.id) { index, user in
+                                NavigationLink {
+                                    UserProfileView(userID: user.id)
+                                } label: {
+                                    SearchUserRow(
+                                        user: user,
+                                        seed: index
+                                    )
+                                }
+                                .task {
+                                    await UserProfileViewModel.preload(
+                                        userID: user.id,
+                                        using: apiClient
+                                    )
+                                }
+                                .buttonStyle(.plain)
+                                .padding(.horizontal, 16)
+                            }
                         }
-                        .foregroundStyle(.white)
-                        .frame(maxWidth: .infinity)
 
-                        Spacer(minLength: 0)
+                        if !emptyStateSuggestedPlaces.isEmpty {
+                            SearchSectionHeader(title: "Places")
+                                .padding(.horizontal, 16)
+                                .padding(.top, emptyStateRecentUsers.isEmpty ? 8 : 4)
+
+                            ForEach(emptyStateSuggestedPlaces) { place in
+                                NavigationLink {
+                                    PlaceDetailView(place: place)
+                                } label: {
+                                    SearchVenueRow(place: place)
+                                        .padding(.horizontal, 16)
+                                }
+                                .buttonStyle(.plain)
+                            }
+                        }
+
+                        if !emptyStateUpcomingEvents.isEmpty {
+                            SearchSectionHeader(title: "Events")
+                                .padding(.horizontal, 16)
+                                .padding(.top, emptyStateRecentUsers.isEmpty && emptyStateSuggestedPlaces.isEmpty ? 8 : 4)
+
+                            ForEach(emptyStateUpcomingEvents) { event in
+                                NavigationLink {
+                                    EventDetailView(event: event)
+                                } label: {
+                                    EventSearchRow(event: event)
+                                        .padding(.horizontal, 16)
+                                }
+                                .buttonStyle(.plain)
+                            }
+                        }
+
+                        if emptyStateRecentUsers.isEmpty && emptyStateSuggestedPlaces.isEmpty && emptyStateUpcomingEvents.isEmpty && !searchViewModel.isLoading {
+                            ContentUnavailableView {
+                                Label(
+                                    "People, places, events...",
+                                    systemImage: "magnifyingglass"
+                                )
+                            } description: {
+                                Text(
+                                    isAuthenticated
+                                        ? "Search people, places, and events."
+                                        : "Search places and events."
+                                )
+                            }
+                            .foregroundStyle(.white)
+                            .frame(maxWidth: .infinity)
+                            .padding(.top, 48)
+                        }
+
+                        if searchViewModel.isLoading {
+                            ProgressView()
+                                .tint(.white)
+                                .frame(maxWidth: .infinity)
+                                .padding(.top, 16)
+                        }
                     }
-                    .frame(minHeight: 420)
+                    .frame(maxWidth: .infinity, alignment: .leading)
+                    .padding(.top, 8)
+                    .padding(.bottom, 12)
                 } else {
                     if searchViewModel.isLoading && searchUserResults.isEmpty && searchVenueResults.isEmpty && searchEvents.isEmpty {
                         ProgressView("Searching...")
@@ -345,15 +410,16 @@ struct HomeView: View {
                         ContentUnavailableView {
                             Label("No Results", systemImage: "magnifyingglass")
                         } description: {
-                            Text("Try a different event, person, venue, or username.")
+                            Text("Try a different person, place, or event.")
                         }
                         .foregroundStyle(.white)
                         .frame(maxWidth: .infinity)
                         .padding(.top, 48)
                     } else {
-                        if !searchUserResults.isEmpty {
+                        if showsPeopleResults {
                             SearchSectionHeader(title: "People")
                                 .padding(.horizontal, 16)
+                                .padding(.top, 8)
 
                             ForEach(Array(searchUserResults.enumerated()), id: \.element.id) { index, user in
                                 NavigationLink {
@@ -361,11 +427,13 @@ struct HomeView: View {
                                 } label: {
                                     SearchUserRow(
                                         user: user,
-                                        seed: index,
-                                        isSendingRequest: sendingFriendRequestUserIDs.contains(user.id),
-                                        onAddFriend: {
-                                            sendFriendRequest(to: user.id)
-                                        }
+                                        seed: index
+                                    )
+                                }
+                                .task {
+                                    await UserProfileViewModel.preload(
+                                        userID: user.id,
+                                        using: apiClient
                                     )
                                 }
                                 .buttonStyle(.plain)
@@ -373,10 +441,10 @@ struct HomeView: View {
                             }
                         }
 
-                        if !searchVenueResults.isEmpty {
-                            SearchSectionHeader(title: "Venues")
+                        if showsPlaceResults {
+                            SearchSectionHeader(title: "Places")
                                 .padding(.horizontal, 16)
-                                .padding(.top, searchUserResults.isEmpty ? 0 : 8)
+                                .padding(.top, 8)
 
                             ForEach(searchVenueResults) { place in
                                 NavigationLink {
@@ -389,10 +457,10 @@ struct HomeView: View {
                             }
                         }
 
-                        if !searchEvents.isEmpty {
+                        if showsEventResults {
                             SearchSectionHeader(title: "Events")
                                 .padding(.horizontal, 16)
-                                .padding(.top, (searchUserResults.isEmpty && searchVenueResults.isEmpty) ? 0 : 8)
+                                .padding(.top, 8)
 
                             ForEach(searchEvents) { event in
                                 NavigationLink {
@@ -416,7 +484,7 @@ struct HomeView: View {
             }
             .frame(maxWidth: .infinity)
             .padding(.top, showsNativeSearch ? 0 : 74)
-            .padding(.bottom, 104)
+            .padding(.bottom, 48)
         }
         .scrollIndicators(.hidden)
         .scrollDismissesKeyboard(.interactively)
@@ -438,7 +506,7 @@ struct HomeView: View {
                     .font(.system(size: 20, weight: .medium))
                     .foregroundStyle(.white.opacity(0.92))
 
-                TextField("", text: $searchText, prompt: Text("Events, people, venues...").foregroundStyle(.white.opacity(0.42)))
+                TextField("", text: $searchText, prompt: Text("People, places, events...").foregroundStyle(.white.opacity(0.42)))
                     .font(.system(size: 17, weight: .medium))
                     .foregroundStyle(.white)
                     .textInputAutocapitalization(.never)
@@ -459,7 +527,7 @@ struct HomeView: View {
                 }
             }
             .padding(.horizontal, 16)
-            .frame(height: 48)
+            .frame(height: 46)
             .frame(maxWidth: .infinity)
             .contentShape(Capsule())
             .homeLiquidGlass(in: Capsule())
@@ -467,6 +535,28 @@ struct HomeView: View {
                 isSearchFieldFocused = true
                 isSearchPresented = true
             }
+
+            Menu {
+                ForEach(SearchFilter.allCases) { filter in
+                    Button {
+                        selectedSearchFilter = filter
+                    } label: {
+                        if selectedSearchFilter == filter {
+                            Label(filter.title, systemImage: "checkmark")
+                        } else {
+                            Text(filter.title)
+                        }
+                    }
+                }
+            } label: {
+                Image(systemName: "line.3.horizontal.decrease")
+                    .font(.system(size: 17, weight: .semibold))
+                    .foregroundStyle(selectedSearchFilter == .all ? Color.primary : AppTheme.accentBlue)
+                    .frame(width: 46, height: 46)
+                    .contentShape(Circle())
+                    .modifier(HomeStandaloneControlStyle(isStandalone: true))
+            }
+            .buttonStyle(.plain)
         }
     }
 
@@ -655,17 +745,21 @@ struct HomeView: View {
     }
 
     private var searchEvents: [EventFeedItem] {
+        guard selectedSearchFilter.includesEvents else {
+            return []
+        }
+
         let query = normalizedSearchQuery
+        guard !query.isEmpty else {
+            return []
+        }
+
         let localMatches = filteredCurrentEvents
             .filter { $0.startAt >= .now }
             .filter { event in
                 event.matchesSearch(query)
             }
             .sorted(by: { $0.startAt < $1.startAt })
-
-        guard !query.isEmpty else {
-            return []
-        }
 
         var seenEventIDs = Set<UUID>()
         return (searchViewModel.events + localMatches)
@@ -702,11 +796,50 @@ struct HomeView: View {
     }
 
     private var searchUserResults: [FriendUserSummary] {
-        searchViewModel.users
+        selectedSearchFilter.includesPeople ? searchViewModel.users : []
+    }
+
+    private var emptyStateRecentUsers: [FriendUserSummary] {
+        guard selectedSearchFilter.includesPeople else {
+            return []
+        }
+
+        let count = selectedSearchFilter == .people ? 20 : 5
+        return Array(searchViewModel.recentUsers.prefix(count))
+    }
+
+    private var emptyStateSuggestedPlaces: [PlaceListItem] {
+        guard selectedSearchFilter.includesPlaces else {
+            return []
+        }
+
+        let count = selectedSearchFilter == .places ? 10 : 0
+        return Array(searchViewModel.suggestedPlaces.prefix(count))
+    }
+
+    private var emptyStateUpcomingEvents: [EventFeedItem] {
+        guard selectedSearchFilter.includesEvents else {
+            return []
+        }
+
+        let count = selectedSearchFilter == .events ? 10 : 5
+        return Array(searchViewModel.upcomingEvents.prefix(count))
     }
 
     private var searchVenueResults: [PlaceListItem] {
-        searchViewModel.places
+        selectedSearchFilter.includesPlaces ? searchViewModel.places : []
+    }
+
+    private var showsPeopleResults: Bool {
+        !searchUserResults.isEmpty
+    }
+
+    private var showsPlaceResults: Bool {
+        !searchVenueResults.isEmpty
+    }
+
+    private var showsEventResults: Bool {
+        !searchEvents.isEmpty
     }
 
     private var availableLocationFilters: [HomeLocationFilter] {
@@ -817,6 +950,7 @@ struct HomeView: View {
 
     private var shouldShowRecentActivity: Bool {
         isAuthenticated &&
+            selectedEventFilter == .all &&
             effectiveCategoryFilterID == nil &&
             !isViewingFutureWeek &&
             !recentActivityViewModel.activities.isEmpty
@@ -867,32 +1001,6 @@ struct HomeView: View {
 
     private var isAuthenticated: Bool {
         appSession.isAuthBypassed || clerk.user != nil
-    }
-
-    private func sendFriendRequest(to userID: String) {
-        guard isAuthenticated else {
-            return
-        }
-
-        sendingFriendRequestUserIDs.insert(userID)
-
-        Task {
-            defer {
-                sendingFriendRequestUserIDs.remove(userID)
-            }
-
-            do {
-                let response = try await apiClient.send(
-                    APIClient.sendMobileFriendRequest(friendUserID: userID)
-                )
-                searchViewModel.updateFriendStatus(
-                    for: userID,
-                    status: response.friendStatus
-                )
-            } catch {
-                // Keep the current search results visible without interrupting the surface.
-            }
-        }
     }
 
     private func sortEventsForDayRow(_ lhs: EventFeedItem, _ rhs: EventFeedItem) -> Bool {
@@ -1479,7 +1587,7 @@ private struct SearchSectionHeader: View {
 
     var body: some View {
         Text(title)
-            .font(.system(size: 18, weight: .bold))
+            .font(.system(size: 20, weight: .bold))
             .foregroundStyle(.white)
             .frame(maxWidth: .infinity, alignment: .leading)
     }
@@ -1488,8 +1596,6 @@ private struct SearchSectionHeader: View {
 private struct SearchUserRow: View {
     let user: FriendUserSummary
     let seed: Int
-    let isSendingRequest: Bool
-    let onAddFriend: () -> Void
 
     private let fallbackColors = [
         Color(red: 0.88, green: 0.48, blue: 0.36),
@@ -1517,28 +1623,16 @@ private struct SearchUserRow: View {
 
             Spacer(minLength: 0)
 
-            if user.friendStatus == FriendUserSummary.FriendStatus.none {
-                Button(action: onAddFriend) {
-                    ZStack {
-                        Circle()
-                            .fill(Color.white.opacity(0.08))
-
-                        if isSendingRequest {
-                            ProgressView()
-                                .scaleEffect(0.75)
-                                .tint(.white)
-                        } else {
-                            Image(systemName: "person.badge.plus")
-                                .font(.system(size: 16, weight: .bold))
-                                .foregroundStyle(Color(red: 0.48, green: 0.77, blue: 1.0))
-                        }
-                    }
-                    .frame(width: 38, height: 38)
-                }
-                .buttonStyle(.plain)
-                .disabled(isSendingRequest)
+            if user.friendStatus == .accepted {
+                Text("Friends")
+                    .font(.system(size: 12, weight: .bold))
+                    .foregroundStyle(.white.opacity(0.62))
             } else if user.friendStatus == .pendingSent {
                 Text("Pending")
+                    .font(.system(size: 12, weight: .bold))
+                    .foregroundStyle(.white.opacity(0.62))
+            } else if user.friendStatus == .pendingReceived {
+                Text("Requested You")
                     .font(.system(size: 12, weight: .bold))
                     .foregroundStyle(.white.opacity(0.62))
             }
@@ -1676,7 +1770,7 @@ private final class HomeRecentActivityViewModel: ObservableObject {
 }
 
 @MainActor
-private final class HomeSearchDirectoryViewModel: ObservableObject {
+final class HomeSearchDirectoryViewModel: ObservableObject {
     enum Phase {
         case idle
         case loading
@@ -1684,13 +1778,27 @@ private final class HomeSearchDirectoryViewModel: ObservableObject {
     }
 
     @Published private(set) var users: [FriendUserSummary] = []
+    @Published private(set) var recentUsers: [FriendUserSummary] = []
     @Published private(set) var places: [PlaceListItem] = []
+    @Published private(set) var suggestedPlaces: [PlaceListItem] = []
     @Published private(set) var events: [EventFeedItem] = []
+    @Published private(set) var upcomingEvents: [EventFeedItem] = []
     @Published private(set) var phase: Phase = .idle
+    private static var cachedResponse: MobileSearchResponse?
+    private static var inFlightLoad: Task<MobileSearchResponse, Error>?
     private var activeQuery = ""
 
     var isLoading: Bool {
         phase == .loading
+    }
+
+    private func apply(_ response: MobileSearchResponse) {
+        users = response.users
+        recentUsers = response.recentUsers
+        places = response.places
+        suggestedPlaces = response.suggestedPlaces
+        events = response.events
+        upcomingEvents = response.upcomingEvents
     }
 
     func prepare(query: String) {
@@ -1698,10 +1806,12 @@ private final class HomeSearchDirectoryViewModel: ObservableObject {
         activeQuery = normalizedQuery
 
         if normalizedQuery.isEmpty {
-            users = []
-            places = []
-            events = []
-            phase = .idle
+            if let cachedResponse = Self.cachedResponse {
+                apply(cachedResponse)
+                phase = .loaded
+            } else {
+                phase = .loading
+            }
         } else {
             phase = .loading
         }
@@ -1710,43 +1820,83 @@ private final class HomeSearchDirectoryViewModel: ObservableObject {
     func load(query: String, using apiClient: APIClient) async {
         let normalizedQuery = query.trimmingCharacters(in: .whitespacesAndNewlines)
 
-        guard !normalizedQuery.isEmpty else {
-            activeQuery = ""
-            users = []
-            places = []
-            events = []
-            phase = .idle
-            return
-        }
-
         activeQuery = normalizedQuery
         phase = .loading
 
         do {
-            let response = try await apiClient.send(
-                APIClient.mobileSearch(query: normalizedQuery)
-            )
+            let response: MobileSearchResponse
+
+            if normalizedQuery.isEmpty, let cachedResponse = Self.cachedResponse {
+                response = cachedResponse
+            } else if normalizedQuery.isEmpty, let inFlightLoad = Self.inFlightLoad {
+                response = try await inFlightLoad.value
+            } else {
+                let loadTask = Task {
+                    try await apiClient.send(
+                        APIClient.mobileSearch(query: normalizedQuery)
+                    )
+                }
+
+                if normalizedQuery.isEmpty {
+                    Self.inFlightLoad = loadTask
+                }
+
+                response = try await loadTask.value
+            }
 
             guard activeQuery == normalizedQuery else {
                 return
             }
 
-            users = response.users
-            places = response.places
-            events = response.events
+            if normalizedQuery.isEmpty {
+                Self.cachedResponse = response
+            }
+
+            apply(response)
         } catch {
             guard activeQuery == normalizedQuery else {
                 return
             }
 
             users = []
+            recentUsers = []
             places = []
+            suggestedPlaces = []
             events = []
+            upcomingEvents = []
+        }
+
+        if normalizedQuery.isEmpty {
+            Self.inFlightLoad = nil
         }
 
         if activeQuery == normalizedQuery {
             phase = .loaded
         }
+    }
+
+    static func preload(using apiClient: APIClient) async {
+        if cachedResponse != nil {
+            return
+        }
+
+        if let inFlightLoad {
+            _ = try? await inFlightLoad.value
+            return
+        }
+
+        let loadTask = Task {
+            try await apiClient.send(APIClient.mobileSearch(query: ""))
+        }
+        inFlightLoad = loadTask
+
+        do {
+            cachedResponse = try await loadTask.value
+        } catch {
+            // Ignore preload failures; the search screen can still load normally later.
+        }
+
+        inFlightLoad = nil
     }
 
     func updateFriendStatus(for userID: String, status: FriendUserSummary.FriendStatus) {
@@ -1763,6 +1913,53 @@ private final class HomeSearchDirectoryViewModel: ObservableObject {
                 friendStatus: status
             )
         }
+    }
+}
+
+private enum SearchFilter: String, CaseIterable, Identifiable {
+    case all
+    case people
+    case places
+    case events
+
+    var id: String { rawValue }
+
+    var title: String {
+        switch self {
+        case .all:
+            return "All"
+        case .people:
+            return "People"
+        case .places:
+            return "Places"
+        case .events:
+            return "Events"
+        }
+    }
+
+    var systemImage: String {
+        switch self {
+        case .all:
+            return "line.3.horizontal.decrease.circle"
+        case .people:
+            return "person.2"
+        case .places:
+            return "mappin.and.ellipse"
+        case .events:
+            return "calendar"
+        }
+    }
+
+    var includesPeople: Bool {
+        self == .all || self == .people
+    }
+
+    var includesPlaces: Bool {
+        self == .all || self == .places
+    }
+
+    var includesEvents: Bool {
+        self == .all || self == .events
     }
 }
 

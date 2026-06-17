@@ -321,3 +321,49 @@ export async function PATCH(
     );
   }
 }
+
+export async function DELETE(
+  _request: Request,
+  context: { params: Promise<{ id: string }> }
+) {
+  try {
+    const { id } = await context.params;
+    const { userId } = await currentMobileUserContext();
+
+    if (!userId) {
+      return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
+    }
+
+    const existingEvent = await db.query.events.findFirst({
+      where: eq(events.id, id),
+      columns: {
+        id: true,
+        createdByUserId: true,
+      },
+    });
+
+    if (!existingEvent) {
+      return NextResponse.json({ error: "Event not found" }, { status: 404 });
+    }
+
+    const permissions = await resolveMobileEventEditPermissions(userId);
+    const isCreator = existingEvent.createdByUserId === userId;
+
+    if (!permissions.isAdmin && !isCreator) {
+      return NextResponse.json(
+        { error: "You do not have permission to delete this event" },
+        { status: 403 }
+      );
+    }
+
+    await db.delete(events).where(eq(events.id, id));
+
+    return NextResponse.json({ success: true });
+  } catch (error) {
+    console.error("Failed to delete mobile event", error);
+    return NextResponse.json(
+      { error: "Failed to delete event" },
+      { status: 500 }
+    );
+  }
+}

@@ -13,6 +13,7 @@ struct PlaceDetail: Decodable, Identifiable, Hashable, Sendable {
     let state: String?
     let website: URL?
     let instagram: String?
+    let hours: VenueHours?
     let categories: [String]
     let categoryLabels: [String: String]
     let updatedAt: Date?
@@ -33,6 +34,7 @@ struct PlaceDetail: Decodable, Identifiable, Hashable, Sendable {
         case state
         case website
         case instagram
+        case hours
         case categories
         case categoryLabels
         case updatedAt
@@ -110,6 +112,7 @@ extension PlaceDetail {
         state = try container.decodeIfPresent(String.self, forKey: .state)
         website = try container.decodeOptionalURL(forKey: .website)
         instagram = try container.decodeIfPresent(String.self, forKey: .instagram)
+        hours = try container.decodeIfPresent(VenueHours.self, forKey: .hours)
         categories = try container.decodeIfPresent([String].self, forKey: .categories) ?? []
         categoryLabels = try container.decodeIfPresent([String: String].self, forKey: .categoryLabels) ?? [:]
         updatedAt = try container.decodeIfPresent(Date.self, forKey: .updatedAt)
@@ -117,6 +120,43 @@ extension PlaceDetail {
         events = try container.decodeIfPresent([EventFeedItem].self, forKey: .events) ?? []
         pastEvents = try container.decodeIfPresent([EventFeedItem].self, forKey: .pastEvents) ?? []
     }
+}
+
+struct VenueHours: Codable, Hashable, Sendable {
+    let monday: DayHours?
+    let tuesday: DayHours?
+    let wednesday: DayHours?
+    let thursday: DayHours?
+    let friday: DayHours?
+    let saturday: DayHours?
+    let sunday: DayHours?
+
+    func hours(for date: Date, calendar: Calendar = .current) -> DayHours? {
+        switch calendar.component(.weekday, from: date) {
+        case 1:
+            return sunday
+        case 2:
+            return monday
+        case 3:
+            return tuesday
+        case 4:
+            return wednesday
+        case 5:
+            return thursday
+        case 6:
+            return friday
+        case 7:
+            return saturday
+        default:
+            return nil
+        }
+    }
+}
+
+struct DayHours: Codable, Hashable, Sendable {
+    let open: String
+    let close: String
+    let closed: Bool
 }
 
 private extension KeyedDecodingContainer where Key == PlaceDetail.CodingKeys {

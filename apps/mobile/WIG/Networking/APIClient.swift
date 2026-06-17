@@ -389,6 +389,15 @@ struct APIClient: Sendable {
         )
     }
 
+    static func deleteMobileEvent(eventID: UUID) -> Endpoint<EmptyResponse> {
+        Endpoint(
+            path: "/api/mobile/events/\(eventID.uuidString)",
+            method: .delete,
+            requiresAuthentication: false,
+            includesAuthenticationIfAvailable: true
+        )
+    }
+
     static func mobileSetEventCoverImage(
         eventID: UUID,
         coverImageURL: URL
@@ -685,7 +694,10 @@ struct MobileOnboardingState: Decodable, Hashable, Sendable {
 
 struct MobileSearchResponse: Decodable, Hashable, Sendable {
     let events: [EventFeedItem]
+    let upcomingEvents: [EventFeedItem]
     let users: [FriendUserSummary]
+    let recentUsers: [FriendUserSummary]
+    let suggestedPlaces: [PlaceListItem]
     let places: [PlaceListItem]
 }
 

@@ -1947,6 +1947,7 @@ export const eventRouter = router({
               actorUserId: ctx.auth.userId,
               eventId: input.eventId,
               status: input.status,
+              partnerUserId: includedPartnerInRsvp ? partnerUserId : null,
             },
             ctx.db
           );

@@ -224,7 +224,7 @@ export async function GET(_request: Request, context: RouteContext) {
     )
     .filter((friend): friend is NonNullable<typeof friend> => Boolean(friend));
 
-  const [upcomingRsvps, pastRsvps, followedPlaceIds, editPermissions, viewerFriendships] =
+  const [upcomingRsvps, pastRsvps, followedPlaceIds, editPermissions, viewerFriendships, viewerTargetFriendship] =
     await Promise.all([
       db.query.eventRsvps.findMany({
         where: and(eq(eventRsvps.userId, id), eq(eventRsvps.status, "going")),
@@ -277,6 +277,14 @@ export async function GET(_request: Request, context: RouteContext) {
             ),
           })
         : Promise.resolve([]),
+      viewerUserId
+        ? db.query.userFriends.findFirst({
+            where: or(
+              and(eq(userFriends.userId, viewerUserId), eq(userFriends.friendUserId, id)),
+              and(eq(userFriends.userId, id), eq(userFriends.friendUserId, viewerUserId))
+            ),
+          })
+        : Promise.resolve(null),
     ]);
 
   const upcomingEventsRaw = upcomingRsvps
@@ -438,7 +446,19 @@ export async function GET(_request: Request, context: RouteContext) {
   };
 
   return NextResponse.json({
-    profile: userSummary(targetUser),
+    profile: targetUser
+      ? {
+          ...userSummary(targetUser),
+          friendshipId: viewerTargetFriendship?.id ?? null,
+          friendStatus: viewerTargetFriendship
+            ? viewerTargetFriendship.status === "accepted"
+              ? "accepted"
+              : viewerTargetFriendship.userId === viewerUserId
+                ? "pending_sent"
+                : "pending_received"
+            : "none",
+        }
+      : null,
     friendCount: friends.length,
     friends,
     upcomingEvents: upcomingEventsRaw.map(mapMobileEvent),

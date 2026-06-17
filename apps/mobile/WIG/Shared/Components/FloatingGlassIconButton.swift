@@ -3,6 +3,7 @@ import SwiftUI
 struct FloatingGlassIconButton: View {
     let systemImage: String
     var foregroundColor: Color = .primary
+    var size: CGFloat = 46
     let action: () -> Void
 
     var body: some View {
@@ -10,7 +11,7 @@ struct FloatingGlassIconButton: View {
             Image(systemName: systemImage)
                 .font(.system(size: 17, weight: .semibold))
                 .foregroundStyle(foregroundColor)
-                .frame(width: 46, height: 46)
+                .frame(width: size, height: size)
                 .contentShape(Circle())
                 .floatingGlassCircle()
         }

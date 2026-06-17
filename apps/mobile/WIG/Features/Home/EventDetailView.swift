@@ -80,6 +80,15 @@ struct EventDetailView: View {
             partnerRelationship = nil
             closeRSVPMenu()
         }
+        .onReceive(NotificationCenter.default.publisher(for: .mobileEventDidDelete)) { notification in
+            guard let deletedEventID = notification.object as? UUID,
+                  deletedEventID == currentEvent.id
+            else {
+                return
+            }
+
+            dismiss()
+        }
         .onAppear {
             appSession.beginEventDetailPresentation()
         }
@@ -106,25 +115,29 @@ struct EventDetailView: View {
         GeometryReader { proxy in
             let side = proxy.size.width
 
-            Button {
-                guard currentEvent.posterImageURL != nil else {
-                    return
-                }
-
-                isImageViewerPresented = true
-            } label: {
-                eventArtwork
-                    .frame(width: side, height: side)
-                    .clipShape(RoundedRectangle(cornerRadius: 24, style: .continuous))
-                    .overlay {
-                        if isAuthenticated {
-                            EventSocialOverlayView(attendees: currentEvent.socialAttendees, size: .detail)
-                                .clipShape(RoundedRectangle(cornerRadius: 24, style: .continuous))
-                            }
+            eventArtwork
+                .frame(width: side, height: side)
+                .clipShape(RoundedRectangle(cornerRadius: 24, style: .continuous))
+                .overlay {
+                    if isAuthenticated {
+                        EventSocialOverlayView(attendees: currentEvent.socialAttendees, size: .detail)
+                            .clipShape(RoundedRectangle(cornerRadius: 24, style: .continuous))
                     }
-            }
-            .buttonStyle(.plain)
-            .offset(y: heroTopOffset)
+                }
+                .overlay(alignment: .bottomLeading) {
+                    if currentEvent.posterImageURL != nil {
+                        FloatingGlassIconButton(
+                            systemImage: "arrow.up.left.and.arrow.down.right",
+                            foregroundColor: .white,
+                            size: 46
+                        ) {
+                            isImageViewerPresented = true
+                        }
+                        .padding(.leading, 12)
+                        .padding(.bottom, 12)
+                    }
+                }
+                .offset(y: heroTopOffset)
         }
         .aspectRatio(1, contentMode: .fit)
         .padding(.bottom, heroTopOffset)
@@ -461,7 +474,7 @@ struct EventDetailView: View {
             VStack(alignment: .leading, spacing: 18) {
                 if !currentEvent.friendsGoing.isEmpty {
                     EventAttendeeSection(
-                        title: "Who's Going",
+                        title: "Going",
                         attendees: currentEvent.friendsGoing
                     )
                 }
@@ -693,7 +706,7 @@ private struct EventAttendeeSection: View {
                 }
             }
             .padding(.horizontal, 16)
-            .padding(.vertical, 14)
+            .padding(.vertical, 16)
             .frame(maxWidth: .infinity, alignment: .leading)
             .background(
                 RoundedRectangle(cornerRadius: 18, style: .continuous)
@@ -711,26 +724,26 @@ private struct EventAttendeeRow: View {
     let attendee: EventSocialRSVP
 
     var body: some View {
-        HStack(spacing: 14) {
+        HStack(spacing: 12) {
             EventAttendeeAvatar(user: attendee.user, status: attendee.status)
 
-            VStack(alignment: .leading, spacing: 3) {
+            VStack(alignment: .leading, spacing: 2) {
                 Text(displayName)
-                    .font(.system(size: 17, weight: .medium))
+                    .font(.system(size: 15, weight: .medium))
                     .foregroundStyle(.white)
                     .lineLimit(1)
-
-                Text(secondaryText)
-                    .font(.system(size: 14, weight: .medium))
-                    .foregroundStyle(.white.opacity(0.58))
             }
 
             Spacer(minLength: 10)
         }
-        .padding(.vertical, 10)
+        .padding(.vertical, 6)
     }
 
     private var displayName: String {
+        if attendee.user.isCurrentUser {
+            return "You"
+        }
+
         let parts = [attendee.user.firstName, attendee.user.lastName]
             .compactMap { value in
                 let trimmed = value?.trimmingCharacters(in: .whitespacesAndNewlines) ?? ""
@@ -739,28 +752,13 @@ private struct EventAttendeeRow: View {
 
         return parts.isEmpty ? "Unknown" : parts.joined(separator: " ")
     }
-
-    private var secondaryText: String {
-        if attendee.user.isCurrentUser {
-            return "You"
-        }
-
-        switch attendee.status {
-        case .going:
-            return "Going"
-        case .interested:
-            return "Interested"
-        case .notGoing:
-            return "Can't Go"
-        }
-    }
 }
 
 private struct EventAttendeeAvatar: View {
     let user: EventSocialUser
     let status: EventRSVPStatus
 
-    private let size: CGFloat = 48
+    private let size: CGFloat = 42
 
     var body: some View {
         ZStack {
@@ -808,7 +806,7 @@ private struct EventAttendeeAvatar: View {
             )
 
             Text(initials)
-                .font(.system(size: 16, weight: .bold))
+                .font(.system(size: 14, weight: .bold))
                 .foregroundStyle(.white)
         }
     }
@@ -846,10 +844,27 @@ private struct EventArtworkViewer: View {
     let imageURL: URL
 
     @Environment(\.dismiss) private var dismiss
+    @State private var baseScale: CGFloat = 1
+    @State private var pinchScale: CGFloat = 1
+    @State private var imageOffset: CGSize = .zero
+    @State private var dragTranslation: CGSize = .zero
+
+    private var totalScale: CGFloat {
+        min(max(baseScale * pinchScale, 1), 4)
+    }
+
+    private var verticalDismissOffset: CGFloat {
+        guard totalScale <= 1.02 else {
+            return 0
+        }
+
+        return max(dragTranslation.height, 0)
+    }
 
     var body: some View {
         ZStack(alignment: .topTrailing) {
             Color.black
+                .opacity(backgroundOpacity)
                 .ignoresSafeArea()
 
             AsyncImage(url: imageURL) { phase in
@@ -863,8 +878,24 @@ private struct EventArtworkViewer: View {
                         .resizable()
                         .scaledToFit()
                         .frame(maxWidth: .infinity, maxHeight: .infinity)
+                        .scaleEffect(totalScale)
+                        .offset(
+                            x: imageOffset.width + horizontalDragOffset,
+                            y: imageOffset.height + verticalDragOffset
+                        )
                         .padding(.horizontal, 12)
                         .padding(.vertical, 28)
+                        .gesture(combinedArtworkGesture)
+                        .onTapGesture(count: 2) {
+                            withAnimation(.spring(response: 0.28, dampingFraction: 0.82)) {
+                                if totalScale > 1.02 {
+                                    resetTransform()
+                                } else {
+                                    baseScale = 2
+                                    pinchScale = 1
+                                }
+                            }
+                        }
                 case .failure:
                     Image(systemName: "photo")
                         .font(.system(size: 52, weight: .regular))
@@ -882,6 +913,78 @@ private struct EventArtworkViewer: View {
             .padding(.trailing, 26)
         }
         .statusBarHidden()
+    }
+
+    private var combinedArtworkGesture: some Gesture {
+        SimultaneousGesture(dragGesture, magnificationGesture)
+    }
+
+    private var magnificationGesture: some Gesture {
+        MagnifyGesture()
+            .onChanged { value in
+                pinchScale = value.magnification
+            }
+            .onEnded { value in
+                withAnimation(.spring(response: 0.24, dampingFraction: 0.84)) {
+                    baseScale = min(max(baseScale * value.magnification, 1), 4)
+                    pinchScale = 1
+
+                    if baseScale <= 1.02 {
+                        resetTransform()
+                    }
+                }
+            }
+    }
+
+    private var dragGesture: some Gesture {
+        DragGesture(minimumDistance: 0, coordinateSpace: .local)
+            .onChanged { value in
+                dragTranslation = value.translation
+            }
+            .onEnded { value in
+                let predictedDismiss = max(
+                    value.translation.height,
+                    value.predictedEndTranslation.height
+                )
+
+                if totalScale <= 1.02 && predictedDismiss > 140 {
+                    dismiss()
+                    return
+                }
+
+                withAnimation(.spring(response: 0.28, dampingFraction: 0.84)) {
+                    if totalScale > 1.02 {
+                        imageOffset.width += value.translation.width
+                        imageOffset.height += value.translation.height
+                    }
+
+                    dragTranslation = .zero
+
+                    if totalScale <= 1.02 {
+                        imageOffset = .zero
+                    }
+                }
+            }
+    }
+
+    private var horizontalDragOffset: CGFloat {
+        totalScale > 1.02 ? dragTranslation.width : 0
+    }
+
+    private var verticalDragOffset: CGFloat {
+        totalScale > 1.02 ? dragTranslation.height : verticalDismissOffset
+    }
+
+    private func resetTransform() {
+        baseScale = 1
+        pinchScale = 1
+        imageOffset = .zero
+        dragTranslation = .zero
+    }
+
+    private var backgroundOpacity: Double {
+        let progress = min(max(verticalDismissOffset / 220, 0), 1)
+        return 1 - (progress * 0.35)
     }
 }
 

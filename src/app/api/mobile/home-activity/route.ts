@@ -201,6 +201,7 @@ export async function GET(request: Request) {
       if (!VISIBLE_ACTIVITY_TYPES.has(activity.type)) return false;
       if (!activity.event) return false;
       if (activity.actorUserId === userId) return false;
+      if (!friendIdSet.has(activity.actorUserId)) return false;
       if (activity.event.visibility !== "public" || activity.event.status !== "active") {
         return false;
       }

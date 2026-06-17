@@ -150,6 +150,8 @@ final class UserProfileViewModel: ObservableObject {
     }
 
     @Published private(set) var state: State = .idle
+    private static var cachedResponses = [String: UserProfileResponse]()
+    private static var inFlightLoads = [String: Task<UserProfileResponse, Error>]()
 
     var canShowEventsFilter: Bool {
         guard case .loaded(let response) = state else {
@@ -160,13 +162,76 @@ final class UserProfileViewModel: ObservableObject {
     }
 
     func load(userID: String, using apiClient: APIClient) async {
+        if let cachedResponse = Self.cachedResponses[userID] {
+            state = .loaded(cachedResponse)
+            return
+        }
+
+        if let inFlightLoad = Self.inFlightLoads[userID] {
+            state = .loading
+
+            do {
+                let response = try await inFlightLoad.value
+                Self.cachedResponses[userID] = response
+                state = .loaded(response)
+            } catch {
+                state = .failed(error.localizedDescription)
+            }
+
+            return
+        }
+
         state = .loading
 
         do {
-            let response = try await apiClient.send(APIClient.mobileUserProfile(userID: userID))
+            let loadTask = Task {
+                try await apiClient.send(APIClient.mobileUserProfile(userID: userID))
+            }
+            Self.inFlightLoads[userID] = loadTask
+
+            let response = try await loadTask.value
+            Self.cachedResponses[userID] = response
             state = .loaded(response)
         } catch {
             state = .failed(error.localizedDescription)
         }
+
+        Self.inFlightLoads[userID] = nil
+    }
+
+    static func preload(userID: String, using apiClient: APIClient) async {
+        if cachedResponses[userID] != nil {
+            return
+        }
+
+        if let inFlightLoad = inFlightLoads[userID] {
+            _ = try? await inFlightLoad.value
+            return
+        }
+
+        let loadTask = Task {
+            try await apiClient.send(APIClient.mobileUserProfile(userID: userID))
+        }
+        inFlightLoads[userID] = loadTask
+
+        do {
+            cachedResponses[userID] = try await loadTask.value
+        } catch {
+            // Ignore preload failures; the profile can still load normally later.
+        }
+
+        inFlightLoads[userID] = nil
+    }
+
+    func updateLoadedResponse(_ transform: (UserProfileResponse) -> UserProfileResponse) {
+        guard case .loaded(let response) = state else {
+            return
+        }
+
+        let updated = transform(response)
+        if let profileID = updated.profile?.id {
+            Self.cachedResponses[profileID] = updated
+        }
+        state = .loaded(updated)
     }
 }

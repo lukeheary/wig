@@ -34,6 +34,7 @@ struct MobileEventCreationView: View {
     @State private var selectedCategoryKeys = Set<String>()
     @State private var isSubmitting = false
     @State private var alertMessage: String?
+    @State private var activeAlert: ActiveAlert?
 
     init(mode: Mode = .create, onCompleted: ((EventFeedItem) -> Void)? = nil) {
         self.mode = mode
@@ -68,8 +69,8 @@ struct MobileEventCreationView: View {
             Form {
                 coverImageSection
                 placeSections
-                locationSection
                 detailsSection
+                locationSection
                 categoriesSection
             }
             .scrollContentBackground(.hidden)
@@ -96,6 +97,8 @@ struct MobileEventCreationView: View {
                 if viewModel.categories.isEmpty && !viewModel.isLoadingCategories {
                     await viewModel.loadCategories(using: apiClient)
                 }
+
+                await PlaceLookupViewModel.preload(using: apiClient)
             }
             .sheet(item: $activePlacePicker) { kind in
                 PlaceLookupSheet(kind: kind) { place in
@@ -111,20 +114,41 @@ struct MobileEventCreationView: View {
                     await handleSelectedCoverImage(item)
                 }
             }
-            .alert(
-                failureAlertTitle,
-                isPresented: Binding(
-                    get: { alertMessage != nil },
-                    set: { isPresented in
-                        if !isPresented {
+            .onChange(of: alertMessage) { _, message in
+                if let message {
+                    activeAlert = .error(message)
+                } else if case .error = activeAlert {
+                    activeAlert = nil
+                }
+            }
+            .onChange(of: selectedVenue?.id) { _, _ in
+                applyVenueScheduleDefaults()
+            }
+            .onChange(of: scheduleDateKey) { _, _ in
+                applyVenueScheduleDefaults()
+            }
+            .alert(item: $activeAlert) { alert in
+                switch alert {
+                case .error(let message):
+                    return Alert(
+                        title: Text(failureAlertTitle),
+                        message: Text(message),
+                        dismissButton: .cancel(Text("OK")) {
                             alertMessage = nil
                         }
-                    }
-                )
-            ) {
-                Button("OK", role: .cancel) {}
-            } message: {
-                Text(alertMessage ?? "Please try again.")
+                    )
+                case .deleteConfirmation:
+                    return Alert(
+                        title: Text("Delete Event?"),
+                        message: Text("This action cannot be undone."),
+                        primaryButton: .destructive(Text("Delete")) {
+                            Task {
+                                await deleteEvent()
+                            }
+                        },
+                        secondaryButton: .cancel()
+                    )
+                }
             }
         }
     }
@@ -182,10 +206,8 @@ struct MobileEventCreationView: View {
     private var placeSections: some View {
         Section("Linked Places") {
             placeSelectionSection(
-                title: "Venue",
                 selection: selectedVenue,
                 placeholderTitle: "Select Venue",
-                placeholderSubtitle: "Search for a venue",
                 systemImage: "building.2"
             ) {
                 activePlacePicker = .venue
@@ -194,10 +216,8 @@ struct MobileEventCreationView: View {
             }
 
             placeSelectionSection(
-                title: "Organizer",
                 selection: selectedOrganizer,
-                placeholderTitle: "Select Organizer",
-                placeholderSubtitle: "Search for an organizer",
+                placeholderTitle: "Select Organizer (Optional)",
                 systemImage: "person.badge.plus"
             ) {
                 activePlacePicker = .organizer
@@ -213,21 +233,15 @@ struct MobileEventCreationView: View {
 
     private var locationSection: some View {
         Section("Location") {
-            if let locationSource {
-                Text("Using \(locationSource.name)'s location as a starting point.")
-                    .font(.system(size: 14))
-                    .foregroundStyle(.secondary)
-            }
-
-            TextField("Address", text: $address)
+            ClearableInputField("Address", text: $address)
                 .textInputAutocapitalization(.words)
                 .autocorrectionDisabled()
 
-            TextField("City", text: $city)
+            ClearableInputField("City", text: $city)
                 .textInputAutocapitalization(.words)
                 .autocorrectionDisabled()
 
-            TextField("State", text: $state)
+            ClearableInputField("State", text: $state)
                 .textInputAutocapitalization(.characters)
                 .autocorrectionDisabled()
         }
@@ -236,7 +250,7 @@ struct MobileEventCreationView: View {
     @ViewBuilder
     private var detailsSection: some View {
         Section("Details") {
-            TextField("Event Title", text: $title)
+            ClearableInputField("Event Title", text: $title)
                 .textInputAutocapitalization(.words)
 
             VStack(alignment: .leading, spacing: 8) {
@@ -250,7 +264,7 @@ struct MobileEventCreationView: View {
                     .padding(.horizontal, 2)
             }
 
-            TextField("Event URL", text: $eventURLText)
+            ClearableInputField("Event URL", text: $eventURLText)
                 .textInputAutocapitalization(.never)
                 .autocorrectionDisabled()
 
@@ -263,9 +277,15 @@ struct MobileEventCreationView: View {
 
         Section("Schedule") {
             DatePicker(
-                "Start",
+                "Start Date",
+                selection: startDateBinding,
+                displayedComponents: [.date]
+            )
+
+            DatePicker(
+                "Start Time",
                 selection: $startAt,
-                displayedComponents: [.date, .hourAndMinute]
+                displayedComponents: [.hourAndMinute]
             )
 
             Toggle("Add End Time", isOn: $hasEndAt)
@@ -273,70 +293,87 @@ struct MobileEventCreationView: View {
 
             if hasEndAt {
                 DatePicker(
-                    "End",
+                    "End Date",
+                    selection: endDateBinding,
+                    displayedComponents: [.date]
+                )
+
+                DatePicker(
+                    "End Time",
                     selection: $endAt,
-                    displayedComponents: [.date, .hourAndMinute]
+                    displayedComponents: [.hourAndMinute]
                 )
             }
         }
+
     }
 
     private var categoriesSection: some View {
-        Section("Categories") {
-            if viewModel.isLoadingCategories {
-                HStack(spacing: 10) {
-                    ProgressView()
-                        .tint(AppTheme.accentBlue)
-                    Text("Loading categories...")
-                        .font(.system(size: 14, weight: .medium))
-                        .foregroundStyle(.secondary)
-                }
-                .frame(maxWidth: .infinity, alignment: .leading)
-            } else if viewModel.categories.isEmpty {
-                VStack(alignment: .leading, spacing: 8) {
-                    Text("No categories are available right now.")
-                        .font(.system(size: 14, weight: .medium))
-                        .foregroundStyle(.secondary)
-
-                    if let loadError = viewModel.loadError {
-                        Text(loadError)
-                            .font(.system(size: 12, weight: .medium))
+        Group {
+            Section("Categories") {
+                if viewModel.isLoadingCategories {
+                    HStack(spacing: 10) {
+                        ProgressView()
+                            .tint(AppTheme.accentBlue)
+                        Text("Loading categories...")
+                            .font(.system(size: 14, weight: .medium))
                             .foregroundStyle(.secondary)
                     }
+                    .frame(maxWidth: .infinity, alignment: .leading)
+                } else if viewModel.categories.isEmpty {
+                    VStack(alignment: .leading, spacing: 8) {
+                        Text("No categories are available right now.")
+                            .font(.system(size: 14, weight: .medium))
+                            .foregroundStyle(.secondary)
 
-                    Button("Retry") {
-                        Task {
-                            await viewModel.loadCategories(using: apiClient)
+                        if let loadError = viewModel.loadError {
+                            Text(loadError)
+                                .font(.system(size: 12, weight: .medium))
+                                .foregroundStyle(.secondary)
+                        }
+
+                        Button("Retry") {
+                            Task {
+                                await viewModel.loadCategories(using: apiClient)
+                            }
+                        }
+                        .font(.system(size: 14, weight: .semibold))
+                        .foregroundStyle(AppTheme.accentBlue)
+                    }
+                    .frame(maxWidth: .infinity, alignment: .leading)
+                } else {
+                    LazyVGrid(
+                        columns: [
+                            GridItem(.adaptive(minimum: 96), spacing: 10),
+                        ],
+                        alignment: .leading,
+                        spacing: 10
+                    ) {
+                        ForEach(viewModel.categories, id: \.key) { category in
+                            Button {
+                                toggleCategory(category.key)
+                            } label: {
+                                Text(category.label)
+                                    .font(.system(size: 13, weight: .semibold))
+                                    .foregroundStyle(selectedCategoryKeys.contains(category.key) ? .black : .primary)
+                                    .padding(.horizontal, 12)
+                                    .padding(.vertical, 10)
+                                    .frame(maxWidth: .infinity)
+                                    .background(
+                                        RoundedRectangle(cornerRadius: 14, style: .continuous)
+                                            .fill(selectedCategoryKeys.contains(category.key) ? AppTheme.accentBlue : Color(uiColor: .secondarySystemGroupedBackground))
+                                    )
+                            }
+                            .buttonStyle(.plain)
                         }
                     }
-                    .font(.system(size: 14, weight: .semibold))
-                    .foregroundStyle(AppTheme.accentBlue)
                 }
-                .frame(maxWidth: .infinity, alignment: .leading)
-            } else {
-                LazyVGrid(
-                    columns: [
-                        GridItem(.adaptive(minimum: 96), spacing: 10),
-                    ],
-                    alignment: .leading,
-                    spacing: 10
-                ) {
-                    ForEach(viewModel.categories, id: \.key) { category in
-                        Button {
-                            toggleCategory(category.key)
-                        } label: {
-                            Text(category.label)
-                                .font(.system(size: 13, weight: .semibold))
-                                .foregroundStyle(selectedCategoryKeys.contains(category.key) ? .black : .primary)
-                                .padding(.horizontal, 12)
-                                .padding(.vertical, 10)
-                                .frame(maxWidth: .infinity)
-                                .background(
-                                    RoundedRectangle(cornerRadius: 14, style: .continuous)
-                                        .fill(selectedCategoryKeys.contains(category.key) ? AppTheme.accentBlue : Color(uiColor: .secondarySystemGroupedBackground))
-                                )
-                        }
-                        .buttonStyle(.plain)
+            }
+
+            if case .edit = mode {
+                Section {
+                    Button("Delete Event", role: .destructive) {
+                        activeAlert = .deleteConfirmation
                     }
                 }
             }
@@ -344,10 +381,8 @@ struct MobileEventCreationView: View {
     }
 
     private func placeSelectionSection(
-        title: String,
         selection: PlaceDetail?,
         placeholderTitle: String,
-        placeholderSubtitle: String,
         systemImage: String,
         onSelect: @escaping () -> Void,
         clearAction: @escaping () -> Void
@@ -357,21 +392,10 @@ struct MobileEventCreationView: View {
                 HStack(spacing: 12) {
                     placeIcon(selection: selection, placeholderSystemImage: systemImage)
 
-                    VStack(alignment: .leading, spacing: 3) {
-                        Text(title)
-                            .font(.system(size: 13, weight: .medium))
-                            .foregroundStyle(.secondary)
-
-                        Text(selection?.name ?? placeholderTitle)
-                            .font(.system(size: 16, weight: .semibold))
-                            .foregroundStyle(.primary)
-                            .lineLimit(1)
-
-                        Text(selection?.locationText ?? placeholderSubtitle)
-                            .font(.system(size: 13, weight: .medium))
-                            .foregroundStyle(.secondary)
-                            .lineLimit(1)
-                    }
+                    Text(selection?.name ?? placeholderTitle)
+                        .font(.system(size: 14, weight: .semibold))
+                        .foregroundStyle(.primary)
+                        .lineLimit(1)
 
                     Spacer(minLength: 0)
 
@@ -384,7 +408,7 @@ struct MobileEventCreationView: View {
             .buttonStyle(.plain)
 
             if selection != nil {
-                Button("Clear \(title)", role: .destructive) {
+                Button("Clear", role: .destructive) {
                     clearAction()
                 }
             }
@@ -724,6 +748,7 @@ struct MobileEventCreationView: View {
                 state: event.state,
                 website: nil,
                 instagram: nil,
+                hours: nil,
                 categories: event.categories,
                 categoryLabels: event.categoryLabels,
                 updatedAt: event.updatedAt,
@@ -754,6 +779,7 @@ struct MobileEventCreationView: View {
                 state: event.state,
                 website: nil,
                 instagram: nil,
+                hours: nil,
                 categories: event.categories,
                 categoryLabels: event.categoryLabels,
                 updatedAt: event.updatedAt,
@@ -777,6 +803,146 @@ struct MobileEventCreationView: View {
 
         let trimmed = value.trimmingCharacters(in: .whitespacesAndNewlines)
         return trimmed.isEmpty ? nil : trimmed
+    }
+
+    private var scheduleDateKey: Date {
+        Calendar.current.startOfDay(for: startAt)
+    }
+
+    private var startDateBinding: Binding<Date> {
+        Binding(
+            get: { startAt },
+            set: { newDate in
+                startAt = Self.combineDate(newDate, withTimeFrom: startAt)
+
+                if endAt < startAt {
+                    endAt = startAt.addingTimeInterval(2 * 60 * 60)
+                }
+            }
+        )
+    }
+
+    private var endDateBinding: Binding<Date> {
+        Binding(
+            get: { endAt },
+            set: { newDate in
+                endAt = Self.combineDate(newDate, withTimeFrom: endAt)
+            }
+        )
+    }
+
+    private func applyVenueScheduleDefaults() {
+        guard let dayHours = selectedVenue?.hours?.hours(for: startAt),
+              !dayHours.closed
+        else {
+            return
+        }
+
+        if let openDate = Self.date(for: dayHours.open, on: startAt) {
+            startAt = openDate
+        }
+
+        if let closeDate = Self.date(for: dayHours.close, on: startAt) {
+            hasEndAt = true
+
+            if closeDate >= startAt {
+                endAt = closeDate
+            } else if let nextDayClose = Calendar.current.date(byAdding: .day, value: 1, to: closeDate) {
+                endAt = nextDayClose
+            }
+        }
+    }
+
+    private static func date(for time: String, on baseDate: Date) -> Date? {
+        let parts = time.split(separator: ":")
+        guard parts.count == 2,
+              let hour = Int(parts[0]),
+              let minute = Int(parts[1])
+        else {
+            return nil
+        }
+
+        var components = Calendar.current.dateComponents([.year, .month, .day], from: baseDate)
+        components.hour = hour
+        components.minute = minute
+        components.second = 0
+        return Calendar.current.date(from: components)
+    }
+
+    private static func combineDate(_ date: Date, withTimeFrom timeSource: Date) -> Date {
+        let calendar = Calendar.current
+        var dateComponents = calendar.dateComponents([.year, .month, .day], from: date)
+        let timeComponents = calendar.dateComponents([.hour, .minute, .second], from: timeSource)
+        dateComponents.hour = timeComponents.hour
+        dateComponents.minute = timeComponents.minute
+        dateComponents.second = timeComponents.second
+        return calendar.date(from: dateComponents) ?? date
+    }
+
+    private func deleteEvent() async {
+        guard !isSubmitting else {
+            return
+        }
+
+        guard case .edit(let event) = mode else {
+            return
+        }
+
+        isSubmitting = true
+        defer {
+            isSubmitting = false
+        }
+
+        do {
+            try await apiClient.send(APIClient.deleteMobileEvent(eventID: event.id))
+            NotificationCenter.default.post(name: .mobileEventDidDelete, object: event.id)
+            NotificationCenter.default.post(name: .mobileEventDidChange, object: event.id)
+            dismiss()
+        } catch {
+            alertMessage = error.localizedDescription
+            activeAlert = .error(error.localizedDescription)
+        }
+    }
+}
+
+private enum ActiveAlert: Identifiable {
+    case error(String)
+    case deleteConfirmation
+
+    var id: String {
+        switch self {
+        case .error(let message):
+            return "error-\(message)"
+        case .deleteConfirmation:
+            return "deleteConfirmation"
+        }
+    }
+}
+
+private struct ClearableInputField: View {
+    let title: String
+    @Binding var text: String
+
+    init(_ title: String, text: Binding<String>) {
+        self.title = title
+        _text = text
+    }
+
+    var body: some View {
+        HStack(spacing: 8) {
+            TextField(title, text: $text)
+
+            if !text.isEmpty {
+                Button {
+                    text = ""
+                } label: {
+                    Image(systemName: "xmark.circle.fill")
+                        .font(.system(size: 15, weight: .semibold))
+                        .foregroundStyle(.tertiary)
+                }
+                .buttonStyle(.plain)
+            }
+        }
     }
 }
 
@@ -864,11 +1030,40 @@ private struct PlaceLookupSheet: View {
 
                 ScrollView {
                     VStack(alignment: .leading, spacing: 14) {
-                        TextField(kind.placeholderQuery, text: $query)
-                            .textFieldStyle(.roundedBorder)
-                            .textInputAutocapitalization(.words)
-                            .padding(.horizontal, 16)
-                            .padding(.top, 12)
+                        HStack(spacing: 10) {
+                            Image(systemName: "magnifyingglass")
+                                .font(.system(size: 16, weight: .medium))
+                                .foregroundStyle(.white.opacity(0.65))
+
+                            TextField(kind.placeholderQuery, text: $query)
+                                .font(.system(size: 16, weight: .medium))
+                                .foregroundStyle(.white)
+                                .textInputAutocapitalization(.words)
+                                .autocorrectionDisabled()
+
+                            if !query.isEmpty {
+                                Button {
+                                    query = ""
+                                } label: {
+                                    Image(systemName: "xmark.circle.fill")
+                                        .font(.system(size: 16, weight: .semibold))
+                                        .foregroundStyle(.white.opacity(0.4))
+                                }
+                                .buttonStyle(.plain)
+                            }
+                        }
+                        .padding(.horizontal, 16)
+                        .frame(height: 50)
+                        .background(
+                            RoundedRectangle(cornerRadius: 18, style: .continuous)
+                                .fill(Color.white.opacity(0.08))
+                        )
+                        .overlay(
+                            RoundedRectangle(cornerRadius: 18, style: .continuous)
+                                .strokeBorder(Color.white.opacity(0.08), lineWidth: 1)
+                        )
+                        .padding(.horizontal, 16)
+                        .padding(.top, 12)
 
                         content
                             .padding(.horizontal, 16)
@@ -953,6 +1148,9 @@ private final class PlaceLookupViewModel: ObservableObject {
         case loaded
     }
 
+    private static var cachedResponse: MobilePlacesResponse?
+    private static var inFlightLoad: Task<MobilePlacesResponse, Error>?
+
     let type: PlaceListItem.PlaceType
     @Published private(set) var places: [PlaceListItem] = []
     @Published private(set) var phase: Phase = .idle
@@ -973,7 +1171,27 @@ private final class PlaceLookupViewModel: ObservableObject {
 
         do {
             if normalizedQuery.isEmpty {
-                let response = try await apiClient.send(APIClient.mobilePlaces(limit: 50))
+                let response: MobilePlacesResponse
+
+                if let cachedResponse = Self.cachedResponse {
+                    response = cachedResponse
+                } else if let inFlightLoad = Self.inFlightLoad {
+                    response = try await inFlightLoad.value
+                    Self.cachedResponse = response
+                } else {
+                    let loadTask = Task {
+                        try await apiClient.send(APIClient.mobilePlaces(limit: 50))
+                    }
+                    Self.inFlightLoad = loadTask
+                    do {
+                        response = try await loadTask.value
+                        Self.cachedResponse = response
+                    } catch {
+                        Self.inFlightLoad = nil
+                        throw error
+                    }
+                    Self.inFlightLoad = nil
+                }
 
                 guard activeQuery == normalizedQuery else {
                     return
@@ -1002,6 +1220,32 @@ private final class PlaceLookupViewModel: ObservableObject {
         if activeQuery == normalizedQuery {
             phase = .loaded
         }
+    }
+
+    static func preload(using apiClient: APIClient) async {
+        if cachedResponse != nil {
+            return
+        }
+
+        if let inFlightLoad {
+            _ = try? await inFlightLoad.value
+            return
+        }
+
+        let loadTask = Task {
+            try await apiClient.send(
+                APIClient.mobilePlaces(limit: 50)
+            )
+        }
+        inFlightLoad = loadTask
+
+        do {
+            cachedResponse = try await loadTask.value
+        } catch {
+            // Ignore preload failures; the picker can still load normally later.
+        }
+
+        inFlightLoad = nil
     }
 }
 

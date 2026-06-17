@@ -145,6 +145,14 @@ private struct MobileOnboardingView: View {
     @State private var dateOfBirth: Date
     @State private var errorMessage: String?
 
+    private var normalizedUsername: String {
+        username.trimmingCharacters(in: .whitespacesAndNewlines).lowercased()
+    }
+
+    private var canSubmit: Bool {
+        Self.isValidUsername(normalizedUsername) && !viewModel.isSubmitting
+    }
+
     init(initialState: MobileOnboardingState, onComplete: @escaping () -> Void) {
         self.initialState = initialState
         self.onComplete = onComplete
@@ -169,15 +177,6 @@ private struct MobileOnboardingView: View {
                             .font(.system(size: 13, weight: .medium))
                             .foregroundStyle(.red.opacity(0.92))
                     }
-
-                    #if DEBUG
-                    if let debug = initialState.debug {
-                        Text("debug: \(debug.reason) user=\(debug.userID) matched=\(debug.matchedUserID ?? "none") email=\(debug.matchedByEmail ? "yes" : "no") api=\(AppConfig.shared.apiBaseURL.host ?? "unknown") clerk=\(AppConfig.shared.clerkFrontendAPI)")
-                            .font(.system(size: 11, weight: .medium))
-                            .foregroundStyle(.white.opacity(0.36))
-                            .textSelection(.enabled)
-                    }
-                    #endif
 
                     signOutButton
                 }
@@ -290,8 +289,8 @@ private struct MobileOnboardingView: View {
             )
         }
         .buttonStyle(.plain)
-        .disabled(viewModel.isSubmitting)
-        .opacity(viewModel.isSubmitting ? 0.72 : 1)
+        .disabled(!canSubmit)
+        .opacity(canSubmit ? 1 : 0.72)
     }
 
     private var signOutButton: some View {
@@ -310,7 +309,6 @@ private struct MobileOnboardingView: View {
     }
 
     private func submit() {
-        let normalizedUsername = username.trimmingCharacters(in: .whitespacesAndNewlines).lowercased()
         guard Self.isValidUsername(normalizedUsername) else {
             errorMessage = "Username must be 3-20 characters and use only letters, numbers, or underscores."
             return

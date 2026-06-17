@@ -279,8 +279,9 @@ struct MainTabView: View {
         async let venues: Void = VenuesViewModel.preload(using: apiClient)
         async let activity: Void = ActivityViewModel.preload(using: apiClient)
         async let profile: Void = ProfileViewModel.preload(using: apiClient)
+        async let search: Void = HomeSearchDirectoryViewModel.preload(using: apiClient)
 
-        _ = await (adminStatus, venues, activity, profile)
+        _ = await (adminStatus, venues, activity, profile, search)
     }
 
     private func loadAdminStatus() async {
@@ -303,21 +304,21 @@ struct MainTabView: View {
 
                     Menu {
                         Button {
-                            isEventCreationSheetPresented = true
+                            presentedPlaceCreationType = .organizer
                         } label: {
-                            Label("Add Event", systemImage: "calendar.badge.plus")
+                            Label("Add Organizer", systemImage: "person.badge.plus")
                         }
 
                         Button {
                             presentedPlaceCreationType = .venue
                         } label: {
-                            Label("Add Venue", systemImage: "building.2.badge.plus")
+                            Label("Add Venue", systemImage: "building.2")
                         }
 
                         Button {
-                            presentedPlaceCreationType = .organizer
+                            isEventCreationSheetPresented = true
                         } label: {
-                            Label("Add Organizer", systemImage: "person.badge.plus")
+                            Label("Add Event", systemImage: "calendar.badge.plus")
                         }
                     } label: {
                         Image(systemName: "plus")

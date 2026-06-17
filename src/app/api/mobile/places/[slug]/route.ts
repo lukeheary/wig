@@ -186,6 +186,7 @@ export async function GET(
     state: mappedPlace.state,
     website: mappedPlace.website,
     instagram: mappedPlace.instagram,
+    hours: place.hours ?? null,
     categories: mappedPlace.categories,
     categoryLabels: mappedPlace.categoryLabels,
     updatedAt: mappedPlace.updatedAt,

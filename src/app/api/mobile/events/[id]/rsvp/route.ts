@@ -260,6 +260,7 @@ export async function POST(request: Request, context: RouteContext) {
         actorUserId: userId,
         eventId,
         status: body.status,
+        partnerUserId: includedPartnerInRsvp ? partnerUserId : null,
       },
       db
     );

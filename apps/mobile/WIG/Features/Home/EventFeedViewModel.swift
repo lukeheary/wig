@@ -3,6 +3,7 @@ import SwiftUI
 extension Notification.Name {
     static let eventRSVPDidChange = Notification.Name("eventRSVPDidChange")
     static let mobileEventDidChange = Notification.Name("mobileEventDidChange")
+    static let mobileEventDidDelete = Notification.Name("mobileEventDidDelete")
     static let mobilePlaceDidChange = Notification.Name("mobilePlaceDidChange")
 }
 
