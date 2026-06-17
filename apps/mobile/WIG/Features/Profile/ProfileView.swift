@@ -318,6 +318,9 @@ struct ProfileView: View {
             partnerRelationship = response.relationship
         } catch {
             partnerRelationship = nil
+            guard !isCancellationLikeError(error) else {
+                return
+            }
             partnerErrorMessage = error.localizedDescription
         }
     }
@@ -490,9 +493,23 @@ struct ProfileView: View {
                 .foregroundStyle(.white)
                 .frame(width: 46, height: 46)
                 .contentShape(Circle())
-                .profileLiquidGlass(in: Circle())
+            .profileLiquidGlass(in: Circle())
         }
         .buttonStyle(.plain)
+    }
+
+    private func isCancellationLikeError(_ error: Error) -> Bool {
+        if error is CancellationError {
+            return true
+        }
+
+        let nsError = error as NSError
+        if nsError.domain == NSURLErrorDomain, nsError.code == NSURLErrorCancelled {
+            return true
+        }
+
+        return error.localizedDescription.trimmingCharacters(in: .whitespacesAndNewlines)
+            .localizedCaseInsensitiveCompare("cancelled") == .orderedSame
     }
 }
 

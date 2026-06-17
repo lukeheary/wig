@@ -14,7 +14,7 @@ struct MainTabView: View {
     @State private var isEventCreationSheetPresented = false
     @State private var presentedPlaceCreationType: PlaceListItem.PlaceType?
 
-    private let floatingCreationButtonSize: CGFloat = 48
+    private let floatingCreationButtonSize: CGFloat = 52
     private let floatingCreationButtonBottomPadding: CGFloat = 60
 
     var body: some View {
@@ -79,6 +79,10 @@ struct MainTabView: View {
             }
         }
         .onChange(of: isAuthenticated) { _, isAuthenticated in
+            if !isAuthenticated {
+                appSession.updateAdminStatus(false)
+            }
+
             guard !isAuthenticated, selectedTab.requiresAuthentication else {
                 return
             }
@@ -172,6 +176,10 @@ struct MainTabView: View {
             }
         }
         .onChange(of: isAuthenticated) { _, isAuthenticated in
+            if !isAuthenticated {
+                appSession.updateAdminStatus(false)
+            }
+
             guard !isAuthenticated, selectedTab.requiresAuthentication else {
                 return
             }
@@ -267,11 +275,21 @@ struct MainTabView: View {
     }
 
     private func preloadAuthenticatedTabs() async {
+        async let adminStatus = loadAdminStatus()
         async let venues: Void = VenuesViewModel.preload(using: apiClient)
         async let activity: Void = ActivityViewModel.preload(using: apiClient)
         async let profile: Void = ProfileViewModel.preload(using: apiClient)
 
-        _ = await (venues, activity, profile)
+        _ = await (adminStatus, venues, activity, profile)
+    }
+
+    private func loadAdminStatus() async {
+        do {
+            let response = try await apiClient.send(APIClient.mobileAdminStatus())
+            appSession.updateAdminStatus(response.isAdmin)
+        } catch {
+            appSession.updateAdminStatus(false)
+        }
     }
 
     @ViewBuilder

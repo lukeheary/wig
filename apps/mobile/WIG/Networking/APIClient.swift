@@ -176,6 +176,14 @@ struct APIClient: Sendable {
         )
     }
 
+    static func mobileAdminStatus() -> Endpoint<MobileAdminStatusResponse> {
+        Endpoint(
+            path: "/api/mobile/admin-status",
+            requiresAuthentication: false,
+            includesAuthenticationIfAvailable: true
+        )
+    }
+
     static func mobileUserProfile(userID: String) -> Endpoint<UserProfileResponse> {
         Endpoint(
             path: "/api/mobile/users/\(userID)",
@@ -684,6 +692,10 @@ struct MobileSearchResponse: Decodable, Hashable, Sendable {
 struct MobileFriendRequestResponse: Decodable, Hashable, Sendable {
     let success: Bool
     let friendStatus: FriendUserSummary.FriendStatus
+}
+
+struct MobileAdminStatusResponse: Decodable, Hashable, Sendable {
+    let isAdmin: Bool
 }
 
 enum EventRSVPStatus: String, Codable, Hashable, Sendable {

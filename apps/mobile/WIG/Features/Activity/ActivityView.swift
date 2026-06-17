@@ -7,8 +7,10 @@ struct ActivityView: View {
     @State private var selectedFilter: ActivityFeedFilter = .upcoming
     @State private var selectedCityFilter: ActivityCityFilter?
     @State private var activityActionErrorMessage: String?
+    @State private var visibleActivityCount = ActivityView.activityPageSize
 
     private let background = Color(red: 0.07, green: 0.07, blue: 0.08)
+    private static let activityPageSize = 20
 
     var body: some View {
         NavigationStack {
@@ -49,6 +51,12 @@ struct ActivityView: View {
                 }
                 .refreshable {
                     await viewModel.load(using: apiClient, forceRefresh: true)
+                }
+                .onChange(of: selectedFilter) { _, _ in
+                    resetVisibleActivityCount()
+                }
+                .onChange(of: selectedCityFilter) { _, _ in
+                    resetVisibleActivityCount()
                 }
                 .alert(
                     "Couldn't Update Request",
@@ -96,6 +104,7 @@ struct ActivityView: View {
             let activities = effectiveCityFilter(for: response).filtered(
                 selectedFilter.filtered(response.activities)
             )
+            let visibleActivities = Array(activities.prefix(visibleActivityCount))
 
             if response.activities.isEmpty {
                 ContentUnavailableView {
@@ -116,13 +125,21 @@ struct ActivityView: View {
             } else {
                 ScrollView {
                     LazyVStack(alignment: .leading, spacing: 22) {
-                        ForEach(groupedActivities(activities)) { section in
+                        ForEach(groupedActivities(visibleActivities)) { section in
                             ActivitySectionView(
                                 section: section,
                                 onRespondToRequest: { activity, response in
                                     await respondToRequest(activity: activity, response: response)
                                 }
                             )
+                        }
+
+                        if visibleActivityCount < activities.count {
+                            Color.clear
+                                .frame(height: 1)
+                                .onAppear {
+                                    loadMoreActivities(totalCount: activities.count)
+                                }
                         }
                     }
                     .padding(.top, 82)
@@ -168,8 +185,16 @@ struct ActivityView: View {
             return "This Week"
         }
 
-        let weeksAgo = max(daysAgo / 7, 1)
-        return weeksAgo == 1 ? "1 Week Ago" : "\(weeksAgo) Weeks Ago"
+        let weekDifference = calendar.dateComponents([.weekOfYear], from: startOfDate, to: startOfToday).weekOfYear ?? 0
+        let monthDifference = calendar.dateComponents([.month], from: startOfDate, to: startOfToday).month ?? 0
+        let weeksAgo = max(abs(weekDifference), 1)
+        let monthsAgo = max(abs(monthDifference), 1)
+
+        if weeksAgo <= 3 {
+            return weeksAgo == 1 ? "1 Week Ago" : "\(weeksAgo) Weeks Ago"
+        }
+
+        return monthsAgo == 1 ? "Last Month" : "\(monthsAgo) Months Ago"
     }
 
     private var availableCityFilters: [ActivityCityFilter] {
@@ -252,6 +277,18 @@ struct ActivityView: View {
         } catch {
             activityActionErrorMessage = error.localizedDescription
         }
+    }
+
+    private func resetVisibleActivityCount() {
+        visibleActivityCount = Self.activityPageSize
+    }
+
+    private func loadMoreActivities(totalCount: Int) {
+        guard visibleActivityCount < totalCount else {
+            return
+        }
+
+        visibleActivityCount = min(visibleActivityCount + Self.activityPageSize, totalCount)
     }
 }
 
@@ -531,7 +568,7 @@ private struct ActivitySectionView: View {
     let onRespondToRequest: (ActivityFeedItem, ActivityRequestResponse) async -> Void
 
     var body: some View {
-        VStack(alignment: .leading, spacing: 14) {
+        VStack(alignment: .leading, spacing: 10) {
             Text(section.title)
                 .font(.system(size: 20, weight: .bold))
                 .foregroundStyle(.white)
@@ -566,8 +603,9 @@ private struct ActivityRowView: View {
     }()
 
     var body: some View {
-        HStack(alignment: .center, spacing: 12) {
+        HStack(alignment: .top, spacing: 12) {
             ActivityAvatarView(activity: activity)
+                .padding(.top, 6)
 
             if activity.type.isRequest {
                 requestContent
@@ -612,7 +650,7 @@ private struct ActivityRowView: View {
     }
 
     private var requestContent: some View {
-        HStack(alignment: .center, spacing: 14) {
+        HStack(alignment: .top, spacing: 14) {
             VStack(alignment: .leading, spacing: 4) {
                 requestText
                     .font(.system(size: 14))

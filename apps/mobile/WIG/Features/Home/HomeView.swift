@@ -313,21 +313,27 @@ struct HomeView: View {
                 }
 
                 if normalizedSearchQuery.isEmpty {
-                    ContentUnavailableView {
-                        Label(
-                            isAuthenticated ? "Search Events and People" : "Search Events and Venues",
-                            systemImage: "magnifyingglass"
-                        )
-                    } description: {
-                        Text(
-                            isAuthenticated
-                                ? "Type a name, username, venue, or event."
-                                : "Type a venue or event."
-                        )
+                    VStack {
+                        Spacer(minLength: 0)
+
+                        ContentUnavailableView {
+                            Label(
+                                isAuthenticated ? "Search Anything" : "Search Events and Venues",
+                                systemImage: "magnifyingglass"
+                            )
+                        } description: {
+                            Text(
+                                isAuthenticated
+                                    ? "Search for an event, person, username, or venue."
+                                    : "Search for an event or venue."
+                            )
+                        }
+                        .foregroundStyle(.white)
+                        .frame(maxWidth: .infinity)
+
+                        Spacer(minLength: 0)
                     }
-                    .foregroundStyle(.white)
-                    .frame(maxWidth: .infinity)
-                    .padding(.top, 48)
+                    .frame(minHeight: 420)
                 } else {
                     if searchViewModel.isLoading && searchUserResults.isEmpty && searchVenueResults.isEmpty && searchEvents.isEmpty {
                         ProgressView("Searching...")
@@ -454,8 +460,13 @@ struct HomeView: View {
             }
             .padding(.horizontal, 16)
             .frame(height: 48)
+            .frame(maxWidth: .infinity)
             .contentShape(Capsule())
             .homeLiquidGlass(in: Capsule())
+            .onTapGesture {
+                isSearchFieldFocused = true
+                isSearchPresented = true
+            }
         }
     }
 
@@ -1229,7 +1240,7 @@ private struct HomeRecentActivitySection: View {
     var body: some View {
         let visible = visibleActivities
         if !visible.isEmpty {
-            VStack(alignment: .leading, spacing: 14) {
+            VStack(alignment: .leading, spacing: 10) {
                 Button(action: onShowActivity) {
                     HStack(spacing: 6) {
                         Text("Recent Activity")
@@ -1274,8 +1285,9 @@ private struct HomeRecentActivityRow: View {
     }()
 
     var body: some View {
-        HStack(alignment: .center, spacing: 12) {
+        HStack(alignment: .top, spacing: 12) {
             ActivityAvatarView(activity: activity)
+                .padding(.top, 6)
 
             if activity.type.isRequest {
                 requestContent
@@ -1318,7 +1330,7 @@ private struct HomeRecentActivityRow: View {
     }
 
     private var requestContent: some View {
-        HStack(alignment: .center, spacing: 14) {
+        HStack(alignment: .top, spacing: 14) {
             VStack(alignment: .leading, spacing: 4) {
                 (
                     Text(activity.actorName)
