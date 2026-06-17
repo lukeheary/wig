@@ -6,8 +6,11 @@ struct ActivityView: View {
     @StateObject private var viewModel = ActivityViewModel()
     @State private var selectedFilter: ActivityFeedFilter = .upcoming
     @State private var selectedCityFilter: ActivityCityFilter?
+    @State private var activityActionErrorMessage: String?
+    @State private var visibleActivityCount = ActivityView.activityPageSize
 
     private let background = Color(red: 0.07, green: 0.07, blue: 0.08)
+    private static let activityPageSize = 20
 
     var body: some View {
         NavigationStack {
@@ -17,19 +20,29 @@ struct ActivityView: View {
                 .overlay(alignment: .topLeading) {
                     HStack(spacing: 10) {
                         if case .loaded(let response) = viewModel.state {
-                            ActivityCityFilterDropdown(
-                                selection: Binding(
+                            ActivityLeadingControls(
+                                citySelection: Binding(
                                     get: { effectiveCityFilter(for: response) },
                                     set: { selectedCityFilter = $0 }
                                 ),
-                                cities: availableCityFilters
+                                cities: availableCityFilters,
+                                hasActiveCitySelection: effectiveCityFilter(for: response) != defaultCityFilter(for: response),
+                                selection: $selectedFilter
+                            )
+                        } else {
+                            ActivityLeadingControls(
+                                citySelection: Binding(
+                                    get: { .all },
+                                    set: { selectedCityFilter = $0 }
+                                ),
+                                cities: [.all],
+                                hasActiveCitySelection: false,
+                                selection: $selectedFilter
                             )
                         }
-
-                        ActivityFilterDropdown(selection: $selectedFilter)
                     }
                         .padding(.leading, 16)
-                        .padding(.top, 14)
+                        .padding(.top, 0)
                 }
                 .task {
                     if case .idle = viewModel.state {
@@ -38,6 +51,27 @@ struct ActivityView: View {
                 }
                 .refreshable {
                     await viewModel.load(using: apiClient, forceRefresh: true)
+                }
+                .onChange(of: selectedFilter) { _, _ in
+                    resetVisibleActivityCount()
+                }
+                .onChange(of: selectedCityFilter) { _, _ in
+                    resetVisibleActivityCount()
+                }
+                .alert(
+                    "Couldn't Update Request",
+                    isPresented: Binding(
+                        get: { activityActionErrorMessage != nil },
+                        set: { isPresented in
+                            if !isPresented {
+                                activityActionErrorMessage = nil
+                            }
+                        }
+                    )
+                ) {
+                    Button("OK", role: .cancel) {}
+                } message: {
+                    Text(activityActionErrorMessage ?? "Please try again.")
                 }
         }
     }
@@ -70,6 +104,7 @@ struct ActivityView: View {
             let activities = effectiveCityFilter(for: response).filtered(
                 selectedFilter.filtered(response.activities)
             )
+            let visibleActivities = Array(activities.prefix(visibleActivityCount))
 
             if response.activities.isEmpty {
                 ContentUnavailableView {
@@ -90,8 +125,21 @@ struct ActivityView: View {
             } else {
                 ScrollView {
                     LazyVStack(alignment: .leading, spacing: 22) {
-                        ForEach(groupedActivities(activities)) { section in
-                            ActivitySectionView(section: section)
+                        ForEach(groupedActivities(visibleActivities)) { section in
+                            ActivitySectionView(
+                                section: section,
+                                onRespondToRequest: { activity, response in
+                                    await respondToRequest(activity: activity, response: response)
+                                }
+                            )
+                        }
+
+                        if visibleActivityCount < activities.count {
+                            Color.clear
+                                .frame(height: 1)
+                                .onAppear {
+                                    loadMoreActivities(totalCount: activities.count)
+                                }
                         }
                     }
                     .padding(.top, 82)
@@ -137,8 +185,16 @@ struct ActivityView: View {
             return "This Week"
         }
 
-        let weeksAgo = max(daysAgo / 7, 1)
-        return weeksAgo == 1 ? "1 Week ago" : "\(weeksAgo) Weeks ago"
+        let weekDifference = calendar.dateComponents([.weekOfYear], from: startOfDate, to: startOfToday).weekOfYear ?? 0
+        let monthDifference = calendar.dateComponents([.month], from: startOfDate, to: startOfToday).month ?? 0
+        let weeksAgo = max(abs(weekDifference), 1)
+        let monthsAgo = max(abs(monthDifference), 1)
+
+        if weeksAgo <= 3 {
+            return weeksAgo == 1 ? "1 Week Ago" : "\(weeksAgo) Weeks Ago"
+        }
+
+        return monthsAgo == 1 ? "Last Month" : "\(monthsAgo) Months Ago"
     }
 
     private var availableCityFilters: [ActivityCityFilter] {
@@ -147,9 +203,13 @@ struct ActivityView: View {
         }
 
         let cities = response.activities.reduce(into: [ActivityCityFilter]()) { filters, activity in
+            guard let event = activity.event else {
+                return
+            }
+
             let filter = ActivityCityFilter.city(
-                city: activity.event.city,
-                state: activity.event.state
+                city: event.city,
+                state: event.state
             )
 
             guard !filters.contains(filter) else {
@@ -183,16 +243,58 @@ struct ActivityView: View {
             return selectedCityFilter
         }
 
+        return defaultCityFilter(for: response)
+    }
+
+    private func defaultCityFilter(for response: ActivityFeedResponse) -> ActivityCityFilter {
         if let currentUserLocation = response.currentUserLocation {
             return .city(city: currentUserLocation.city, state: currentUserLocation.state)
         }
 
-        return cities.first { $0 != .all } ?? .all
+        return availableCityFilters.first { $0 != .all } ?? .all
+    }
+
+    private func respondToRequest(
+        activity: ActivityFeedItem,
+        response: ActivityRequestResponse
+    ) async {
+        do {
+            switch (activity.type, response) {
+            case (.friendRequestReceived, .accept):
+                try await apiClient.send(APIClient.acceptMobileFriendRequest(friendRequestID: activity.id.uuidString))
+            case (.friendRequestReceived, .decline):
+                try await apiClient.send(APIClient.declineMobileFriendRequest(friendRequestID: activity.id.uuidString))
+            case (.partnerRequestReceived, .accept):
+                try await apiClient.send(APIClient.acceptMobilePartnerRequest(partnerID: activity.id.uuidString))
+            case (.partnerRequestReceived, .decline):
+                try await apiClient.send(APIClient.declineMobilePartnerRequest(partnerID: activity.id.uuidString))
+            default:
+                return
+            }
+
+            // Don't reload here — the store records the response and keeps the
+            // item visible with settled text. A pull-to-refresh will clean it up.
+        } catch {
+            activityActionErrorMessage = error.localizedDescription
+        }
+    }
+
+    private func resetVisibleActivityCount() {
+        visibleActivityCount = Self.activityPageSize
+    }
+
+    private func loadMoreActivities(totalCount: Int) {
+        guard visibleActivityCount < totalCount else {
+            return
+        }
+
+        visibleActivityCount = min(visibleActivityCount + Self.activityPageSize, totalCount)
     }
 }
 
 private struct ActivityFilterDropdown: View {
     @Binding var selection: ActivityFeedFilter
+    var useCombinedStyle = false
 
     var body: some View {
         Menu {
@@ -211,9 +313,9 @@ private struct ActivityFilterDropdown: View {
             Image(systemName: "line.3.horizontal.decrease")
                 .font(.system(size: 18, weight: .semibold))
                 .foregroundStyle(selection == .upcoming ? .primary : AppTheme.accentBlue)
-                .frame(width: 44, height: 44)
-                .contentShape(Circle())
-                .activityLiquidGlass(in: Circle())
+                .frame(width: 46, height: 46)
+                .contentShape(Rectangle())
+                .modifier(ActivityStandaloneControlStyle(isStandalone: !useCombinedStyle))
         }
         .buttonStyle(.plain)
     }
@@ -222,6 +324,8 @@ private struct ActivityFilterDropdown: View {
 private struct ActivityCityFilterDropdown: View {
     @Binding var selection: ActivityCityFilter
     let cities: [ActivityCityFilter]
+    let hasActiveSelection: Bool
+    var useCombinedStyle = false
 
     var body: some View {
         Menu {
@@ -237,9 +341,54 @@ private struct ActivityCityFilterDropdown: View {
                 }
             }
         } label: {
-            ActivityFilterPill(title: selection.title)
+            Image(systemName: "map")
+                .font(.system(size: 18, weight: .semibold))
+                .foregroundStyle(hasActiveSelection ? AppTheme.accentBlue : .primary)
+                .frame(width: 46, height: 46)
+                .contentShape(Rectangle())
+                .modifier(ActivityStandaloneControlStyle(isStandalone: !useCombinedStyle))
         }
         .buttonStyle(.plain)
+    }
+}
+
+private struct ActivityLeadingControls: View {
+    @Binding var citySelection: ActivityCityFilter
+    let cities: [ActivityCityFilter]
+    let hasActiveCitySelection: Bool
+    @Binding var selection: ActivityFeedFilter
+
+    var body: some View {
+        HStack(spacing: 0) {
+            ActivityCityFilterDropdown(
+                selection: $citySelection,
+                cities: cities,
+                hasActiveSelection: hasActiveCitySelection,
+                useCombinedStyle: true
+            )
+
+            ActivityFilterDropdown(
+                selection: $selection,
+                useCombinedStyle: true
+            )
+        }
+        .frame(height: 46)
+        .clipShape(Capsule())
+        .activityLiquidGlass(in: Capsule())
+        .shadow(color: .black.opacity(0.12), radius: 14, x: 0, y: 8)
+    }
+}
+
+private struct ActivityStandaloneControlStyle: ViewModifier {
+    let isStandalone: Bool
+
+    @ViewBuilder
+    func body(content: Content) -> some View {
+        if isStandalone {
+            content.activityLiquidGlass(in: Circle())
+        } else {
+            content
+        }
     }
 }
 
@@ -259,7 +408,7 @@ private struct ActivityFilterPill: View {
         }
         .foregroundStyle(.primary)
         .padding(.horizontal, 15)
-        .frame(height: 44)
+        .frame(height: 46)
         .fixedSize(horizontal: true, vertical: false)
         .contentShape(Capsule())
         .activityLiquidGlass(in: Capsule())
@@ -309,9 +458,23 @@ private enum ActivityFeedFilter: String, CaseIterable, Identifiable {
     func filtered(_ activities: [ActivityFeedItem]) -> [ActivityFeedItem] {
         switch self {
         case .upcoming:
-            return activities.filter { $0.event.startAt >= .now }
+            return activities.filter { activity in
+                if activity.type == .friendRequestAccepted || activity.type == .partnerRequestAccepted {
+                    return false
+                }
+
+                guard let event = activity.event else { return true }
+                return event.startAt >= .now
+            }
         case .past:
-            return activities.filter { $0.event.startAt < .now }
+            return activities.filter { activity in
+                if activity.type == .friendRequestAccepted || activity.type == .partnerRequestAccepted {
+                    return true
+                }
+
+                guard let event = activity.event else { return false }
+                return event.startAt < .now
+            }
         case .all:
             return activities
         }
@@ -346,8 +509,12 @@ private enum ActivityCityFilter: Hashable, Identifiable {
             return activities
         case .city(let city, let state):
             return activities.filter { activity in
-                activity.event.city.localizedCaseInsensitiveCompare(city) == .orderedSame &&
-                    activity.event.state.localizedCaseInsensitiveCompare(state) == .orderedSame
+                guard let event = activity.event else {
+                    return true
+                }
+
+                return event.city.localizedCaseInsensitiveCompare(city) == .orderedSame &&
+                    event.state.localizedCaseInsensitiveCompare(state) == .orderedSame
             }
         }
     }
@@ -398,9 +565,10 @@ private struct ActivitySummaryPill: View {
 
 private struct ActivitySectionView: View {
     let section: ActivitySection
+    let onRespondToRequest: (ActivityFeedItem, ActivityRequestResponse) async -> Void
 
     var body: some View {
-        VStack(alignment: .leading, spacing: 14) {
+        VStack(alignment: .leading, spacing: 10) {
             Text(section.title)
                 .font(.system(size: 20, weight: .bold))
                 .foregroundStyle(.white)
@@ -408,7 +576,10 @@ private struct ActivitySectionView: View {
 
             VStack(alignment: .leading, spacing: 16) {
                 ForEach(section.activities) { activity in
-                    ActivityRowView(activity: activity)
+                    ActivityRowView(
+                        activity: activity,
+                        onRespondToRequest: onRespondToRequest
+                    )
                 }
             }
             .padding(.horizontal, 16)
@@ -418,9 +589,12 @@ private struct ActivitySectionView: View {
 
 private struct ActivityRowView: View {
     let activity: ActivityFeedItem
+    let onRespondToRequest: (ActivityFeedItem, ActivityRequestResponse) async -> Void
+    @EnvironmentObject private var requestStore: ActivityRequestStore
     @State private var selectedEvent: EventFeedItem?
     @State private var selectedVenue: PlaceListItem?
     @State private var selectedUserProfile: SelectedUserProfile?
+    @State private var isSubmittingResponse = false
 
     private static let relativeFormatter: RelativeDateTimeFormatter = {
         let formatter = RelativeDateTimeFormatter()
@@ -431,27 +605,38 @@ private struct ActivityRowView: View {
     var body: some View {
         HStack(alignment: .top, spacing: 12) {
             ActivityAvatarView(activity: activity)
+                .padding(.top, 6)
 
-            VStack(alignment: .leading, spacing: 4) {
-                InlineLinkedActivityText(
-                    activity: activity,
-                    onTapEvent: {
-                        selectedEvent = activity.event.eventFeedItem
-                    },
-                    onTapVenue: { venue in
-                        selectedVenue = venue
-                    },
-                    onTapUser: { userID in
-                        selectedUserProfile = SelectedUserProfile(id: userID)
-                    }
-                )
+            if activity.type.isRequest {
+                requestContent
+            } else {
+                VStack(alignment: .leading, spacing: 4) {
+                    InlineLinkedActivityText(
+                        activity: activity,
+                        onTapEvent: {
+                            if let event = activity.event?.eventFeedItem {
+                                selectedEvent = event
+                            }
+                        },
+                        onTapVenue: { venue in
+                            selectedVenue = venue
+                        },
+                        onTapUser: { userID in
+                            selectedUserProfile = SelectedUserProfile(id: userID)
+                        }
+                    )
                     .frame(maxWidth: .infinity, alignment: .leading)
 
-                Text(Self.relativeFormatter.localizedString(for: activity.timestamp, relativeTo: .now))
+                    Text(
+                        Self.relativeFormatter
+                            .localizedString(for: activity.timestamp, relativeTo: .now)
+                            .capitalizingRelativeAgo()
+                    )
                     .font(.system(size: 11, weight: .medium))
                     .foregroundStyle(.white.opacity(0.42))
+                }
+                .frame(maxWidth: .infinity, alignment: .leading)
             }
-            .frame(maxWidth: .infinity, alignment: .leading)
         }
         .navigationDestination(item: $selectedEvent) { event in
             EventDetailView(event: event)
@@ -461,6 +646,104 @@ private struct ActivityRowView: View {
         }
         .navigationDestination(item: $selectedUserProfile) { selection in
             UserProfileView(userID: selection.id)
+        }
+    }
+
+    private var requestContent: some View {
+        HStack(alignment: .top, spacing: 14) {
+            VStack(alignment: .leading, spacing: 4) {
+                requestText
+                    .font(.system(size: 14))
+                    .lineSpacing(3)
+                    .onTapGesture {
+                        if requestStore.response(for: activity.id) == nil {
+                            selectedUserProfile = SelectedUserProfile(id: activity.actorUserID)
+                        }
+                    }
+
+                Text(
+                    Self.relativeFormatter
+                        .localizedString(for: activity.timestamp, relativeTo: .now)
+                        .capitalizingRelativeAgo()
+                )
+                .font(.system(size: 11, weight: .medium))
+                .foregroundStyle(.white.opacity(0.42))
+            }
+            .frame(maxWidth: .infinity, alignment: .leading)
+
+            if activity.type.isActionableRequest && requestStore.response(for: activity.id) == nil {
+                HStack(spacing: 10) {
+                    Button {
+                        submit(.decline)
+                    } label: {
+                        Image(systemName: "xmark")
+                            .font(.system(size: 13, weight: .bold))
+                            .foregroundStyle(.white.opacity(0.75))
+                            .frame(width: 36, height: 36)
+                            .background(Circle().fill(Color.white.opacity(0.1)))
+                    }
+                    .disabled(isSubmittingResponse)
+
+                    Button {
+                        submit(.accept)
+                    } label: {
+                        Image(systemName: "checkmark")
+                            .font(.system(size: 15, weight: .bold))
+                            .foregroundStyle(.white)
+                            .frame(width: 42, height: 42)
+                            .background(Circle().fill(AppTheme.accentBlue))
+                    }
+                    .disabled(isSubmittingResponse)
+                }
+                .opacity(isSubmittingResponse ? 0.5 : 1)
+            }
+        }
+    }
+
+    @ViewBuilder
+    private var requestText: some View {
+        let requestType = activity.type == .partnerRequestReceived ? "partner" : "friend"
+        if let settled = requestStore.response(for: activity.id) {
+            let verb = settled == .accept ? "accepted" : "declined"
+            (
+                Text("You \(verb) a \(requestType) request from ")
+                .foregroundColor(.white.opacity(0.62))
+                + Text(activity.actorName)
+                .fontWeight(.medium)
+                .foregroundColor(.white.opacity(0.62))
+                + Text(".")
+                .foregroundColor(.white.opacity(0.62))
+            )
+        } else if activity.type == .friendRequestAccepted || activity.type == .partnerRequestAccepted {
+            let acceptedType = activity.type == .partnerRequestAccepted ? "partner" : "friend"
+            (
+                Text("You accepted a \(acceptedType) request from ")
+                .foregroundColor(.white.opacity(0.62))
+                + Text(activity.actorName)
+                .fontWeight(.medium)
+                .foregroundColor(.white.opacity(0.62))
+                + Text(".")
+                .foregroundColor(.white.opacity(0.62))
+            )
+        } else {
+            (
+                Text(activity.actorName)
+                .fontWeight(.medium)
+                .foregroundColor(.white)
+                + Text(" sent you a \(requestType) request.")
+                .foregroundColor(.white.opacity(0.62))
+            )
+        }
+    }
+
+    private func submit(_ response: ActivityRequestResponse) {
+        guard !isSubmittingResponse else { return }
+
+        isSubmittingResponse = true
+        Task {
+            await onRespondToRequest(activity, response)
+            requestStore.record(response, for: activity.id)
+            isSubmittingResponse = false
         }
     }
 
@@ -500,16 +783,23 @@ struct InlineLinkedActivityText: UIViewRepresentable {
         context.coordinator.parent = self
         textView.attributedText = attributedText(image: context.coordinator.cachedImage)
 
-        guard context.coordinator.imageURL != activity.event.coverImageURL else {
+        guard let event = activity.event else {
+            context.coordinator.imageURL = nil
+            context.coordinator.cachedImage = nil
+            context.coordinator.task?.cancel()
             return
         }
 
-        context.coordinator.imageURL = activity.event.coverImageURL
+        guard context.coordinator.imageURL != event.coverImageURL else {
+            return
+        }
+
+        context.coordinator.imageURL = event.coverImageURL
         context.coordinator.cachedImage = nil
         context.coordinator.task?.cancel()
         textView.attributedText = attributedText(image: nil)
 
-        guard let url = activity.event.coverImageURL else {
+        guard let url = event.coverImageURL else {
             return
         }
 
@@ -541,6 +831,9 @@ struct InlineLinkedActivityText: UIViewRepresentable {
         let mediumFont = UIFont.systemFont(ofSize: 14, weight: .medium)
         let mutedColor = UIColor.white.withAlphaComponent(0.62)
         let text = NSMutableAttributedString()
+        guard let event = activity.event else {
+            return text
+        }
 
         if let partnerFirstName = activity.partnerFirstName {
             text.append(linkedNameText(actorDisplayName, userID: activity.actorUserID, font: mediumFont))
@@ -574,16 +867,16 @@ struct InlineLinkedActivityText: UIViewRepresentable {
         text.append(thumbnailAttachment(image: image))
         text.append(
             NSAttributedString(
-                string: "\u{2009}\u{00a0}\(activity.event.title)",
+                string: "\u{2009}\u{00a0}\(event.title)",
                 attributes: [
                     .font: mediumFont,
                     .foregroundColor: UIColor.white,
-                    .link: URL(string: "wig-event://\(activity.event.id.uuidString)")!,
+                    .link: URL(string: "wig-event://\(event.id.uuidString)")!,
                 ]
             )
         )
 
-        if let venue = activity.event.venue {
+        if let venue = event.venue {
             text.append(
                 NSAttributedString(
                     string: " at ",
@@ -603,7 +896,7 @@ struct InlineLinkedActivityText: UIViewRepresentable {
         } else {
             text.append(
                 NSAttributedString(
-                    string: " at \(activity.event.primaryLocation)",
+                    string: " at \(event.primaryLocation)",
                     attributes: [.font: font, .foregroundColor: mutedColor]
                 )
             )
@@ -611,7 +904,7 @@ struct InlineLinkedActivityText: UIViewRepresentable {
 
         text.append(
             NSAttributedString(
-                string: " on \(activity.event.eventFeedItem.formattedStart(format: "MMM d"))",
+                string: " on \(event.eventFeedItem.formattedStart(format: "MMM d"))",
                 attributes: [.font: font, .foregroundColor: mutedColor]
             )
         )
@@ -690,18 +983,25 @@ struct InlineLinkedActivityText: UIViewRepresentable {
 
     private var actionPhrase: String {
         let isPluralSubject = activity.partnerFirstName != nil
+        let eventStartAt = activity.event?.startAt ?? .distantFuture
+        let isPastEvent = eventStartAt < .now
 
         switch activity.type {
         case .rsvpGoing:
-            return activity.event.startAt < .now
+            return isPastEvent
                 ? "went to"
                 : (isPluralSubject ? "are going to" : "is going to")
         case .rsvpInterested:
-            return activity.event.startAt < .now
+            return isPastEvent
                 ? (isPluralSubject ? "were interested in" : "was interested in")
                 : (isPluralSubject ? "are interested in" : "is interested in")
         case .rsvpNotGoing:
-            return activity.event.startAt < .now ? "couldn't go to" : "can't go to"
+            return isPastEvent ? "couldn't go to" : "can't go to"
+        case .friendRequestReceived,
+             .partnerRequestReceived,
+             .friendRequestAccepted,
+             .partnerRequestAccepted:
+            return ""
         }
     }
 
@@ -730,7 +1030,7 @@ struct InlineLinkedActivityText: UIViewRepresentable {
                     }
                 case "wig-venue":
                     return UIAction { [weak self] _ in
-                        guard let venue = self?.parent.activity.event.venue else {
+                        guard let venue = self?.parent.activity.event?.venue else {
                             return
                         }
 
@@ -821,6 +1121,14 @@ struct ActivityAvatarView: View {
             return "star.fill"
         case .rsvpNotGoing:
             return "xmark"
+        case .friendRequestReceived:
+            return "person.badge.plus"
+        case .partnerRequestReceived:
+            return "heart.fill"
+        case .friendRequestAccepted:
+            return "person.badge.checkmark"
+        case .partnerRequestAccepted:
+            return "heart.circle.fill"
         }
     }
 
@@ -832,7 +1140,86 @@ struct ActivityAvatarView: View {
             return Color.yellow
         case .rsvpNotGoing:
             return Color.red
+        case .friendRequestReceived:
+            return AppTheme.accentBlue
+        case .partnerRequestReceived:
+            return Color(red: 1.0, green: 0.43, blue: 0.66)
+        case .friendRequestAccepted:
+            return Color(red: 0.45, green: 0.76, blue: 1)
+        case .partnerRequestAccepted:
+            return Color(red: 1.0, green: 0.43, blue: 0.66)
         }
+    }
+}
+
+enum ActivityRequestResponse {
+    case accept
+    case decline
+}
+
+enum ActivityRequestButtonKind {
+    case primary
+    case secondary
+}
+
+struct ActivityRequestButtonModifier: ViewModifier {
+    let kind: ActivityRequestButtonKind
+    let isDisabled: Bool
+
+    func body(content: Content) -> some View {
+        content
+            .font(.system(size: 13, weight: .semibold))
+            .foregroundStyle(foregroundColor)
+            .frame(height: 34)
+            .frame(minWidth: 84)
+            .padding(.horizontal, 14)
+            .background(background)
+            .overlay {
+                Capsule(style: .continuous)
+                    .strokeBorder(borderColor, lineWidth: 1)
+            }
+            .clipShape(Capsule(style: .continuous))
+            .opacity(isDisabled ? 0.55 : 1)
+    }
+
+    private var foregroundColor: Color {
+        switch kind {
+        case .primary:
+            return .white
+        case .secondary:
+            return .white.opacity(0.88)
+        }
+    }
+
+    private var background: some View {
+        Group {
+            switch kind {
+            case .primary:
+                Capsule(style: .continuous)
+                    .fill(AppTheme.accentBlue.opacity(isDisabled ? 0.45 : 0.92))
+            case .secondary:
+                Capsule(style: .continuous)
+                    .fill(Color.white.opacity(0.08))
+            }
+        }
+    }
+
+    private var borderColor: Color {
+        switch kind {
+        case .primary:
+            return AppTheme.accentBlue.opacity(0.18)
+        case .secondary:
+            return Color.white.opacity(0.1)
+        }
+    }
+}
+
+extension View {
+    func activityRequestButtonStyle(
+        kind: ActivityRequestButtonKind,
+        isDisabled: Bool
+    ) -> some View {
+        modifier(ActivityRequestButtonModifier(kind: kind, isDisabled: isDisabled))
     }
 }
 

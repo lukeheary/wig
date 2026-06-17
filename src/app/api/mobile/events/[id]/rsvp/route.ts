@@ -255,7 +255,7 @@ export async function POST(request: Request, context: RouteContext) {
     (body.status === "going" || body.status === "interested") &&
     existingUserRsvp?.status !== body.status
   ) {
-    void notifyFriendsOfRsvp(
+    await notifyFriendsOfRsvp(
       {
         actorUserId: userId,
         eventId,

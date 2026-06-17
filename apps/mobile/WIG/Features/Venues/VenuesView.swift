@@ -19,6 +19,11 @@ struct VenuesView: View {
                 .refreshable {
                     await viewModel.load(using: apiClient, forceRefresh: true)
                 }
+                .onReceive(NotificationCenter.default.publisher(for: .mobilePlaceDidChange)) { _ in
+                    Task {
+                        await viewModel.load(using: apiClient, forceRefresh: true)
+                    }
+                }
         }
     }
 
@@ -85,7 +90,7 @@ struct VenuesView: View {
                 .overlay(alignment: .topLeading) {
                     filterControls(for: response)
                         .padding(.horizontal, 16)
-                        .padding(.top, 14)
+                        .padding(.top, 0)
                 }
                 .scrollIndicators(.hidden)
                 .background(venuesBackground)
@@ -100,15 +105,15 @@ struct VenuesView: View {
 
     private func filterControls(for response: MobilePlacesResponse) -> some View {
         HStack(spacing: 10) {
-            PlaceLocationFilterMenu(
-                selection: Binding(
+            PlaceLeadingControls(
+                locationSelection: Binding(
                     get: { effectiveLocationFilter(for: response) },
                     set: { selectedLocationFilter = $0 }
                 ),
-                locations: availableLocationFilters(for: response)
+                locations: availableLocationFilters(for: response),
+                hasActiveLocationSelection: effectiveLocationFilter(for: response) != defaultLocationFilter(for: response),
+                selection: $selectedPlaceFilter
             )
-
-            PlaceKindFilterMenu(selection: $selectedPlaceFilter)
         }
         .frame(maxWidth: .infinity, alignment: .leading)
         .padding(.bottom, 4)
@@ -154,6 +159,12 @@ struct VenuesView: View {
         if let selectedLocationFilter, locations.contains(selectedLocationFilter) {
             return selectedLocationFilter
         }
+
+        return defaultLocationFilter(for: response)
+    }
+
+    private func defaultLocationFilter(for response: MobilePlacesResponse) -> PlaceLocationFilter {
+        let locations = availableLocationFilters(for: response)
 
         if let currentUserLocation = response.currentUserLocation {
             return .city(city: currentUserLocation.city, state: currentUserLocation.state)
@@ -243,6 +254,8 @@ private enum PlaceKindFilter: String, CaseIterable, Identifiable {
 private struct PlaceLocationFilterMenu: View {
     @Binding var selection: PlaceLocationFilter
     let locations: [PlaceLocationFilter]
+    let hasActiveSelection: Bool
+    var useCombinedStyle = false
 
     var body: some View {
         Menu {
@@ -258,7 +271,12 @@ private struct PlaceLocationFilterMenu: View {
                 }
             }
         } label: {
-            PlaceMenuPillLabel(title: selection.title)
+            Image(systemName: "map")
+                .font(.system(size: 18, weight: .semibold))
+                .foregroundStyle(hasActiveSelection ? AppTheme.accentBlue : .primary)
+                .frame(width: 46, height: 46)
+                .contentShape(Rectangle())
+                .modifier(PlaceStandaloneControlStyle(isStandalone: !useCombinedStyle))
         }
         .buttonStyle(.plain)
     }
@@ -266,6 +284,7 @@ private struct PlaceLocationFilterMenu: View {
 
 private struct PlaceKindFilterMenu: View {
     @Binding var selection: PlaceKindFilter
+    var useCombinedStyle = false
 
     var body: some View {
         Menu {
@@ -284,11 +303,51 @@ private struct PlaceKindFilterMenu: View {
             Image(systemName: "line.3.horizontal.decrease")
                 .font(.system(size: 18, weight: .semibold))
                 .foregroundStyle(selection == .all ? .primary : AppTheme.accentBlue)
-                .frame(width: 44, height: 44)
-                .contentShape(Circle())
-                .placeLiquidGlass(in: Circle())
+                .frame(width: 46, height: 46)
+                .contentShape(Rectangle())
+                .modifier(PlaceStandaloneControlStyle(isStandalone: !useCombinedStyle))
         }
         .buttonStyle(.plain)
+    }
+}
+
+private struct PlaceLeadingControls: View {
+    @Binding var locationSelection: PlaceLocationFilter
+    let locations: [PlaceLocationFilter]
+    let hasActiveLocationSelection: Bool
+    @Binding var selection: PlaceKindFilter
+
+    var body: some View {
+        HStack(spacing: 0) {
+            PlaceLocationFilterMenu(
+                selection: $locationSelection,
+                locations: locations,
+                hasActiveSelection: hasActiveLocationSelection,
+                useCombinedStyle: true
+            )
+
+            PlaceKindFilterMenu(
+                selection: $selection,
+                useCombinedStyle: true
+            )
+        }
+        .frame(height: 46)
+        .clipShape(Capsule())
+        .placeLiquidGlass(in: Capsule())
+        .shadow(color: .black.opacity(0.12), radius: 14, x: 0, y: 8)
+    }
+}
+
+private struct PlaceStandaloneControlStyle: ViewModifier {
+    let isStandalone: Bool
+
+    @ViewBuilder
+    func body(content: Content) -> some View {
+        if isStandalone {
+            content.placeLiquidGlass(in: Circle())
+        } else {
+            content
+        }
     }
 }
 
@@ -308,7 +367,7 @@ private struct PlaceMenuPillLabel: View {
                 .foregroundStyle(.primary.opacity(0.58))
         }
         .padding(.horizontal, 15)
-        .frame(height: 44)
+        .frame(height: 46)
         .fixedSize(horizontal: true, vertical: false)
         .contentShape(Capsule())
         .placeLiquidGlass(in: Capsule())

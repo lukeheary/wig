@@ -2,6 +2,8 @@ import SwiftUI
 
 extension Notification.Name {
     static let eventRSVPDidChange = Notification.Name("eventRSVPDidChange")
+    static let mobileEventDidChange = Notification.Name("mobileEventDidChange")
+    static let mobilePlaceDidChange = Notification.Name("mobilePlaceDidChange")
 }
 
 @MainActor
@@ -76,14 +78,15 @@ final class EventFeedViewModel: ObservableObject {
                 state = .loading
             }
 
-            guard let weekEnd = Self.weekCalendar.date(byAdding: .day, value: 7, to: cacheKey) else {
+            let requestStartDate = Self.displayRangeStartDate(for: cacheKey)
+            guard let weekEnd = Self.weekEndDate(for: cacheKey) else {
                 throw EventFeedError.invalidWeekRange
             }
 
             let loadTask = Task {
                 try await apiClient.send(
                     APIClient.mobileEventsPreview(
-                        startDate: cacheKey,
+                        startDate: requestStartDate,
                         endDate: weekEnd,
                         limit: 500
                     )
@@ -128,6 +131,33 @@ final class EventFeedViewModel: ObservableObject {
 
     private static func cacheKey(for date: Date) -> Date {
         weekCalendar.startOfDay(for: date)
+    }
+
+    static func displayRangeStartDate(for weekStart: Date, now: Date = .now) -> Date {
+        let currentWeekStart = startOfWeek(for: now)
+        let startOfToday = weekCalendar.startOfDay(for: now)
+
+        if weekStart > currentWeekStart {
+            return cacheKey(for: weekStart)
+        }
+
+        if weekCalendar.component(.hour, from: now) < 6 {
+            return weekCalendar.date(byAdding: .day, value: -1, to: startOfToday) ?? startOfToday
+        }
+
+        return startOfToday
+    }
+
+    static func weekEndDate(for weekStart: Date) -> Date? {
+        weekCalendar.date(byAdding: .day, value: 7, to: cacheKey(for: weekStart))
+    }
+
+    static func startOfWeek(for date: Date) -> Date {
+        let startOfDay = weekCalendar.startOfDay(for: date)
+        let weekday = weekCalendar.component(.weekday, from: startOfDay)
+        let daysFromMonday = (weekday - weekCalendar.firstWeekday + 7) % 7
+
+        return weekCalendar.date(byAdding: .day, value: -daysFromMonday, to: startOfDay) ?? startOfDay
     }
 
     private static var weekCalendar: Calendar {

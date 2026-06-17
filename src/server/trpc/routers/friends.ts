@@ -15,6 +15,7 @@ import {
   deleteNotificationsForEntity,
 } from "@/server/utils/notifications";
 import { sendPushNotificationToUsers } from "@/server/utils/push-notifications";
+import { accentInsensitiveLike } from "@/server/db/search";
 
 export const friendsRouter = router({
   searchUsers: protectedProcedure
@@ -26,8 +27,6 @@ export const friendsRouter = router({
       })
     )
     .query(async ({ ctx, input }) => {
-      const searchPattern = `%${input.query}%`;
-
       // Get existing friend connections (accepted or pending) in both directions
       const existingFriendships = await ctx.db.query.userFriends.findMany({
         where: or(
@@ -50,10 +49,14 @@ export const friendsRouter = router({
       const results = await ctx.db.query.users.findMany({
         where: and(
           or(
-            sql`LOWER(${users.username}) LIKE LOWER(${searchPattern})`,
-            sql`LOWER(${users.email}) LIKE LOWER(${searchPattern})`,
-            sql`LOWER(${users.firstName}) LIKE LOWER(${searchPattern})`,
-            sql`LOWER(${users.lastName}) LIKE LOWER(${searchPattern})`
+            accentInsensitiveLike(users.username, input.query),
+            accentInsensitiveLike(users.email, input.query),
+            accentInsensitiveLike(users.firstName, input.query, {
+              coalesceToEmpty: true,
+            }),
+            accentInsensitiveLike(users.lastName, input.query, {
+              coalesceToEmpty: true,
+            })
           ),
           eq(users.isOnboarding, false),
           sql`${users.id} NOT IN (${sql.join(
@@ -147,8 +150,8 @@ export const friendsRouter = router({
           type: "friend_request",
           entityType: "friend_request",
           entityId: friendRequest.id,
-          title: "Friend request",
-          body: `${senderName} sent you a friend request`,
+          title: senderName,
+          body: "Sent you a friend request",
           metadata: {
             requestId: friendRequest.id,
             requestType: "friend",
@@ -160,8 +163,8 @@ export const friendsRouter = router({
       await sendPushNotificationToUsers(
         [input.friendUserId],
         {
-          title: "Friend request",
-          body: `${senderName} sent you a friend request`,
+          title: senderName,
+          body: "Sent you a friend request",
           data: {
             type: "friend_request",
             entityId: friendRequest.id,
@@ -246,12 +249,26 @@ export const friendsRouter = router({
           type: "friend_request_accepted",
           entityType: "friend_request",
           entityId: input.friendRequestId,
-          title: "Friend request accepted",
-          body: `${accepterName} accepted your friend request`,
+          title: accepterName,
+          body: "Added you as a friend",
           actionUrl: "/friends/list",
           metadata: {
             requestId: input.friendRequestId,
             requestType: "friend",
+          },
+        },
+        ctx.db
+      );
+
+      await sendPushNotificationToUsers(
+        [friendRequest.userId],
+        {
+          title: accepterName,
+          body: "Added you as a friend",
+          data: {
+            type: "friend_request_accepted",
+            entityId: input.friendRequestId,
+            actionUrl: "/friends/list",
           },
         },
         ctx.db

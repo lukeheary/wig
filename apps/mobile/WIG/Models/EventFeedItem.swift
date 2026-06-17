@@ -43,6 +43,7 @@ struct EventFeedItem: Codable, Identifiable, Hashable, Sendable {
     let organizerLogoImageURL: URL?
     let categories: [String]
     let categoryLabels: [String: String]
+    let status: EventStatus
     let updatedAt: Date?
     var canEdit = false
     var isFollowed = false
@@ -76,6 +77,7 @@ struct EventFeedItem: Codable, Identifiable, Hashable, Sendable {
         case organizerLogoImageURL = "organizerLogoImageUrl"
         case categories
         case categoryLabels
+        case status
         case updatedAt
         case canEdit
         case isFollowed
@@ -297,6 +299,7 @@ extension EventFeedItem {
         organizerLogoImageURL = try container.decodeOptionalURL(forKey: .organizerLogoImageURL)
         categories = try container.decodeIfPresent([String].self, forKey: .categories) ?? []
         categoryLabels = try container.decodeIfPresent([String: String].self, forKey: .categoryLabels) ?? [:]
+        status = try container.decodeIfPresent(EventStatus.self, forKey: .status) ?? .active
         updatedAt = try container.decodeIfPresent(Date.self, forKey: .updatedAt)
         canEdit = try container.decodeIfPresent(Bool.self, forKey: .canEdit) ?? false
         isFollowed = try container.decodeIfPresent(Bool.self, forKey: .isFollowed) ?? false

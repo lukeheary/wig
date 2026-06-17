@@ -56,6 +56,8 @@ import {
   createNotification,
   notifyFriendsOfRsvp,
 } from "@/server/utils/notifications";
+import { sendPushNotificationToUsers } from "@/server/utils/push-notifications";
+import { accentInsensitiveLike } from "@/server/db/search";
 import { RSVP_DECLINE_REASON_VALUES } from "@/lib/rsvp";
 
 function resolveEventUpdateActivityType(
@@ -117,17 +119,29 @@ async function notifyPartnerOfMirroredRsvp({
       columns: {
         id: true,
         title: true,
+        startAt: true,
       },
     }),
   ]);
 
   if (!event) return;
 
+  const partnerRsvpDate = event.startAt
+    ? new Intl.DateTimeFormat("en-US", {
+        month: "short",
+        day: "numeric",
+      }).format(event.startAt)
+    : null;
   const actorName =
     [actor?.firstName, actor?.lastName].filter(Boolean).join(" ").trim() ||
     actor?.username ||
     "Your partner";
-  const verb = status === "going" ? "RSVP'd going to" : "RSVP'd interested in";
+  const title = actorName;
+  const body =
+    status === "going"
+      ? `Is going with you to ${event.title}${partnerRsvpDate ? ` on ${partnerRsvpDate}` : ""}`
+      : `Is interested in ${event.title} with you${partnerRsvpDate ? ` on ${partnerRsvpDate}` : ""}`;
+  const actionUrl = `/event/${event.id}`;
 
   await createNotification(
     {
@@ -136,14 +150,30 @@ async function notifyPartnerOfMirroredRsvp({
       type: "event_update",
       entityType: "event",
       entityId: event.id,
-      title: "Partner RSVP update",
-      body: `${actorName} ${verb} ${event.title} for both of you`,
-      actionUrl: `/event/${event.id}`,
+      title,
+      body,
+      actionUrl,
       metadata: {
         source: "partner_rsvp",
         status,
         eventId: event.id,
         eventTitle: event.title,
+      },
+    },
+    ctx.db
+  );
+
+  await sendPushNotificationToUsers(
+    [partnerUserId],
+    {
+      title,
+      body,
+      data: {
+        type: "event_update",
+        entityId: event.id,
+        actionUrl,
+        source: "partner_rsvp",
+        status,
       },
     },
     ctx.db
@@ -1405,13 +1435,20 @@ export const eventRouter = router({
 
       // Add search filter
       if (input.search?.trim()) {
-        const searchTerm = `%${input.search.trim()}%`;
+        const searchQuery = input.search.trim();
         const matchingVenueRows = await ctx.db
           .select({ id: places.id })
           .from(places)
-          .where(and(eq(places.type, "venue"), ilike(places.name, searchTerm)));
+          .where(
+            and(
+              eq(places.type, "venue"),
+              accentInsensitiveLike(places.name, searchQuery)
+            )
+          );
 
-        const searchConditions = [ilike(events.title, searchTerm)];
+        const searchConditions = [
+          accentInsensitiveLike(events.title, searchQuery),
+        ];
 
         if (matchingVenueRows.length > 0) {
           searchConditions.push(
@@ -1881,7 +1918,7 @@ export const eventRouter = router({
         partnerUserId &&
         (input.status === "going" || input.status === "interested")
       ) {
-        void notifyPartnerOfMirroredRsvp({
+        await notifyPartnerOfMirroredRsvp({
           ctx,
           actorUserId: ctx.auth.userId,
           partnerUserId,
@@ -1905,7 +1942,7 @@ export const eventRouter = router({
         });
 
         if (existingUserRsvp?.status !== input.status) {
-          void notifyFriendsOfRsvp(
+          await notifyFriendsOfRsvp(
             {
               actorUserId: ctx.auth.userId,
               eventId: input.eventId,
@@ -2351,13 +2388,20 @@ export const eventRouter = router({
       }
 
       if (input.search?.trim()) {
-        const searchTerm = `%${input.search.trim()}%`;
+        const searchQuery = input.search.trim();
         const matchingVenueRows = await ctx.db
           .select({ id: places.id })
           .from(places)
-          .where(and(eq(places.type, "venue"), ilike(places.name, searchTerm)));
+          .where(
+            and(
+              eq(places.type, "venue"),
+              accentInsensitiveLike(places.name, searchQuery)
+            )
+          );
 
-        const searchConditions = [ilike(events.title, searchTerm)];
+        const searchConditions = [
+          accentInsensitiveLike(events.title, searchQuery),
+        ];
 
         if (matchingVenueRows.length > 0) {
           searchConditions.push(
@@ -2480,13 +2524,20 @@ export const eventRouter = router({
       }
 
       if (input.search?.trim()) {
-        const searchTerm = `%${input.search.trim()}%`;
+        const searchQuery = input.search.trim();
         const matchingVenueRows = await ctx.db
           .select({ id: places.id })
           .from(places)
-          .where(and(eq(places.type, "venue"), ilike(places.name, searchTerm)));
+          .where(
+            and(
+              eq(places.type, "venue"),
+              accentInsensitiveLike(places.name, searchQuery)
+            )
+          );
 
-        const searchConditions = [ilike(events.title, searchTerm)];
+        const searchConditions = [
+          accentInsensitiveLike(events.title, searchQuery),
+        ];
 
         if (matchingVenueRows.length > 0) {
           searchConditions.push(

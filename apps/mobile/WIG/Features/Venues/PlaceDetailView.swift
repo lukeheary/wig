@@ -105,7 +105,7 @@ struct PlaceDetailView: View {
         .overlay(alignment: .topTrailing) {
             PlaceDetailActionMenu()
                 .padding(.trailing, 16)
-                .padding(.top, 14)
+                .padding(.top, 0)
         }
         .task {
             if case .idle = viewModel.state {
@@ -125,7 +125,7 @@ struct PlaceDetailView: View {
             }
         }
         .padding(.leading, 16)
-        .padding(.top, 14)
+        .padding(.top, 0)
     }
 
     private struct PlaceDetailActionMenu: View {
@@ -144,9 +144,9 @@ struct PlaceDetailView: View {
                 }
             } label: {
                 Image(systemName: "ellipsis")
-                    .font(.system(size: 16, weight: .bold))
+                    .font(.system(size: 17, weight: .semibold))
                     .foregroundStyle(.primary)
-                    .frame(width: 44, height: 44)
+                    .frame(width: 46, height: 46)
                     .contentShape(Circle())
                     .placeDetailLiquidGlass(in: Circle())
             }
@@ -194,7 +194,7 @@ struct PlaceDetailView: View {
             Image(systemName: "line.3.horizontal.decrease")
                 .font(.system(size: 18, weight: .semibold))
                 .foregroundStyle(isActive ? AppTheme.accentBlue : .primary)
-                .frame(width: 44, height: 44)
+                .frame(width: 46, height: 46)
                 .contentShape(Circle())
                 .placeDetailLiquidGlass(in: Circle())
         }

@@ -137,12 +137,18 @@ export async function sendPushNotificationToUsers(
   database: DatabaseClient = db
 ) {
   if (!isConfigured() || userIds.length === 0) {
+    console.info("APNs push skipped", {
+      reason: !isConfigured() ? "missing_configuration" : "no_user_ids",
+      userCount: userIds.length,
+      title: payload.title,
+    });
     return;
   }
 
+  const uniqueUserIds = [...new Set(userIds)];
   const tokens = await database.query.userPushTokens.findMany({
     where: and(
-      inArray(userPushTokens.userId, [...new Set(userIds)]),
+      inArray(userPushTokens.userId, uniqueUserIds),
       isNull(userPushTokens.revokedAt)
     ),
     columns: {
@@ -151,17 +157,30 @@ export async function sendPushNotificationToUsers(
   });
 
   if (tokens.length === 0) {
+    console.info("APNs push skipped", {
+      reason: "no_active_tokens",
+      userCount: uniqueUserIds.length,
+      title: payload.title,
+    });
     return;
   }
 
+  console.info("APNs push sending", {
+    userCount: uniqueUserIds.length,
+    tokenCount: tokens.length,
+    title: payload.title,
+  });
+
   const jwt = createApnsJwt();
   const invalidTokens: string[] = [];
+  let successCount = 0;
 
   await Promise.all(
     tokens.map(async ({ token }) => {
       const response = await sendApnsRequest(token, jwt, payload);
 
       if (response.status >= 200 && response.status < 300) {
+        successCount += 1;
         return;
       }
 
@@ -183,4 +202,10 @@ export async function sendPushNotificationToUsers(
   );
 
   await revokeTokens(invalidTokens, database);
+
+  console.info("APNs push finished", {
+    title: payload.title,
+    successCount,
+    revokedTokenCount: invalidTokens.length,
+  });
 }

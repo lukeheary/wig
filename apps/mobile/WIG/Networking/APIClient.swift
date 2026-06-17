@@ -116,6 +116,14 @@ struct APIClient: Sendable {
         )
     }
 
+    static func mobileCategories() -> Endpoint<MobileCategoriesResponse> {
+        Endpoint(
+            path: "/api/mobile/categories",
+            requiresAuthentication: false,
+            includesAuthenticationIfAvailable: true
+        )
+    }
+
     static func mobilePlaceDetail(slug: String) -> Endpoint<PlaceDetail> {
         Endpoint(
             path: "/api/mobile/places/\(slug)",
@@ -168,6 +176,14 @@ struct APIClient: Sendable {
         )
     }
 
+    static func mobileAdminStatus() -> Endpoint<MobileAdminStatusResponse> {
+        Endpoint(
+            path: "/api/mobile/admin-status",
+            requiresAuthentication: false,
+            includesAuthenticationIfAvailable: true
+        )
+    }
+
     static func mobileUserProfile(userID: String) -> Endpoint<UserProfileResponse> {
         Endpoint(
             path: "/api/mobile/users/\(userID)",
@@ -183,6 +199,24 @@ struct APIClient: Sendable {
             body: try JSONEncoder().encode(
                 MobileFriendRequestRequest(friendUserID: friendUserID)
             ),
+            requiresAuthentication: false,
+            includesAuthenticationIfAvailable: true
+        )
+    }
+
+    static func acceptMobileFriendRequest(friendRequestID: String) -> Endpoint<EmptyResponse> {
+        Endpoint(
+            path: "/api/mobile/friends/\(friendRequestID)/accept",
+            method: .post,
+            requiresAuthentication: false,
+            includesAuthenticationIfAvailable: true
+        )
+    }
+
+    static func declineMobileFriendRequest(friendRequestID: String) -> Endpoint<EmptyResponse> {
+        Endpoint(
+            path: "/api/mobile/friends/\(friendRequestID)",
+            method: .delete,
             requiresAuthentication: false,
             includesAuthenticationIfAvailable: true
         )
@@ -207,6 +241,167 @@ struct APIClient: Sendable {
                 URLQueryItem(name: "query", value: query),
                 URLQueryItem(name: "limit", value: String(limit)),
             ],
+            requiresAuthentication: false,
+            includesAuthenticationIfAvailable: true
+        )
+    }
+
+    static func mobileUploadImage(
+        imageData: Data,
+        folder: String,
+        fileName: String = "cover-image.jpg"
+    ) -> Endpoint<MobileUploadResponse> {
+        let boundary = "wig-mobile-upload-\(UUID().uuidString)"
+
+        return Endpoint(
+            path: "/api/mobile/upload",
+            method: .post,
+            headers: ["Content-Type": "multipart/form-data; boundary=\(boundary)"],
+            body: multipartImageBody(
+                imageData: imageData,
+                boundary: boundary,
+                fieldName: "file",
+                fileName: fileName,
+                mimeType: "image/jpeg",
+                additionalFields: [
+                    ("folder", folder),
+                    ("filename", fileName),
+                ]
+            ),
+            requiresAuthentication: false,
+            includesAuthenticationIfAvailable: true
+        )
+    }
+
+    static func mobileCreateEvent(
+        venueID: UUID? = nil,
+        organizerID: UUID? = nil,
+        title: String,
+        description: String? = nil,
+        coverImageURL: URL? = nil,
+        eventURL: URL? = nil,
+        startAt: Date,
+        endAt: Date? = nil,
+        address: String? = nil,
+        city: String,
+        state: String,
+        categories: [String] = [],
+        status: EventStatus = .active
+    ) throws -> Endpoint<MobileEventCreateResponse> {
+        let request = MobileEventCreateRequest(
+            venueId: venueID?.uuidString,
+            organizerId: organizerID?.uuidString,
+            title: title,
+            description: description,
+            coverImageUrl: coverImageURL?.absoluteString,
+            eventUrl: eventURL?.absoluteString,
+            startAt: ISO8601DateFormatter.wigFractional.string(from: startAt),
+            endAt: endAt.map { ISO8601DateFormatter.wigFractional.string(from: $0) },
+            address: address,
+            city: city,
+            state: state,
+            categories: categories,
+            status: status
+        )
+
+        return Endpoint(
+            path: "/api/mobile/events",
+            method: .post,
+            body: try JSONEncoder().encode(request),
+            requiresAuthentication: false,
+            includesAuthenticationIfAvailable: true
+        )
+    }
+
+    static func mobileCreatePlace(
+        type: PlaceListItem.PlaceType,
+        name: String,
+        description: String? = nil,
+        logoImageURL: URL? = nil,
+        address: String? = nil,
+        city: String? = nil,
+        state: String? = nil,
+        website: URL? = nil,
+        instagram: String? = nil,
+        categories: [String] = []
+    ) throws -> Endpoint<MobilePlaceCreateResponse> {
+        let request = MobilePlaceCreateRequest(
+            type: type.rawValue,
+            name: name,
+            description: description,
+            logoImageUrl: logoImageURL?.absoluteString,
+            address: address,
+            city: city,
+            state: state,
+            website: website?.absoluteString,
+            instagram: instagram,
+            categories: categories
+        )
+
+        return Endpoint(
+            path: "/api/mobile/places",
+            method: .post,
+            body: try JSONEncoder().encode(request),
+            requiresAuthentication: false,
+            includesAuthenticationIfAvailable: true
+        )
+    }
+
+    static func mobileUpdateEvent(
+        eventID: UUID,
+        venueID: UUID? = nil,
+        organizerID: UUID? = nil,
+        title: String,
+        description: String? = nil,
+        coverImageURL: URL? = nil,
+        removeCoverImage: Bool = false,
+        eventURL: URL? = nil,
+        startAt: Date,
+        endAt: Date? = nil,
+        address: String? = nil,
+        city: String,
+        state: String,
+        categories: [String] = [],
+        status: EventStatus = .active
+    ) throws -> Endpoint<EventFeedItem> {
+        let request = MobileEventUpdateRequest(
+            title: title,
+            description: description,
+            coverImageUrl: removeCoverImage ? "" : coverImageURL?.absoluteString,
+            eventUrl: eventURL?.absoluteString,
+            startAt: ISO8601DateFormatter.wigFractional.string(from: startAt),
+            endAt: endAt.map { ISO8601DateFormatter.wigFractional.string(from: $0) },
+            address: address,
+            city: city,
+            state: state,
+            categories: categories,
+            status: status,
+            venueId: venueID?.uuidString,
+            organizerId: organizerID?.uuidString
+        )
+
+        return Endpoint(
+            path: "/api/mobile/events/\(eventID.uuidString)",
+            method: .patch,
+            body: try JSONEncoder().encode(request),
+            requiresAuthentication: false,
+            includesAuthenticationIfAvailable: true
+        )
+    }
+
+    static func mobileSetEventCoverImage(
+        eventID: UUID,
+        coverImageURL: URL
+    ) throws -> Endpoint<EmptyResponse> {
+        let request = MobileEventCoverImageRequest(
+            eventId: eventID.uuidString,
+            coverImageUrl: coverImageURL.absoluteString
+        )
+
+        return Endpoint(
+            path: "/api/mobile/events/\(eventID.uuidString)/cover-image",
+            method: .post,
+            body: try JSONEncoder().encode(request),
             requiresAuthentication: false,
             includesAuthenticationIfAvailable: true
         )
@@ -289,6 +484,45 @@ struct APIClient: Sendable {
     static func mobileMyPartner() -> Endpoint<MobilePartnerResponse> {
         Endpoint(
             path: "/api/mobile/partners/me",
+            requiresAuthentication: false,
+            includesAuthenticationIfAvailable: true
+        )
+    }
+
+    static func sendMobilePartnerRequest(recipientID: String) throws -> Endpoint<EmptyResponse> {
+        Endpoint(
+            path: "/api/mobile/partners/request",
+            method: .post,
+            body: try JSONEncoder().encode(
+                MobilePartnerRequestRequest(recipientID: recipientID)
+            ),
+            requiresAuthentication: false,
+            includesAuthenticationIfAvailable: true
+        )
+    }
+
+    static func acceptMobilePartnerRequest(partnerID: String) -> Endpoint<EmptyResponse> {
+        Endpoint(
+            path: "/api/mobile/partners/\(partnerID)/accept",
+            method: .post,
+            requiresAuthentication: false,
+            includesAuthenticationIfAvailable: true
+        )
+    }
+
+    static func declineMobilePartnerRequest(partnerID: String) -> Endpoint<EmptyResponse> {
+        Endpoint(
+            path: "/api/mobile/partners/\(partnerID)",
+            method: .delete,
+            requiresAuthentication: false,
+            includesAuthenticationIfAvailable: true
+        )
+    }
+
+    static func removeMobilePartner() -> Endpoint<EmptyResponse> {
+        Endpoint(
+            path: "/api/mobile/partners/me",
+            method: .delete,
             requiresAuthentication: false,
             includesAuthenticationIfAvailable: true
         )
@@ -460,6 +694,10 @@ struct MobileFriendRequestResponse: Decodable, Hashable, Sendable {
     let friendStatus: FriendUserSummary.FriendStatus
 }
 
+struct MobileAdminStatusResponse: Decodable, Hashable, Sendable {
+    let isAdmin: Bool
+}
+
 enum EventRSVPStatus: String, Codable, Hashable, Sendable {
     case going
     case interested
@@ -543,9 +781,116 @@ private struct MobileFriendRequestRequest: Encodable {
     }
 }
 
+private struct MobilePartnerRequestRequest: Encodable {
+    let recipientID: String
+
+    enum CodingKeys: String, CodingKey {
+        case recipientID = "recipientId"
+    }
+}
+
 private struct MobilePushTokenRequest: Encodable {
     let token: String
     let platform: String
+}
+
+private struct MobileEventCreateRequest: Encodable {
+    let venueId: String?
+    let organizerId: String?
+    let title: String
+    let description: String?
+    let coverImageUrl: String?
+    let eventUrl: String?
+    let startAt: String
+    let endAt: String?
+    let address: String?
+    let city: String
+    let state: String
+    let categories: [String]
+    let status: EventStatus
+}
+
+private struct MobilePlaceCreateRequest: Encodable {
+    let type: String
+    let name: String
+    let description: String?
+    let logoImageUrl: String?
+    let address: String?
+    let city: String?
+    let state: String?
+    let website: String?
+    let instagram: String?
+    let categories: [String]
+}
+
+private struct MobileEventUpdateRequest: Encodable {
+    let title: String
+    let description: String?
+    let coverImageUrl: String?
+    let eventUrl: String?
+    let startAt: String
+    let endAt: String?
+    let address: String?
+    let city: String
+    let state: String
+    let categories: [String]
+    let status: EventStatus
+    let venueId: String?
+    let organizerId: String?
+}
+
+private struct MobileEventCoverImageRequest: Encodable {
+    let eventId: String
+    let coverImageUrl: String
+
+    enum CodingKeys: String, CodingKey {
+        case eventId
+        case coverImageUrl
+    }
+}
+
+struct MobileUploadResponse: Decodable, Hashable, Sendable {
+    let url: URL
+}
+
+struct MobileCategoriesResponse: Decodable, Hashable, Sendable {
+    let categories: [MobileCategoryOption]
+}
+
+struct MobileCategoryOption: Decodable, Hashable, Sendable {
+    let id: String
+    let key: String
+    let label: String
+    let sortOrder: Int
+    let isActive: Bool
+}
+
+struct MobileEventCreateResponse: Decodable, Hashable, Sendable {
+    let id: UUID
+}
+
+struct MobilePlaceCreateResponse: Decodable, Hashable, Sendable {
+    let id: UUID
+}
+
+enum EventStatus: String, Codable, CaseIterable, Hashable, Sendable {
+    case active
+    case cancelled
+    case postponed
+    case draft
+
+    var title: String {
+        switch self {
+        case .active:
+            return "Active"
+        case .cancelled:
+            return "Cancelled"
+        case .postponed:
+            return "Postponed"
+        case .draft:
+            return "Draft"
+        }
+    }
 }
 
 private func multipartImageBody(
@@ -553,9 +898,17 @@ private func multipartImageBody(
     boundary: String,
     fieldName: String,
     fileName: String,
-    mimeType: String
+    mimeType: String,
+    additionalFields: [(String, String)] = []
 ) -> Data {
     var body = Data()
+
+    for (name, value) in additionalFields {
+        body.appendUTF8("--\(boundary)\r\n")
+        body.appendUTF8("Content-Disposition: form-data; name=\"\(name)\"\r\n\r\n")
+        body.appendUTF8("\(value)\r\n")
+    }
+
     body.appendUTF8("--\(boundary)\r\n")
     body.appendUTF8("Content-Disposition: form-data; name=\"\(fieldName)\"; filename=\"\(fileName)\"\r\n")
     body.appendUTF8("Content-Type: \(mimeType)\r\n\r\n")

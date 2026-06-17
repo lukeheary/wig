@@ -20,7 +20,7 @@ struct ActivityFeedItem: Decodable, Identifiable, Hashable, Sendable {
     let notGoingReason: EventRSVPDeclineReason?
     let createdAt: Date
     let updatedAt: Date?
-    let event: ActivityEventSummary
+    let event: ActivityEventSummary?
 
     enum CodingKeys: String, CodingKey {
         case id
@@ -47,6 +47,31 @@ enum ActivityType: String, Decodable, Hashable, Sendable {
     case rsvpGoing = "rsvp_going"
     case rsvpInterested = "rsvp_interested"
     case rsvpNotGoing = "rsvp_not_going"
+    case friendRequestReceived = "friend_request_received"
+    case partnerRequestReceived = "partner_request_received"
+    case friendRequestAccepted = "friend_request_accepted"
+    case partnerRequestAccepted = "partner_request_accepted"
+
+    var isRequest: Bool {
+        switch self {
+        case .friendRequestReceived,
+             .partnerRequestReceived,
+             .friendRequestAccepted,
+             .partnerRequestAccepted:
+            return true
+        case .rsvpGoing, .rsvpInterested, .rsvpNotGoing:
+            return false
+        }
+    }
+
+    var isActionableRequest: Bool {
+        switch self {
+        case .friendRequestReceived, .partnerRequestReceived:
+            return true
+        case .friendRequestAccepted, .partnerRequestAccepted, .rsvpGoing, .rsvpInterested, .rsvpNotGoing:
+            return false
+        }
+    }
 }
 
 enum UserGender: String, Decodable, Hashable, Sendable {
@@ -149,6 +174,7 @@ struct ActivityEventSummary: Decodable, Identifiable, Hashable, Sendable {
             organizerLogoImageURL: organizerLogoImageURL,
             categories: categories,
             categoryLabels: categoryLabels,
+            status: .active,
             updatedAt: updatedAt,
             canEdit: canEdit,
             isFollowed: isFollowed,
@@ -176,7 +202,7 @@ extension ActivityFeedItem {
         notGoingReason = try container.decodeIfPresent(EventRSVPDeclineReason.self, forKey: .notGoingReason)
         createdAt = try container.decode(Date.self, forKey: .createdAt)
         updatedAt = try container.decodeIfPresent(Date.self, forKey: .updatedAt)
-        event = try container.decode(ActivityEventSummary.self, forKey: .event)
+        event = try container.decodeIfPresent(ActivityEventSummary.self, forKey: .event)
     }
 }
 
@@ -239,5 +265,18 @@ private extension KeyedDecodingContainer {
         }
 
         return url
+    }
+}
+
+@MainActor
+final class ActivityRequestStore: ObservableObject {
+    @Published private(set) var responses: [UUID: ActivityRequestResponse] = [:]
+
+    func record(_ response: ActivityRequestResponse, for id: UUID) {
+        responses[id] = response
+    }
+
+    func response(for id: UUID) -> ActivityRequestResponse? {
+        responses[id]
     }
 }

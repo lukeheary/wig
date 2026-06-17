@@ -93,8 +93,8 @@ export async function POST(request: Request) {
       type: "friend_request",
       entityType: "friend_request",
       entityId: friendRequest.id,
-      title: "Friend request",
-      body: `${senderName} sent you a friend request`,
+      title: senderName,
+      body: "Sent you a friend request",
       metadata: {
         requestId: friendRequest.id,
         requestType: "friend",
@@ -102,8 +102,8 @@ export async function POST(request: Request) {
     });
 
     await sendPushNotificationToUsers([body.friendUserId], {
-      title: "Friend request",
-      body: `${senderName} sent you a friend request`,
+      title: senderName,
+      body: "Sent you a friend request",
       data: {
         type: "friend_request",
         entityId: friendRequest.id,

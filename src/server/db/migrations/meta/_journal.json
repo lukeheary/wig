@@ -1,0 +1,306 @@
+{
+  "version": 7,
+  "dialect": "postgresql",
+  "entries": [
+    {
+      "idx": 0,
+      "when": 1780768583000,
+      "tag": "0000_good_sandman",
+      "breakpoints": true
+    },
+    {
+      "idx": 1,
+      "when": 1768335293000,
+      "tag": "0001_messy_sleeper",
+      "breakpoints": true
+    },
+    {
+      "idx": 2,
+      "when": 1780768583000,
+      "tag": "0002_fair_darwin",
+      "breakpoints": true
+    },
+    {
+      "idx": 3,
+      "when": 1780768583000,
+      "tag": "0003_conscious_mikhail_rasputin",
+      "breakpoints": true
+    },
+    {
+      "idx": 4,
+      "when": 1780768583000,
+      "tag": "0004_sleepy_obadiah_stane",
+      "breakpoints": true
+    },
+    {
+      "idx": 5,
+      "when": 1780768583000,
+      "tag": "0005_moaning_supernaut",
+      "breakpoints": true
+    },
+    {
+      "idx": 6,
+      "when": 1780768583000,
+      "tag": "0006_last_blindfold",
+      "breakpoints": true
+    },
+    {
+      "idx": 7,
+      "when": 1780768583000,
+      "tag": "0007_warm_franklin_storm",
+      "breakpoints": true
+    },
+    {
+      "idx": 8,
+      "when": 1768704494000,
+      "tag": "0008_lush_war_machine",
+      "breakpoints": true
+    },
+    {
+      "idx": 9,
+      "when": 1780768583000,
+      "tag": "0009_futuristic_calypso",
+      "breakpoints": true
+    },
+    {
+      "idx": 10,
+      "when": 1780768583000,
+      "tag": "0010_chemical_malcolm_colcord",
+      "breakpoints": false
+    },
+    {
+      "idx": 11,
+      "when": 1780768583000,
+      "tag": "0011_moaning_dark_phoenix",
+      "breakpoints": true
+    },
+    {
+      "idx": 12,
+      "when": 1770143646000,
+      "tag": "0012_fine_retro_girl",
+      "breakpoints": true
+    },
+    {
+      "idx": 13,
+      "when": 1770232206000,
+      "tag": "0013_lying_lady_bullseye",
+      "breakpoints": false
+    },
+    {
+      "idx": 14,
+      "when": 1780768583000,
+      "tag": "0014_supreme_golden_guardian",
+      "breakpoints": true
+    },
+    {
+      "idx": 15,
+      "when": 1770143646000,
+      "tag": "0015_acoustic_blink",
+      "breakpoints": true
+    },
+    {
+      "idx": 16,
+      "when": 1780768583000,
+      "tag": "0016_quick_vance_astro",
+      "breakpoints": true
+    },
+    {
+      "idx": 17,
+      "when": 1780768583000,
+      "tag": "0017_add_event_source_url",
+      "breakpoints": true
+    },
+    {
+      "idx": 18,
+      "when": 1770748980000,
+      "tag": "0018_add_event_external_id",
+      "breakpoints": true
+    },
+    {
+      "idx": 19,
+      "when": 1780768583000,
+      "tag": "0019_add_place_categories",
+      "breakpoints": true
+    },
+    {
+      "idx": 20,
+      "when": 1771378334000,
+      "tag": "0020_add_event_categories",
+      "breakpoints": true
+    },
+    {
+      "idx": 21,
+      "when": 1771437374000,
+      "tag": "0021_add_event_series",
+      "breakpoints": true
+    },
+    {
+      "idx": 22,
+      "when": 1771473897000,
+      "tag": "0022_user_partners",
+      "breakpoints": true
+    },
+    {
+      "idx": 23,
+      "when": 1771473897000,
+      "tag": "0023_partner_rsvp_mirroring",
+      "breakpoints": true
+    },
+    {
+      "idx": 24,
+      "when": 1780768583000,
+      "tag": "0024_drop_event_venue_name",
+      "breakpoints": false
+    },
+    {
+      "idx": 25,
+      "when": 1771515209000,
+      "tag": "0025_drop_event_series_venue_name",
+      "breakpoints": false
+    },
+    {
+      "idx": 26,
+      "when": 1780768583000,
+      "tag": "0026_add_scrapers",
+      "breakpoints": true
+    },
+    {
+      "idx": 27,
+      "when": 1780768583000,
+      "tag": "0027_drop_legacy_follows",
+      "breakpoints": false
+    },
+    {
+      "idx": 28,
+      "when": 1771563452000,
+      "tag": "0028_rename_friends_and_rsvps_tables",
+      "breakpoints": false
+    },
+    {
+      "idx": 29,
+      "when": 1780768583000,
+      "tag": "0029_add_rsvp_not_going_activity",
+      "breakpoints": false
+    },
+    {
+      "idx": 30,
+      "when": 1780768583000,
+      "tag": "0030_add_monthly_recurrence_frequency",
+      "breakpoints": false
+    },
+    {
+      "idx": 31,
+      "when": 1780768583000,
+      "tag": "0031_add_event_status",
+      "breakpoints": true
+    },
+    {
+      "idx": 32,
+      "when": 1771879987000,
+      "tag": "0032_add_event_activity",
+      "breakpoints": true
+    },
+    {
+      "idx": 33,
+      "when": 1780768583000,
+      "tag": "0033_add_event_updates_last_seen_at",
+      "breakpoints": false
+    },
+    {
+      "idx": 34,
+      "when": 1780768583000,
+      "tag": "0034_add_event_series_time_zone",
+      "breakpoints": false
+    },
+    {
+      "idx": 35,
+      "when": 1772050100000,
+      "tag": "0035_add_event_series_categories",
+      "breakpoints": true
+    },
+    {
+      "idx": 36,
+      "when": 1780768583000,
+      "tag": "0036_add_support_tickets",
+      "breakpoints": true
+    },
+    {
+      "idx": 37,
+      "when": 1773249949000,
+      "tag": "0037_add_notifications_and_support_ticket_activity",
+      "breakpoints": true
+    },
+    {
+      "idx": 38,
+      "when": 1773279927000,
+      "tag": "0038_add_request_notification_types",
+      "breakpoints": false
+    },
+    {
+      "idx": 39,
+      "when": 1773363171000,
+      "tag": "0038_add_support_ticket_severity",
+      "breakpoints": true
+    },
+    {
+      "idx": 40,
+      "when": 1774035023000,
+      "tag": "0039_add_user_surface_state",
+      "breakpoints": true
+    },
+    {
+      "idx": 41,
+      "when": 1780768583000,
+      "tag": "0040_dedupe_rsvp_activity_and_add_updated_at",
+      "breakpoints": true
+    },
+    {
+      "idx": 42,
+      "when": 1780768583000,
+      "tag": "0041_add_scraper_classification_name",
+      "breakpoints": false
+    },
+    {
+      "idx": 43,
+      "when": 1780768583000,
+      "tag": "0042_remove_clubcafe_add_scraper_logs",
+      "breakpoints": false
+    },
+    {
+      "idx": 44,
+      "when": 1780768583000,
+      "tag": "0043_add_rsvp_decline_reason",
+      "breakpoints": false
+    },
+    {
+      "idx": 45,
+      "when": 1775938829000,
+      "tag": "0044_allow_multiple_scrapers_per_place",
+      "breakpoints": false
+    },
+    {
+      "idx": 46,
+      "when": 1780408394000,
+      "tag": "0045_add_push_notifications",
+      "breakpoints": true
+    },
+    {
+      "idx": 47,
+      "when": 1780768583000,
+      "tag": "0046_add_event_time_zone",
+      "breakpoints": false
+    },
+    {
+      "idx": 48,
+      "when": 1780632005000,
+      "tag": "0047_backfill_eastern_event_time_zones",
+      "breakpoints": false
+    },
+    {
+      "idx": 49,
+      "when": 1781616313000,
+      "tag": "0048_enable_unaccent_search",
+      "breakpoints": false
+    }
+  ]
+}

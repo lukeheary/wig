@@ -12,16 +12,45 @@ final class ProfileViewModel: ObservableObject {
     @Published private(set) var state: State = .idle
     @Published private(set) var isUploadingAvatar = false
     @Published var avatarUploadError: String?
+    private static var cachedResponse: FriendsFeedResponse?
+    private static var inFlightLoad: Task<FriendsFeedResponse, Error>?
 
-    func load(using apiClient: APIClient) async {
+    func load(using apiClient: APIClient, forceRefresh: Bool = false) async {
+        if !forceRefresh, let cachedResponse = Self.cachedResponse {
+            state = .loaded(cachedResponse)
+            return
+        }
+
+        if !forceRefresh, let inFlightLoad = Self.inFlightLoad {
+            state = .loading
+
+            do {
+                let response = try await inFlightLoad.value
+                Self.cachedResponse = response
+                state = .loaded(response)
+            } catch {
+                state = .failed(error.localizedDescription)
+            }
+
+            return
+        }
+
         state = .loading
 
         do {
-            let response = try await apiClient.send(APIClient.mobileFriends())
+            let loadTask = Task {
+                try await apiClient.send(APIClient.mobileFriends())
+            }
+            Self.inFlightLoad = loadTask
+
+            let response = try await loadTask.value
+            Self.cachedResponse = response
             state = .loaded(response)
         } catch {
             state = .failed(error.localizedDescription)
         }
+
+        Self.inFlightLoad = nil
     }
 
     func updateAvatar(imageData: Data, using apiClient: APIClient) async {
@@ -36,6 +65,7 @@ final class ProfileViewModel: ObservableObject {
             )
 
             if case .loaded(let friendsResponse) = state {
+                Self.cachedResponse = friendsResponse.updatingProfileAvatarImageURL(response.avatarImageURL)
                 state = .loaded(
                     friendsResponse.updatingProfileAvatarImageURL(response.avatarImageURL)
                 )
@@ -45,6 +75,68 @@ final class ProfileViewModel: ObservableObject {
         }
 
         isUploadingAvatar = false
+    }
+
+    func updateLoadedResponse(
+        _ transform: (FriendsFeedResponse) -> FriendsFeedResponse
+    ) {
+        guard case .loaded(let response) = state else {
+            return
+        }
+
+        state = .loaded(transform(response))
+    }
+
+    func removeFriend(userID: String) {
+        updateLoadedResponse { response in
+            FriendsFeedResponse(
+                profile: response.profile,
+                friendCount: max(response.friendCount - 1, 0),
+                requestCount: response.requestCount,
+                friends: response.friends.filter { $0.id != userID },
+                receivedRequests: response.receivedRequests,
+                sentRequests: response.sentRequests,
+                upcomingEvents: response.upcomingEvents,
+                pastEvents: response.pastEvents
+            )
+        }
+    }
+
+    func snapshotLoadedResponse() -> FriendsFeedResponse? {
+        guard case .loaded(let response) = state else {
+            return nil
+        }
+
+        return response
+    }
+
+    func restoreLoadedResponse(_ response: FriendsFeedResponse) {
+        Self.cachedResponse = response
+        state = .loaded(response)
+    }
+
+    static func preload(using apiClient: APIClient) async {
+        if cachedResponse != nil {
+            return
+        }
+
+        if let inFlightLoad {
+            _ = try? await inFlightLoad.value
+            return
+        }
+
+        let loadTask = Task {
+            try await apiClient.send(APIClient.mobileFriends())
+        }
+        inFlightLoad = loadTask
+
+        do {
+            cachedResponse = try await loadTask.value
+        } catch {
+            // Ignore preload failures; the screen can still load normally later.
+        }
+
+        inFlightLoad = nil
     }
 }
 

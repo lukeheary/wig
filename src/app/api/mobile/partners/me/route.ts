@@ -1,5 +1,5 @@
 import { auth } from "@clerk/nextjs/server";
-import { asc, eq, or } from "drizzle-orm";
+import { and, asc, eq, or } from "drizzle-orm";
 import { NextResponse } from "next/server";
 import { db } from "@/server/db";
 import { userPartners, users } from "@/server/db/schema";
@@ -63,4 +63,27 @@ export async function GET() {
       },
     },
   });
+}
+
+export async function DELETE() {
+  const userId = await currentMobileUserId();
+
+  if (!userId) {
+    return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
+  }
+
+  const existingRelationship = await db.query.userPartners.findFirst({
+    where: and(
+      or(eq(userPartners.requesterId, userId), eq(userPartners.recipientId, userId)),
+      eq(userPartners.status, "accepted")
+    ),
+  });
+
+  if (!existingRelationship) {
+    return NextResponse.json({});
+  }
+
+  await db.delete(userPartners).where(eq(userPartners.id, existingRelationship.id));
+
+  return NextResponse.json({});
 }
