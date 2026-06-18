@@ -9,6 +9,7 @@ struct PlaceDetailView: View {
     @Environment(\.dismiss) private var dismiss
     @StateObject private var viewModel = PlaceDetailViewModel()
     @State private var selectedTab: PlaceEventsTab = .upcoming
+    @State private var presentedAction: PlaceDetailAction?
 
     private let eventCardWidth: CGFloat = 220
 
@@ -103,9 +104,29 @@ struct PlaceDetailView: View {
             leadingTopControls
         }
         .overlay(alignment: .topTrailing) {
-            PlaceDetailActionMenu()
+            PlaceDetailActionMenu(type: place.type) { action in
+                presentedAction = action
+            }
                 .padding(.trailing, 16)
                 .padding(.top, 0)
+        }
+        .sheet(item: $presentedAction) { action in
+            if case .loaded(let detail) = viewModel.state {
+                switch action {
+                case .edit:
+                    MobilePlaceCreationView(mode: .edit(detail)) {
+                        Task {
+                            await viewModel.load(slug: detail.slug, using: apiClient)
+                        }
+                    }
+                case .createEvent, .createEventSeries:
+                    MobileEventCreationView(mode: .create, preselectedPlace: detail) { _ in
+                        Task {
+                            await viewModel.load(slug: detail.slug, using: apiClient)
+                        }
+                    }
+                }
+            }
         }
         .task {
             if case .idle = viewModel.state {
@@ -129,17 +150,29 @@ struct PlaceDetailView: View {
     }
 
     private struct PlaceDetailActionMenu: View {
+        let type: PlaceListItem.PlaceType
+        let onSelect: (PlaceDetailAction) -> Void
+
         var body: some View {
             Menu {
-                Button {} label: {
-                    Label("Edit Venue", systemImage: "building.2")
+                Button {
+                    onSelect(.edit)
+                } label: {
+                    Label(
+                        "Edit \(type.displayName)",
+                        systemImage: type == .venue ? "building.2" : "person.2"
+                    )
                 }
 
-                Button {} label: {
+                Button {
+                    onSelect(.createEvent)
+                } label: {
                     Label("Create Event", systemImage: "calendar.badge.plus")
                 }
 
-                Button {} label: {
+                Button {
+                    onSelect(.createEventSeries)
+                } label: {
                     Label("Create Event Series", systemImage: "calendar.badge.clock")
                 }
             } label: {
@@ -152,6 +185,14 @@ struct PlaceDetailView: View {
             }
             .buttonStyle(.plain)
         }
+    }
+
+    private enum PlaceDetailAction: String, Identifiable {
+        case edit
+        case createEvent
+        case createEventSeries
+
+        var id: String { rawValue }
     }
 
     private var canShowEventFilter: Bool {
@@ -262,6 +303,7 @@ private struct PlaceDetailHeader: View {
     let onFollowToggle: () -> Void
     @State private var isMapsDialogPresented = false
     @State private var safariRoute: SafariRoute?
+    @State private var isImageViewerPresented = false
 
     var body: some View {
         VStack(alignment: .leading, spacing: 8) {
@@ -340,6 +382,11 @@ private struct PlaceDetailHeader: View {
             SafariView(url: route.url)
                 .ignoresSafeArea()
         }
+        .fullScreenCover(isPresented: $isImageViewerPresented) {
+            if let logoURL {
+                EventArtworkViewer(imageURL: logoURL)
+            }
+        }
     }
 
     private var followButton: some View {
@@ -366,22 +413,27 @@ private struct PlaceDetailHeader: View {
     @ViewBuilder
     private var logo: some View {
         if let logoURL {
-            AsyncImage(url: logoURL) { phase in
-                switch phase {
-                case .empty:
-                    logoPlaceholder
-                case .success(let image):
-                    image
-                        .resizable()
-                        .scaledToFill()
-                case .failure:
-                    logoPlaceholder
-                @unknown default:
-                    logoPlaceholder
+            Button {
+                isImageViewerPresented = true
+            } label: {
+                AsyncImage(url: logoURL) { phase in
+                    switch phase {
+                    case .empty:
+                        logoPlaceholder
+                    case .success(let image):
+                        image
+                            .resizable()
+                            .scaledToFill()
+                    case .failure:
+                        logoPlaceholder
+                    @unknown default:
+                        logoPlaceholder
+                    }
                 }
+                .frame(width: 92, height: 92)
+                .clipShape(RoundedRectangle(cornerRadius: 18, style: .continuous))
             }
-            .frame(width: 92, height: 92)
-            .clipShape(RoundedRectangle(cornerRadius: 18, style: .continuous))
+            .buttonStyle(.plain)
         } else {
             logoPlaceholder
                 .frame(width: 92, height: 92)
@@ -545,7 +597,7 @@ private enum PlaceEventGrouper {
     )
 }
 
-private extension View {
+extension View {
     @ViewBuilder
     func placeDetailLiquidGlass<S: InsettableShape>(in shape: S) -> some View {
         if #available(iOS 26.1, *) {

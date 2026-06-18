@@ -396,41 +396,42 @@ private struct PlaceRowView: View {
     let place: PlaceListItem
 
     var body: some View {
-        HStack(alignment: .center, spacing: 12) {
-            placeLogo
+        ZStack(alignment: .bottomTrailing) {
+            HStack(alignment: .center, spacing: 12) {
+                placeLogo
 
-            VStack(alignment: .leading, spacing: 7) {
-                Text(place.name)
-                    .font(.system(size: 14, weight: .semibold))
-                    .foregroundStyle(.white)
-                    .lineLimit(2)
-                    .minimumScaleFactor(0.88)
+                VStack(alignment: .leading, spacing: 7) {
+                    Text(place.name)
+                        .font(.system(size: 14, weight: .semibold))
+                        .foregroundStyle(.white)
+                        .lineLimit(2)
+                        .minimumScaleFactor(0.88)
 
-                if !place.locationText.isEmpty {
-                    Text(place.locationText)
-                        .font(.system(size: 13, weight: .semibold))
-                        .foregroundStyle(Color(red: 0.48, green: 0.77, blue: 1.0))
-                        .lineLimit(1)
+                    if !place.locationText.isEmpty {
+                        Text(place.locationText)
+                            .font(.system(size: 13, weight: .semibold))
+                            .foregroundStyle(Color(red: 0.48, green: 0.77, blue: 1.0))
+                            .lineLimit(1)
+                    }
+
+                    if let eventCountText = place.eventCountText {
+                        Text(eventCountText)
+                            .font(.system(size: 13, weight: .medium))
+                            .foregroundStyle(.white.opacity(0.62))
+                            .lineLimit(1)
+                    }
                 }
-
-                if let eventCountText = place.eventCountText {
-                    Text(eventCountText)
-                        .font(.system(size: 13, weight: .medium))
-                        .foregroundStyle(.white.opacity(0.62))
-                        .lineLimit(1)
-                }
+                .frame(maxWidth: .infinity, alignment: .leading)
             }
-            .frame(maxWidth: .infinity, alignment: .leading)
-
-            Spacer(minLength: 8)
+            .padding(9)
+            .frame(minHeight: 102, alignment: .topLeading)
 
             Text(place.type.displayName)
                 .font(.system(size: 11, weight: .semibold))
                 .foregroundStyle(.white.opacity(0.36))
-                .frame(maxHeight: .infinity, alignment: .bottom)
+                .padding(.trailing, 9)
+                .padding(.bottom, 9)
         }
-        .padding(9)
-        .frame(minHeight: 102, alignment: .top)
         .background(
             RoundedRectangle(cornerRadius: 18, style: .continuous)
                 .fill(Color(red: 0.11, green: 0.11, blue: 0.13))

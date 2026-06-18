@@ -32,11 +32,17 @@ struct MobileEventCreationView: View {
     @State private var selectedVenue: PlaceDetail?
     @State private var selectedOrganizer: PlaceDetail?
     @State private var selectedCategoryKeys = Set<String>()
+    @State private var venueScraperRows: [EditableScraperRow] = []
+    @State private var organizerScraperRows: [EditableScraperRow] = []
     @State private var isSubmitting = false
     @State private var alertMessage: String?
     @State private var activeAlert: ActiveAlert?
 
-    init(mode: Mode = .create, onCompleted: ((EventFeedItem) -> Void)? = nil) {
+    init(
+        mode: Mode = .create,
+        preselectedPlace: PlaceDetail? = nil,
+        onCompleted: ((EventFeedItem) -> Void)? = nil
+    ) {
         self.mode = mode
         self.onCompleted = onCompleted
 
@@ -45,6 +51,18 @@ struct MobileEventCreationView: View {
             let defaultEndDate = Calendar.current.date(byAdding: .hour, value: 2, to: .now) ?? .now
             _endAt = State(initialValue: defaultEndDate)
             _existingCoverImageURL = State(initialValue: nil)
+            if let preselectedPlace {
+                switch preselectedPlace.type {
+                case .venue:
+                    _selectedVenue = State(initialValue: preselectedPlace)
+                case .organizer:
+                    _selectedOrganizer = State(initialValue: preselectedPlace)
+                }
+
+                _address = State(initialValue: preselectedPlace.address ?? "")
+                _city = State(initialValue: preselectedPlace.city ?? "")
+                _state = State(initialValue: preselectedPlace.state ?? "")
+            }
 
         case .edit(let event):
             _title = State(initialValue: event.title)
@@ -124,6 +142,16 @@ struct MobileEventCreationView: View {
             .onChange(of: selectedVenue?.id) { _, _ in
                 applyVenueScheduleDefaults()
             }
+            .onChange(of: selectedVenue?.slug) { _, slug in
+                Task {
+                    await loadScrapers(for: .venue, slug: slug)
+                }
+            }
+            .onChange(of: selectedOrganizer?.slug) { _, slug in
+                Task {
+                    await loadScrapers(for: .organizer, slug: slug)
+                }
+            }
             .onChange(of: scheduleDateKey) { _, _ in
                 applyVenueScheduleDefaults()
             }
@@ -149,6 +177,12 @@ struct MobileEventCreationView: View {
                         secondaryButton: .cancel()
                     )
                 }
+            }
+            .task(id: selectedVenue?.slug) {
+                await loadScrapers(for: .venue, slug: selectedVenue?.slug)
+            }
+            .task(id: selectedOrganizer?.slug) {
+                await loadScrapers(for: .organizer, slug: selectedOrganizer?.slug)
             }
         }
     }
@@ -194,7 +228,7 @@ struct MobileEventCreationView: View {
             .listRowInsets(EdgeInsets(top: 10, leading: 16, bottom: 10, trailing: 16))
 
             if selectedCoverImage != nil || existingCoverImageURL != nil {
-                Button("Remove Image", role: .destructive) {
+                InlineActionButton(title: "Remove Image", systemImage: "trash", role: .destructive) {
                     selectedCoverImageItem = nil
                     selectedCoverImage = nil
                     existingCoverImageURL = nil
@@ -377,6 +411,83 @@ struct MobileEventCreationView: View {
                     }
                 }
             }
+
+            scraperSections
+        }
+    }
+
+    @ViewBuilder
+    private var scraperSections: some View {
+        if let venue = selectedVenue {
+            scraperSection(title: "Venue Scrapers", placeName: venue.name, rows: $venueScraperRows)
+        }
+
+        if let organizer = selectedOrganizer {
+            scraperSection(title: "Organizer Scrapers", placeName: organizer.name, rows: $organizerScraperRows)
+        }
+    }
+
+    private func scraperSection(
+        title: String,
+        placeName: String,
+        rows: Binding<[EditableScraperRow]>
+    ) -> some View {
+        Section(title) {
+            Text(placeName)
+                .font(.system(size: 13, weight: .medium))
+                .foregroundStyle(.secondary)
+
+            if rows.wrappedValue.isEmpty {
+                Text("No scrapers configured.")
+                    .font(.system(size: 14, weight: .medium))
+                    .foregroundStyle(.secondary)
+            } else {
+                ForEach(rows.wrappedValue) { row in
+                    VStack(alignment: .leading, spacing: 12) {
+                        Picker(
+                            "Scraper Type",
+                            selection: binding(for: row.id, in: rows, keyPath: \.scraper)
+                        ) {
+                            ForEach(MobileScraperType.allCases, id: \.self) { scraper in
+                                Text(scraper.title).tag(scraper)
+                            }
+                        }
+
+                        ClearableInputField(
+                            row.scraper == .ticketmaster
+                                ? "Venue/Organizer Name"
+                                : row.scraper == .posh
+                                    ? "Posh URL"
+                                    : "Scraper URL",
+                            text: binding(for: row.id, in: rows, keyPath: \.searchString)
+                        )
+                        .textInputAutocapitalization(.never)
+                        .autocorrectionDisabled()
+
+                        if row.scraper == .ticketmaster {
+                            ClearableInputField(
+                                "Classification Name (Optional)",
+                                text: binding(
+                                    for: row.id,
+                                    in: rows,
+                                    keyPath: \.classificationNameText
+                                )
+                            )
+                            .textInputAutocapitalization(.never)
+                            .autocorrectionDisabled()
+                        }
+
+                        InlineActionButton(title: "Remove Scraper", systemImage: "trash", role: .destructive) {
+                            rows.wrappedValue.removeAll { $0.id == row.id }
+                        }
+                    }
+                    .padding(.vertical, 4)
+                }
+            }
+
+            InlineActionButton(title: "Add Scraper", systemImage: "plus", role: nil) {
+                rows.wrappedValue.append(EditableScraperRow())
+            }
         }
     }
 
@@ -408,7 +519,7 @@ struct MobileEventCreationView: View {
             .buttonStyle(.plain)
 
             if selection != nil {
-                Button("Clear", role: .destructive) {
+                InlineActionButton(title: "Clear", systemImage: "xmark", role: .destructive) {
                     clearAction()
                 }
             }
@@ -484,6 +595,31 @@ struct MobileEventCreationView: View {
         }
     }
 
+    private func handleSelectedPlace(_ place: PlaceListItem, for kind: PlacePickerKind) {
+        handleSelectedPlace(PlaceDetail(listItem: place), for: kind)
+
+        Task {
+            do {
+                let detail = try await apiClient.send(
+                    APIClient.mobilePlaceDetail(slug: place.slug)
+                )
+
+                await MainActor.run {
+                    switch kind {
+                    case .venue:
+                        guard selectedVenue?.id == place.id else { return }
+                    case .organizer:
+                        guard selectedOrganizer?.id == place.id else { return }
+                    }
+
+                    handleSelectedPlace(detail, for: kind)
+                }
+            } catch {
+                // Keep the instant local selection if the detail refresh fails.
+            }
+        }
+    }
+
     private func handleSelectedCoverImage(_ item: PhotosPickerItem) async {
         selectedCoverImageItem = nil
 
@@ -508,6 +644,36 @@ struct MobileEventCreationView: View {
             selectedCategoryKeys.remove(key)
         } else {
             selectedCategoryKeys.insert(key)
+        }
+    }
+
+    private func loadScrapers(for kind: PlacePickerKind, slug: String?) async {
+        guard let slug else {
+            switch kind {
+            case .venue:
+                venueScraperRows = []
+            case .organizer:
+                organizerScraperRows = []
+            }
+            return
+        }
+
+        do {
+            let response = try await apiClient.send(APIClient.mobilePlaceScrapers(slug: slug))
+            let rows = response.scrapers.map(EditableScraperRow.init)
+            switch kind {
+            case .venue:
+                venueScraperRows = rows
+            case .organizer:
+                organizerScraperRows = rows
+            }
+        } catch {
+            switch kind {
+            case .venue:
+                venueScraperRows = []
+            case .organizer:
+                organizerScraperRows = []
+            }
         }
     }
 
@@ -608,6 +774,7 @@ struct MobileEventCreationView: View {
                 }
 
                 NotificationCenter.default.post(name: .mobileEventDidChange, object: createdEvent.id)
+                try await saveLinkedPlaceScrapers()
                 dismiss()
 
             case .edit(let event):
@@ -632,6 +799,7 @@ struct MobileEventCreationView: View {
                 )
 
                 NotificationCenter.default.post(name: .mobileEventDidChange, object: updatedEvent.id)
+                try await saveLinkedPlaceScrapers()
                 onCompleted?(updatedEvent)
                 dismiss()
             }
@@ -796,6 +964,47 @@ struct MobileEventCreationView: View {
             .filter { selectedCategoryKeys.contains($0) }
     }
 
+    private func saveLinkedPlaceScrapers() async throws {
+        if let venue = selectedVenue {
+            try await apiClient.send(
+                APIClient.replaceMobilePlaceScrapers(
+                    slug: venue.slug,
+                    scrapers: venueScraperRows.compactMap(\.apiValue)
+                )
+            )
+        }
+
+        if let organizer = selectedOrganizer {
+            try await apiClient.send(
+                APIClient.replaceMobilePlaceScrapers(
+                    slug: organizer.slug,
+                    scrapers: organizerScraperRows.compactMap(\.apiValue)
+                )
+            )
+        }
+    }
+
+    private func binding<Value>(
+        for id: UUID,
+        in rows: Binding<[EditableScraperRow]>,
+        keyPath: WritableKeyPath<EditableScraperRow, Value>
+    ) -> Binding<Value> {
+        Binding(
+            get: {
+                guard let row = rows.wrappedValue.first(where: { $0.id == id }) else {
+                    fatalError("Missing scraper row for binding")
+                }
+                return row[keyPath: keyPath]
+            },
+            set: { newValue in
+                guard let index = rows.wrappedValue.firstIndex(where: { $0.id == id }) else {
+                    return
+                }
+                rows.wrappedValue[index][keyPath: keyPath] = newValue
+            }
+        )
+    }
+
     private func cleaned(_ value: String?) -> String? {
         guard let value else {
             return nil
@@ -946,6 +1155,38 @@ private struct ClearableInputField: View {
     }
 }
 
+private struct InlineActionButton: View {
+    let title: String
+    let systemImage: String
+    let role: ButtonRole?
+    let action: () -> Void
+
+    var body: some View {
+        Button(role: role, action: action) {
+            Label(title, systemImage: systemImage)
+                .font(.system(size: 13, weight: .semibold))
+                .padding(.horizontal, 12)
+                .padding(.vertical, 8)
+                .background(
+                    Capsule()
+                        .fill(backgroundColor)
+                )
+        }
+        .buttonStyle(.plain)
+        .foregroundStyle(foregroundColor)
+    }
+
+    private var foregroundColor: Color {
+        role == .destructive ? .red : AppTheme.accentBlue
+    }
+
+    private var backgroundColor: Color {
+        role == .destructive
+            ? Color.red.opacity(0.10)
+            : AppTheme.accentBlue.opacity(0.12)
+    }
+}
+
 @MainActor
 private final class MobileEventCreationViewModel: ObservableObject {
     @Published private(set) var categories: [MobileCategoryOption] = []
@@ -963,8 +1204,7 @@ private final class MobileEventCreationViewModel: ObservableObject {
         }
 
         do {
-            let response = try await apiClient.send(APIClient.mobileCategories())
-            categories = response.categories.filter(\.isActive)
+            categories = try await MobileCategoryStore.load(using: apiClient)
             loadError = nil
         } catch {
             categories = []
@@ -1007,16 +1247,64 @@ private enum PlacePickerKind: String, Identifiable {
     }
 }
 
+private struct EditableScraperRow: Identifiable, Hashable {
+    let id: UUID
+    var persistedID: UUID?
+    var scraper: MobileScraperType
+    var searchString: String
+    var classificationNameText: String
+
+    init(
+        id: UUID = UUID(),
+        persistedID: UUID? = nil,
+        scraper: MobileScraperType = .dice,
+        searchString: String = "",
+        classificationNameText: String = ""
+    ) {
+        self.id = id
+        self.persistedID = persistedID
+        self.scraper = scraper
+        self.searchString = searchString
+        self.classificationNameText = classificationNameText
+    }
+
+    init(config: MobilePlaceScraperConfig) {
+        self.init(
+            persistedID: config.id,
+            scraper: config.scraper,
+            searchString: config.searchString,
+            classificationNameText: config.classificationName ?? ""
+        )
+    }
+
+    var apiValue: MobilePlaceScraperConfig? {
+        let trimmedSearchString = searchString.trimmingCharacters(in: .whitespacesAndNewlines)
+        guard !trimmedSearchString.isEmpty else {
+            return nil
+        }
+
+        let trimmedClassificationName = classificationNameText.trimmingCharacters(in: .whitespacesAndNewlines)
+        return MobilePlaceScraperConfig(
+            id: persistedID,
+            scraper: scraper,
+            searchString: trimmedSearchString,
+            classificationName: scraper == .ticketmaster && !trimmedClassificationName.isEmpty
+                ? trimmedClassificationName
+                : nil
+        )
+    }
+}
+
 private struct PlaceLookupSheet: View {
     let kind: PlacePickerKind
-    let onSelect: (PlaceDetail) -> Void
+    let onSelect: (PlaceListItem) -> Void
 
     @Environment(\.apiClient) private var apiClient
     @Environment(\.dismiss) private var dismiss
     @StateObject private var viewModel: PlaceLookupViewModel
     @State private var query = ""
 
-    init(kind: PlacePickerKind, onSelect: @escaping (PlaceDetail) -> Void) {
+    init(kind: PlacePickerKind, onSelect: @escaping (PlaceListItem) -> Void) {
         self.kind = kind
         self.onSelect = onSelect
         _viewModel = StateObject(wrappedValue: PlaceLookupViewModel(type: kind.type))
@@ -1111,9 +1399,7 @@ private struct PlaceLookupSheet: View {
             LazyVStack(spacing: 12) {
                 ForEach(viewModel.places) { place in
                     Button {
-                        Task {
-                            await select(place)
-                        }
+                        select(place)
                     } label: {
                         PlaceSearchRow(place: place)
                     }
@@ -1127,16 +1413,9 @@ private struct PlaceLookupSheet: View {
         query.trimmingCharacters(in: .whitespacesAndNewlines)
     }
 
-    private func select(_ place: PlaceListItem) async {
-        do {
-            let detail = try await apiClient.send(
-                APIClient.mobilePlaceDetail(slug: place.slug)
-            )
-            onSelect(detail)
-            dismiss()
-        } catch {
-            // Keep the picker open if the detail lookup fails.
-        }
+    private func select(_ place: PlaceListItem) {
+        onSelect(place)
+        dismiss()
     }
 }
 

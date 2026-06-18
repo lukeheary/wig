@@ -1,14 +1,76 @@
 import { auth } from "@clerk/nextjs/server";
 import { NextResponse } from "next/server";
 import { and, asc, desc, eq, gte, inArray, lt } from "drizzle-orm";
+import { z } from "zod";
 import { db } from "@/server/db";
 import { eventRsvps, events, placeFollows, places, users } from "@/server/db/schema";
-import { mapEventCategoryData, mapPlaceCategoryData } from "@/server/utils/categories";
+import {
+  filterExistingCategoryKeys,
+  mapEventCategoryData,
+  mapPlaceCategoryData,
+  setPlaceCategoryKeys,
+} from "@/server/utils/categories";
 import {
   canEditMobileEvent,
   resolveMobileEventEditPermissions,
   type MobileEventEditPermissions,
 } from "@/app/api/mobile/event-edit-permissions";
+import {
+  INSTAGRAM_HANDLE_ERROR,
+  INSTAGRAM_HANDLE_REGEX,
+} from "@/lib/place-identifiers";
+
+const mobileUpdatePlaceSchema = z
+  .object({
+    type: z.enum(["venue", "organizer"]),
+    name: z.string().trim().min(1).max(255),
+    description: z.string().trim().nullable().optional(),
+    logoImageUrl: z.string().url().nullable().optional(),
+    keepExistingLogo: z.boolean().optional().default(true),
+    address: z.string().trim().nullable().optional(),
+    city: z.string().trim().max(100).nullable().optional(),
+    state: z.string().trim().max(2).nullable().optional(),
+    website: z.string().url().nullable().optional(),
+    instagram: z
+      .string()
+      .trim()
+      .max(100)
+      .refine(
+        (value) => !value || INSTAGRAM_HANDLE_REGEX.test(value),
+        INSTAGRAM_HANDLE_ERROR
+      )
+      .nullable()
+      .optional(),
+    hours: z.any().nullable().optional(),
+    categories: z.array(z.string()).optional().default([]),
+  })
+  .superRefine((value, context) => {
+    if (value.type === "venue" && !value.city?.trim()) {
+      context.addIssue({
+        code: z.ZodIssueCode.custom,
+        message: "City is required",
+        path: ["city"],
+      });
+    }
+
+    if (value.type === "venue" && !value.state?.trim()) {
+      context.addIssue({
+        code: z.ZodIssueCode.custom,
+        message: "State is required",
+        path: ["state"],
+      });
+    }
+
+    const hasCity = Boolean(value.city?.trim());
+    const hasState = Boolean(value.state?.trim());
+    if (hasCity !== hasState) {
+      context.addIssue({
+        code: z.ZodIssueCode.custom,
+        message: "City and state must be provided together",
+        path: [hasCity ? "state" : "city"],
+      });
+    }
+  });
 
 async function currentMobileUserId() {
   const { userId } = await auth();
@@ -50,12 +112,17 @@ function mapMobileEvent(
     city: mapped.city,
     state: mapped.state,
     timeZone: mapped.timeZone,
+    venueId: mapped.venueId,
     venueName: mapped.venue?.name ?? null,
+    venueSlug: mapped.venue?.slug ?? null,
+    organizerId: mapped.organizerId,
     organizerName: mapped.organizer?.name ?? null,
+    organizerSlug: mapped.organizer?.slug ?? null,
     venueLogoImageUrl: mapped.venue?.logoImageUrl ?? null,
     organizerLogoImageUrl: mapped.organizer?.logoImageUrl ?? null,
     categories: mapped.categories,
     categoryLabels: mapped.categoryLabels,
+    status: mapped.status,
     updatedAt: mapped.updatedAt,
     canEdit: canEditMobileEvent(permissions, {
       venueId: mapped.venueId,
@@ -198,4 +265,75 @@ export async function GET(
       mapMobileEvent(event, editPermissions, currentUserRsvpMap.get(event.id))
     ),
   });
+}
+
+export async function PATCH(
+  request: Request,
+  { params }: { params: Promise<{ slug: string }> }
+) {
+  try {
+    const { slug } = await params;
+    const { userId } = await auth();
+
+    if (!userId) {
+      return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
+    }
+
+    const place = await db.query.places.findFirst({
+      where: eq(places.slug, slug),
+      columns: { id: true, logoImageUrl: true },
+    });
+
+    if (!place) {
+      return NextResponse.json({ error: "Place not found" }, { status: 404 });
+    }
+
+    const permissions = await resolveMobileEventEditPermissions(userId);
+    if (!permissions.isAdmin && !permissions.manageablePlaceIds.has(place.id)) {
+      return NextResponse.json({ error: "Forbidden" }, { status: 403 });
+    }
+
+    const body = mobileUpdatePlaceSchema.parse(await request.json());
+    const validCategories = await filterExistingCategoryKeys(db, body.categories, {
+      activeOnly: true,
+    });
+
+    await db
+      .update(places)
+      .set({
+        type: body.type,
+        name: body.name.trim(),
+        description: body.description?.trim() || null,
+        logoImageUrl: body.keepExistingLogo
+          ? place.logoImageUrl
+          : body.logoImageUrl?.trim() || null,
+        address: body.type === "venue" ? body.address?.trim() || null : null,
+        city: body.city?.trim() || null,
+        state: body.state?.trim().toUpperCase() || null,
+        website: body.website?.trim() || null,
+        instagram: body.instagram?.trim() || null,
+        hours: body.type === "venue" ? body.hours ?? null : null,
+        updatedAt: new Date(),
+      })
+      .where(eq(places.id, place.id));
+
+    await setPlaceCategoryKeys(db, place.id, validCategories, {
+      activeOnly: true,
+    });
+
+    return NextResponse.json({ id: place.id });
+  } catch (error) {
+    if (error instanceof z.ZodError) {
+      return NextResponse.json(
+        { error: error.issues[0]?.message || "Invalid request" },
+        { status: 400 }
+      );
+    }
+
+    console.error("Mobile update place error:", error);
+    return NextResponse.json(
+      { error: "Failed to update place" },
+      { status: 500 }
+    );
+  }
 }

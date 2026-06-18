@@ -97,6 +97,30 @@ struct PlaceDetail: Decodable, Identifiable, Hashable, Sendable {
 }
 
 extension PlaceDetail {
+    init(listItem: PlaceListItem) {
+        self.init(
+            id: listItem.id,
+            type: listItem.type,
+            slug: listItem.slug,
+            name: listItem.name,
+            description: nil,
+            logoImageURL: listItem.logoImageURL,
+            coverImageURL: nil,
+            address: nil,
+            city: listItem.city,
+            state: listItem.state,
+            website: nil,
+            instagram: nil,
+            hours: nil,
+            categories: [],
+            categoryLabels: [:],
+            updatedAt: listItem.updatedAt,
+            isFollowed: listItem.isFollowed,
+            events: [],
+            pastEvents: []
+        )
+    }
+
     init(from decoder: Decoder) throws {
         let container = try decoder.container(keyedBy: CodingKeys.self)
 

@@ -323,10 +323,7 @@ struct HomeView: View {
                                 NavigationLink {
                                     UserProfileView(userID: user.id)
                                 } label: {
-                                    SearchUserRow(
-                                        user: user,
-                                        seed: index
-                                    )
+                                        SearchUserRow(user: user)
                                 }
                                 .task {
                                     await UserProfileViewModel.preload(
@@ -425,10 +422,7 @@ struct HomeView: View {
                                 NavigationLink {
                                     UserProfileView(userID: user.id)
                                 } label: {
-                                    SearchUserRow(
-                                        user: user,
-                                        seed: index
-                                    )
+                                        SearchUserRow(user: user)
                                 }
                                 .task {
                                     await UserProfileViewModel.preload(
@@ -1595,19 +1589,15 @@ private struct SearchSectionHeader: View {
 
 private struct SearchUserRow: View {
     let user: FriendUserSummary
-    let seed: Int
-
-    private let fallbackColors = [
-        Color(red: 0.88, green: 0.48, blue: 0.36),
-        Color(red: 0.88, green: 0.68, blue: 0.46),
-        Color(red: 0.57, green: 0.35, blue: 0.70),
-        Color(red: 0.43, green: 0.70, blue: 0.62),
-        Color(red: 0.15, green: 0.63, blue: 0.58),
-    ]
 
     var body: some View {
         HStack(spacing: 14) {
-            avatar
+            UserAvatarView(
+                imageURL: user.avatarImageURL,
+                name: user.name,
+                size: 48,
+                identityKey: user.id
+            )
 
             VStack(alignment: .leading, spacing: 3) {
                 Text(user.name)
@@ -1648,37 +1638,6 @@ private struct SearchUserRow: View {
         )
     }
 
-    @ViewBuilder
-    private var avatar: some View {
-        Group {
-            if let url = user.avatarImageURL {
-                AsyncImage(url: url) { phase in
-                    switch phase {
-                    case .success(let image):
-                        image
-                            .resizable()
-                            .scaledToFill()
-                    default:
-                        fallbackAvatar
-                    }
-                }
-            } else {
-                fallbackAvatar
-            }
-        }
-        .frame(width: 48, height: 48)
-        .clipShape(Circle())
-    }
-
-    private var fallbackAvatar: some View {
-        Circle()
-            .fill(fallbackColors[abs(seed) % fallbackColors.count])
-            .overlay {
-                Text(String(user.name.prefix(1)).uppercased())
-                    .font(.system(size: 16, weight: .bold))
-                    .foregroundStyle(.black.opacity(0.86))
-            }
-    }
 }
 
 private struct SearchVenueRow: View {

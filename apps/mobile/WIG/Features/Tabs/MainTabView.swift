@@ -280,8 +280,9 @@ struct MainTabView: View {
         async let activity: Void = ActivityViewModel.preload(using: apiClient)
         async let profile: Void = ProfileViewModel.preload(using: apiClient)
         async let search: Void = HomeSearchDirectoryViewModel.preload(using: apiClient)
+        async let categories: Void = MobileCategoryStore.preload(using: apiClient)
 
-        _ = await (adminStatus, venues, activity, profile, search)
+        _ = await (adminStatus, venues, activity, profile, search, categories)
     }
 
     private func loadAdminStatus() async {

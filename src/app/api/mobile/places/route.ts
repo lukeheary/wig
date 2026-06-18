@@ -80,6 +80,7 @@ const mobileCreatePlaceSchema = z
         INSTAGRAM_HANDLE_ERROR
       )
       .optional(),
+    hours: z.any().optional().nullable(),
     categories: z.array(z.string()).optional().default([]),
   })
   .superRefine((value, context) => {
@@ -339,6 +340,7 @@ export async function POST(request: Request) {
         state: cleanedState,
         website: cleanedWebsite,
         instagram: cleanedInstagram,
+        hours: body.type === "venue" ? body.hours ?? null : null,
       })
       .returning({ id: places.id });
 

@@ -1063,42 +1063,16 @@ struct ActivityAvatarView: View {
 
     var body: some View {
         ZStack(alignment: .bottomTrailing) {
-            avatar
-                .frame(width: 44, height: 44)
-                .clipShape(Circle())
+            UserAvatarView(
+                imageURL: activity.actorAvatarImageURL,
+                name: activity.actorName,
+                size: 44,
+                identityKey: activity.actorUserID
+            )
 
             statusBadge
                 .offset(x: 4, y: 4)
         }
-    }
-
-    @ViewBuilder
-    private var avatar: some View {
-        if let url = activity.actorAvatarImageURL {
-            AsyncImage(url: url) { phase in
-                switch phase {
-                case .success(let image):
-                    image
-                        .resizable()
-                        .scaledToFill()
-                default:
-                    fallbackAvatar
-                }
-            }
-        } else {
-            fallbackAvatar
-        }
-    }
-
-    private var fallbackAvatar: some View {
-        Circle()
-            .fill(Color(red: 0.88, green: 0.68, blue: 0.46))
-            .overlay {
-                Text("}")
-                    .font(.system(size: 22, weight: .bold))
-                    .rotationEffect(.degrees(90))
-                    .foregroundStyle(.black.opacity(0.84))
-            }
     }
 
     private var statusBadge: some View {

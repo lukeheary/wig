@@ -29,6 +29,7 @@
 		1A2B3C4D5E6F708192A0C002 /* UIImage+Upload.swift in Sources */ = {isa = PBXBuildFile; fileRef = 1A2B3C4D5E6F708192A0B002 /* UIImage+Upload.swift */; };
 		1A2B3C4D5E6F708192A0C003 /* String+RelativeFormatting.swift in Sources */ = {isa = PBXBuildFile; fileRef = 1A2B3C4D5E6F708192A0B003 /* String+RelativeFormatting.swift */; };
 		1A2B3C4D5E6F708192A0C004 /* MobilePlaceCreationView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 1A2B3C4D5E6F708192A0B004 /* MobilePlaceCreationView.swift */; };
+		1A2B3C4D5E6F708192A0C005 /* MobileCategoryStore.swift in Sources */ = {isa = PBXBuildFile; fileRef = 1A2B3C4D5E6F708192A0B005 /* MobileCategoryStore.swift */; };
 		1D348DDF86D014D61E9BAB1F /* GiftList.swift in Sources */ = {isa = PBXBuildFile; fileRef = 426D21E06189626A1AF56246 /* GiftList.swift */; };
 		59D822A7D7ADCABFCF108A54 /* Assets.xcassets in Resources */ = {isa = PBXBuildFile; fileRef = C0D13CF91B0EECB51C7BEBC0 /* Assets.xcassets */; };
 		68C7C86049E10AB91E4389A2 /* VenuesView.swift in Sources */ = {isa = PBXBuildFile; fileRef = BBBA8FF5228C20D71528FB71 /* VenuesView.swift */; };
@@ -72,6 +73,7 @@
 		1A2B3C4D5E6F708192A0B002 /* UIImage+Upload.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = "UIImage+Upload.swift"; sourceTree = "<group>"; };
 		1A2B3C4D5E6F708192A0B003 /* String+RelativeFormatting.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = "String+RelativeFormatting.swift"; sourceTree = "<group>"; };
 		1A2B3C4D5E6F708192A0B004 /* MobilePlaceCreationView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = MobilePlaceCreationView.swift; sourceTree = "<group>"; };
+		1A2B3C4D5E6F708192A0B005 /* MobileCategoryStore.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = MobileCategoryStore.swift; sourceTree = "<group>"; };
 		1A7D0D9C9A7444D4B6D8D001 /* Debug.xcconfig */ = {isa = PBXFileReference; lastKnownFileType = text.xcconfig; name = Debug.xcconfig; path = Config/Debug.xcconfig; sourceTree = SOURCE_ROOT; };
 		1A7D0D9C9A7444D4B6D8D002 /* Release.xcconfig */ = {isa = PBXFileReference; lastKnownFileType = text.xcconfig; name = Release.xcconfig; path = Config/Release.xcconfig; sourceTree = SOURCE_ROOT; };
 		205A0A05764438AFB15835AF /* Info.plist */ = {isa = PBXFileReference; lastKnownFileType = text.plist; path = Info.plist; sourceTree = "<group>"; };
@@ -242,6 +244,7 @@
 			isa = PBXGroup;
 			children = (
 				0A7F46F19B1D4A6CA4100004 /* AppSession.swift */,
+				1A2B3C4D5E6F708192A0B005 /* MobileCategoryStore.swift */,
 				1A2B3C4D5E6F708192A0B003 /* String+RelativeFormatting.swift */,
 				1A2B3C4D5E6F708192A0B002 /* UIImage+Upload.swift */,
 				7D1A2200B7C3478AA43C90F1 /* PushNotificationManager.swift */,
@@ -386,6 +389,7 @@
 				1D348DDF86D014D61E9BAB1F /* GiftList.swift in Sources */,
 				90C9663BDAC608D5EA336BE0 /* HomeView.swift in Sources */,
 				1A2B3C4D5E6F708192A0C001 /* MobileEventCreationView.swift in Sources */,
+				1A2B3C4D5E6F708192A0C005 /* MobileCategoryStore.swift in Sources */,
 				1A2B3C4D5E6F708192A0C004 /* MobilePlaceCreationView.swift in Sources */,
 				F9BAE145020603897D733455 /* ActivityView.swift in Sources */,
 				CA9B0D3B6C19273F055C584F /* MainTabView.swift in Sources */,
@@ -554,7 +558,7 @@
 					"$(inherited)",
 					"@executable_path/Frameworks",
 				);
-				MARKETING_VERSION = 1.0.4;
+				MARKETING_VERSION = 1.0.5;
 				PRODUCT_BUNDLE_IDENTIFIER = com.whoisgoing.app;
 				PRODUCT_NAME = WIG;
 				SDKROOT = iphoneos;
@@ -583,7 +587,7 @@
 					"$(inherited)",
 					"@executable_path/Frameworks",
 				);
-				MARKETING_VERSION = 1.0.4;
+				MARKETING_VERSION = 1.0.5;
 				PRODUCT_BUNDLE_IDENTIFIER = com.whoisgoing.app;
 				PRODUCT_NAME = WIG;
 				SDKROOT = iphoneos;

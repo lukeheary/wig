@@ -157,6 +157,10 @@ struct EventDetailView: View {
                 }
             }
 
+            if currentEvent.eventURL != nil {
+                externalEventMenu
+            }
+
             FloatingGlassIconButton(systemImage: "square.and.arrow.up") {
                 isShareSheetPresented = true
             }
@@ -251,20 +255,43 @@ struct EventDetailView: View {
                 }
             }
 
-            if let sourceName = currentEvent.externalSourceName {
-                Button {
-                    openExternalEvent()
-                } label: {
-                    HStack(spacing: 6) {
-                        Text("View on \(sourceName)")
-                        Image(systemName: "arrow.up.right.square")
+            if let organizerPlace {
+                HStack(spacing: 4) {
+                    Text("Organized by")
+                        .foregroundStyle(.white.opacity(0.62))
+
+                    NavigationLink {
+                        PlaceDetailView(place: organizerPlace)
+                    } label: {
+                        Text(organizerPlace.name)
+                            .foregroundStyle(.white)
                     }
-                    .font(.system(size: 16, weight: .semibold))
-                    .foregroundStyle(.white.opacity(0.62))
+                    .buttonStyle(.plain)
                 }
-                .buttonStyle(.plain)
+                .font(.system(size: 16, weight: .semibold))
             }
         }
+    }
+
+    private var externalEventMenu: some View {
+        Menu {
+            Button {
+                openExternalEvent()
+            } label: {
+                Label(
+                    "View on \(currentEvent.externalSourceName ?? "Event Site")",
+                    systemImage: "arrow.up.right.square"
+                )
+            }
+        } label: {
+            Image(systemName: "arrow.up.right")
+                .font(.system(size: 17, weight: .semibold))
+                .foregroundStyle(.primary)
+                .frame(width: 46, height: 46)
+                .contentShape(Circle())
+                .placeDetailLiquidGlass(in: Circle())
+        }
+        .buttonStyle(.plain)
     }
 
     private var linkedPlace: PlaceListItem? {
@@ -315,6 +342,30 @@ struct EventDetailView: View {
         }
 
         return nil
+    }
+
+    private var organizerPlace: PlaceListItem? {
+        guard let id = currentEvent.organizerID,
+              let slug = currentEvent.organizerSlug,
+              let name = currentEvent.organizerName,
+              !slug.isEmpty,
+              !name.isEmpty
+        else {
+            return nil
+        }
+
+        return PlaceListItem(
+            id: id,
+            type: .organizer,
+            slug: slug,
+            name: name,
+            logoImageURL: currentEvent.organizerLogoImageURL,
+            city: currentEvent.city,
+            state: currentEvent.state,
+            upcomingEventCount: 0,
+            updatedAt: currentEvent.updatedAt,
+            isFollowed: currentEvent.isFollowed
+        )
     }
 
     @ViewBuilder
@@ -706,7 +757,7 @@ private struct EventAttendeeSection: View {
                 }
             }
             .padding(.horizontal, 16)
-            .padding(.vertical, 16)
+            .padding(.vertical, 8)
             .frame(maxWidth: .infinity, alignment: .leading)
             .background(
                 RoundedRectangle(cornerRadius: 18, style: .continuous)
@@ -736,7 +787,7 @@ private struct EventAttendeeRow: View {
 
             Spacer(minLength: 10)
         }
-        .padding(.vertical, 6)
+        .padding(.vertical, 10)
     }
 
     private var displayName: String {
@@ -840,7 +891,7 @@ private struct ShareSheet: UIViewControllerRepresentable {
     func updateUIViewController(_ uiViewController: UIActivityViewController, context: Context) {}
 }
 
-private struct EventArtworkViewer: View {
+struct EventArtworkViewer: View {
     let imageURL: URL
 
     @Environment(\.dismiss) private var dismiss

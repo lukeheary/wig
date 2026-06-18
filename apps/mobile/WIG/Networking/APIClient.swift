@@ -132,6 +132,46 @@ struct APIClient: Sendable {
         )
     }
 
+    static func mobileGooglePlaceSearch(query: String) -> Endpoint<MobileGooglePlaceSearchResponse> {
+        Endpoint(
+            path: "/api/mobile/google-places",
+            queryItems: [URLQueryItem(name: "query", value: query)],
+            requiresAuthentication: false,
+            includesAuthenticationIfAvailable: true
+        )
+    }
+
+    static func mobileGooglePlaceDetail(placeID: String) -> Endpoint<MobileGooglePlaceDetail> {
+        Endpoint(
+            path: "/api/mobile/google-places/\(placeID)",
+            requiresAuthentication: false,
+            includesAuthenticationIfAvailable: true
+        )
+    }
+
+    static func mobilePlaceScrapers(slug: String) -> Endpoint<MobilePlaceScrapersResponse> {
+        Endpoint(
+            path: "/api/mobile/places/\(slug)/scrapers",
+            requiresAuthentication: false,
+            includesAuthenticationIfAvailable: true
+        )
+    }
+
+    static func replaceMobilePlaceScrapers(
+        slug: String,
+        scrapers: [MobilePlaceScraperConfig]
+    ) throws -> Endpoint<MobilePlaceScrapersResponse> {
+        Endpoint(
+            path: "/api/mobile/places/\(slug)/scrapers",
+            method: .put,
+            body: try JSONEncoder().encode(
+                MobilePlaceScrapersUpdateRequest(scrapers: scrapers)
+            ),
+            requiresAuthentication: false,
+            includesAuthenticationIfAvailable: true
+        )
+    }
+
     static func followMobilePlace(slug: String) -> Endpoint<PlaceFollowState> {
         Endpoint(
             path: "/api/mobile/places/\(slug)/follow",
@@ -323,6 +363,7 @@ struct APIClient: Sendable {
         state: String? = nil,
         website: URL? = nil,
         instagram: String? = nil,
+        hours: VenueHours? = nil,
         categories: [String] = []
     ) throws -> Endpoint<MobilePlaceCreateResponse> {
         let request = MobilePlaceCreateRequest(
@@ -335,12 +376,52 @@ struct APIClient: Sendable {
             state: state,
             website: website?.absoluteString,
             instagram: instagram,
+            hours: hours,
             categories: categories
         )
 
         return Endpoint(
             path: "/api/mobile/places",
             method: .post,
+            body: try JSONEncoder().encode(request),
+            requiresAuthentication: false,
+            includesAuthenticationIfAvailable: true
+        )
+    }
+
+    static func mobileUpdatePlace(
+        slug: String,
+        type: PlaceListItem.PlaceType,
+        name: String,
+        description: String? = nil,
+        logoImageURL: URL? = nil,
+        keepExistingLogo: Bool = true,
+        address: String? = nil,
+        city: String? = nil,
+        state: String? = nil,
+        website: URL? = nil,
+        instagram: String? = nil,
+        hours: VenueHours? = nil,
+        categories: [String] = []
+    ) throws -> Endpoint<MobilePlaceCreateResponse> {
+        let request = MobilePlaceUpdateRequest(
+            type: type.rawValue,
+            name: name,
+            description: description,
+            logoImageUrl: logoImageURL?.absoluteString,
+            keepExistingLogo: keepExistingLogo,
+            address: address,
+            city: city,
+            state: state,
+            website: website?.absoluteString,
+            instagram: instagram,
+            hours: hours,
+            categories: categories
+        )
+
+        return Endpoint(
+            path: "/api/mobile/places/\(slug)",
+            method: .patch,
             body: try JSONEncoder().encode(request),
             requiresAuthentication: false,
             includesAuthenticationIfAvailable: true
@@ -832,6 +913,22 @@ private struct MobilePlaceCreateRequest: Encodable {
     let state: String?
     let website: String?
     let instagram: String?
+    let hours: VenueHours?
+    let categories: [String]
+}
+
+private struct MobilePlaceUpdateRequest: Encodable {
+    let type: String
+    let name: String
+    let description: String?
+    let logoImageUrl: String?
+    let keepExistingLogo: Bool
+    let address: String?
+    let city: String?
+    let state: String?
+    let website: String?
+    let instagram: String?
+    let hours: VenueHours?
     let categories: [String]
 }
 
@@ -861,6 +958,10 @@ private struct MobileEventCoverImageRequest: Encodable {
     }
 }
 
+private struct MobilePlaceScrapersUpdateRequest: Encodable {
+    let scrapers: [MobilePlaceScraperConfig]
+}
+
 struct MobileUploadResponse: Decodable, Hashable, Sendable {
     let url: URL
 }
@@ -883,6 +984,74 @@ struct MobileEventCreateResponse: Decodable, Hashable, Sendable {
 
 struct MobilePlaceCreateResponse: Decodable, Hashable, Sendable {
     let id: UUID
+}
+
+enum MobileScraperType: String, Codable, CaseIterable, Hashable, Sendable {
+    case dice
+    case posh
+    case ticketmaster
+
+    var title: String {
+        switch self {
+        case .dice:
+            return "Dice.fm"
+        case .posh:
+            return "Posh"
+        case .ticketmaster:
+            return "Ticketmaster"
+        }
+    }
+}
+
+struct MobilePlaceScraperConfig: Codable, Hashable, Identifiable, Sendable {
+    let id: UUID?
+    let scraper: MobileScraperType
+    let searchString: String
+    let classificationName: String?
+}
+
+struct MobilePlaceScrapersResponse: Decodable, Hashable, Sendable {
+    let scrapers: [MobilePlaceScraperConfig]
+}
+
+struct MobileGooglePlaceSearchResponse: Decodable, Hashable, Sendable {
+    let predictions: [MobileGooglePlacePrediction]
+}
+
+struct MobileGooglePlacePrediction: Decodable, Hashable, Identifiable, Sendable {
+    let placeID: String
+    let primaryText: String
+    let secondaryText: String?
+
+    var id: String { placeID }
+
+    enum CodingKeys: String, CodingKey {
+        case placeID = "placeId"
+        case primaryText
+        case secondaryText
+    }
+}
+
+struct MobileGooglePlaceDetail: Decodable, Hashable, Sendable {
+    let placeID: String
+    let name: String
+    let address: String
+    let city: String
+    let state: String
+    let formattedAddress: String
+    let website: URL?
+    let hours: VenueHours?
+
+    enum CodingKeys: String, CodingKey {
+        case placeID = "placeId"
+        case name
+        case address
+        case city
+        case state
+        case formattedAddress
+        case website
+        case hours
+    }
 }
 
 enum EventStatus: String, Codable, CaseIterable, Hashable, Sendable {
