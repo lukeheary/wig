@@ -775,102 +775,18 @@ private struct EventAttendeeRow: View {
     let attendee: EventSocialRSVP
 
     var body: some View {
-        HStack(spacing: 12) {
-            EventAttendeeAvatar(user: attendee.user, status: attendee.status)
-
-            VStack(alignment: .leading, spacing: 2) {
-                Text(displayName)
-                    .font(.system(size: 15, weight: .medium))
-                    .foregroundStyle(.white)
-                    .lineLimit(1)
-            }
-
-            Spacer(minLength: 10)
-        }
-        .padding(.vertical, 10)
-    }
-
-    private var displayName: String {
-        if attendee.user.isCurrentUser {
-            return "You"
-        }
-
-        let parts = [attendee.user.firstName, attendee.user.lastName]
-            .compactMap { value in
-                let trimmed = value?.trimmingCharacters(in: .whitespacesAndNewlines) ?? ""
-                return trimmed.isEmpty ? nil : trimmed
-            }
-
-        return parts.isEmpty ? "Unknown" : parts.joined(separator: " ")
-    }
-}
-
-private struct EventAttendeeAvatar: View {
-    let user: EventSocialUser
-    let status: EventRSVPStatus
-
-    private let size: CGFloat = 42
-
-    var body: some View {
-        ZStack {
-            Circle()
-                .fill(ringColor)
-
-            avatarContent
-                .frame(width: size - 4, height: size - 4)
-                .clipShape(Circle())
-        }
-        .frame(width: size, height: size)
-    }
-
-    @ViewBuilder
-    private var avatarContent: some View {
-        if let avatarImageURL = user.avatarImageURL {
-            AsyncImage(url: avatarImageURL) { phase in
-                switch phase {
-                case .empty:
-                    fallbackAvatar
-                case .success(let image):
-                    image
-                        .resizable()
-                        .scaledToFill()
-                case .failure:
-                    fallbackAvatar
-                @unknown default:
-                    fallbackAvatar
-                }
-            }
-        } else {
-            fallbackAvatar
-        }
-    }
-
-    private var fallbackAvatar: some View {
-        ZStack {
-            LinearGradient(
-                colors: [
-                    Color(red: 0.22, green: 0.37, blue: 0.62),
-                    Color(red: 0.62, green: 0.20, blue: 0.36),
-                ],
-                startPoint: .topLeading,
-                endPoint: .bottomTrailing
-            )
-
-            Text(initials)
-                .font(.system(size: 14, weight: .bold))
-                .foregroundStyle(.white)
-        }
-    }
-
-    private var initials: String {
-        let first = user.firstName?.trimmingCharacters(in: .whitespacesAndNewlines).first
-        let last = user.lastName?.trimmingCharacters(in: .whitespacesAndNewlines).first
-        let value = [first, last].compactMap { $0 }.map(String.init).joined()
-        return value.isEmpty ? "?" : value.uppercased()
+        UserListRowView(
+            imageURL: attendee.user.avatarImageURL,
+            name: displayName,
+            avatarName: actualName,
+            identityKey: attendee.user.id,
+            ringColor: ringColor,
+            ringWidth: 4
+        )
     }
 
     private var ringColor: Color {
-        switch status {
+        switch attendee.status {
         case .going:
             return Color(red: 0.23, green: 0.93, blue: 0.86)
         case .interested:
@@ -878,6 +794,24 @@ private struct EventAttendeeAvatar: View {
         case .notGoing:
             return .red
         }
+    }
+
+    private var displayName: String {
+        if attendee.user.isCurrentUser {
+            return "You"
+        }
+
+        return actualName
+    }
+
+    private var actualName: String {
+        let parts = [attendee.user.firstName, attendee.user.lastName]
+            .compactMap { value in
+                let trimmed = value?.trimmingCharacters(in: .whitespacesAndNewlines) ?? ""
+                return trimmed.isEmpty ? nil : trimmed
+            }
+
+        return parts.isEmpty ? "Unknown" : parts.joined(separator: " ")
     }
 }
 

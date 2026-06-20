@@ -35,6 +35,8 @@ struct PlaceListItem: Decodable, Identifiable, Hashable, Sendable {
     let upcomingEventCount: Int
     let updatedAt: Date?
     var isFollowed = false
+    var categories: [String] = []
+    var categoryLabels: [String: String] = [:]
 
     enum CodingKeys: String, CodingKey {
         case id
@@ -50,6 +52,8 @@ struct PlaceListItem: Decodable, Identifiable, Hashable, Sendable {
         case eventCount
         case updatedAt
         case isFollowed
+        case categories
+        case categoryLabels
     }
 
     var locationText: String {
@@ -88,6 +92,14 @@ struct PlaceListItem: Decodable, Identifiable, Hashable, Sendable {
         components.queryItems = queryItems
         return components.url ?? logoImageURL
     }
+
+    var primaryCategoryLabel: String? {
+        guard let category = categories.first else {
+            return nil
+        }
+
+        return categoryLabels[category] ?? category.capitalized
+    }
 }
 
 extension PlaceListItem {
@@ -112,6 +124,8 @@ extension PlaceListItem {
 
         updatedAt = try container.decodeIfPresent(Date.self, forKey: .updatedAt)
         isFollowed = try container.decodeIfPresent(Bool.self, forKey: .isFollowed) ?? false
+        categories = try container.decodeIfPresent([String].self, forKey: .categories) ?? []
+        categoryLabels = try container.decodeIfPresent([String: String].self, forKey: .categoryLabels) ?? [:]
     }
 }
 

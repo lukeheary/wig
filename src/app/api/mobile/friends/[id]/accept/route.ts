@@ -1,5 +1,5 @@
 import { auth } from "@clerk/nextjs/server";
-import { asc, eq } from "drizzle-orm";
+import { and, asc, eq, or } from "drizzle-orm";
 import { NextResponse } from "next/server";
 import { db } from "@/server/db";
 import { userFriends, users } from "@/server/db/schema";
@@ -29,6 +29,24 @@ type RouteContext = {
   params: Promise<{ id: string }>;
 };
 
+async function resolvePendingFriendRequest(id: string, userId: string) {
+  const directMatch = await db.query.userFriends.findFirst({
+    where: eq(userFriends.id, id),
+  });
+
+  if (directMatch) {
+    return directMatch;
+  }
+
+  return db.query.userFriends.findFirst({
+    where: and(
+      eq(userFriends.status, "pending"),
+      eq(userFriends.friendUserId, userId),
+      or(eq(userFriends.userId, id), eq(userFriends.friendUserId, id))
+    ),
+  });
+}
+
 export async function POST(_: Request, context: RouteContext) {
   const userId = await currentMobileUserId();
 
@@ -38,9 +56,7 @@ export async function POST(_: Request, context: RouteContext) {
 
   const { id } = await context.params;
 
-  const friendRequest = await db.query.userFriends.findFirst({
-    where: eq(userFriends.id, id),
-  });
+  const friendRequest = await resolvePendingFriendRequest(id, userId);
 
   if (!friendRequest) {
     return NextResponse.json({ error: "Friend request not found" }, { status: 404 });
@@ -66,13 +82,13 @@ export async function POST(_: Request, context: RouteContext) {
       status: "accepted",
       updatedAt: new Date(),
     })
-    .where(eq(userFriends.id, id));
+    .where(eq(userFriends.id, friendRequest.id));
 
   await deleteNotificationsForEntity(
     {
       userId,
       entityType: "friend_request",
-      entityIds: [id],
+      entityIds: [friendRequest.id],
     },
     db
   );
@@ -97,12 +113,12 @@ export async function POST(_: Request, context: RouteContext) {
       actorUserId: userId,
       type: "friend_request_accepted",
       entityType: "friend_request",
-      entityId: id,
+      entityId: friendRequest.id,
       title: accepterName,
       body: "Added you as a friend",
       actionUrl: "/friends/list",
       metadata: {
-        requestId: id,
+        requestId: friendRequest.id,
         requestType: "friend",
       },
     },
@@ -114,7 +130,7 @@ export async function POST(_: Request, context: RouteContext) {
     body: "Added you as a friend",
     data: {
       type: "friend_request_accepted",
-      entityId: id,
+      entityId: friendRequest.id,
       actionUrl: "/friends/list",
     },
   });

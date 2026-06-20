@@ -5,6 +5,7 @@ extension Notification.Name {
     static let mobileEventDidChange = Notification.Name("mobileEventDidChange")
     static let mobileEventDidDelete = Notification.Name("mobileEventDidDelete")
     static let mobilePlaceDidChange = Notification.Name("mobilePlaceDidChange")
+    static let friendRequestDidChange = Notification.Name("friendRequestDidChange")
 }
 
 @MainActor

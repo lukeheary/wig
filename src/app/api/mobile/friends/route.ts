@@ -249,10 +249,20 @@ export async function GET() {
     if (friendship.status === "pending") {
       if (friendship.friendUserId === userId) {
         const sender = userSummary(friendship.user);
-        if (sender) receivedRequests.push(sender);
+        if (sender) {
+          receivedRequests.push({
+            ...sender,
+            friendshipId: friendship.id,
+          });
+        }
       } else {
         const recipient = userSummary(friendship.friend);
-        if (recipient) sentRequests.push(recipient);
+        if (recipient) {
+          sentRequests.push({
+            ...recipient,
+            friendshipId: friendship.id,
+          });
+        }
       }
     }
   }

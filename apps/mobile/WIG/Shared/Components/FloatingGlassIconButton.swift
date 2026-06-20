@@ -78,6 +78,67 @@ struct UserAvatarView: View {
     }
 }
 
+struct UserListRowView<Trailing: View>: View {
+    let imageURL: URL?
+    let name: String
+    let avatarName: String
+    let identityKey: String?
+    var ringColor: Color = .clear
+    var ringWidth: CGFloat = 0
+    var avatarSize: CGFloat = 42
+    var verticalPadding: CGFloat = 10
+    @ViewBuilder let trailing: () -> Trailing
+
+    init(
+        imageURL: URL?,
+        name: String,
+        avatarName: String? = nil,
+        identityKey: String?,
+        ringColor: Color = .clear,
+        ringWidth: CGFloat = 0,
+        avatarSize: CGFloat = 42,
+        verticalPadding: CGFloat = 10,
+        @ViewBuilder trailing: @escaping () -> Trailing = { EmptyView() }
+    ) {
+        self.imageURL = imageURL
+        self.name = name
+        self.avatarName = avatarName ?? name
+        self.identityKey = identityKey
+        self.ringColor = ringColor
+        self.ringWidth = ringWidth
+        self.avatarSize = avatarSize
+        self.verticalPadding = verticalPadding
+        self.trailing = trailing
+    }
+
+    var body: some View {
+        HStack(spacing: 12) {
+            ZStack {
+                Circle()
+                    .fill(ringColor)
+
+                UserAvatarView(
+                    imageURL: imageURL,
+                    name: avatarName,
+                    size: avatarSize - ringWidth,
+                    identityKey: identityKey
+                )
+            }
+            .frame(width: avatarSize, height: avatarSize)
+
+            Text(name)
+                .font(.system(size: 15, weight: .medium))
+                .foregroundStyle(.white)
+                .lineLimit(1)
+
+            Spacer(minLength: 10)
+
+            trailing()
+        }
+        .padding(.vertical, verticalPadding)
+    }
+}
+
 private extension View {
     @ViewBuilder
     func floatingGlassCircle() -> some View {

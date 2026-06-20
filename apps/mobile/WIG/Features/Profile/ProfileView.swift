@@ -484,10 +484,23 @@ struct ProfileView: View {
     private func respondToFriendRequest(
         _ request: FriendUserSummary,
         response: ActivityRequestResponse
-    ) async {
-        guard let friendshipID = request.friendshipID, !friendshipID.isEmpty else {
-            return
+    ) async -> Bool {
+        var resolvedRequest = request
+
+        if resolvedRequest.friendshipID == nil || resolvedRequest.friendshipID?.isEmpty == true {
+            await viewModel.load(using: apiClient, forceRefresh: true)
+
+            if let refreshedRequest = viewModel
+                .snapshotLoadedResponse()?
+                .receivedRequests
+                .first(where: { $0.id == request.id && $0.friendshipID?.isEmpty == false }) {
+                resolvedRequest = refreshedRequest
+            }
         }
+
+        let requestIdentifier = resolvedRequest.friendshipID?.isEmpty == false
+            ? resolvedRequest.friendshipID!
+            : resolvedRequest.id
 
         let previousResponse = viewModel.snapshotLoadedResponse()
 
@@ -500,15 +513,15 @@ struct ProfileView: View {
                     requestCount: max(current.requestCount - 1, 0),
                     friends: current.friends + [
                         FriendUserSummary(
-                            id: request.id,
-                            friendshipID: request.friendshipID,
-                            name: request.name,
-                            username: request.username,
-                            avatarImageURL: request.avatarImageURL,
+                            id: resolvedRequest.id,
+                            friendshipID: resolvedRequest.friendshipID,
+                            name: resolvedRequest.name,
+                            username: resolvedRequest.username,
+                            avatarImageURL: resolvedRequest.avatarImageURL,
                             friendStatus: .accepted
                         )
                     ],
-                    receivedRequests: current.receivedRequests.filter { $0.id != request.id },
+                    receivedRequests: current.receivedRequests.filter { $0.id != resolvedRequest.id },
                     sentRequests: current.sentRequests,
                     upcomingEvents: current.upcomingEvents,
                     pastEvents: current.pastEvents
@@ -521,7 +534,7 @@ struct ProfileView: View {
                     friendCount: current.friendCount,
                     requestCount: max(current.requestCount - 1, 0),
                     friends: current.friends,
-                    receivedRequests: current.receivedRequests.filter { $0.id != request.id },
+                    receivedRequests: current.receivedRequests.filter { $0.id != resolvedRequest.id },
                     sentRequests: current.sentRequests,
                     upcomingEvents: current.upcomingEvents,
                     pastEvents: current.pastEvents
@@ -532,15 +545,17 @@ struct ProfileView: View {
         do {
             switch response {
             case .accept:
-                try await apiClient.send(APIClient.acceptMobileFriendRequest(friendRequestID: friendshipID))
+                try await apiClient.send(APIClient.acceptMobileFriendRequest(friendRequestID: requestIdentifier))
             case .decline:
-                try await apiClient.send(APIClient.declineMobileFriendRequest(friendRequestID: friendshipID))
+                try await apiClient.send(APIClient.declineMobileFriendRequest(friendRequestID: requestIdentifier))
             }
+            return true
         } catch {
             if let previousResponse {
                 viewModel.restoreLoadedResponse(previousResponse)
             }
             friendRequestActionErrorMessage = error.localizedDescription
+            return false
         }
     }
 
@@ -712,13 +727,13 @@ struct UserProfileView: View {
             case .pendingReceived:
                 HStack(spacing: 12) {
                     Button("Decline") {
-                        respondToFriendRequest(profile: profile, response: .decline)
+                        _ = respondToFriendRequest(profile: profile, response: .decline)
                     }
                     .profileActionButtonStyle(kind: .secondary, isDisabled: isRespondingToFriendRequest)
                     .disabled(isRespondingToFriendRequest)
 
                     Button("Accept") {
-                        respondToFriendRequest(profile: profile, response: .accept)
+                        _ = respondToFriendRequest(profile: profile, response: .accept)
                     }
                     .profileActionButtonStyle(kind: .accent, isDisabled: isRespondingToFriendRequest)
                     .disabled(isRespondingToFriendRequest)
@@ -792,7 +807,7 @@ struct UserProfileView: View {
                         name: $0.name,
                         username: $0.username,
                         avatarImageURL: $0.avatarImageURL,
-                        friendStatus: response == .accept ? .accepted : .none
+                        friendStatus: response == .accept ? .accepted : FriendUserSummary.FriendStatus.none
                     )
                 },
                 friendCount: current.friendCount,
@@ -1071,8 +1086,8 @@ private struct RelationshipSummaryRow: View {
     let onChangePartner: () -> Void
     let onRemovePartner: () -> Void
     let onRemoveFriend: (FriendUserSummary) -> Void
-    let onAcceptFriendRequest: (FriendUserSummary) async -> Void
-    let onDeclineFriendRequest: (FriendUserSummary) async -> Void
+    let onAcceptFriendRequest: (FriendUserSummary) async -> Bool
+    let onDeclineFriendRequest: (FriendUserSummary) async -> Bool
 
     var body: some View {
         HStack(spacing: 12) {
@@ -1191,44 +1206,34 @@ private struct PartnerManagementCard: View {
                 }
             }
         }
-        .padding(18)
+        .padding(.horizontal, 16)
+        .padding(.vertical, 8)
         .frame(maxWidth: .infinity, alignment: .leading)
-        .background(ProfileTheme.cardBackground, in: RoundedRectangle(cornerRadius: 22, style: .continuous))
+        .background(ProfileTheme.cardBackground, in: RoundedRectangle(cornerRadius: 18, style: .continuous))
+        .overlay(
+            RoundedRectangle(cornerRadius: 18, style: .continuous)
+                .stroke(.white.opacity(0.08), lineWidth: 1)
+        )
     }
 
     @ViewBuilder
     private func partnerAvatarRow(_ partner: MobilePartnerUser, trailing: AnyView? = nil) -> some View {
-        HStack(spacing: 12) {
-            FriendAvatarView(
-                user: FriendUserSummary(
-                    id: partner.id,
-                    name: [partner.firstName, partner.lastName].compactMap { $0 }.joined(separator: " ").trimmingCharacters(in: .whitespacesAndNewlines).ifEmpty(partner.username),
-                    username: partner.username,
-                    avatarImageURL: partner.avatarImageURL
-                ),
-                size: 52
-            )
-
-            VStack(alignment: .leading, spacing: 3) {
-                Text(
-                    [partner.firstName, partner.lastName]
-                        .compactMap { $0 }
-                        .joined(separator: " ")
-                        .trimmingCharacters(in: .whitespacesAndNewlines)
-                        .ifEmpty(partner.username)
-                )
-                .font(.system(size: 16, weight: .bold))
-                .foregroundStyle(.white)
-
-                Text("@\(partner.username)")
-                    .font(.system(size: 14, weight: .medium))
-                    .foregroundStyle(.white.opacity(0.56))
+        NavigationLink {
+            UserProfileView(userID: partner.id)
+        } label: {
+            UserListRowView(
+                imageURL: partner.avatarImageURL,
+                name: [partner.firstName, partner.lastName]
+                    .compactMap { $0 }
+                    .joined(separator: " ")
+                    .trimmingCharacters(in: .whitespacesAndNewlines)
+                    .ifEmpty(partner.username),
+                identityKey: partner.id
+            ) {
+                trailing
             }
-
-            Spacer(minLength: 8)
-
-            trailing
         }
+        .buttonStyle(.plain)
     }
 
     @ViewBuilder
@@ -1458,13 +1463,17 @@ private struct FriendsListViewContent: View {
                 message: "No friends yet"
             )
         } else {
-                RelationshipCard {
-                    ForEach(Array(friends.enumerated()), id: \.element.id) { index, friend in
+                VStack(spacing: 0) {
+                    ForEach(Array(friends.enumerated()), id: \.element.id) { _, friend in
                     HStack(spacing: 12) {
                         NavigationLink {
                             UserProfileView(userID: friend.id)
                         } label: {
-                            FriendRowView(user: friend)
+                            UserListRowView(
+                                imageURL: friend.avatarImageURL,
+                                name: friend.name,
+                                identityKey: friend.id
+                            )
                         }
                         .buttonStyle(.plain)
 
@@ -1490,31 +1499,53 @@ private struct FriendsListViewContent: View {
                         }
                     }
                 }
+                .padding(.horizontal, 16)
+                .padding(.vertical, 8)
+                .frame(maxWidth: .infinity, alignment: .leading)
+                .background(
+                    RoundedRectangle(cornerRadius: 18, style: .continuous)
+                        .fill(ProfileTheme.cardBackground)
+                )
+                .overlay(
+                    RoundedRectangle(cornerRadius: 18, style: .continuous)
+                        .stroke(.white.opacity(0.08), lineWidth: 1)
+                )
             }
     }
 }
 
 private struct FriendRequestsView: View {
-    let receivedRequests: [FriendUserSummary]
-    let sentRequests: [FriendUserSummary]
-    let onAcceptRequest: (FriendUserSummary) async -> Void
-    let onDeclineRequest: (FriendUserSummary) async -> Void
+    let onAcceptRequest: (FriendUserSummary) async -> Bool
+    let onDeclineRequest: (FriendUserSummary) async -> Bool
+    @EnvironmentObject private var activityRequestStore: ActivityRequestStore
+    @State private var receivedRequests: [FriendUserSummary]
+    @State private var sentRequests: [FriendUserSummary]
     @State private var activeRequestID: String?
+    @State private var selectedUserProfile: RequestSelectedUserProfile?
+
+    init(
+        receivedRequests: [FriendUserSummary],
+        sentRequests: [FriendUserSummary],
+        onAcceptRequest: @escaping (FriendUserSummary) async -> Bool,
+        onDeclineRequest: @escaping (FriendUserSummary) async -> Bool
+    ) {
+        self.onAcceptRequest = onAcceptRequest
+        self.onDeclineRequest = onDeclineRequest
+        _receivedRequests = State(initialValue: receivedRequests)
+        _sentRequests = State(initialValue: sentRequests)
+    }
 
     var body: some View {
         RelationshipListScreen(title: "Received Requests") {
             VStack(alignment: .leading, spacing: 6) {
                 if receivedRequests.isEmpty {
-                    EmptyRelationshipCard(
-                        systemImage: "envelope",
-                        message: "No pending friend requests"
-                    )
+                    EmptyRequestPlaceholder(message: "No pending friend requests")
                 } else {
                     VStack(spacing: 0) {
                         ForEach(Array(receivedRequests.enumerated()), id: \.element.id) { index, request in
                             HStack(spacing: 12) {
-                                NavigationLink {
-                                    UserProfileView(userID: request.id)
+                                Button {
+                                    selectedUserProfile = RequestSelectedUserProfile(id: request.id)
                                 } label: {
                                     FriendRowView(
                                         user: request,
@@ -1523,6 +1554,7 @@ private struct FriendRequestsView: View {
                                     )
                                 }
                                 .buttonStyle(.plain)
+                                .frame(maxWidth: .infinity, alignment: .leading)
 
                                 HStack(spacing: 8) {
                                     Button {
@@ -1567,15 +1599,12 @@ private struct FriendRequestsView: View {
                         .foregroundStyle(.white)
 
                     if sentRequests.isEmpty {
-                        EmptyRelationshipCard(
-                            systemImage: "paperplane",
-                            message: "No sent requests"
-                        )
+                        EmptyRequestPlaceholder(message: "No sent requests")
                     } else {
                         VStack(spacing: 0) {
                             ForEach(Array(sentRequests.enumerated()), id: \.element.id) { index, request in
-                                NavigationLink {
-                                    UserProfileView(userID: request.id)
+                                Button {
+                                    selectedUserProfile = RequestSelectedUserProfile(id: request.id)
                                 } label: {
                                     FriendRowView(
                                         user: request,
@@ -1585,6 +1614,7 @@ private struct FriendRequestsView: View {
                                     )
                                 }
                                 .buttonStyle(.plain)
+                                .frame(maxWidth: .infinity, alignment: .leading)
 
                                 if request.id != sentRequests.last?.id {
                                     Divider()
@@ -1595,22 +1625,195 @@ private struct FriendRequestsView: View {
                         }
                     }
                 }
+                .padding(.top, 28)
             }
+        }
+        .navigationDestination(item: $selectedUserProfile) { selection in
+            UserProfileView(userID: selection.id)
         }
     }
 
     private func submit(_ response: ActivityRequestResponse, for request: FriendUserSummary) {
         activeRequestID = request.id
         Task {
+            let previousReceivedRequests = receivedRequests
+            withAnimation(.snappy(duration: 0.2)) {
+                receivedRequests.removeAll { $0.id == request.id }
+            }
+
+            let succeeded: Bool
             switch response {
             case .accept:
-                await onAcceptRequest(request)
+                succeeded = await onAcceptRequest(request)
             case .decline:
-                await onDeclineRequest(request)
+                succeeded = await onDeclineRequest(request)
             }
+
+            if !succeeded {
+                withAnimation(.snappy(duration: 0.2)) {
+                    receivedRequests = previousReceivedRequests
+                }
+            } else if let friendshipID = request.friendshipID, let requestID = UUID(uuidString: friendshipID) {
+                activityRequestStore.record(response, for: requestID)
+                NotificationCenter.default.post(name: .friendRequestDidChange, object: requestID)
+            } else if succeeded {
+                NotificationCenter.default.post(name: .friendRequestDidChange, object: nil)
+            }
+
             activeRequestID = nil
         }
     }
+}
+
+struct RequestsPageView: View {
+    @Environment(\.apiClient) private var apiClient
+    @StateObject private var viewModel = ProfileViewModel()
+    @State private var errorMessage: String?
+
+    var body: some View {
+        Group {
+            switch viewModel.state {
+            case .idle, .loading:
+                ProgressView("Loading requests...")
+                    .frame(maxWidth: .infinity, maxHeight: .infinity)
+                    .tint(.white)
+                    .foregroundStyle(.white)
+                    .background(ProfileTheme.background)
+
+            case .failed(let message):
+                ContentUnavailableView {
+                    Label("Couldn't Load Requests", systemImage: "wifi.exclamationmark")
+                } description: {
+                    Text(message)
+                } actions: {
+                    Button("Try Again") {
+                        Task {
+                            await viewModel.load(using: apiClient, forceRefresh: true)
+                        }
+                    }
+                }
+                .foregroundStyle(.white)
+                .background(ProfileTheme.background)
+
+            case .loaded(let response):
+                FriendRequestsView(
+                    receivedRequests: response.receivedRequests,
+                    sentRequests: response.sentRequests,
+                    onAcceptRequest: { request in
+                        await respondToFriendRequest(request, response: .accept)
+                    },
+                    onDeclineRequest: { request in
+                        await respondToFriendRequest(request, response: .decline)
+                    }
+                )
+            }
+        }
+        .task {
+            if case .idle = viewModel.state {
+                await viewModel.load(using: apiClient, forceRefresh: true)
+            }
+        }
+        .refreshable {
+            await viewModel.load(using: apiClient, forceRefresh: true)
+        }
+        .alert(
+            "Couldn't Update Request",
+            isPresented: Binding(
+                get: { errorMessage != nil },
+                set: { isPresented in
+                    if !isPresented {
+                        errorMessage = nil
+                    }
+                }
+            )
+        ) {
+            Button("OK", role: .cancel) {}
+        } message: {
+            Text(errorMessage ?? "Please try again.")
+        }
+    }
+
+    private func respondToFriendRequest(
+        _ request: FriendUserSummary,
+        response: ActivityRequestResponse
+    ) async -> Bool {
+        var resolvedRequest = request
+
+        if resolvedRequest.friendshipID == nil || resolvedRequest.friendshipID?.isEmpty == true {
+            await viewModel.load(using: apiClient, forceRefresh: true)
+
+            if let refreshedRequest = viewModel
+                .snapshotLoadedResponse()?
+                .receivedRequests
+                .first(where: { $0.id == request.id && $0.friendshipID?.isEmpty == false }) {
+                resolvedRequest = refreshedRequest
+            }
+        }
+
+        let requestIdentifier = resolvedRequest.friendshipID?.isEmpty == false
+            ? resolvedRequest.friendshipID!
+            : resolvedRequest.id
+
+        let previousResponse = viewModel.snapshotLoadedResponse()
+
+        switch response {
+        case .accept:
+            viewModel.updateLoadedResponse { current in
+                FriendsFeedResponse(
+                    profile: current.profile,
+                    friendCount: current.friendCount + 1,
+                    requestCount: max(current.requestCount - 1, 0),
+                    friends: current.friends + [
+                        FriendUserSummary(
+                            id: resolvedRequest.id,
+                            friendshipID: resolvedRequest.friendshipID,
+                            name: resolvedRequest.name,
+                            username: resolvedRequest.username,
+                            avatarImageURL: resolvedRequest.avatarImageURL,
+                            friendStatus: .accepted
+                        )
+                    ],
+                    receivedRequests: current.receivedRequests.filter { $0.id != resolvedRequest.id },
+                    sentRequests: current.sentRequests,
+                    upcomingEvents: current.upcomingEvents,
+                    pastEvents: current.pastEvents
+                )
+            }
+        case .decline:
+            viewModel.updateLoadedResponse { current in
+                FriendsFeedResponse(
+                    profile: current.profile,
+                    friendCount: current.friendCount,
+                    requestCount: max(current.requestCount - 1, 0),
+                    friends: current.friends,
+                    receivedRequests: current.receivedRequests.filter { $0.id != resolvedRequest.id },
+                    sentRequests: current.sentRequests,
+                    upcomingEvents: current.upcomingEvents,
+                    pastEvents: current.pastEvents
+                )
+            }
+        }
+
+        do {
+            switch response {
+            case .accept:
+                try await apiClient.send(APIClient.acceptMobileFriendRequest(friendRequestID: requestIdentifier))
+            case .decline:
+                try await apiClient.send(APIClient.declineMobileFriendRequest(friendRequestID: requestIdentifier))
+            }
+            return true
+        } catch {
+            if let previousResponse {
+                viewModel.restoreLoadedResponse(previousResponse)
+            }
+            errorMessage = error.localizedDescription
+            return false
+        }
+    }
+}
+
+private struct RequestSelectedUserProfile: Identifiable, Hashable {
+    let id: String
 }
 
 private struct RelationshipListScreen<Content: View>: View {
@@ -1701,6 +1904,38 @@ private struct EmptyRelationshipCard: View {
             RoundedRectangle(cornerRadius: 18, style: .continuous)
                 .stroke(.white.opacity(0.08), lineWidth: 1)
         )
+    }
+}
+
+private struct EmptyRequestPlaceholder: View {
+    let message: String
+
+    var body: some View {
+        RoundedRectangle(cornerRadius: 20, style: .continuous)
+            .fill(Color.clear)
+            .frame(maxWidth: .infinity)
+            .frame(height: 140)
+            .overlay {
+                Text(message)
+                    .font(.system(size: 15, weight: .medium))
+                    .foregroundStyle(.white.opacity(0.58))
+                    .multilineTextAlignment(.center)
+                    .padding(.horizontal, 24)
+            }
+            .overlay {
+                RoundedRectangle(cornerRadius: 20, style: .continuous)
+                    .strokeBorder(
+                        style: StrokeStyle(
+                            lineWidth: 1,
+                            dash: [5, 5]
+                        )
+                    )
+                    .foregroundStyle(.white.opacity(0.10))
+            }
+            .background(
+                RoundedRectangle(cornerRadius: 20, style: .continuous)
+                    .fill(Color.white.opacity(0.015))
+            )
     }
 }
 

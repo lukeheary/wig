@@ -254,57 +254,25 @@ private struct EventSocialAvatarView: View {
             Circle()
                 .fill(ringColor)
 
-            avatarContent
-                .frame(width: size - 4, height: size - 4)
-                .clipShape(Circle())
+            UserAvatarView(
+                imageURL: attendee.avatarImageURL,
+                name: displayName,
+                size: size - 4,
+                identityKey: attendee.id
+            )
         }
         .frame(width: size, height: size)
     }
 
-    @ViewBuilder
-    private var avatarContent: some View {
-        if let avatarImageURL = attendee.avatarImageURL {
-            AsyncImage(url: avatarImageURL) { phase in
-                switch phase {
-                case .empty:
-                    fallbackAvatar
-                case .success(let image):
-                    image
-                        .resizable()
-                        .scaledToFill()
-                case .failure:
-                    fallbackAvatar
-                @unknown default:
-                    fallbackAvatar
-                }
+    private var displayName: String {
+        let name = [attendee.firstName, attendee.lastName]
+            .compactMap { value in
+                let trimmed = value?.trimmingCharacters(in: .whitespacesAndNewlines) ?? ""
+                return trimmed.isEmpty ? nil : trimmed
             }
-        } else {
-            fallbackAvatar
-        }
-    }
+            .joined(separator: " ")
 
-    private var fallbackAvatar: some View {
-        ZStack {
-            LinearGradient(
-                colors: [
-                    Color(red: 0.22, green: 0.37, blue: 0.62),
-                    Color(red: 0.62, green: 0.20, blue: 0.36),
-                ],
-                startPoint: .topLeading,
-                endPoint: .bottomTrailing
-            )
-
-            Text(initials)
-                .font(.system(size: max(10, size * 0.34), weight: .bold))
-                .foregroundStyle(.white)
-        }
-    }
-
-    private var initials: String {
-        let first = attendee.firstName?.trimmingCharacters(in: .whitespacesAndNewlines).first
-        let last = attendee.lastName?.trimmingCharacters(in: .whitespacesAndNewlines).first
-        let value = [first, last].compactMap { $0 }.map(String.init).joined()
-        return value.isEmpty ? "?" : value.uppercased()
+        return name.isEmpty ? "?" : name
     }
 
     private var ringColor: Color {

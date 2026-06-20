@@ -84,7 +84,9 @@ final class ProfileViewModel: ObservableObject {
             return
         }
 
-        state = .loaded(transform(response))
+        let updated = transform(response)
+        Self.cachedResponse = updated
+        state = .loaded(updated)
     }
 
     func removeFriend(userID: String) {

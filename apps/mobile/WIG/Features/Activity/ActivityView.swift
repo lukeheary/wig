@@ -58,6 +58,11 @@ struct ActivityView: View {
                 .onChange(of: selectedCityFilter) { _, _ in
                     resetVisibleActivityCount()
                 }
+                .onReceive(NotificationCenter.default.publisher(for: .friendRequestDidChange)) { _ in
+                    Task {
+                        await viewModel.load(using: apiClient, forceRefresh: true)
+                    }
+                }
                 .alert(
                     "Couldn't Update Request",
                     isPresented: Binding(
@@ -594,7 +599,7 @@ private struct ActivityRowView: View {
     @State private var selectedEvent: EventFeedItem?
     @State private var selectedVenue: PlaceListItem?
     @State private var selectedUserProfile: SelectedUserProfile?
-    @State private var isSubmittingResponse = false
+    @State private var isRequestsPagePresented = false
 
     private static let relativeFormatter: RelativeDateTimeFormatter = {
         let formatter = RelativeDateTimeFormatter()
@@ -603,9 +608,9 @@ private struct ActivityRowView: View {
     }()
 
     var body: some View {
-        HStack(alignment: .top, spacing: 12) {
+        HStack(alignment: activity.type.isRequest ? .center : .top, spacing: 12) {
             ActivityAvatarView(activity: activity)
-                .padding(.top, 6)
+                .padding(.top, activity.type.isRequest ? 0 : 6)
 
             if activity.type.isRequest {
                 requestContent
@@ -647,11 +652,14 @@ private struct ActivityRowView: View {
         .navigationDestination(item: $selectedUserProfile) { selection in
             UserProfileView(userID: selection.id)
         }
+        .navigationDestination(isPresented: $isRequestsPagePresented) {
+            RequestsPageView()
+        }
     }
 
     private var requestContent: some View {
-        HStack(alignment: .top, spacing: 14) {
-            VStack(alignment: .leading, spacing: 4) {
+        HStack(alignment: .center, spacing: 14) {
+            VStack(alignment: .leading, spacing: 6) {
                 requestText
                     .font(.system(size: 14))
                     .lineSpacing(3)
@@ -672,30 +680,15 @@ private struct ActivityRowView: View {
             .frame(maxWidth: .infinity, alignment: .leading)
 
             if activity.type.isActionableRequest && requestStore.response(for: activity.id) == nil {
-                HStack(spacing: 10) {
-                    Button {
-                        submit(.decline)
-                    } label: {
-                        Image(systemName: "xmark")
-                            .font(.system(size: 13, weight: .bold))
-                            .foregroundStyle(.white.opacity(0.75))
-                            .frame(width: 36, height: 36)
-                            .background(Circle().fill(Color.white.opacity(0.1)))
-                    }
-                    .disabled(isSubmittingResponse)
-
-                    Button {
-                        submit(.accept)
-                    } label: {
-                        Image(systemName: "checkmark")
-                            .font(.system(size: 15, weight: .bold))
-                            .foregroundStyle(.white)
-                            .frame(width: 42, height: 42)
-                            .background(Circle().fill(AppTheme.accentBlue))
-                    }
-                    .disabled(isSubmittingResponse)
+                Button {
+                    isRequestsPagePresented = true
+                } label: {
+                    Image(systemName: "chevron.right")
+                        .font(.system(size: 16, weight: .bold))
+                        .foregroundStyle(.white.opacity(0.66))
+                        .frame(width: 32, height: 32)
                 }
-                .opacity(isSubmittingResponse ? 0.5 : 1)
+                .buttonStyle(.plain)
             }
         }
     }
@@ -733,17 +726,6 @@ private struct ActivityRowView: View {
                 + Text(" sent you a \(requestType) request.")
                 .foregroundColor(.white.opacity(0.62))
             )
-        }
-    }
-
-    private func submit(_ response: ActivityRequestResponse) {
-        guard !isSubmittingResponse else { return }
-
-        isSubmittingResponse = true
-        Task {
-            await onRespondToRequest(activity, response)
-            requestStore.record(response, for: activity.id)
-            isSubmittingResponse = false
         }
     }
 

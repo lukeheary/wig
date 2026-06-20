@@ -16,7 +16,11 @@ import {
   createMobileMetroResolver,
   mobileMetroAreas,
 } from "@/app/api/mobile/metro";
-import { filterExistingCategoryKeys, setPlaceCategoryKeys } from "@/server/utils/categories";
+import {
+  filterExistingCategoryKeys,
+  mapPlaceCategoryData,
+  setPlaceCategoryKeys,
+} from "@/server/utils/categories";
 import {
   INSTAGRAM_HANDLE_ERROR,
   INSTAGRAM_HANDLE_REGEX,
@@ -163,6 +167,13 @@ export async function GET(request: Request) {
     db.query.places.findMany({
       orderBy: [asc(places.name)],
       limit,
+      with: {
+        categoryLinks: {
+          with: {
+            category: true,
+          },
+        },
+      },
     }),
   ]);
 
@@ -257,6 +268,7 @@ export async function GET(request: Request) {
   }
 
   const payload = placesList.map((place) => {
+    const mappedPlace = mapPlaceCategoryData(place);
     const eventCount = countByPlaceId.get(place.id) ?? 0;
     const metroArea = resolveMetroArea({
       city: place.city,
@@ -264,19 +276,21 @@ export async function GET(request: Request) {
     });
 
     return {
-      id: place.id,
-      type: place.type,
-      slug: place.slug,
-      name: place.name,
-      logoImageUrl: place.logoImageUrl,
-      city: place.city,
-      state: place.state,
+      id: mappedPlace.id,
+      type: mappedPlace.type,
+      slug: mappedPlace.slug,
+      name: mappedPlace.name,
+      logoImageUrl: mappedPlace.logoImageUrl,
+      city: mappedPlace.city,
+      state: mappedPlace.state,
       metroAreaCity: metroArea?.city ?? null,
       metroAreaState: metroArea?.state ?? null,
       eventCount,
       upcomingEventCount: eventCount,
-      updatedAt: place.updatedAt,
-      isFollowed: followedPlaceIds.has(place.id),
+      updatedAt: mappedPlace.updatedAt,
+      isFollowed: followedPlaceIds.has(mappedPlace.id),
+      categories: mappedPlace.categories,
+      categoryLabels: mappedPlace.categoryLabels,
     };
   });
 

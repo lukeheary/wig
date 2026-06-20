@@ -88,6 +88,11 @@ struct HomeView: View {
                         await loadHome(for: selectedWeekStart, using: apiClient, forceRefresh: true)
                     }
                 }
+                .onReceive(NotificationCenter.default.publisher(for: .friendRequestDidChange)) { _ in
+                    Task {
+                        await loadHome(for: selectedWeekStart, using: apiClient, forceRefresh: true)
+                    }
+                }
                 .onChange(of: selectedWeekStart) { _, weekStart in
                     Task {
                         await loadHome(for: weekStart, using: apiClient)
@@ -1378,7 +1383,7 @@ private struct HomeRecentActivityRow: View {
     @State private var selectedEvent: EventFeedItem?
     @State private var selectedVenue: PlaceListItem?
     @State private var selectedUserProfile: RecentActivitySelectedUserProfile?
-    @State private var isSubmittingResponse = false
+    @State private var isRequestsPagePresented = false
 
     private static let relativeFormatter: RelativeDateTimeFormatter = {
         let formatter = RelativeDateTimeFormatter()
@@ -1387,9 +1392,9 @@ private struct HomeRecentActivityRow: View {
     }()
 
     var body: some View {
-        HStack(alignment: .top, spacing: 12) {
+        HStack(alignment: activity.type.isRequest ? .center : .top, spacing: 12) {
             ActivityAvatarView(activity: activity)
-                .padding(.top, 6)
+                .padding(.top, activity.type.isRequest ? 0 : 6)
 
             if activity.type.isRequest {
                 requestContent
@@ -1429,11 +1434,14 @@ private struct HomeRecentActivityRow: View {
         .navigationDestination(item: $selectedUserProfile) { selection in
             UserProfileView(userID: selection.id)
         }
+        .navigationDestination(isPresented: $isRequestsPagePresented) {
+            RequestsPageView()
+        }
     }
 
     private var requestContent: some View {
-        HStack(alignment: .top, spacing: 14) {
-            VStack(alignment: .leading, spacing: 4) {
+        HStack(alignment: .center, spacing: 14) {
+            VStack(alignment: .leading, spacing: 6) {
                 (
                     Text(activity.actorName)
                         .fontWeight(.medium)
@@ -1459,40 +1467,15 @@ private struct HomeRecentActivityRow: View {
             }
             .frame(maxWidth: .infinity, alignment: .leading)
 
-            HStack(spacing: 10) {
-                Button {
-                    submitResponse(.decline)
-                } label: {
-                    Image(systemName: "xmark")
-                        .font(.system(size: 13, weight: .bold))
-                        .foregroundStyle(.white.opacity(0.75))
-                        .frame(width: 36, height: 36)
-                        .background(Circle().fill(Color.white.opacity(0.1)))
-                }
-                .disabled(isSubmittingResponse)
-
-                Button {
-                    submitResponse(.accept)
-                } label: {
-                    Image(systemName: "checkmark")
-                        .font(.system(size: 15, weight: .bold))
-                        .foregroundStyle(.white)
-                        .frame(width: 42, height: 42)
-                        .background(Circle().fill(AppTheme.accentBlue))
-                }
-                .disabled(isSubmittingResponse)
+            Button {
+                isRequestsPagePresented = true
+            } label: {
+                Image(systemName: "chevron.right")
+                    .font(.system(size: 16, weight: .bold))
+                    .foregroundStyle(.white.opacity(0.66))
+                    .frame(width: 32, height: 32)
             }
-            .opacity(isSubmittingResponse ? 0.5 : 1)
-        }
-    }
-
-    private func submitResponse(_ response: ActivityRequestResponse) {
-        guard !isSubmittingResponse else { return }
-        isSubmittingResponse = true
-        Task {
-            await onRespondToRequest(activity, response)
-            requestStore.record(response, for: activity.id)
-            isSubmittingResponse = false
+            .buttonStyle(.plain)
         }
     }
 }

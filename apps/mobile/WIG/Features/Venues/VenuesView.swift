@@ -5,6 +5,7 @@ struct VenuesView: View {
     @StateObject private var viewModel = VenuesViewModel()
     @State private var selectedLocationFilter: PlaceLocationFilter?
     @State private var selectedPlaceFilter: PlaceKindFilter = .all
+    @State private var selectedCategoryID: String?
 
     var body: some View {
         NavigationStack {
@@ -112,7 +113,10 @@ struct VenuesView: View {
                 ),
                 locations: availableLocationFilters(for: response),
                 hasActiveLocationSelection: effectiveLocationFilter(for: response) != defaultLocationFilter(for: response),
-                selection: $selectedPlaceFilter
+                selection: $selectedPlaceFilter,
+                categories: availableCategoryFilters(for: response),
+                selectedCategoryID: selectedCategoryID,
+                onSelectCategory: { selectedCategoryID = $0 }
             )
         }
         .frame(maxWidth: .infinity, alignment: .leading)
@@ -123,6 +127,7 @@ struct VenuesView: View {
         response.places
             .filter(effectiveLocationFilter(for: response).includes)
             .filter(selectedPlaceFilter.includes)
+            .filter(categoryFilterIncludes)
     }
 
     private func availableLocationFilters(for response: MobilePlacesResponse) -> [PlaceLocationFilter] {
@@ -177,6 +182,42 @@ struct VenuesView: View {
 
             return city.localizedCaseInsensitiveCompare("Boston") == .orderedSame
         } ?? locations.first ?? .all
+    }
+
+    private func availableCategoryFilters(for response: MobilePlacesResponse) -> [PlaceCategoryFilter] {
+        var counts: [String: Int] = [:]
+
+        for place in response.places {
+            for category in place.categories {
+                counts[category, default: 0] += 1
+            }
+        }
+
+        return counts.keys
+            .sorted { lhs, rhs in
+                categoryTitle(for: lhs, in: response).localizedCaseInsensitiveCompare(categoryTitle(for: rhs, in: response)) == .orderedAscending
+            }
+            .map { category in
+                PlaceCategoryFilter(
+                    id: category,
+                    title: categoryTitle(for: category, in: response)
+                )
+            }
+    }
+
+    private func categoryTitle(for category: String, in response: MobilePlacesResponse) -> String {
+        response.places
+            .compactMap { $0.categoryLabels[category] }
+            .first(where: { !$0.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty })
+            ?? category.capitalized
+    }
+
+    private func categoryFilterIncludes(_ place: PlaceListItem) -> Bool {
+        guard let selectedCategoryID else {
+            return true
+        }
+
+        return place.categories.contains(selectedCategoryID)
     }
 }
 
@@ -284,25 +325,60 @@ private struct PlaceLocationFilterMenu: View {
 
 private struct PlaceKindFilterMenu: View {
     @Binding var selection: PlaceKindFilter
+    let categories: [PlaceCategoryFilter]
+    let selectedCategoryID: String?
+    let onSelectCategory: (String?) -> Void
     var useCombinedStyle = false
+
+    private var hasActiveFilters: Bool {
+        selection != .all || selectedCategoryID != nil
+    }
 
     var body: some View {
         Menu {
-            ForEach(PlaceKindFilter.allCases) { filter in
-                Button {
-                    selection = filter
-                } label: {
-                    if filter == selection {
-                        Label(filter.title, systemImage: "checkmark")
-                    } else {
-                        Text(filter.title)
+            Section("Places") {
+                ForEach(PlaceKindFilter.allCases) { filter in
+                    Button {
+                        selection = filter
+                    } label: {
+                        if filter == selection {
+                            Label(filter.title, systemImage: "checkmark")
+                        } else {
+                            Text(filter.title)
+                        }
+                    }
+                }
+            }
+
+            if !categories.isEmpty {
+                Section("Categories") {
+                    Button {
+                        onSelectCategory(nil)
+                    } label: {
+                        if selectedCategoryID == nil {
+                            Label("All Categories", systemImage: "checkmark")
+                        } else {
+                            Text("All Categories")
+                        }
+                    }
+
+                    ForEach(categories) { category in
+                        Button {
+                            onSelectCategory(selectedCategoryID == category.id ? nil : category.id)
+                        } label: {
+                            if selectedCategoryID == category.id {
+                                Label(category.title, systemImage: "checkmark")
+                            } else {
+                                Text(category.title)
+                            }
+                        }
                     }
                 }
             }
         } label: {
             Image(systemName: "line.3.horizontal.decrease")
                 .font(.system(size: 18, weight: .semibold))
-                .foregroundStyle(selection == .all ? .primary : AppTheme.accentBlue)
+                .foregroundStyle(hasActiveFilters ? AppTheme.accentBlue : .primary)
                 .frame(width: 46, height: 46)
                 .contentShape(Rectangle())
                 .modifier(PlaceStandaloneControlStyle(isStandalone: !useCombinedStyle))
@@ -316,6 +392,9 @@ private struct PlaceLeadingControls: View {
     let locations: [PlaceLocationFilter]
     let hasActiveLocationSelection: Bool
     @Binding var selection: PlaceKindFilter
+    let categories: [PlaceCategoryFilter]
+    let selectedCategoryID: String?
+    let onSelectCategory: (String?) -> Void
 
     var body: some View {
         HStack(spacing: 0) {
@@ -328,6 +407,9 @@ private struct PlaceLeadingControls: View {
 
             PlaceKindFilterMenu(
                 selection: $selection,
+                categories: categories,
+                selectedCategoryID: selectedCategoryID,
+                onSelectCategory: onSelectCategory,
                 useCombinedStyle: true
             )
         }
@@ -336,6 +418,11 @@ private struct PlaceLeadingControls: View {
         .placeLiquidGlass(in: Capsule())
         .shadow(color: .black.opacity(0.12), radius: 14, x: 0, y: 8)
     }
+}
+
+private struct PlaceCategoryFilter: Identifiable {
+    let id: String
+    let title: String
 }
 
 private struct PlaceStandaloneControlStyle: ViewModifier {
