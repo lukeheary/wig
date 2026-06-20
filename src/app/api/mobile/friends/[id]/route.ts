@@ -38,7 +38,10 @@ async function resolvePendingFriendRequest(id: string, userId: string) {
     where: and(
       eq(userFriends.status, "pending"),
       or(eq(userFriends.userId, userId), eq(userFriends.friendUserId, userId)),
-      or(eq(userFriends.userId, id), eq(userFriends.friendUserId, id))
+      or(
+        and(eq(userFriends.friendUserId, userId), eq(userFriends.userId, id)),
+        and(eq(userFriends.userId, userId), eq(userFriends.friendUserId, id))
+      )
     ),
   });
 }

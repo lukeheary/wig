@@ -1,5 +1,5 @@
 import { auth } from "@clerk/nextjs/server";
-import { and, asc, eq, or } from "drizzle-orm";
+import { and, asc, eq } from "drizzle-orm";
 import { NextResponse } from "next/server";
 import { db } from "@/server/db";
 import { userFriends, users } from "@/server/db/schema";
@@ -42,7 +42,7 @@ async function resolvePendingFriendRequest(id: string, userId: string) {
     where: and(
       eq(userFriends.status, "pending"),
       eq(userFriends.friendUserId, userId),
-      or(eq(userFriends.userId, id), eq(userFriends.friendUserId, id))
+      eq(userFriends.userId, id)
     ),
   });
 }
