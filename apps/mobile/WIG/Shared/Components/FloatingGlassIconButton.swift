@@ -81,6 +81,7 @@ struct UserAvatarView: View {
 struct UserListRowView<Trailing: View>: View {
     let imageURL: URL?
     let name: String
+    let subtitle: String?
     let avatarName: String
     let identityKey: String?
     var ringColor: Color = .clear
@@ -92,6 +93,7 @@ struct UserListRowView<Trailing: View>: View {
     init(
         imageURL: URL?,
         name: String,
+        subtitle: String? = nil,
         avatarName: String? = nil,
         identityKey: String?,
         ringColor: Color = .clear,
@@ -102,6 +104,7 @@ struct UserListRowView<Trailing: View>: View {
     ) {
         self.imageURL = imageURL
         self.name = name
+        self.subtitle = subtitle
         self.avatarName = avatarName ?? name
         self.identityKey = identityKey
         self.ringColor = ringColor
@@ -126,10 +129,19 @@ struct UserListRowView<Trailing: View>: View {
             }
             .frame(width: avatarSize, height: avatarSize)
 
-            Text(name)
-                .font(.system(size: 15, weight: .medium))
-                .foregroundStyle(.white)
-                .lineLimit(1)
+            VStack(alignment: .leading, spacing: 3) {
+                Text(name)
+                    .font(.system(size: 15, weight: .medium))
+                    .foregroundStyle(.white)
+                    .lineLimit(1)
+
+                if let subtitle, !subtitle.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty {
+                    Text(subtitle)
+                        .font(.system(size: 11, weight: .medium))
+                        .foregroundStyle(.white.opacity(0.58))
+                        .lineLimit(1)
+                }
+            }
 
             Spacer(minLength: 10)
 

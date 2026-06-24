@@ -45,6 +45,8 @@ function userSummary(user: typeof users.$inferSelect | null | undefined) {
     name,
     username: user.username,
     avatarImageUrl: user.avatarImageUrl,
+    city: user.city,
+    state: user.state,
   };
 }
 
@@ -227,7 +229,7 @@ export async function GET(_request: Request, context: RouteContext) {
   const [upcomingRsvps, pastRsvps, followedPlaceIds, editPermissions, viewerFriendships, viewerTargetFriendship] =
     await Promise.all([
       db.query.eventRsvps.findMany({
-        where: and(eq(eventRsvps.userId, id), eq(eventRsvps.status, "going")),
+        where: and(eq(eventRsvps.userId, id), inArray(eventRsvps.status, ["going", "interested"])),
         with: {
           event: {
             with: {
@@ -244,7 +246,7 @@ export async function GET(_request: Request, context: RouteContext) {
         orderBy: [asc(eventRsvps.updatedAt)],
       }),
       db.query.eventRsvps.findMany({
-        where: and(eq(eventRsvps.userId, id), eq(eventRsvps.status, "going")),
+        where: and(eq(eventRsvps.userId, id), inArray(eventRsvps.status, ["going", "interested"])),
         with: {
           event: {
             with: {

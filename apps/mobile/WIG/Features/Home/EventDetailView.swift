@@ -780,20 +780,8 @@ private struct EventAttendeeRow: View {
             name: displayName,
             avatarName: actualName,
             identityKey: attendee.user.id,
-            ringColor: ringColor,
-            ringWidth: 4
+            ringWidth: 0
         )
-    }
-
-    private var ringColor: Color {
-        switch attendee.status {
-        case .going:
-            return Color(red: 0.23, green: 0.93, blue: 0.86)
-        case .interested:
-            return Color(red: 0.98, green: 0.78, blue: 0.23)
-        case .notGoing:
-            return .red
-        }
     }
 
     private var displayName: String {

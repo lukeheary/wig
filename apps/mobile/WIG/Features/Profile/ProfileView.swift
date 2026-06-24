@@ -33,23 +33,6 @@ struct ProfileView: View {
                 .refreshable {
                     await loadProfileScreen()
                 }
-                .confirmationDialog(
-                    "Update profile picture",
-                    isPresented: $isAvatarSourceDialogPresented,
-                    titleVisibility: .visible
-                ) {
-                    Button("Choose Photo") {
-                        isAvatarPhotoPickerPresented = true
-                    }
-
-                    if UIImagePickerController.isSourceTypeAvailable(.camera) {
-                        Button("Take Photo") {
-                            isAvatarCameraPresented = true
-                        }
-                    }
-
-                    Button("Cancel", role: .cancel) {}
-                }
                 .photosPicker(
                     isPresented: $isAvatarPhotoPickerPresented,
                     selection: $selectedAvatarPhotoItem,
@@ -189,10 +172,17 @@ struct ProfileView: View {
 
                     ProfileHeader(
                         profile: response.profile,
-                        isUploadingAvatar: viewModel.isUploadingAvatar
-                    ) {
-                        isAvatarSourceDialogPresented = true
-                    }
+                        isUploadingAvatar: viewModel.isUploadingAvatar,
+                        isAvatarMenuPresented: $isAvatarSourceDialogPresented,
+                        onChooseAvatarPhoto: {
+                            isAvatarSourceDialogPresented = false
+                            isAvatarPhotoPickerPresented = true
+                        },
+                        onTakeAvatarPhoto: {
+                            isAvatarSourceDialogPresented = false
+                            isAvatarCameraPresented = true
+                        }
+                    )
 
                     RelationshipSummaryRow(
                         response: response,
@@ -246,7 +236,7 @@ struct ProfileView: View {
                 }
                 .padding(.horizontal, 16)
                 .padding(.top, 0)
-                .padding(.bottom, 104)
+                .padding(.bottom, 48)
             }
             .scrollIndicators(.hidden)
             .background(ProfileTheme.background)
@@ -260,13 +250,9 @@ struct ProfileView: View {
 
         VStack(alignment: .leading, spacing: 18) {
             if groups.isEmpty {
-                ContentUnavailableView {
-                    Label("No Events", systemImage: "calendar")
-                } description: {
-                    Text("There aren’t any \(selectedEventsTab.emptyStateName) events to show yet.")
-                }
-                .foregroundStyle(.white)
-                .frame(maxWidth: .infinity, minHeight: 220)
+                ProfileEmptyEventsPlaceholder(
+                    message: "There aren’t any \(selectedEventsTab.emptyStateName) events to show yet."
+                )
             } else {
                 ForEach(groups) { group in
                     VStack(alignment: .leading, spacing: 14) {
@@ -518,6 +504,8 @@ struct ProfileView: View {
                             name: resolvedRequest.name,
                             username: resolvedRequest.username,
                             avatarImageURL: resolvedRequest.avatarImageURL,
+                            city: resolvedRequest.city,
+                            state: resolvedRequest.state,
                             friendStatus: .accepted
                         )
                     ],
@@ -670,11 +658,7 @@ struct UserProfileView: View {
         case .loaded(let response):
             ScrollView {
                 VStack(spacing: 22) {
-                    ProfileHeader(
-                        profile: response.profile,
-                        isUploadingAvatar: false,
-                        onEditAvatar: nil
-                    )
+                    ProfileHeader(profile: response.profile, isUploadingAvatar: false, isAvatarMenuPresented: nil)
 
                     userFriendAction(response: response)
 
@@ -687,7 +671,7 @@ struct UserProfileView: View {
                 }
                 .padding(.horizontal, 16)
                 .padding(.top, 68)
-                .padding(.bottom, 104)
+                .padding(.bottom, 48)
             }
             .scrollIndicators(.hidden)
             .background(ProfileTheme.background)
@@ -769,6 +753,8 @@ struct UserProfileView: View {
                                 name: $0.name,
                                 username: $0.username,
                                 avatarImageURL: $0.avatarImageURL,
+                                city: $0.city,
+                                state: $0.state,
                                 friendStatus: response.friendStatus
                             )
                         },
@@ -807,6 +793,8 @@ struct UserProfileView: View {
                         name: $0.name,
                         username: $0.username,
                         avatarImageURL: $0.avatarImageURL,
+                        city: $0.city,
+                        state: $0.state,
                         friendStatus: response == .accept ? .accepted : FriendUserSummary.FriendStatus.none
                     )
                 },
@@ -901,13 +889,9 @@ private struct UserProfileEventsSection: View {
 
         VStack(alignment: .leading, spacing: 18) {
             if groups.isEmpty {
-                ContentUnavailableView {
-                    Label("No Events", systemImage: "calendar")
-                } description: {
-                    Text("There aren’t any \(selectedEventsTab.emptyStateName) events to show yet.")
-                }
-                .foregroundStyle(.white)
-                .frame(maxWidth: .infinity, minHeight: 220)
+                ProfileEmptyEventsPlaceholder(
+                    message: "There aren’t any \(selectedEventsTab.emptyStateName) events to show yet."
+                )
             } else {
                 ForEach(groups) { group in
                     VStack(alignment: .leading, spacing: 14) {
@@ -1021,15 +1005,19 @@ private enum ProfileEventGrouper {
 private struct ProfileHeader: View {
     let profile: FriendUserSummary?
     let isUploadingAvatar: Bool
-    let onEditAvatar: (() -> Void)?
+    let isAvatarMenuPresented: Binding<Bool>?
+    var onChooseAvatarPhoto: (() -> Void)? = nil
+    var onTakeAvatarPhoto: (() -> Void)? = nil
 
     var body: some View {
         VStack(spacing: 12) {
-            ZStack(alignment: .bottomTrailing) {
-                FriendAvatarView(user: profile, size: 104)
+            if let isAvatarMenuPresented {
+                Button {
+                    isAvatarMenuPresented.wrappedValue = true
+                } label: {
+                    ZStack(alignment: .bottomTrailing) {
+                        FriendAvatarView(user: profile, size: 104)
 
-                if let onEditAvatar {
-                    Button(action: onEditAvatar) {
                         ZStack {
                             Circle()
                                 .fill(Color(red: 0.14, green: 0.14, blue: 0.16))
@@ -1050,12 +1038,30 @@ private struct ProfileHeader: View {
                             Circle()
                                 .stroke(ProfileTheme.background, lineWidth: 3)
                         )
+                        .offset(x: 2, y: 2)
                     }
-                    .buttonStyle(.plain)
-                    .disabled(isUploadingAvatar)
-                    .accessibilityLabel("Edit profile picture")
-                    .offset(x: 2, y: 2)
                 }
+                .buttonStyle(.plain)
+                .disabled(isUploadingAvatar)
+                .accessibilityLabel("Edit profile picture")
+                .popover(
+                    isPresented: isAvatarMenuPresented,
+                    attachmentAnchor: .rect(.bounds),
+                    arrowEdge: .top
+                ) {
+                    ProfileAvatarActionPopover(
+                        canShowCamera: UIImagePickerController.isSourceTypeAvailable(.camera),
+                        onChoosePhoto: {
+                            onChooseAvatarPhoto?()
+                        },
+                        onTakePhoto: {
+                            onTakeAvatarPhoto?()
+                        }
+                    )
+                    .presentationCompactAdaptation(.popover)
+                }
+            } else {
+                FriendAvatarView(user: profile, size: 104)
             }
 
             if let profile {
@@ -1074,6 +1080,47 @@ private struct ProfileHeader: View {
     }
 }
 
+private struct ProfileAvatarActionPopover: View {
+    let canShowCamera: Bool
+    let onChoosePhoto: () -> Void
+    let onTakePhoto: () -> Void
+
+    @Environment(\.dismiss) private var dismiss
+
+    var body: some View {
+        VStack(alignment: .leading, spacing: 4) {
+            Button {
+                dismiss()
+                onChoosePhoto()
+            } label: {
+                Label("Choose Photo", systemImage: "photo.on.rectangle")
+                    .frame(maxWidth: .infinity, alignment: .leading)
+            }
+            .buttonStyle(.plain)
+            .foregroundStyle(.white)
+            .padding(.horizontal, 14)
+            .padding(.vertical, 10)
+
+            if canShowCamera {
+                Button {
+                    dismiss()
+                    onTakePhoto()
+                } label: {
+                    Label("Take Photo", systemImage: "camera")
+                        .frame(maxWidth: .infinity, alignment: .leading)
+                }
+                .buttonStyle(.plain)
+                .foregroundStyle(.white)
+                .padding(.horizontal, 14)
+                .padding(.vertical, 10)
+            }
+        }
+        .frame(width: 190, alignment: .leading)
+        .padding(.vertical, 8)
+        .background(ProfileTheme.cardBackground)
+    }
+}
+
 private struct RelationshipSummaryRow: View {
     let response: FriendsFeedResponse
     let partnerRelationship: MobilePartnerRelationship?
@@ -1089,8 +1136,19 @@ private struct RelationshipSummaryRow: View {
     let onAcceptFriendRequest: (FriendUserSummary) async -> Bool
     let onDeclineFriendRequest: (FriendUserSummary) async -> Bool
 
+    private var locationText: String? {
+        response.profile?.locationText
+    }
+
     var body: some View {
-        HStack(spacing: 12) {
+        HStack(spacing: 16) {
+            if let locationText {
+                Text(locationText)
+                    .font(.system(size: 15, weight: .medium))
+                    .foregroundStyle(.white.opacity(0.56))
+                    .lineLimit(1)
+            }
+
             NavigationLink {
                 MyFriendsView(
                     response: response,
@@ -1106,7 +1164,7 @@ private struct RelationshipSummaryRow: View {
                     onRemoveFriend: onRemoveFriend
                 )
             } label: {
-                RelationshipSummaryPill(count: response.friendCount, label: "Friends")
+                RelationshipSummaryLink(count: response.friendCount, label: "Friends")
             }
             .buttonStyle(.plain)
 
@@ -1118,10 +1176,11 @@ private struct RelationshipSummaryRow: View {
                     onDeclineRequest: onDeclineFriendRequest
                 )
             } label: {
-                RelationshipSummaryPill(count: response.requestCount, label: "Requests")
+                RelationshipSummaryLink(count: response.requestCount, label: "Requests")
             }
             .buttonStyle(.plain)
         }
+        .frame(maxWidth: .infinity, alignment: .center)
     }
 }
 
@@ -1137,6 +1196,7 @@ private struct MyFriendsView: View {
     let onChangePartner: () -> Void
     let onRemovePartner: () -> Void
     let onRemoveFriend: (FriendUserSummary) -> Void
+    @State private var pendingFriendRemoval: FriendUserSummary?
 
     var body: some View {
         RelationshipListScreen {
@@ -1162,9 +1222,37 @@ private struct MyFriendsView: View {
 
                     FriendsListViewContent(
                         friends: response.friends,
-                        onRemoveFriend: onRemoveFriend
+                        onRemoveFriend: { friend in
+                            pendingFriendRemoval = friend
+                        }
                     )
                 }
+            }
+        }
+        .alert(
+            "Remove Friend?",
+            isPresented: Binding(
+                get: { pendingFriendRemoval != nil },
+                set: { isPresented in
+                    if !isPresented {
+                        pendingFriendRemoval = nil
+                    }
+                }
+            )
+        ) {
+            Button("Remove", role: .destructive) {
+                if let pendingFriendRemoval {
+                    onRemoveFriend(pendingFriendRemoval)
+                    self.pendingFriendRemoval = nil
+                }
+            }
+
+            Button("Cancel", role: .cancel) {
+                pendingFriendRemoval = nil
+            }
+        } message: {
+            if let pendingFriendRemoval {
+                Text("Remove \(pendingFriendRemoval.name) from your friends?")
             }
         }
     }
@@ -1186,7 +1274,7 @@ private struct PartnerManagementCard: View {
             if let relationship {
                 partnerStateView(relationship)
             } else {
-                VStack(alignment: .leading, spacing: 14) {
+                VStack(alignment: .leading, spacing: 16) {
                     Text(
                         availableFriendCount == 0
                             ? "You need an accepted friend before you can choose a partner."
@@ -1204,6 +1292,7 @@ private struct PartnerManagementCard: View {
                     )
                     .disabled(availableFriendCount == 0 || isBusy)
                 }
+                .padding(.vertical, 8)
             }
         }
         .padding(.horizontal, 16)
@@ -1228,6 +1317,7 @@ private struct PartnerManagementCard: View {
                     .joined(separator: " ")
                     .trimmingCharacters(in: .whitespacesAndNewlines)
                     .ifEmpty(partner.username),
+                subtitle: "@\(partner.username)",
                 identityKey: partner.id
             ) {
                 trailing
@@ -1388,24 +1478,36 @@ private struct PartnerPickerSheet: View {
 private struct UserRelationshipSummaryRow: View {
     let response: UserProfileResponse
 
+    private var locationText: String? {
+        response.profile?.locationText
+    }
+
     var body: some View {
-        HStack(spacing: 12) {
+        HStack(spacing: 16) {
+            if let locationText {
+                Text(locationText)
+                    .font(.system(size: 15, weight: .medium))
+                    .foregroundStyle(.white.opacity(0.56))
+                    .lineLimit(1)
+            }
+
             NavigationLink {
                 FriendsListView(title: "Friends", friends: response.friends)
             } label: {
-                RelationshipSummaryPill(count: response.friendCount, label: "Friends")
+                RelationshipSummaryLink(count: response.friendCount, label: "Friends")
             }
             .buttonStyle(.plain)
         }
+        .frame(maxWidth: .infinity, alignment: .center)
     }
 }
 
-private struct RelationshipSummaryPill: View {
+private struct RelationshipSummaryLink: View {
     let count: Int
     let label: String
 
     var body: some View {
-        HStack {
+        HStack(spacing: 0) {
             (
                 Text("\(count)")
                     .foregroundColor(.white)
@@ -1415,19 +1517,8 @@ private struct RelationshipSummaryPill: View {
                     .foregroundColor(.white.opacity(0.64))
             )
             .font(.system(size: 15, weight: .regular))
-
-            Spacer(minLength: 8)
-
-            Image(systemName: "chevron.right")
-                .font(.system(size: 14, weight: .semibold))
-                .foregroundStyle(.white.opacity(0.58))
         }
-        .padding(.horizontal, 17)
-        .frame(height: 52)
-        .background(
-            RoundedRectangle(cornerRadius: 26, style: .continuous)
-                .fill(Color.white.opacity(0.09))
-        )
+        .padding(.vertical, 4)
     }
 }
 
@@ -1472,6 +1563,7 @@ private struct FriendsListViewContent: View {
                             UserListRowView(
                                 imageURL: friend.avatarImageURL,
                                 name: friend.name,
+                                subtitle: friend.usernameText,
                                 identityKey: friend.id
                             )
                         }
@@ -1770,6 +1862,8 @@ struct RequestsPageView: View {
                             name: resolvedRequest.name,
                             username: resolvedRequest.username,
                             avatarImageURL: resolvedRequest.avatarImageURL,
+                            city: resolvedRequest.city,
+                            state: resolvedRequest.state,
                             friendStatus: .accepted
                         )
                     ],
@@ -1839,7 +1933,7 @@ private struct RelationshipListScreen<Content: View>: View {
             }
             .padding(.horizontal, 16)
             .padding(.top, 82)
-            .padding(.bottom, 104)
+            .padding(.bottom, 48)
         }
         .background(ProfileTheme.background.ignoresSafeArea())
         .background(SwipeBackEnabler())
@@ -1904,6 +1998,38 @@ private struct EmptyRelationshipCard: View {
             RoundedRectangle(cornerRadius: 18, style: .continuous)
                 .stroke(.white.opacity(0.08), lineWidth: 1)
         )
+    }
+}
+
+private struct ProfileEmptyEventsPlaceholder: View {
+    let message: String
+
+    var body: some View {
+        RoundedRectangle(cornerRadius: 20, style: .continuous)
+            .fill(Color.clear)
+            .frame(maxWidth: .infinity)
+            .frame(height: 140)
+            .overlay {
+                Text(message)
+                    .font(.system(size: 15, weight: .medium))
+                    .foregroundStyle(.white.opacity(0.58))
+                    .multilineTextAlignment(.center)
+                    .padding(.horizontal, 24)
+            }
+            .overlay {
+                RoundedRectangle(cornerRadius: 20, style: .continuous)
+                    .strokeBorder(
+                        style: StrokeStyle(
+                            lineWidth: 1,
+                            dash: [5, 5]
+                        )
+                    )
+                    .foregroundStyle(.white.opacity(0.10))
+            }
+            .background(
+                RoundedRectangle(cornerRadius: 20, style: .continuous)
+                    .fill(Color.white.opacity(0.015))
+            )
     }
 }
 

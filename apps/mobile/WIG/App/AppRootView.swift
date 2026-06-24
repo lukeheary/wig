@@ -58,10 +58,12 @@ private struct StatusBarScrim: View {
 
 private struct LaunchLoadingView: View {
     var body: some View {
-        Text("Who Is Going?")
-            .font(.system(size: 34, weight: .black))
-            .foregroundStyle(.white)
-            .multilineTextAlignment(.center)
+        Image("LaunchIcon")
+            .resizable()
+            .scaledToFit()
+            .frame(width: 136, height: 136)
+            .clipShape(RoundedRectangle(cornerRadius: 28, style: .continuous))
+            .shadow(color: .black.opacity(0.24), radius: 24, x: 0, y: 12)
             .frame(maxWidth: .infinity, maxHeight: .infinity)
     }
 }

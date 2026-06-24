@@ -311,34 +311,21 @@ struct HomeView: View {
 
     private var searchResultsContent: some View {
         ScrollView {
-            LazyVStack(alignment: .leading, spacing: 14) {
+            LazyVStack(alignment: .leading, spacing: 12) {
                 if showsNativeSearch {
                     searchInputBar
                         .padding(.horizontal, 16)
                 }
 
                 if normalizedSearchQuery.isEmpty {
-                    VStack(alignment: .leading, spacing: 16) {
+                    VStack(alignment: .leading, spacing: 12) {
                         if !emptyStateRecentUsers.isEmpty {
                             SearchSectionHeader(title: "People")
                                 .padding(.horizontal, 16)
                                 .padding(.top, 8)
 
-                            ForEach(Array(emptyStateRecentUsers.enumerated()), id: \.element.id) { index, user in
-                                NavigationLink {
-                                    UserProfileView(userID: user.id)
-                                } label: {
-                                        SearchUserRow(user: user)
-                                }
-                                .task {
-                                    await UserProfileViewModel.preload(
-                                        userID: user.id,
-                                        using: apiClient
-                                    )
-                                }
-                                .buttonStyle(.plain)
+                            SearchUsersList(users: emptyStateRecentUsers)
                                 .padding(.horizontal, 16)
-                            }
                         }
 
                         if !emptyStateSuggestedPlaces.isEmpty {
@@ -400,7 +387,6 @@ struct HomeView: View {
                     }
                     .frame(maxWidth: .infinity, alignment: .leading)
                     .padding(.top, 8)
-                    .padding(.bottom, 12)
                 } else {
                     if searchViewModel.isLoading && searchUserResults.isEmpty && searchVenueResults.isEmpty && searchEvents.isEmpty {
                         ProgressView("Searching...")
@@ -418,26 +404,14 @@ struct HomeView: View {
                         .frame(maxWidth: .infinity)
                         .padding(.top, 48)
                     } else {
+                        VStack(alignment: .leading, spacing: 12) {
                         if showsPeopleResults {
                             SearchSectionHeader(title: "People")
                                 .padding(.horizontal, 16)
                                 .padding(.top, 8)
 
-                            ForEach(Array(searchUserResults.enumerated()), id: \.element.id) { index, user in
-                                NavigationLink {
-                                    UserProfileView(userID: user.id)
-                                } label: {
-                                        SearchUserRow(user: user)
-                                }
-                                .task {
-                                    await UserProfileViewModel.preload(
-                                        userID: user.id,
-                                        using: apiClient
-                                    )
-                                }
-                                .buttonStyle(.plain)
-                                        .padding(.horizontal, 16)
-                            }
+                            SearchUsersList(users: searchUserResults)
+                                .padding(.horizontal, 16)
                         }
 
                         if showsPlaceResults {
@@ -478,6 +452,9 @@ struct HomeView: View {
                                 .frame(maxWidth: .infinity)
                                 .padding(.top, 6)
                         }
+                        }
+                        .frame(maxWidth: .infinity, alignment: .leading)
+                        .padding(.top, 8)
                     }
                 }
             }
@@ -804,7 +781,10 @@ struct HomeView: View {
         }
 
         let count = selectedSearchFilter == .people ? 20 : 5
-        return Array(searchViewModel.recentUsers.prefix(count))
+        let sourceUsers = searchViewModel.recentUsers.isEmpty
+            ? searchViewModel.users
+            : searchViewModel.recentUsers
+        return Array(sourceUsers.prefix(count))
     }
 
     private var emptyStateSuggestedPlaces: [PlaceListItem] {
@@ -812,8 +792,11 @@ struct HomeView: View {
             return []
         }
 
-        let count = selectedSearchFilter == .places ? 10 : 0
-        return Array(searchViewModel.suggestedPlaces.prefix(count))
+        let count = selectedSearchFilter == .places ? 10 : 5
+        let sourcePlaces = searchViewModel.suggestedPlaces.isEmpty
+            ? searchViewModel.places
+            : searchViewModel.suggestedPlaces
+        return Array(sourcePlaces.prefix(count))
     }
 
     private var emptyStateUpcomingEvents: [EventFeedItem] {
@@ -1488,17 +1471,17 @@ private struct EventSearchRow: View {
     let event: EventFeedItem
 
     var body: some View {
-        HStack(spacing: 14) {
+        HStack(alignment: .center, spacing: 12) {
             artwork
-                .frame(width: 86, height: 86)
-                .clipShape(RoundedRectangle(cornerRadius: 18, style: .continuous))
+                .frame(width: 84, height: 84)
+                .clipShape(RoundedRectangle(cornerRadius: 15, style: .continuous))
 
-            VStack(alignment: .leading, spacing: 6) {
+            VStack(alignment: .leading, spacing: 7) {
                 Text(event.title)
                     .font(.system(size: 14, weight: .semibold))
                     .foregroundStyle(.white)
                     .lineLimit(2)
-                    .frame(maxWidth: .infinity, alignment: .leading)
+                    .minimumScaleFactor(0.88)
 
                 Text(event.formattedStart(format: "EEE, MMM d 'at' h:mm a"))
                     .font(.system(size: 13, weight: .semibold))
@@ -1507,18 +1490,16 @@ private struct EventSearchRow: View {
 
                 Text(event.primaryLocation)
                     .font(.system(size: 13, weight: .medium))
-                    .foregroundStyle(.white.opacity(0.64))
+                    .foregroundStyle(.white.opacity(0.62))
                     .lineLimit(1)
             }
+            .frame(maxWidth: .infinity, alignment: .leading)
         }
-        .padding(12)
+        .padding(9)
+        .frame(minHeight: 102, alignment: .topLeading)
         .background(
-            RoundedRectangle(cornerRadius: 24, style: .continuous)
+            RoundedRectangle(cornerRadius: 18, style: .continuous)
                 .fill(Color(red: 0.11, green: 0.11, blue: 0.13))
-        )
-        .overlay(
-            RoundedRectangle(cornerRadius: 24, style: .continuous)
-                .strokeBorder(.white.opacity(0.035), lineWidth: 1)
         )
     }
 
@@ -1574,28 +1555,14 @@ private struct SearchUserRow: View {
     let user: FriendUserSummary
 
     var body: some View {
-        HStack(spacing: 14) {
-            UserAvatarView(
-                imageURL: user.avatarImageURL,
-                name: user.name,
-                size: 48,
-                identityKey: user.id
-            )
-
-            VStack(alignment: .leading, spacing: 3) {
-                Text(user.name)
-                    .font(.system(size: 16, weight: .semibold))
-                    .foregroundStyle(.white)
-                    .lineLimit(1)
-
-                Text(user.usernameText)
-                    .font(.system(size: 14, weight: .medium))
-                    .foregroundStyle(.white.opacity(0.58))
-                    .lineLimit(1)
-            }
-
-            Spacer(minLength: 0)
-
+        UserListRowView(
+            imageURL: user.avatarImageURL,
+            name: user.name,
+            subtitle: user.usernameText,
+            identityKey: user.id,
+            avatarSize: 42,
+            verticalPadding: 10
+        ) {
             if user.friendStatus == .accepted {
                 Text("Friends")
                     .font(.system(size: 12, weight: .bold))
@@ -1610,54 +1577,84 @@ private struct SearchUserRow: View {
                     .foregroundStyle(.white.opacity(0.62))
             }
         }
-        .padding(12)
-        .background(
-            RoundedRectangle(cornerRadius: 22, style: .continuous)
-                .fill(Color(red: 0.11, green: 0.11, blue: 0.13))
-        )
-        .overlay(
-            RoundedRectangle(cornerRadius: 22, style: .continuous)
-                .strokeBorder(.white.opacity(0.035), lineWidth: 1)
-        )
     }
+}
 
+private struct SearchUsersList: View {
+    let users: [FriendUserSummary]
+    @Environment(\.apiClient) private var apiClient
+
+    var body: some View {
+        VStack(spacing: 12) {
+            ForEach(users) { user in
+                NavigationLink {
+                    UserProfileView(userID: user.id)
+                } label: {
+                    SearchUserRow(user: user)
+                }
+                .task {
+                    await UserProfileViewModel.preload(userID: user.id, using: apiClient)
+                }
+                .buttonStyle(.plain)
+                .padding(.horizontal, 16)
+                .padding(.vertical, 8)
+                .frame(maxWidth: .infinity, alignment: .leading)
+                .background(
+                    RoundedRectangle(cornerRadius: 18, style: .continuous)
+                        .fill(Color(red: 0.11, green: 0.11, blue: 0.13))
+                )
+                .overlay(
+                    RoundedRectangle(cornerRadius: 18, style: .continuous)
+                        .strokeBorder(.white.opacity(0.08), lineWidth: 1)
+                )
+            }
+        }
+    }
 }
 
 private struct SearchVenueRow: View {
     let place: PlaceListItem
 
     var body: some View {
-        HStack(spacing: 14) {
-            logo
+        ZStack(alignment: .bottomTrailing) {
+            HStack(alignment: .center, spacing: 12) {
+                logo
 
-            VStack(alignment: .leading, spacing: 4) {
-                Text(place.name)
-                    .font(.system(size: 16, weight: .semibold))
-                    .foregroundStyle(.white)
-                    .lineLimit(1)
+                VStack(alignment: .leading, spacing: 7) {
+                    Text(place.name)
+                        .font(.system(size: 14, weight: .semibold))
+                        .foregroundStyle(.white)
+                        .lineLimit(2)
+                        .minimumScaleFactor(0.88)
 
-                Text(place.type.displayName)
-                    .font(.system(size: 13, weight: .semibold))
-                    .foregroundStyle(Color(red: 0.48, green: 0.77, blue: 1.0))
+                    if !place.locationText.isEmpty {
+                        Text(place.locationText)
+                            .font(.system(size: 13, weight: .semibold))
+                            .foregroundStyle(Color(red: 0.48, green: 0.77, blue: 1.0))
+                            .lineLimit(1)
+                    }
 
-                if !place.locationText.isEmpty {
-                    Text(place.locationText)
-                        .font(.system(size: 14, weight: .medium))
-                        .foregroundStyle(.white.opacity(0.58))
-                        .lineLimit(1)
+                    if let eventCountText = place.eventCountText {
+                        Text(eventCountText)
+                            .font(.system(size: 13, weight: .medium))
+                            .foregroundStyle(.white.opacity(0.62))
+                            .lineLimit(1)
+                    }
                 }
+                .frame(maxWidth: .infinity, alignment: .leading)
             }
+            .padding(9)
+            .frame(minHeight: 102, alignment: .topLeading)
 
-            Spacer(minLength: 0)
+            Text(place.type.displayName)
+                .font(.system(size: 11, weight: .semibold))
+                .foregroundStyle(.white.opacity(0.36))
+                .padding(.trailing, 9)
+                .padding(.bottom, 9)
         }
-        .padding(12)
         .background(
-            RoundedRectangle(cornerRadius: 22, style: .continuous)
+            RoundedRectangle(cornerRadius: 18, style: .continuous)
                 .fill(Color(red: 0.11, green: 0.11, blue: 0.13))
-        )
-        .overlay(
-            RoundedRectangle(cornerRadius: 22, style: .continuous)
-                .strokeBorder(.white.opacity(0.035), lineWidth: 1)
         )
     }
 
@@ -1674,22 +1671,31 @@ private struct SearchVenueRow: View {
                     logoPlaceholder
                 }
             }
-            .frame(width: 48, height: 48)
-            .clipShape(RoundedRectangle(cornerRadius: 14, style: .continuous))
+            .frame(width: 84, height: 84)
+            .clipShape(RoundedRectangle(cornerRadius: 15, style: .continuous))
         } else {
             logoPlaceholder
         }
     }
 
     private var logoPlaceholder: some View {
-        RoundedRectangle(cornerRadius: 14, style: .continuous)
-            .fill(Color.white.opacity(0.08))
-            .frame(width: 48, height: 48)
-            .overlay {
-                Image(systemName: place.type == .venue ? "building.2" : "calendar.badge.clock")
-                    .font(.system(size: 18, weight: .semibold))
-                    .foregroundStyle(.white.opacity(0.74))
-            }
+        ZStack {
+            LinearGradient(
+                colors: [
+                    Color(red: 0.16, green: 0.18, blue: 0.24),
+                    Color(red: 0.30, green: 0.22, blue: 0.32),
+                    Color(red: 0.08, green: 0.08, blue: 0.09),
+                ],
+                startPoint: .topLeading,
+                endPoint: .bottomTrailing
+            )
+
+            Image(systemName: place.type == .venue ? "building.2" : "sparkles")
+                .font(.system(size: 30, weight: .semibold))
+                .foregroundStyle(.white.opacity(0.72))
+        }
+        .frame(width: 84, height: 84)
+        .clipShape(RoundedRectangle(cornerRadius: 16, style: .continuous))
     }
 }
 
@@ -1852,6 +1858,8 @@ final class HomeSearchDirectoryViewModel: ObservableObject {
                 name: user.name,
                 username: user.username,
                 avatarImageURL: user.avatarImageURL,
+                city: user.city,
+                state: user.state,
                 friendStatus: status
             )
         }

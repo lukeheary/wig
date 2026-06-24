@@ -966,7 +966,7 @@ struct MobileEventCreationView: View {
 
     private func saveLinkedPlaceScrapers() async throws {
         if let venue = selectedVenue {
-            try await apiClient.send(
+            _ = try await apiClient.send(
                 APIClient.replaceMobilePlaceScrapers(
                     slug: venue.slug,
                     scrapers: venueScraperRows.compactMap(\.apiValue)
@@ -975,7 +975,7 @@ struct MobileEventCreationView: View {
         }
 
         if let organizer = selectedOrganizer {
-            try await apiClient.send(
+            _ = try await apiClient.send(
                 APIClient.replaceMobilePlaceScrapers(
                     slug: organizer.slug,
                     scrapers: organizerScraperRows.compactMap(\.apiValue)

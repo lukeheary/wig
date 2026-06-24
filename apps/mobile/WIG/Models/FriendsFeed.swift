@@ -52,6 +52,8 @@ struct FriendUserSummary: Decodable, Identifiable, Hashable, Sendable {
     let name: String
     let username: String
     let avatarImageURL: URL?
+    let city: String?
+    let state: String?
     let friendStatus: FriendStatus?
 
     enum CodingKeys: String, CodingKey {
@@ -60,6 +62,8 @@ struct FriendUserSummary: Decodable, Identifiable, Hashable, Sendable {
         case name
         case username
         case avatarImageURL = "avatarImageUrl"
+        case city
+        case state
         case friendStatus
     }
 
@@ -69,6 +73,8 @@ struct FriendUserSummary: Decodable, Identifiable, Hashable, Sendable {
         name: String,
         username: String,
         avatarImageURL: URL?,
+        city: String? = nil,
+        state: String? = nil,
         friendStatus: FriendStatus? = nil
     ) {
         self.id = id
@@ -76,11 +82,31 @@ struct FriendUserSummary: Decodable, Identifiable, Hashable, Sendable {
         self.name = name
         self.username = username
         self.avatarImageURL = avatarImageURL
+        self.city = city
+        self.state = state
         self.friendStatus = friendStatus
     }
 
     var usernameText: String {
         "@\(username)"
+    }
+
+    var locationText: String? {
+        let parts = [city, state]
+            .compactMap { value -> String? in
+                guard let rawValue = value else {
+                    return nil
+                }
+                let trimmed = rawValue.trimmingCharacters(in: .whitespacesAndNewlines)
+                guard !trimmed.isEmpty else {
+                    return nil
+                }
+                return trimmed
+            }
+        guard !parts.isEmpty else {
+            return nil
+        }
+        return parts.joined(separator: ", ")
     }
 }
 
@@ -107,6 +133,8 @@ extension FriendUserSummary {
             name: name,
             username: username,
             avatarImageURL: avatarImageURL,
+            city: city,
+            state: state,
             friendStatus: friendStatus
         )
     }
@@ -121,6 +149,8 @@ extension FriendUserSummary {
         name = try container.decode(String.self, forKey: .name)
         username = try container.decode(String.self, forKey: .username)
         avatarImageURL = try container.decodeOptionalURL(forKey: .avatarImageURL)
+        city = try container.decodeIfPresent(String.self, forKey: .city)
+        state = try container.decodeIfPresent(String.self, forKey: .state)
         friendStatus = try container.decodeIfPresent(FriendStatus.self, forKey: .friendStatus)
     }
 }

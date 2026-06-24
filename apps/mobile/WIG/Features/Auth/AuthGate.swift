@@ -14,11 +14,7 @@ struct AuthGate: View {
             } else {
                 switch viewModel.state {
                 case .idle, .loading:
-                    ProgressView("Loading account...")
-                        .frame(maxWidth: .infinity, maxHeight: .infinity)
-                        .tint(.white)
-                        .foregroundStyle(.white)
-                        .background(AppTheme.background)
+                    MainTabView()
 
                 case .failed(let message):
                     MobileOnboardingGateErrorView(message: message) {

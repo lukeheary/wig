@@ -26,6 +26,8 @@ type UserSummary = {
   name: string;
   username: string;
   avatarImageUrl: string | null;
+  city: string | null;
+  state: string | null;
 };
 
 const DEFAULT_MOBILE_FEED_TIME_ZONE = "America/New_York";
@@ -134,6 +136,8 @@ function userSummary(user: typeof users.$inferSelect | null | undefined): UserSu
     name,
     username: user.username,
     avatarImageUrl: user.avatarImageUrl,
+    city: user.city,
+    state: user.state,
   };
 }
 
@@ -270,10 +274,7 @@ export async function GET() {
   const acceptedFriendIds = [...acceptedByUserId.keys()];
   const [upcomingRsvps, pastRsvps, followedPlaceIds, editPermissions] = await Promise.all([
     db.query.eventRsvps.findMany({
-      where: and(
-        eq(eventRsvps.userId, userId),
-        eq(eventRsvps.status, "going")
-      ),
+      where: and(eq(eventRsvps.userId, userId), inArray(eventRsvps.status, ["going", "interested"])),
       with: {
         event: {
           with: {
@@ -290,10 +291,7 @@ export async function GET() {
       orderBy: [asc(eventRsvps.updatedAt)],
     }),
     db.query.eventRsvps.findMany({
-      where: and(
-        eq(eventRsvps.userId, userId),
-        eq(eventRsvps.status, "going")
-      ),
+      where: and(eq(eventRsvps.userId, userId), inArray(eventRsvps.status, ["going", "interested"])),
       with: {
         event: {
           with: {

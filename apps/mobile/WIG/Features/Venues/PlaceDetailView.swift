@@ -32,10 +32,7 @@ struct PlaceDetailView: View {
                         onFollowToggle: {}
                     )
 
-                    ProgressView("Loading events...")
-                        .frame(maxWidth: .infinity, minHeight: 180)
-                        .tint(.white)
-                        .foregroundStyle(.white)
+                    PlaceDetailEventSkeletonSection(cardWidth: eventCardWidth)
 
                 case .failed(let message):
                     PlaceDetailHeader(
@@ -94,7 +91,7 @@ struct PlaceDetailView: View {
             }
             .padding(.horizontal, 16)
             .padding(.top, 18)
-            .padding(.bottom, 104)
+            .padding(.bottom, 48)
         }
         .background(placeBackground)
         .background(SwipeBackEnabler())
@@ -286,6 +283,88 @@ struct PlaceDetailView: View {
     private var placeBackground: some View {
         Color(red: 0.07, green: 0.07, blue: 0.08)
             .ignoresSafeArea()
+    }
+}
+
+private struct PlaceDetailEventSkeletonSection: View {
+    let cardWidth: CGFloat
+
+    var body: some View {
+        VStack(alignment: .leading, spacing: 12) {
+            RoundedRectangle(cornerRadius: 8, style: .continuous)
+                .fill(Color.white.opacity(0.10))
+                .frame(width: 148, height: 26)
+
+            ScrollView(.horizontal) {
+                HStack(alignment: .top, spacing: 12) {
+                    ForEach(0 ..< 3, id: \.self) { index in
+                        PlaceDetailEventSkeletonCard(seed: index)
+                            .frame(width: cardWidth)
+                    }
+                }
+            }
+            .scrollIndicators(.hidden)
+            .allowsHitTesting(false)
+        }
+    }
+}
+
+private struct PlaceDetailEventSkeletonCard: View {
+    let seed: Int
+    @State private var isHighlighted = false
+
+    var body: some View {
+        VStack(alignment: .leading, spacing: 14) {
+            RoundedRectangle(cornerRadius: 14, style: .continuous)
+                .fill(shimmerFill)
+                .frame(height: 200)
+
+            VStack(alignment: .leading, spacing: 10) {
+                RoundedRectangle(cornerRadius: 6, style: .continuous)
+                    .fill(shimmerFill)
+                    .frame(height: 14)
+
+                RoundedRectangle(cornerRadius: 6, style: .continuous)
+                    .fill(shimmerFill)
+                    .frame(width: 150, height: 14)
+
+                RoundedRectangle(cornerRadius: 6, style: .continuous)
+                    .fill(shimmerFill)
+                    .frame(width: 110, height: 12)
+            }
+            .padding(.horizontal, 2)
+        }
+        .padding(14)
+        .frame(maxWidth: .infinity, alignment: .leading)
+        .background(
+            RoundedRectangle(cornerRadius: 18, style: .continuous)
+                .fill(Color.white.opacity(0.04))
+        )
+        .overlay(
+            RoundedRectangle(cornerRadius: 18, style: .continuous)
+                .stroke(Color.white.opacity(0.06), lineWidth: 1)
+        )
+        .onAppear {
+            withAnimation(
+                .easeInOut(duration: 1.15)
+                .repeatForever(autoreverses: true)
+                .delay(Double(seed) * 0.08)
+            ) {
+                isHighlighted = true
+            }
+        }
+    }
+
+    private var shimmerFill: LinearGradient {
+        LinearGradient(
+            colors: [
+                Color.white.opacity(isHighlighted ? 0.10 : 0.05),
+                Color.white.opacity(isHighlighted ? 0.18 : 0.09),
+                Color.white.opacity(isHighlighted ? 0.10 : 0.05),
+            ],
+            startPoint: .topLeading,
+            endPoint: .bottomTrailing
+        )
     }
 }
 
