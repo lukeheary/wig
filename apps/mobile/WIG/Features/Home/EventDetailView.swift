@@ -1,4 +1,6 @@
 import ClerkKit
+import EventKit
+import EventKitUI
 import SwiftUI
 import UIKit
 
@@ -14,6 +16,7 @@ struct EventDetailView: View {
     @State private var isShareSheetPresented = false
     @State private var isImageViewerPresented = false
     @State private var isEditEventPresented = false
+    @State private var isCalendarComposerPresented = false
     @State private var isRSVPMenuExpanded = false
     @State private var rsvpMenuMode: RSVPMenuMode = .rsvp
     @State private var partnerRelationship: MobilePartnerRelationship?
@@ -120,7 +123,7 @@ struct EventDetailView: View {
                 .clipShape(RoundedRectangle(cornerRadius: 24, style: .continuous))
                 .overlay {
                     if isAuthenticated {
-                        EventSocialOverlayView(attendees: currentEvent.socialAttendees, size: .detail)
+                        EventSocialOverlayView(attendees: displayedEvent.socialAttendees, size: .detail)
                             .clipShape(RoundedRectangle(cornerRadius: 24, style: .continuous))
                     }
                 }
@@ -151,22 +154,64 @@ struct EventDetailView: View {
 
             Spacer()
 
-            if currentEvent.canEdit {
-                FloatingGlassIconButton(systemImage: "square.and.pencil") {
+            eventActionsMenu
+        }
+        .padding(.horizontal, 26)
+        .padding(.top, 0)
+        .sheet(isPresented: $isCalendarComposerPresented) {
+            AppleCalendarComposerView(
+                title: currentEvent.title,
+                startDate: currentEvent.startAt,
+                endDate: currentEvent.endAt ?? currentEvent.startAt.addingTimeInterval(2 * 60 * 60),
+                timeZone: currentEvent.displayTimeZone,
+                location: currentEvent.primaryLocation,
+                notes: currentEvent.description,
+                url: currentEvent.eventURL
+            )
+        }
+    }
+
+    private var eventActionsMenu: some View {
+        Menu {
+            if appSession.isAdmin {
+                Button {
                     isEditEventPresented = true
+                } label: {
+                    Label("Edit Event", systemImage: "square.and.pencil")
                 }
             }
 
             if currentEvent.eventURL != nil {
-                externalEventMenu
+                Button {
+                    openExternalEvent()
+                } label: {
+                    Label(
+                        "View on \(currentEvent.externalSourceName ?? "Event Site")",
+                        systemImage: "arrow.up.right.square"
+                    )
+                }
             }
 
-            FloatingGlassIconButton(systemImage: "square.and.arrow.up") {
-                isShareSheetPresented = true
+            Button {
+                isCalendarComposerPresented = true
+            } label: {
+                Label("Add to Calendar", systemImage: "calendar.badge.plus")
             }
+
+            Button {
+                isShareSheetPresented = true
+            } label: {
+                Label("Share Event", systemImage: "square.and.arrow.up")
+            }
+        } label: {
+            Image(systemName: "ellipsis")
+                .font(.system(size: 17, weight: .semibold))
+                .foregroundStyle(.primary)
+                .frame(width: 46, height: 46)
+                .contentShape(Circle())
+                .placeDetailLiquidGlass(in: Circle())
         }
-        .padding(.horizontal, 26)
-        .padding(.top, 0)
+        .buttonStyle(.plain)
     }
 
     @ViewBuilder
@@ -211,13 +256,13 @@ struct EventDetailView: View {
     }
 
     private var details: some View {
-        VStack(alignment: .leading, spacing: 9) {
+        VStack(alignment: .leading, spacing: 7) {
             Text(currentEvent.title)
                 .font(.system(size: 29, weight: .bold))
                 .foregroundStyle(.white)
                 .lineSpacing(1)
 
-            HStack(alignment: .firstTextBaseline, spacing: 6) {
+            HStack(alignment: .center, spacing: 6) {
                 Text(currentEvent.formattedStart(format: "EEE, MMM d 'at' h:mm a"))
                     .font(.system(size: 18, weight: .bold))
                     .foregroundStyle(Color(red: 0.48, green: 0.77, blue: 1.0))
@@ -244,15 +289,6 @@ struct EventDetailView: View {
                         .foregroundStyle(.white)
                         .lineLimit(1)
                 }
-
-                if let category = currentEvent.primaryCategoryLabel {
-                    Text(category)
-                        .font(.system(size: 12, weight: .semibold))
-                        .foregroundStyle(.white.opacity(0.78))
-                        .padding(.horizontal, 10)
-                        .padding(.vertical, 6)
-                        .background(Color.white.opacity(0.10), in: Capsule())
-                }
             }
 
             if let organizerPlace {
@@ -270,28 +306,17 @@ struct EventDetailView: View {
                 }
                 .font(.system(size: 16, weight: .semibold))
             }
-        }
-    }
 
-    private var externalEventMenu: some View {
-        Menu {
-            Button {
-                openExternalEvent()
-            } label: {
-                Label(
-                    "View on \(currentEvent.externalSourceName ?? "Event Site")",
-                    systemImage: "arrow.up.right.square"
-                )
+            if let category = currentEvent.primaryCategoryLabel {
+                Text(category)
+                    .font(.system(size: 12, weight: .semibold))
+                    .foregroundStyle(.white.opacity(0.78))
+                    .padding(.horizontal, 10)
+                    .padding(.vertical, 6)
+                    .background(Color.white.opacity(0.10), in: Capsule())
+                    .padding(.top, 3)
             }
-        } label: {
-            Image(systemName: "arrow.up.right")
-                .font(.system(size: 17, weight: .semibold))
-                .foregroundStyle(.primary)
-                .frame(width: 46, height: 46)
-                .contentShape(Circle())
-                .placeDetailLiquidGlass(in: Circle())
         }
-        .buttonStyle(.plain)
     }
 
     private var linkedPlace: PlaceListItem? {
@@ -381,55 +406,72 @@ struct EventDetailView: View {
     private var floatingRSVPMenu: some View {
         VStack(spacing: 10) {
             if isRSVPMenuExpanded {
-                VStack(spacing: 2) {
-                    if let partnerRelationship, partnerRelationship.isAccepted {
-                        RSVPPartnerToggleRow(
-                            partnerFirstName: partnerRelationship.partner.firstName ?? partnerRelationship.partner.username,
+                VStack(alignment: .leading, spacing: 14) {
+                    VStack(spacing: 0) {
+                        if let partnerRelationship, partnerRelationship.isAccepted {
+                            RSVPPartnerRow(
+                                partner: partnerRelationship.partner,
+                                isOn: Binding(
+                                    get: { rsvpViewModel.includePartner },
+                                    set: { nextValue in
+                                        handlePartnerToggle(nextValue)
+                                    }
+                                ),
+                                isLoading: rsvpViewModel.isSaving
+                            )
+
+                            Divider()
+                                .overlay(.white.opacity(0.08))
+                                .padding(.leading, 14)
+                        }
+
+                        RSVPNotifyFriendsRow(
                             isOn: Binding(
-                                get: { rsvpViewModel.includePartner },
+                                get: { rsvpViewModel.notifyFriends },
                                 set: { nextValue in
-                                    handlePartnerToggle(nextValue)
+                                    rsvpViewModel.setNotifyFriends(nextValue)
                                 }
                             ),
                             isLoading: rsvpViewModel.isSaving
                         )
-
-                        Divider()
-                            .overlay(.white.opacity(0.08))
-                            .padding(.horizontal, 14)
-                            .padding(.vertical, 6)
                     }
+                    .background(Color.white.opacity(0.07), in: RoundedRectangle(cornerRadius: 22, style: .continuous))
 
-                    switch rsvpMenuMode {
-                    case .rsvp:
-                        ForEach(RSVPMenuOption.allCases) { option in
-                            RSVPMenuOptionButton(
-                                option: option,
-                                isSelected: rsvpViewModel.status == option.status,
-                                hasSelection: rsvpViewModel.status != nil,
-                                isLoading: rsvpViewModel.isSaving
-                            ) {
-                                selectRSVP(option.status)
+                    VStack(spacing: 2) {
+                        switch rsvpMenuMode {
+                        case .rsvp:
+                            ForEach(RSVPMenuOption.allCases) { option in
+                                RSVPMenuOptionButton(
+                                    option: option,
+                                    isSelected: rsvpViewModel.status == option.status,
+                                    hasSelection: rsvpViewModel.status != nil,
+                                    isLoading: rsvpViewModel.isSaving
+                                ) {
+                                    selectRSVP(option.status)
+                                }
+                            }
+
+                        case .declineReason:
+                            ForEach(EventRSVPDeclineReason.allCases, id: \.self) { reason in
+                                RSVPDeclineReasonMenuButton(
+                                    reason: reason,
+                                    isSelected: rsvpViewModel.status == .notGoing
+                                        && rsvpViewModel.notGoingReason == reason,
+                                    isLoading: rsvpViewModel.isSaving
+                                ) {
+                                    saveNotGoing(reason: reason)
+                                }
+                            }
+
+                            RSVPDeclineSkipButton(isLoading: rsvpViewModel.isSaving) {
+                                saveNotGoing(reason: nil)
                             }
                         }
-                    case .declineReason:
-                        ForEach(EventRSVPDeclineReason.allCases, id: \.self) { reason in
-                            RSVPDeclineReasonMenuButton(
-                                reason: reason,
-                                isSelected: rsvpViewModel.status == .notGoing
-                                    && rsvpViewModel.notGoingReason == reason,
-                                isLoading: rsvpViewModel.isSaving
-                            ) {
-                                saveNotGoing(reason: reason)
-                            }
-                        }
-
-                        RSVPDeclineSkipButton(isLoading: rsvpViewModel.isSaving) {
-                            saveNotGoing(reason: nil)
-                        }
                     }
+                    .padding(8)
+                    .background(Color.white.opacity(0.07), in: RoundedRectangle(cornerRadius: 22, style: .continuous))
                 }
-                .padding(8)
+                .padding(18)
                 .frame(maxWidth: .infinity)
                 .eventDetailLiquidGlass(in: RoundedRectangle(cornerRadius: 30, style: .continuous))
                 .transition(.move(edge: .bottom).combined(with: .opacity))
@@ -497,11 +539,7 @@ struct EventDetailView: View {
     }
 
     private var about: some View {
-        VStack(alignment: .leading, spacing: 18) {
-            Text("About")
-                .font(.system(size: 23, weight: .bold))
-                .foregroundStyle(.white)
-
+        VStack(alignment: .leading, spacing: 16) {
             if let description = currentEvent.description?.trimmingCharacters(in: .whitespacesAndNewlines),
                !description.isEmpty
             {
@@ -521,19 +559,19 @@ struct EventDetailView: View {
 
     @ViewBuilder
     private var attendeeSections: some View {
-        if !currentEvent.friendsGoing.isEmpty || !currentEvent.friendsInterested.isEmpty {
+        if !displayedEvent.friendsGoing.isEmpty || !displayedEvent.friendsInterested.isEmpty {
             VStack(alignment: .leading, spacing: 18) {
-                if !currentEvent.friendsGoing.isEmpty {
+                if !displayedEvent.friendsGoing.isEmpty {
                     EventAttendeeSection(
                         title: "Going",
-                        attendees: currentEvent.friendsGoing
+                        attendees: displayedEvent.friendsGoing
                     )
                 }
 
-                if !currentEvent.friendsInterested.isEmpty {
+                if !displayedEvent.friendsInterested.isEmpty {
                     EventAttendeeSection(
                         title: "Interested",
-                        attendees: currentEvent.friendsInterested
+                        attendees: displayedEvent.friendsInterested
                     )
                 }
             }
@@ -568,9 +606,10 @@ struct EventDetailView: View {
                 status,
                 eventID: currentEvent.id,
                 using: apiClient,
-                includePartner: partnerRelationship?.isAccepted == true && rsvpViewModel.includePartner
+                includePartner: partnerRelationship?.isAccepted == true && rsvpViewModel.includePartner,
+                notifyFriends: rsvpViewModel.notifyFriends
             ) {
-                NotificationCenter.default.post(name: .eventRSVPDidChange, object: currentEvent.id)
+                handleSuccessfulRSVPChange()
             }
         }
     }
@@ -590,9 +629,10 @@ struct EventDetailView: View {
                 eventID: currentEvent.id,
                 using: apiClient,
                 includePartner: partnerRelationship?.isAccepted == true && rsvpViewModel.includePartner,
+                notifyFriends: rsvpViewModel.notifyFriends,
                 notGoingReason: reason
             ) {
-                NotificationCenter.default.post(name: .eventRSVPDidChange, object: currentEvent.id)
+                handleSuccessfulRSVPChange()
             }
         }
     }
@@ -636,14 +676,21 @@ struct EventDetailView: View {
                 eventID: currentEvent.id,
                 using: apiClient,
                 includePartner: nextValue,
+                notifyFriends: rsvpViewModel.notifyFriends,
                 forceUpdate: true,
                 notGoingReason: currentStatus == .notGoing ? rsvpViewModel.notGoingReason : nil
             )
 
             if didUpdate {
-                NotificationCenter.default.post(name: .eventRSVPDidChange, object: currentEvent.id)
+                handleSuccessfulRSVPChange()
             }
         }
+    }
+
+    private func handleSuccessfulRSVPChange() {
+        ProfileViewModel.invalidateCache()
+        UserProfileViewModel.invalidateAllCaches()
+        NotificationCenter.default.post(name: .eventRSVPDidChange, object: currentEvent.id)
     }
 
     private var rsvpButtonTitle: String {
@@ -688,6 +735,13 @@ struct EventDetailView: View {
         editedEvent ?? event
     }
 
+    private var displayedEvent: EventFeedItem {
+        currentEvent.updatingCurrentUserRSVP(
+            status: rsvpViewModel.status,
+            notGoingReason: rsvpViewModel.notGoingReason
+        )
+    }
+
     private var shareURL: URL {
         URL(string: "https://www.whoisgoing.com/event/\(currentEvent.id.uuidString)")!
     }
@@ -730,6 +784,57 @@ struct EventDetailView: View {
     }
 }
 
+private struct AppleCalendarComposerView: UIViewControllerRepresentable {
+    let title: String
+    let startDate: Date
+    let endDate: Date
+    let timeZone: TimeZone
+    let location: String
+    let notes: String?
+    let url: URL?
+
+    @Environment(\.dismiss) private var dismiss
+
+    func makeCoordinator() -> Coordinator {
+        Coordinator(dismiss: dismiss)
+    }
+
+    func makeUIViewController(context: Context) -> EKEventEditViewController {
+        let store = EKEventStore()
+        let controller = EKEventEditViewController()
+        let event = EKEvent(eventStore: store)
+        event.title = title
+        event.startDate = startDate
+        event.endDate = endDate
+        event.timeZone = timeZone
+        event.location = location
+        event.notes = notes
+        event.url = url
+
+        controller.eventStore = store
+        controller.event = event
+        controller.editViewDelegate = context.coordinator
+        return controller
+    }
+
+    func updateUIViewController(_ uiViewController: EKEventEditViewController, context: Context) {}
+
+    final class Coordinator: NSObject, EKEventEditViewDelegate {
+        private let dismiss: DismissAction
+
+        init(dismiss: DismissAction) {
+            self.dismiss = dismiss
+        }
+
+        func eventEditViewController(
+            _ controller: EKEventEditViewController,
+            didCompleteWith action: EKEventEditViewAction
+        ) {
+            dismiss()
+        }
+    }
+}
+
 private struct EventAttendeeSection: View {
     let title: String
     let attendees: [EventSocialRSVP]
@@ -743,9 +848,14 @@ private struct EventAttendeeSection: View {
             VStack(spacing: 0) {
                 ForEach(Array(attendees.enumerated()), id: \.element.user.id) { index, attendee in
                     NavigationLink {
-                        UserProfileView(userID: attendee.user.id)
+                        if attendee.user.isCurrentUser {
+                            UserProfileView(userID: attendee.user.id, showsFriendAction: false)
+                        } else {
+                            UserProfileView(userID: attendee.user.id)
+                        }
                     } label: {
                         EventAttendeeRow(attendee: attendee)
+                            .contentShape(Rectangle())
                     }
                     .buttonStyle(.plain)
 
@@ -961,14 +1071,50 @@ struct EventArtworkViewer: View {
     }
 }
 
-private struct RSVPPartnerToggleRow: View {
-    let partnerFirstName: String
+private struct RSVPPartnerRow: View {
+    let partner: MobilePartnerUser
     @Binding var isOn: Bool
     let isLoading: Bool
 
     var body: some View {
         HStack(spacing: 12) {
-            Text("RSVP with \(partnerFirstName)")
+            Text("RSVP with \(partner.displayName)")
+                .font(.system(size: 15, weight: .bold))
+                .foregroundStyle(.white)
+                .lineLimit(1)
+
+            Spacer(minLength: 12)
+
+            UserAvatarView(
+                imageURL: partner.avatarImageURL,
+                name: partner.displayName,
+                size: 34,
+                identityKey: partner.id
+            )
+            .overlay {
+                if isOn {
+                    Circle()
+                        .strokeBorder(AppTheme.accentBlue, lineWidth: 2)
+                }
+            }
+
+            Toggle("", isOn: $isOn)
+                .labelsHidden()
+                .tint(AppTheme.accentBlue)
+                .disabled(isLoading)
+        }
+        .padding(.horizontal, 14)
+        .frame(height: 58)
+    }
+}
+
+private struct RSVPNotifyFriendsRow: View {
+    @Binding var isOn: Bool
+    let isLoading: Bool
+
+    var body: some View {
+        HStack(spacing: 12) {
+            Text("Notify Friends")
                 .font(.system(size: 15, weight: .bold))
                 .foregroundStyle(.white)
 
@@ -980,7 +1126,7 @@ private struct RSVPPartnerToggleRow: View {
                 .disabled(isLoading)
         }
         .padding(.horizontal, 14)
-        .padding(.vertical, 12)
+        .frame(height: 58)
     }
 }
 
@@ -1012,9 +1158,9 @@ private struct RSVPMenuOptionButton: View {
                     .foregroundStyle(option.status.rsvpTintColor)
             }
             .padding(.horizontal, 14)
-            .frame(height: 48)
-            .background(isSelected ? Color.white.opacity(0.10) : Color.clear, in: Capsule())
-            .contentShape(Capsule())
+            .frame(height: 58)
+            .background(isSelected ? Color.white.opacity(0.10) : Color.clear, in: RoundedRectangle(cornerRadius: 18, style: .continuous))
+            .contentShape(RoundedRectangle(cornerRadius: 18, style: .continuous))
         }
         .buttonStyle(.plain)
         .disabled(isLoading)
@@ -1125,6 +1271,17 @@ private extension EventRSVPDeclineReason {
     }
 }
 
+private extension MobilePartnerUser {
+    var displayName: String {
+        let fullName = [firstName, lastName]
+            .compactMap { $0?.trimmingCharacters(in: .whitespacesAndNewlines) }
+            .filter { !$0.isEmpty }
+            .joined(separator: " ")
+
+        return fullName.isEmpty ? username : fullName
+    }
+}
+
 private enum RSVPMenuOption: CaseIterable, Identifiable {
     case going
     case interested
@@ -1191,6 +1348,7 @@ private final class EventRSVPViewModel: ObservableObject {
     @Published private(set) var status: EventRSVPStatus?
     @Published private(set) var notGoingReason: EventRSVPDeclineReason?
     @Published private(set) var includePartner = false
+    @Published private(set) var notifyFriends = true
     @Published private(set) var isSaving = false
     @Published private(set) var errorMessage: String?
 
@@ -1223,11 +1381,16 @@ private final class EventRSVPViewModel: ObservableObject {
         self.includePartner = includePartner
     }
 
+    func setNotifyFriends(_ notifyFriends: Bool) {
+        self.notifyFriends = notifyFriends
+    }
+
     func toggle(
         _ nextStatus: EventRSVPStatus,
         eventID: UUID,
         using apiClient: APIClient,
         includePartner nextIncludePartner: Bool = false,
+        notifyFriends nextNotifyFriends: Bool = true,
         forceUpdate: Bool = false,
         notGoingReason nextNotGoingReason: EventRSVPDeclineReason? = nil
     ) async -> Bool {
@@ -1238,11 +1401,13 @@ private final class EventRSVPViewModel: ObservableObject {
         let previousStatus = status
         let previousNotGoingReason = notGoingReason
         let previousIncludePartner = includePartner
+        let previousNotifyFriends = notifyFriends
         let shouldDelete = !forceUpdate && previousStatus == nextStatus && nextStatus != .notGoing
 
         status = shouldDelete ? nil : nextStatus
         notGoingReason = shouldDelete ? nil : nextNotGoingReason
         includePartner = shouldDelete ? false : nextIncludePartner
+        notifyFriends = nextNotifyFriends
         errorMessage = nil
         isSaving = true
 
@@ -1256,7 +1421,8 @@ private final class EventRSVPViewModel: ObservableObject {
                     eventID: eventID,
                     status: nextStatus,
                     notGoingReason: nextStatus == .notGoing ? nextNotGoingReason : nil,
-                    includePartner: nextIncludePartner
+                    includePartner: nextIncludePartner,
+                    notifyFriends: nextNotifyFriends
                 )
                 state = try await apiClient.send(endpoint)
             }
@@ -1268,6 +1434,7 @@ private final class EventRSVPViewModel: ObservableObject {
             status = previousStatus
             notGoingReason = previousNotGoingReason
             includePartner = previousIncludePartner
+            notifyFriends = previousNotifyFriends
             errorMessage = error.localizedDescription
             isSaving = false
             return false

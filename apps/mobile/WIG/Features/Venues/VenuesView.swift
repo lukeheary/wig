@@ -1,11 +1,17 @@
 import SwiftUI
 
 struct VenuesView: View {
+    let resetFiltersTrigger: Int
+
     @Environment(\.apiClient) private var apiClient
     @StateObject private var viewModel = VenuesViewModel()
     @State private var selectedLocationFilter: PlaceLocationFilter?
     @State private var selectedPlaceFilter: PlaceKindFilter = .all
     @State private var selectedCategoryID: String?
+
+    init(resetFiltersTrigger: Int = 0) {
+        self.resetFiltersTrigger = resetFiltersTrigger
+    }
 
     var body: some View {
         NavigationStack {
@@ -25,6 +31,9 @@ struct VenuesView: View {
                         await viewModel.load(using: apiClient, forceRefresh: true)
                     }
                 }
+                .onChange(of: resetFiltersTrigger) { _, _ in
+                    resetFilters()
+                }
         }
     }
 
@@ -32,11 +41,23 @@ struct VenuesView: View {
     private var content: some View {
         switch viewModel.state {
         case .idle, .loading:
-            ProgressView("Loading venues...")
-                .frame(maxWidth: .infinity, maxHeight: .infinity)
-                .tint(.white)
-                .foregroundStyle(.white)
-                .background(venuesBackground)
+            ScrollView {
+                LazyVStack(spacing: 12) {
+                    ForEach(0..<6, id: \.self) { index in
+                        PlaceRowSkeletonView(seed: index)
+                    }
+                }
+                .padding(.horizontal, 16)
+                .padding(.top, 78)
+                .padding(.bottom, 48)
+            }
+            .overlay(alignment: .topLeading) {
+                loadingFilterControls
+                    .padding(.horizontal, 16)
+                    .padding(.top, 0)
+            }
+            .scrollIndicators(.hidden)
+            .background(venuesBackground)
 
         case .failed(let message):
             ContentUnavailableView {
@@ -117,6 +138,22 @@ struct VenuesView: View {
                 categories: availableCategoryFilters(for: response),
                 selectedCategoryID: selectedCategoryID,
                 onSelectCategory: { selectedCategoryID = $0 }
+            )
+        }
+        .frame(maxWidth: .infinity, alignment: .leading)
+        .padding(.bottom, 4)
+    }
+
+    private var loadingFilterControls: some View {
+        HStack(spacing: 10) {
+            PlaceLeadingControls(
+                locationSelection: .constant(.all),
+                locations: [.all],
+                hasActiveLocationSelection: false,
+                selection: .constant(.all),
+                categories: [],
+                selectedCategoryID: nil,
+                onSelectCategory: { _ in }
             )
         }
         .frame(maxWidth: .infinity, alignment: .leading)
@@ -218,6 +255,12 @@ struct VenuesView: View {
         }
 
         return place.categories.contains(selectedCategoryID)
+    }
+
+    private func resetFilters() {
+        selectedLocationFilter = nil
+        selectedPlaceFilter = .all
+        selectedCategoryID = nil
     }
 }
 
@@ -479,7 +522,7 @@ private extension View {
     }
 }
 
-private struct PlaceRowView: View {
+struct PlaceRowView: View {
     let place: PlaceListItem
 
     var body: some View {
@@ -567,6 +610,71 @@ private struct PlaceRowView: View {
                 .foregroundStyle(.white.opacity(0.72))
         }
         .clipShape(RoundedRectangle(cornerRadius: 16, style: .continuous))
+    }
+}
+
+private struct PlaceRowSkeletonView: View {
+    let seed: Int
+
+    var body: some View {
+        ZStack(alignment: .bottomTrailing) {
+            HStack(alignment: .center, spacing: 12) {
+                RoundedRectangle(cornerRadius: 15, style: .continuous)
+                    .fill(shimmerFill)
+                    .frame(width: 84, height: 84)
+
+                VStack(alignment: .leading, spacing: 9) {
+                    RoundedRectangle(cornerRadius: 7, style: .continuous)
+                        .fill(shimmerFill)
+                        .frame(width: titleWidth, height: 16)
+
+                    RoundedRectangle(cornerRadius: 7, style: .continuous)
+                        .fill(shimmerFill)
+                        .frame(width: subtitleWidth, height: 14)
+
+                    RoundedRectangle(cornerRadius: 7, style: .continuous)
+                        .fill(shimmerFill)
+                        .frame(width: metaWidth, height: 14)
+                }
+                .frame(maxWidth: .infinity, alignment: .leading)
+            }
+            .padding(9)
+            .frame(minHeight: 102, alignment: .topLeading)
+
+            RoundedRectangle(cornerRadius: 6, style: .continuous)
+                .fill(shimmerFill)
+                .frame(width: 58, height: 12)
+                .padding(.trailing, 9)
+                .padding(.bottom, 9)
+        }
+        .background(
+            RoundedRectangle(cornerRadius: 18, style: .continuous)
+                .fill(Color(red: 0.11, green: 0.11, blue: 0.13))
+        )
+    }
+
+    private var titleWidth: CGFloat {
+        [156, 184, 142, 172][seed % 4]
+    }
+
+    private var subtitleWidth: CGFloat {
+        [96, 112, 88, 120][seed % 4]
+    }
+
+    private var metaWidth: CGFloat {
+        [128, 148, 118, 138][seed % 4]
+    }
+
+    private var shimmerFill: LinearGradient {
+        LinearGradient(
+            colors: [
+                .white.opacity(0.08),
+                .white.opacity(0.16),
+                .white.opacity(0.08),
+            ],
+            startPoint: .topLeading,
+            endPoint: .bottomTrailing
+        )
     }
 }
 

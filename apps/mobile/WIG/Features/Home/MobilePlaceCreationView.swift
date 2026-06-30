@@ -30,6 +30,7 @@ struct MobilePlaceCreationView: View {
     @State private var isSubmitting = false
     @State private var alertMessage: String?
     @State private var isGooglePlacePickerPresented = false
+    @State private var venueScraperRows: [EditablePlaceScraperRow] = []
 
     init(type: PlaceListItem.PlaceType, onCompleted: (() -> Void)? = nil) {
         self.init(mode: .create(type), onCompleted: onCompleted)
@@ -69,6 +70,9 @@ struct MobilePlaceCreationView: View {
                 locationSection
                 detailsSection
                 categoriesSection
+                if isVenue {
+                    venueScrapersSection
+                }
             }
             .scrollContentBackground(.hidden)
             .background(Color(uiColor: .systemGroupedBackground))
@@ -94,6 +98,8 @@ struct MobilePlaceCreationView: View {
                 if viewModel.categories.isEmpty && !viewModel.isLoadingCategories {
                     await viewModel.loadCategories(using: apiClient)
                 }
+
+                await loadVenueScrapersIfNeeded()
             }
             .sheet(isPresented: $isGooglePlacePickerPresented) {
                 GooglePlaceLookupSheet { place in
@@ -323,6 +329,58 @@ struct MobilePlaceCreationView: View {
         }
     }
 
+    private var venueScrapersSection: some View {
+        Section("Venue Scrapers") {
+            if venueScraperRows.isEmpty {
+                Text("No scrapers configured.")
+                    .font(.system(size: 14, weight: .medium))
+                    .foregroundStyle(.secondary)
+            } else {
+                ForEach(venueScraperRows) { row in
+                    VStack(alignment: .leading, spacing: 12) {
+                        Picker(
+                            "Scraper Type",
+                            selection: scraperBinding(for: row.id, keyPath: \.scraper)
+                        ) {
+                            ForEach(MobileScraperType.allCases, id: \.self) { scraper in
+                                Text(scraper.title).tag(scraper)
+                            }
+                        }
+
+                        ClearableInputField(
+                            row.scraper == .ticketmaster
+                                ? "Venue Name"
+                                : row.scraper == .posh
+                                    ? "Posh URL"
+                                    : "Scraper URL",
+                            text: scraperBinding(for: row.id, keyPath: \.searchString)
+                        )
+                        .textInputAutocapitalization(.never)
+                        .autocorrectionDisabled()
+
+                        if row.scraper == .ticketmaster {
+                            ClearableInputField(
+                                "Classification Name (Optional)",
+                                text: scraperBinding(for: row.id, keyPath: \.classificationNameText)
+                            )
+                            .textInputAutocapitalization(.never)
+                            .autocorrectionDisabled()
+                        }
+
+                        InlineActionButton(title: "Remove Scraper", systemImage: "trash", role: .destructive) {
+                            venueScraperRows.removeAll { $0.id == row.id }
+                        }
+                    }
+                    .padding(.vertical, 4)
+                }
+            }
+
+            InlineActionButton(title: "Add Scraper", systemImage: "plus", role: nil) {
+                venueScraperRows.append(EditablePlaceScraperRow())
+            }
+        }
+    }
+
     private var logoPlaceholder: some View {
         VStack(spacing: 10) {
             Image(systemName: isVenue ? "building.2.crop.circle" : "person.crop.circle.badge.plus")
@@ -511,6 +569,7 @@ struct MobilePlaceCreationView: View {
                 )
             }
 
+            try await saveVenueScrapers(slug: savedPlace.slug)
             NotificationCenter.default.post(name: .mobilePlaceDidChange, object: savedPlace.id)
             onCompleted?()
             dismiss()
@@ -543,6 +602,58 @@ struct MobilePlaceCreationView: View {
         viewModel.categories
             .map(\.key)
             .filter { selectedCategoryKeys.contains($0) }
+    }
+
+    private func loadVenueScrapersIfNeeded() async {
+        guard isVenue else {
+            venueScraperRows = []
+            return
+        }
+
+        guard case .edit(let place) = mode else {
+            venueScraperRows = []
+            return
+        }
+
+        do {
+            let response = try await apiClient.send(APIClient.mobilePlaceScrapers(slug: place.slug))
+            venueScraperRows = response.scrapers.map(EditablePlaceScraperRow.init)
+        } catch {
+            venueScraperRows = []
+        }
+    }
+
+    private func saveVenueScrapers(slug: String) async throws {
+        guard isVenue else {
+            return
+        }
+
+        _ = try await apiClient.send(
+            APIClient.replaceMobilePlaceScrapers(
+                slug: slug,
+                scrapers: venueScraperRows.compactMap(\.apiValue)
+            )
+        )
+    }
+
+    private func scraperBinding<Value>(
+        for id: UUID,
+        keyPath: WritableKeyPath<EditablePlaceScraperRow, Value>
+    ) -> Binding<Value> {
+        Binding(
+            get: {
+                guard let row = venueScraperRows.first(where: { $0.id == id }) else {
+                    fatalError("Missing scraper row for binding")
+                }
+                return row[keyPath: keyPath]
+            },
+            set: { newValue in
+                guard let index = venueScraperRows.firstIndex(where: { $0.id == id }) else {
+                    return
+                }
+                venueScraperRows[index][keyPath: keyPath] = newValue
+            }
+        )
     }
 
     private func normalizedWebsiteString(_ value: String) -> String {
@@ -609,6 +720,54 @@ private struct InlineActionButton: View {
         role == .destructive
             ? Color.red.opacity(0.10)
             : AppTheme.accentBlue.opacity(0.12)
+    }
+}
+
+private struct EditablePlaceScraperRow: Identifiable, Hashable {
+    let id: UUID
+    var persistedID: UUID?
+    var scraper: MobileScraperType
+    var searchString: String
+    var classificationNameText: String
+
+    init(
+        id: UUID = UUID(),
+        persistedID: UUID? = nil,
+        scraper: MobileScraperType = .dice,
+        searchString: String = "",
+        classificationNameText: String = ""
+    ) {
+        self.id = id
+        self.persistedID = persistedID
+        self.scraper = scraper
+        self.searchString = searchString
+        self.classificationNameText = classificationNameText
+    }
+
+    init(config: MobilePlaceScraperConfig) {
+        self.init(
+            persistedID: config.id,
+            scraper: config.scraper,
+            searchString: config.searchString,
+            classificationNameText: config.classificationName ?? ""
+        )
+    }
+
+    var apiValue: MobilePlaceScraperConfig? {
+        let trimmedSearchString = searchString.trimmingCharacters(in: .whitespacesAndNewlines)
+        guard !trimmedSearchString.isEmpty else {
+            return nil
+        }
+
+        let trimmedClassificationName = classificationNameText.trimmingCharacters(in: .whitespacesAndNewlines)
+        return MobilePlaceScraperConfig(
+            id: persistedID,
+            scraper: scraper,
+            searchString: trimmedSearchString,
+            classificationName: scraper == .ticketmaster && !trimmedClassificationName.isEmpty
+                ? trimmedClassificationName
+                : nil
+        )
     }
 }
 

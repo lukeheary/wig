@@ -97,21 +97,14 @@ struct EventCardView: View {
     }
 
     private func fullBleedArtwork(url: URL) -> some View {
-        AsyncImage(url: url) { phase in
-            switch phase {
-            case .empty:
-                posterPlaceholder
-            case .success(let image):
-                image
-                    .resizable()
-                    .scaledToFill()
-                    .frame(maxWidth: .infinity, maxHeight: .infinity)
-                    .clipped()
-            case .failure:
-                posterPlaceholder
-            @unknown default:
-                posterPlaceholder
-            }
+        RemoteImageView(url: url) { image in
+            image
+                .resizable()
+                .scaledToFill()
+                .frame(maxWidth: .infinity, maxHeight: .infinity)
+                .clipped()
+        } placeholder: {
+            posterPlaceholder
         }
         .frame(maxWidth: .infinity, maxHeight: .infinity)
         .clipShape(RoundedRectangle(cornerRadius: imageCornerRadius, style: .continuous))

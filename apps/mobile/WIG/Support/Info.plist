@@ -45,6 +45,8 @@
 	<string>$(CLERK_PUBLISHABLE_KEY)</string>
 	<key>NSCameraUsageDescription</key>
 	<string>WIG needs camera access so you can take a profile picture.</string>
+	<key>NSCalendarsWriteOnlyAccessUsageDescription</key>
+	<string>WIG needs calendar access so you can add events to your Apple Calendar.</string>
 	<key>NSPhotoLibraryUsageDescription</key>
 	<string>WIG needs photo library access so you can choose a profile picture.</string>
 	<key>OAUTH_CALLBACK_SCHEME</key>

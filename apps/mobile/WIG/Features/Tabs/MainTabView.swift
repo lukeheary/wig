@@ -11,6 +11,9 @@ struct MainTabView: View {
     @State private var previousNonSearchTab: AppTab = .home
     @State private var isAuthSheetPresented = false
     @State private var homeResetTrigger = 0
+    @State private var venuesResetTrigger = 0
+    @State private var activityResetTrigger = 0
+    @State private var profileResetTrigger = 0
     @State private var isEventCreationSheetPresented = false
     @State private var presentedPlaceCreationType: PlaceListItem.PlaceType?
 
@@ -43,17 +46,17 @@ struct MainTabView: View {
                     )
                 }
 
-                Tab("Venues", systemImage: "building.2", value: AppTab.venues) {
-                    VenuesView()
+                Tab("Places", systemImage: "building.2", value: AppTab.venues) {
+                    VenuesView(resetFiltersTrigger: venuesResetTrigger)
                 }
 
                 if isAuthenticated {
                     Tab("Activity", systemImage: "bolt", value: AppTab.activity) {
-                        ActivityView()
+                        ActivityView(resetFiltersTrigger: activityResetTrigger)
                     }
 
                     Tab("Profile", systemImage: "person.crop.circle", value: AppTab.profile) {
-                        ProfileView()
+                        ProfileView(resetFiltersTrigger: profileResetTrigger)
                     }
                 }
 
@@ -70,6 +73,8 @@ struct MainTabView: View {
         .toolbarBackground(AppTheme.background, for: .tabBar)
         .tint(AppTheme.accentBlue)
         .onChange(of: selectedTab) { oldValue, newValue in
+            resetFilters(for: oldValue, whenSwitchingTo: newValue)
+
             if oldValue != .search {
                 previousNonSearchTab = oldValue
             }
@@ -132,20 +137,20 @@ struct MainTabView: View {
                     }
                     .tag(AppTab.home)
 
-                VenuesView()
+                VenuesView(resetFiltersTrigger: venuesResetTrigger)
                     .tabItem {
-                        Label("Venues", systemImage: "building.2")
+                        Label("Places", systemImage: "building.2")
                     }
                     .tag(AppTab.venues)
 
                 if isAuthenticated {
-                    ActivityView()
+                    ActivityView(resetFiltersTrigger: activityResetTrigger)
                         .tabItem {
                             Label("Activity", systemImage: "bolt")
                         }
                         .tag(AppTab.activity)
 
-                    ProfileView()
+                    ProfileView(resetFiltersTrigger: profileResetTrigger)
                         .tabItem {
                             Label("Profile", systemImage: "person.crop.circle")
                         }
@@ -167,6 +172,8 @@ struct MainTabView: View {
         .toolbarBackground(AppTheme.background, for: .tabBar)
         .tint(AppTheme.accentBlue)
         .onChange(of: selectedTab) { oldValue, newValue in
+            resetFilters(for: oldValue, whenSwitchingTo: newValue)
+
             if oldValue != .search {
                 previousNonSearchTab = oldValue
             }
@@ -245,6 +252,25 @@ struct MainTabView: View {
                 selectedTab = newValue
             }
         )
+    }
+
+    private func resetFilters(for oldValue: AppTab, whenSwitchingTo newValue: AppTab) {
+        guard oldValue != newValue else {
+            return
+        }
+
+        switch oldValue {
+        case .home:
+            homeResetTrigger += 1
+        case .venues:
+            venuesResetTrigger += 1
+        case .activity:
+            activityResetTrigger += 1
+        case .profile:
+            profileResetTrigger += 1
+        case .search:
+            break
+        }
     }
 
     @ViewBuilder

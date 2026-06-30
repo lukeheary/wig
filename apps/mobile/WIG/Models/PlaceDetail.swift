@@ -18,6 +18,7 @@ struct PlaceDetail: Decodable, Identifiable, Hashable, Sendable {
     let categoryLabels: [String: String]
     let updatedAt: Date?
     var isFollowed = false
+    var canManage = false
     let events: [EventFeedItem]
     let pastEvents: [EventFeedItem]
 
@@ -39,6 +40,7 @@ struct PlaceDetail: Decodable, Identifiable, Hashable, Sendable {
         case categoryLabels
         case updatedAt
         case isFollowed
+        case canManage
         case events
         case pastEvents
     }
@@ -116,6 +118,7 @@ extension PlaceDetail {
             categoryLabels: [:],
             updatedAt: listItem.updatedAt,
             isFollowed: listItem.isFollowed,
+            canManage: false,
             events: [],
             pastEvents: []
         )
@@ -141,6 +144,7 @@ extension PlaceDetail {
         categoryLabels = try container.decodeIfPresent([String: String].self, forKey: .categoryLabels) ?? [:]
         updatedAt = try container.decodeIfPresent(Date.self, forKey: .updatedAt)
         isFollowed = try container.decodeIfPresent(Bool.self, forKey: .isFollowed) ?? false
+        canManage = try container.decodeIfPresent(Bool.self, forKey: .canManage) ?? false
         events = try container.decodeIfPresent([EventFeedItem].self, forKey: .events) ?? []
         pastEvents = try container.decodeIfPresent([EventFeedItem].self, forKey: .pastEvents) ?? []
     }

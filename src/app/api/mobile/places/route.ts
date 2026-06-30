@@ -165,7 +165,7 @@ export async function GET(request: Request) {
       })
       .from(cities),
     db.query.places.findMany({
-      orderBy: [asc(places.name)],
+      orderBy: [sql`lower(${places.name})`, asc(places.name)],
       limit,
       with: {
         categoryLinks: {
@@ -356,7 +356,7 @@ export async function POST(request: Request) {
         instagram: cleanedInstagram,
         hours: body.type === "venue" ? body.hours ?? null : null,
       })
-      .returning({ id: places.id });
+      .returning({ id: places.id, slug: places.slug });
 
     if (!place) {
       return NextResponse.json(
@@ -382,7 +382,7 @@ export async function POST(request: Request) {
         .onConflictDoNothing();
     }
 
-    return NextResponse.json({ id: place.id });
+    return NextResponse.json({ id: place.id, slug: place.slug });
   } catch (error) {
     if (error instanceof z.ZodError) {
       const message = error.issues[0]?.message || "Invalid request";

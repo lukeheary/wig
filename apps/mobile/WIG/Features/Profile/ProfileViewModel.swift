@@ -140,6 +140,12 @@ final class ProfileViewModel: ObservableObject {
 
         inFlightLoad = nil
     }
+
+    static func invalidateCache() {
+        cachedResponse = nil
+        inFlightLoad?.cancel()
+        inFlightLoad = nil
+    }
 }
 
 @MainActor
@@ -223,6 +229,14 @@ final class UserProfileViewModel: ObservableObject {
         }
 
         inFlightLoads[userID] = nil
+    }
+
+    static func invalidateAllCaches() {
+        cachedResponses.removeAll()
+        for load in inFlightLoads.values {
+            load.cancel()
+        }
+        inFlightLoads.removeAll()
     }
 
     func updateLoadedResponse(_ transform: (UserProfileResponse) -> UserProfileResponse) {

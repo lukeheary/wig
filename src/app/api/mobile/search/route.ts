@@ -204,7 +204,12 @@ export async function GET(request: Request) {
     const eventsToMap = query ? matchingEvents : upcomingEvents;
     const eventIds = eventsToMap.map((event) => event.id);
 
-    const placeIds = matchingPlaces.map((place) => place.id);
+    const placeIds = [
+      ...new Set([
+        ...matchingPlaces.map((place) => place.id),
+        ...suggestedPlaces.map((place) => place.id),
+      ]),
+    ];
     const now = new Date();
 
     const [followedPlaceIds, venueCounts, organizerCounts, editPermissions] = await Promise.all([
@@ -509,7 +514,7 @@ export async function GET(request: Request) {
           logoImageUrl: place.logoImageUrl,
           city: place.city,
           state: place.state,
-          upcomingEventCount: 0,
+          upcomingEventCount: placeCountMap.get(place.id) ?? 0,
           updatedAt: place.updatedAt,
           isFollowed: followedPlaceIdSet.has(place.id),
         })),

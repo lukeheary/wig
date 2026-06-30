@@ -8,11 +8,18 @@ struct MobileEventCreationView: View {
         case edit(EventFeedItem)
     }
 
+    enum CreationKind {
+        case event
+        case eventSeries
+    }
+
     @Environment(\.apiClient) private var apiClient
     @Environment(\.dismiss) private var dismiss
     @StateObject private var viewModel = MobileEventCreationViewModel()
 
     private let mode: Mode
+    private let creationKind: CreationKind
+    private let onSeriesCompleted: (() -> Void)?
     private let onCompleted: ((EventFeedItem) -> Void)?
 
     @State private var activePlacePicker: PlacePickerKind?
@@ -32,18 +39,25 @@ struct MobileEventCreationView: View {
     @State private var selectedVenue: PlaceDetail?
     @State private var selectedOrganizer: PlaceDetail?
     @State private var selectedCategoryKeys = Set<String>()
-    @State private var venueScraperRows: [EditableScraperRow] = []
-    @State private var organizerScraperRows: [EditableScraperRow] = []
+    @State private var recurrenceFrequency: MobileEventSeriesFrequency = .weekly
+    @State private var recurrenceInterval = 1
+    @State private var recurrenceDaysOfWeek = Set<Int>()
+    @State private var hasSeriesEndDate = false
+    @State private var seriesEndDate = Calendar.current.date(byAdding: .month, value: 3, to: .now) ?? .now
     @State private var isSubmitting = false
     @State private var alertMessage: String?
     @State private var activeAlert: ActiveAlert?
 
     init(
         mode: Mode = .create,
+        creationKind: CreationKind = .event,
         preselectedPlace: PlaceDetail? = nil,
+        onSeriesCompleted: (() -> Void)? = nil,
         onCompleted: ((EventFeedItem) -> Void)? = nil
     ) {
         self.mode = mode
+        self.creationKind = creationKind
+        self.onSeriesCompleted = onSeriesCompleted
         self.onCompleted = onCompleted
 
         switch mode {
@@ -90,6 +104,9 @@ struct MobileEventCreationView: View {
                 detailsSection
                 locationSection
                 categoriesSection
+                if isCreatingEventSeries {
+                    recurrenceSection
+                }
             }
             .scrollContentBackground(.hidden)
             .background(Color(uiColor: .systemGroupedBackground))
@@ -142,18 +159,13 @@ struct MobileEventCreationView: View {
             .onChange(of: selectedVenue?.id) { _, _ in
                 applyVenueScheduleDefaults()
             }
-            .onChange(of: selectedVenue?.slug) { _, slug in
-                Task {
-                    await loadScrapers(for: .venue, slug: slug)
-                }
-            }
-            .onChange(of: selectedOrganizer?.slug) { _, slug in
-                Task {
-                    await loadScrapers(for: .organizer, slug: slug)
-                }
-            }
             .onChange(of: scheduleDateKey) { _, _ in
                 applyVenueScheduleDefaults()
+            }
+            .onChange(of: recurrenceFrequency) { _, frequency in
+                if isCreatingEventSeries && frequency != .daily {
+                    applyDefaultRecurrenceDayIfNeeded()
+                }
             }
             .alert(item: $activeAlert) { alert in
                 switch alert {
@@ -177,12 +189,6 @@ struct MobileEventCreationView: View {
                         secondaryButton: .cancel()
                     )
                 }
-            }
-            .task(id: selectedVenue?.slug) {
-                await loadScrapers(for: .venue, slug: selectedVenue?.slug)
-            }
-            .task(id: selectedOrganizer?.slug) {
-                await loadScrapers(for: .organizer, slug: selectedOrganizer?.slug)
             }
         }
     }
@@ -284,7 +290,7 @@ struct MobileEventCreationView: View {
     @ViewBuilder
     private var detailsSection: some View {
         Section("Details") {
-            ClearableInputField("Event Title", text: $title)
+            ClearableInputField(isCreatingEventSeries ? "Series Title" : "Event Title", text: $title)
                 .textInputAutocapitalization(.words)
 
             VStack(alignment: .leading, spacing: 8) {
@@ -309,7 +315,7 @@ struct MobileEventCreationView: View {
             }
         }
 
-        Section("Schedule") {
+        Section(isCreatingEventSeries ? "First Event" : "Schedule") {
             DatePicker(
                 "Start Date",
                 selection: startDateBinding,
@@ -340,6 +346,72 @@ struct MobileEventCreationView: View {
             }
         }
 
+    }
+
+    private var recurrenceSection: some View {
+        Section("Repeat") {
+            Picker("Repeat", selection: $recurrenceFrequency) {
+                ForEach(MobileEventSeriesFrequency.allCases, id: \.self) { frequency in
+                    Text(frequency.title).tag(frequency)
+                }
+            }
+
+            Stepper(
+                recurrenceIntervalLabel,
+                value: $recurrenceInterval,
+                in: 1...12
+            )
+
+            if recurrenceFrequency == .weekly {
+                VStack(alignment: .leading, spacing: 10) {
+                    Text("Days of Week")
+                        .font(.system(size: 13, weight: .medium))
+                        .foregroundStyle(.secondary)
+
+                    LazyVGrid(
+                        columns: Array(repeating: GridItem(.flexible(), spacing: 8), count: 4),
+                        alignment: .leading,
+                        spacing: 8
+                    ) {
+                        ForEach(Self.weekdayOptions, id: \.index) { option in
+                            Button {
+                                toggleRecurrenceDay(option.index)
+                            } label: {
+                                Text(option.shortLabel)
+                                    .font(.system(size: 13, weight: .semibold))
+                                    .foregroundStyle(recurrenceDaysOfWeek.contains(option.index) ? .black : .primary)
+                                    .frame(maxWidth: .infinity)
+                                    .padding(.vertical, 10)
+                                    .background(
+                                        RoundedRectangle(cornerRadius: 14, style: .continuous)
+                                            .fill(recurrenceDaysOfWeek.contains(option.index) ? AppTheme.accentBlue : Color(uiColor: .secondarySystemGroupedBackground))
+                                    )
+                            }
+                            .buttonStyle(.plain)
+                        }
+                    }
+                }
+            } else if recurrenceFrequency == .monthly {
+                Text(monthlyRecurrenceSummary)
+                    .font(.system(size: 14, weight: .medium))
+                    .foregroundStyle(.secondary)
+            } else {
+                Text(dailyRecurrenceSummary)
+                    .font(.system(size: 14, weight: .medium))
+                    .foregroundStyle(.secondary)
+            }
+
+            Toggle("Set Series End Date", isOn: $hasSeriesEndDate)
+                .tint(AppTheme.accentBlue)
+
+            if hasSeriesEndDate {
+                DatePicker(
+                    "End Date",
+                    selection: $seriesEndDate,
+                    displayedComponents: [.date]
+                )
+            }
+        }
     }
 
     private var categoriesSection: some View {
@@ -410,83 +482,6 @@ struct MobileEventCreationView: View {
                         activeAlert = .deleteConfirmation
                     }
                 }
-            }
-
-            scraperSections
-        }
-    }
-
-    @ViewBuilder
-    private var scraperSections: some View {
-        if let venue = selectedVenue {
-            scraperSection(title: "Venue Scrapers", placeName: venue.name, rows: $venueScraperRows)
-        }
-
-        if let organizer = selectedOrganizer {
-            scraperSection(title: "Organizer Scrapers", placeName: organizer.name, rows: $organizerScraperRows)
-        }
-    }
-
-    private func scraperSection(
-        title: String,
-        placeName: String,
-        rows: Binding<[EditableScraperRow]>
-    ) -> some View {
-        Section(title) {
-            Text(placeName)
-                .font(.system(size: 13, weight: .medium))
-                .foregroundStyle(.secondary)
-
-            if rows.wrappedValue.isEmpty {
-                Text("No scrapers configured.")
-                    .font(.system(size: 14, weight: .medium))
-                    .foregroundStyle(.secondary)
-            } else {
-                ForEach(rows.wrappedValue) { row in
-                    VStack(alignment: .leading, spacing: 12) {
-                        Picker(
-                            "Scraper Type",
-                            selection: binding(for: row.id, in: rows, keyPath: \.scraper)
-                        ) {
-                            ForEach(MobileScraperType.allCases, id: \.self) { scraper in
-                                Text(scraper.title).tag(scraper)
-                            }
-                        }
-
-                        ClearableInputField(
-                            row.scraper == .ticketmaster
-                                ? "Venue/Organizer Name"
-                                : row.scraper == .posh
-                                    ? "Posh URL"
-                                    : "Scraper URL",
-                            text: binding(for: row.id, in: rows, keyPath: \.searchString)
-                        )
-                        .textInputAutocapitalization(.never)
-                        .autocorrectionDisabled()
-
-                        if row.scraper == .ticketmaster {
-                            ClearableInputField(
-                                "Classification Name (Optional)",
-                                text: binding(
-                                    for: row.id,
-                                    in: rows,
-                                    keyPath: \.classificationNameText
-                                )
-                            )
-                            .textInputAutocapitalization(.never)
-                            .autocorrectionDisabled()
-                        }
-
-                        InlineActionButton(title: "Remove Scraper", systemImage: "trash", role: .destructive) {
-                            rows.wrappedValue.removeAll { $0.id == row.id }
-                        }
-                    }
-                    .padding(.vertical, 4)
-                }
-            }
-
-            InlineActionButton(title: "Add Scraper", systemImage: "plus", role: nil) {
-                rows.wrappedValue.append(EditableScraperRow())
             }
         }
     }
@@ -647,33 +642,11 @@ struct MobileEventCreationView: View {
         }
     }
 
-    private func loadScrapers(for kind: PlacePickerKind, slug: String?) async {
-        guard let slug else {
-            switch kind {
-            case .venue:
-                venueScraperRows = []
-            case .organizer:
-                organizerScraperRows = []
-            }
-            return
-        }
-
-        do {
-            let response = try await apiClient.send(APIClient.mobilePlaceScrapers(slug: slug))
-            let rows = response.scrapers.map(EditableScraperRow.init)
-            switch kind {
-            case .venue:
-                venueScraperRows = rows
-            case .organizer:
-                organizerScraperRows = rows
-            }
-        } catch {
-            switch kind {
-            case .venue:
-                venueScraperRows = []
-            case .organizer:
-                organizerScraperRows = []
-            }
+    private func toggleRecurrenceDay(_ day: Int) {
+        if recurrenceDaysOfWeek.contains(day) {
+            recurrenceDaysOfWeek.remove(day)
+        } else {
+            recurrenceDaysOfWeek.insert(day)
         }
     }
 
@@ -692,7 +665,9 @@ struct MobileEventCreationView: View {
         let finalState = cleaned(locationSource?.state) ?? cleaned(state)?.uppercased()
 
         guard !trimmedTitle.isEmpty else {
-            alertMessage = "Please enter an event title."
+            alertMessage = isCreatingEventSeries
+                ? "Please enter a series title."
+                : "Please enter an event title."
             return
         }
 
@@ -710,6 +685,20 @@ struct MobileEventCreationView: View {
         if let endDate, endDate <= startAt {
             alertMessage = "End time must be after the start time."
             return
+        }
+
+        if isCreatingEventSeries {
+            applyDefaultRecurrenceDayIfNeeded()
+
+            if recurrenceFrequency == .weekly && recurrenceDaysOfWeek.isEmpty {
+                alertMessage = "Select at least one weekday for a weekly recurrence."
+                return
+            }
+
+            if hasSeriesEndDate && Calendar.current.startOfDay(for: seriesEndDate) < Calendar.current.startOfDay(for: startAt) {
+                alertMessage = "Series end date must be on or after the first event date."
+                return
+            }
         }
 
         var eventURLValue: URL?
@@ -732,6 +721,32 @@ struct MobileEventCreationView: View {
 
             switch mode {
             case .create:
+                if isCreatingEventSeries {
+                    let createdSeries = try await apiClient.send(
+                        APIClient.mobileCreateEventSeries(
+                            venueID: finalVenueID,
+                            organizerID: finalOrganizerID,
+                            title: trimmedTitle,
+                            description: trimmedDescription.isEmpty ? nil : trimmedDescription,
+                            coverImageURL: uploadedCoverURL,
+                            eventURL: eventURLValue,
+                            startAt: startAt,
+                            endAt: endDate,
+                            address: finalAddress,
+                            city: finalCity,
+                            state: finalState,
+                            categories: orderedSelectedCategories,
+                            status: selectedStatus,
+                            recurrence: eventSeriesRecurrenceRequest
+                        )
+                    )
+
+                    NotificationCenter.default.post(name: .mobileEventDidChange, object: createdSeries.firstEventId)
+                    onSeriesCompleted?()
+                    dismiss()
+                    return
+                }
+
                 let createdEvent = try await apiClient.send(
                     APIClient.mobileCreateEvent(
                         venueID: finalVenueID,
@@ -774,7 +789,6 @@ struct MobileEventCreationView: View {
                 }
 
                 NotificationCenter.default.post(name: .mobileEventDidChange, object: createdEvent.id)
-                try await saveLinkedPlaceScrapers()
                 dismiss()
 
             case .edit(let event):
@@ -799,7 +813,6 @@ struct MobileEventCreationView: View {
                 )
 
                 NotificationCenter.default.post(name: .mobileEventDidChange, object: updatedEvent.id)
-                try await saveLinkedPlaceScrapers()
                 onCompleted?(updatedEvent)
                 dismiss()
             }
@@ -839,7 +852,7 @@ struct MobileEventCreationView: View {
     private var navigationTitle: String {
         switch mode {
         case .create:
-            return "Create Event"
+            return isCreatingEventSeries ? "Create Event Series" : "Create Event"
         case .edit:
             return "Edit Event"
         }
@@ -849,7 +862,7 @@ struct MobileEventCreationView: View {
         if isSubmitting {
             switch mode {
             case .create:
-                return "Creating..."
+                return isCreatingEventSeries ? "Creating Series..." : "Creating..."
             case .edit:
                 return "Saving..."
             }
@@ -857,7 +870,7 @@ struct MobileEventCreationView: View {
 
         switch mode {
         case .create:
-            return "Create"
+            return isCreatingEventSeries ? "Create Series" : "Create"
         case .edit:
             return "Save"
         }
@@ -866,10 +879,18 @@ struct MobileEventCreationView: View {
     private var failureAlertTitle: String {
         switch mode {
         case .create:
-            return "Couldn't Create Event"
+            return isCreatingEventSeries ? "Couldn't Create Event Series" : "Couldn't Create Event"
         case .edit:
             return "Couldn't Save Event"
         }
+    }
+
+    private var isCreatingEventSeries: Bool {
+        if case .create = mode {
+            return creationKind == .eventSeries
+        }
+
+        return false
     }
 
     private var coverImagePlaceholder: some View {
@@ -964,47 +985,56 @@ struct MobileEventCreationView: View {
             .filter { selectedCategoryKeys.contains($0) }
     }
 
-    private func saveLinkedPlaceScrapers() async throws {
-        if let venue = selectedVenue {
-            _ = try await apiClient.send(
-                APIClient.replaceMobilePlaceScrapers(
-                    slug: venue.slug,
-                    scrapers: venueScraperRows.compactMap(\.apiValue)
-                )
-            )
+    private var eventSeriesRecurrenceRequest: MobileEventSeriesRecurrenceRequest {
+        let daysOfWeek: [Int]?
+        switch recurrenceFrequency {
+        case .daily:
+            daysOfWeek = nil
+        case .weekly:
+            daysOfWeek = recurrenceDaysOfWeek.sorted()
+        case .monthly:
+            daysOfWeek = [Self.weekdayIndex(for: startAt)]
         }
 
-        if let organizer = selectedOrganizer {
-            _ = try await apiClient.send(
-                APIClient.replaceMobilePlaceScrapers(
-                    slug: organizer.slug,
-                    scrapers: organizerScraperRows.compactMap(\.apiValue)
-                )
-            )
-        }
-    }
-
-    private func binding<Value>(
-        for id: UUID,
-        in rows: Binding<[EditableScraperRow]>,
-        keyPath: WritableKeyPath<EditableScraperRow, Value>
-    ) -> Binding<Value> {
-        Binding(
-            get: {
-                guard let row = rows.wrappedValue.first(where: { $0.id == id }) else {
-                    fatalError("Missing scraper row for binding")
-                }
-                return row[keyPath: keyPath]
-            },
-            set: { newValue in
-                guard let index = rows.wrappedValue.firstIndex(where: { $0.id == id }) else {
-                    return
-                }
-                rows.wrappedValue[index][keyPath: keyPath] = newValue
-            }
+        return MobileEventSeriesRecurrenceRequest(
+            frequency: recurrenceFrequency,
+            interval: recurrenceInterval,
+            daysOfWeek: daysOfWeek,
+            untilDate: hasSeriesEndDate
+                ? Self.iso8601FractionalFormatter.string(from: Self.endOfDay(seriesEndDate))
+                : nil
         )
     }
 
+    private var recurrenceIntervalLabel: String {
+        let unit: String
+        switch recurrenceFrequency {
+        case .daily:
+            unit = recurrenceInterval == 1 ? "day" : "days"
+        case .weekly:
+            unit = recurrenceInterval == 1 ? "week" : "weeks"
+        case .monthly:
+            unit = recurrenceInterval == 1 ? "month" : "months"
+        }
+
+        return "Every \(recurrenceInterval) \(unit)"
+    }
+
+    private var dailyRecurrenceSummary: String {
+        "Repeats \(recurrenceInterval == 1 ? "every day" : "every \(recurrenceInterval) days")."
+    }
+
+    private var monthlyRecurrenceSummary: String {
+        "Repeats on the \(Self.monthlyPatternLabel(for: startAt)) of every \(recurrenceInterval == 1 ? "month" : "\(recurrenceInterval) months")."
+    }
+
+    private func applyDefaultRecurrenceDayIfNeeded() {
+        guard recurrenceFrequency != .daily, recurrenceDaysOfWeek.isEmpty else {
+            return
+        }
+
+        recurrenceDaysOfWeek = [Self.weekdayIndex(for: startAt)]
+    }
     private func cleaned(_ value: String?) -> String? {
         guard let value else {
             return nil
@@ -1023,6 +1053,9 @@ struct MobileEventCreationView: View {
             get: { startAt },
             set: { newDate in
                 startAt = Self.combineDate(newDate, withTimeFrom: startAt)
+                if isCreatingEventSeries && recurrenceFrequency != .daily {
+                    recurrenceDaysOfWeek = [Self.weekdayIndex(for: startAt)]
+                }
 
                 if endAt < startAt {
                     endAt = startAt.addingTimeInterval(2 * 60 * 60)
@@ -1088,6 +1121,43 @@ struct MobileEventCreationView: View {
         return calendar.date(from: dateComponents) ?? date
     }
 
+    private static let weekdayOptions: [(index: Int, shortLabel: String, fullLabel: String)] = [
+        (0, "Sun", "Sunday"),
+        (1, "Mon", "Monday"),
+        (2, "Tue", "Tuesday"),
+        (3, "Wed", "Wednesday"),
+        (4, "Thu", "Thursday"),
+        (5, "Fri", "Friday"),
+        (6, "Sat", "Saturday"),
+    ]
+
+    private static let iso8601FractionalFormatter: ISO8601DateFormatter = {
+        let formatter = ISO8601DateFormatter()
+        formatter.formatOptions = [.withInternetDateTime, .withFractionalSeconds]
+        return formatter
+    }()
+
+    private static let ordinalLabels = ["First", "Second", "Third", "Fourth", "Fifth"]
+
+    private static func weekdayIndex(for date: Date) -> Int {
+        Calendar.current.component(.weekday, from: date) - 1
+    }
+
+    private static func monthlyPatternLabel(for date: Date) -> String {
+        let weekday = weekdayIndex(for: date)
+        let day = Calendar.current.component(.day, from: date)
+        let ordinalIndex = min(max((day - 1) / 7, 0), ordinalLabels.count - 1)
+        let ordinal = ordinalLabels[ordinalIndex]
+        let weekdayLabel = weekdayOptions.first { $0.index == weekday }?.fullLabel ?? "Day"
+        return "\(ordinal) \(weekdayLabel)"
+    }
+
+    private static func endOfDay(_ date: Date) -> Date {
+        let calendar = Calendar.current
+        let start = calendar.startOfDay(for: date)
+        return calendar.date(byAdding: DateComponents(day: 1, second: -1), to: start) ?? date
+    }
+
     private func deleteEvent() async {
         guard !isSubmitting else {
             return
@@ -1128,7 +1198,7 @@ private enum ActiveAlert: Identifiable {
     }
 }
 
-private struct ClearableInputField: View {
+struct ClearableInputField: View {
     let title: String
     @Binding var text: String
 
@@ -1244,54 +1314,6 @@ private enum PlacePickerKind: String, Identifiable {
         case .organizer:
             return "Search organizers"
         }
-    }
-}
-
-private struct EditableScraperRow: Identifiable, Hashable {
-    let id: UUID
-    var persistedID: UUID?
-    var scraper: MobileScraperType
-    var searchString: String
-    var classificationNameText: String
-
-    init(
-        id: UUID = UUID(),
-        persistedID: UUID? = nil,
-        scraper: MobileScraperType = .dice,
-        searchString: String = "",
-        classificationNameText: String = ""
-    ) {
-        self.id = id
-        self.persistedID = persistedID
-        self.scraper = scraper
-        self.searchString = searchString
-        self.classificationNameText = classificationNameText
-    }
-
-    init(config: MobilePlaceScraperConfig) {
-        self.init(
-            persistedID: config.id,
-            scraper: config.scraper,
-            searchString: config.searchString,
-            classificationNameText: config.classificationName ?? ""
-        )
-    }
-
-    var apiValue: MobilePlaceScraperConfig? {
-        let trimmedSearchString = searchString.trimmingCharacters(in: .whitespacesAndNewlines)
-        guard !trimmedSearchString.isEmpty else {
-            return nil
-        }
-
-        let trimmedClassificationName = classificationNameText.trimmingCharacters(in: .whitespacesAndNewlines)
-        return MobilePlaceScraperConfig(
-            id: persistedID,
-            scraper: scraper,
-            searchString: trimmedSearchString,
-            classificationName: scraper == .ticketmaster && !trimmedClassificationName.isEmpty
-                ? trimmedClassificationName
-                : nil
-        )
     }
 }
 

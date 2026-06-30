@@ -358,6 +358,41 @@ struct EventSocialAttendee: Identifiable, Hashable, Sendable {
     let status: EventRSVPStatus
 }
 
+extension EventFeedItem {
+    func updatingCurrentUserRSVP(
+        status: EventRSVPStatus?,
+        notGoingReason: EventRSVPDeclineReason?
+    ) -> EventFeedItem {
+        var updated = self
+        updated.userRsvpStatus = status
+        updated.userRsvpNotGoingReason = notGoingReason
+
+        let currentUserRSVP = (friendsGoing + friendsInterested).first { $0.user.isCurrentUser }
+        let otherGoing = friendsGoing.filter { !$0.user.isCurrentUser }
+        let otherInterested = friendsInterested.filter { !$0.user.isCurrentUser }
+
+        guard let currentUserRSVP else {
+            updated.friendsGoing = otherGoing
+            updated.friendsInterested = otherInterested
+            return updated
+        }
+
+        switch status {
+        case .going:
+            updated.friendsGoing = [EventSocialRSVP(status: .going, user: currentUserRSVP.user)] + otherGoing
+            updated.friendsInterested = otherInterested
+        case .interested:
+            updated.friendsGoing = otherGoing
+            updated.friendsInterested = [EventSocialRSVP(status: .interested, user: currentUserRSVP.user)] + otherInterested
+        case .notGoing, .none:
+            updated.friendsGoing = otherGoing
+            updated.friendsInterested = otherInterested
+        }
+
+        return updated
+    }
+}
+
 private extension KeyedDecodingContainer {
     func decodeOptionalURL(forKey key: Key) throws -> URL? {
         guard let rawValue = try decodeIfPresent(String.self, forKey: key) else {

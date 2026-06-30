@@ -201,6 +201,7 @@ export async function GET(
   const mappedPlace = mapPlaceCategoryData(place);
   const userId = await currentMobileUserId();
   const editPermissions = await resolveMobileEventEditPermissions(userId);
+  const canManagePlace = editPermissions.isAdmin || editPermissions.manageablePlaceIds.has(place.id);
   const allEvents = [...upcomingEvents, ...pastEvents];
   const eventIds = allEvents.map((event) => event.id);
   const currentUserRsvpMap =
@@ -258,6 +259,7 @@ export async function GET(
     categoryLabels: mappedPlace.categoryLabels,
     updatedAt: mappedPlace.updatedAt,
     isFollowed: Boolean(follow),
+    canManage: canManagePlace,
     events: upcomingEvents.map((event) =>
       mapMobileEvent(event, editPermissions, currentUserRsvpMap.get(event.id))
     ),
@@ -321,7 +323,7 @@ export async function PATCH(
       activeOnly: true,
     });
 
-    return NextResponse.json({ id: place.id });
+    return NextResponse.json({ id: place.id, slug });
   } catch (error) {
     if (error instanceof z.ZodError) {
       return NextResponse.json(

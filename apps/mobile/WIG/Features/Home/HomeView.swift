@@ -156,6 +156,13 @@ struct HomeView: View {
                         isSearchKeyboardDismissEnabled = false
                     }
                 }
+                .task(id: displayedEventPrefetchKey) {
+                    guard !displayedEventsForPrefetch.isEmpty else {
+                        return
+                    }
+
+                    await EventArtworkPrefetcher.prefetch(events: displayedEventsForPrefetch)
+                }
         }
         .nativeSearch(
             isEnabled: showsNativeSearch,
@@ -337,7 +344,7 @@ struct HomeView: View {
                                 NavigationLink {
                                     PlaceDetailView(place: place)
                                 } label: {
-                                    SearchVenueRow(place: place)
+                                    PlaceRowView(place: place)
                                         .padding(.horizontal, 16)
                                 }
                                 .buttonStyle(.plain)
@@ -423,7 +430,7 @@ struct HomeView: View {
                                 NavigationLink {
                                     PlaceDetailView(place: place)
                                 } label: {
-                                    SearchVenueRow(place: place)
+                                    PlaceRowView(place: place)
                                         .padding(.horizontal, 16)
                                 }
                                 .buttonStyle(.plain)
@@ -824,6 +831,20 @@ struct HomeView: View {
         !searchEvents.isEmpty
     }
 
+    private var displayedEventsForPrefetch: [EventFeedItem] {
+        if isShowingSearchResults {
+            return searchEvents
+        }
+
+        return eventsForSelectedWeek
+    }
+
+    private var displayedEventPrefetchKey: String {
+        displayedEventsForPrefetch
+            .map(\.id.uuidString)
+            .joined(separator: ",")
+    }
+
     private var availableLocationFilters: [HomeLocationFilter] {
         var cityFilters = (currentResponse?.availableCities ?? []).reduce(into: [HomeLocationFilter]()) { filters, city in
             let filter = HomeLocationFilter.city(city: city.city, state: city.state)
@@ -964,6 +985,9 @@ struct HomeView: View {
 
     private func resetToCurrentWeek() {
         selectedWeekStart = Self.startOfWeek(for: .now)
+        selectedLocationFilter = nil
+        selectedEventFilter = .all
+        selectedCategoryFilterID = nil
     }
 
     private func loadHome(
@@ -1591,22 +1615,23 @@ private struct SearchUsersList: View {
                     UserProfileView(userID: user.id)
                 } label: {
                     SearchUserRow(user: user)
+                        .padding(.horizontal, 16)
+                        .padding(.vertical, 8)
+                        .frame(maxWidth: .infinity, alignment: .leading)
+                        .background(
+                            RoundedRectangle(cornerRadius: 18, style: .continuous)
+                                .fill(Color(red: 0.11, green: 0.11, blue: 0.13))
+                        )
+                        .overlay(
+                            RoundedRectangle(cornerRadius: 18, style: .continuous)
+                                .strokeBorder(.white.opacity(0.08), lineWidth: 1)
+                        )
+                        .contentShape(Rectangle())
                 }
                 .task {
                     await UserProfileViewModel.preload(userID: user.id, using: apiClient)
                 }
                 .buttonStyle(.plain)
-                .padding(.horizontal, 16)
-                .padding(.vertical, 8)
-                .frame(maxWidth: .infinity, alignment: .leading)
-                .background(
-                    RoundedRectangle(cornerRadius: 18, style: .continuous)
-                        .fill(Color(red: 0.11, green: 0.11, blue: 0.13))
-                )
-                .overlay(
-                    RoundedRectangle(cornerRadius: 18, style: .continuous)
-                        .strokeBorder(.white.opacity(0.08), lineWidth: 1)
-                )
             }
         }
     }
@@ -2002,7 +2027,7 @@ private struct EmptyEventDayPlaceholder: View {
     }
 }
 
-private struct EventCardSkeletonView: View {
+struct EventCardSkeletonView: View {
     let seed: Int
     @State private var isHighlighted = false
 

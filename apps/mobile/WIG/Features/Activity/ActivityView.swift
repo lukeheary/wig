@@ -2,6 +2,8 @@ import SwiftUI
 import UIKit
 
 struct ActivityView: View {
+    let resetFiltersTrigger: Int
+
     @Environment(\.apiClient) private var apiClient
     @StateObject private var viewModel = ActivityViewModel()
     @State private var selectedFilter: ActivityFeedFilter = .upcoming
@@ -11,6 +13,10 @@ struct ActivityView: View {
 
     private let background = Color(red: 0.07, green: 0.07, blue: 0.08)
     private static let activityPageSize = 20
+
+    init(resetFiltersTrigger: Int = 0) {
+        self.resetFiltersTrigger = resetFiltersTrigger
+    }
 
     var body: some View {
         NavigationStack {
@@ -57,6 +63,9 @@ struct ActivityView: View {
                 }
                 .onChange(of: selectedCityFilter) { _, _ in
                     resetVisibleActivityCount()
+                }
+                .onChange(of: resetFiltersTrigger) { _, _ in
+                    resetFilters()
                 }
                 .onReceive(NotificationCenter.default.publisher(for: .friendRequestDidChange)) { _ in
                     Task {
@@ -170,6 +179,12 @@ struct ActivityView: View {
         }
 
         return sections
+    }
+
+    private func resetFilters() {
+        selectedFilter = .upcoming
+        selectedCityFilter = nil
+        resetVisibleActivityCount()
     }
 
     private func recencyLabel(for date: Date) -> String {

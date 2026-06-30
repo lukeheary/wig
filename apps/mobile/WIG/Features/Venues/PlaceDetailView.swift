@@ -10,6 +10,7 @@ struct PlaceDetailView: View {
     @StateObject private var viewModel = PlaceDetailViewModel()
     @State private var selectedTab: PlaceEventsTab = .upcoming
     @State private var presentedAction: PlaceDetailAction?
+    @State private var isUnfollowConfirmationPresented = false
 
     private let eventCardWidth: CGFloat = 220
 
@@ -26,10 +27,7 @@ struct PlaceDetailView: View {
                         locationText: place.locationText.isEmpty ? nil : place.locationText,
                         categoryLabel: nil,
                         websiteURL: nil,
-                        websiteText: nil,
-                        isFollowed: place.isFollowed,
-                        isFollowDisabled: true,
-                        onFollowToggle: {}
+                        websiteText: nil
                     )
 
                     PlaceDetailEventSkeletonSection(cardWidth: eventCardWidth)
@@ -43,10 +41,7 @@ struct PlaceDetailView: View {
                         locationText: place.locationText.isEmpty ? nil : place.locationText,
                         categoryLabel: nil,
                         websiteURL: nil,
-                        websiteText: nil,
-                        isFollowed: place.isFollowed,
-                        isFollowDisabled: true,
-                        onFollowToggle: {}
+                        websiteText: nil
                     )
 
                     ContentUnavailableView {
@@ -71,19 +66,7 @@ struct PlaceDetailView: View {
                         locationText: detail.locationText,
                         categoryLabel: detail.primaryCategoryLabel,
                         websiteURL: detail.website,
-                        websiteText: detail.websiteDisplayText,
-                        isFollowed: detail.isFollowed,
-                        isFollowDisabled: viewModel.isUpdatingFollow,
-                        onFollowToggle: {
-                            UIImpactFeedbackGenerator(style: .light).impactOccurred()
-                            Task {
-                                await viewModel.setFollowed(
-                                    !detail.isFollowed,
-                                    slug: detail.slug,
-                                    using: apiClient
-                                )
-                            }
-                        }
+                        websiteText: detail.websiteDisplayText
                     )
 
                     eventGroups(for: detail)
@@ -101,11 +84,59 @@ struct PlaceDetailView: View {
             leadingTopControls
         }
         .overlay(alignment: .topTrailing) {
-            PlaceDetailActionMenu(type: place.type) { action in
-                presentedAction = action
+            HStack(spacing: 10) {
+                if case .loaded(let detail) = viewModel.state, detail.canManage {
+                    FloatingGlassIconButton(systemImage: "square.and.pencil") {
+                        presentedAction = .edit
+                    }
+                }
+
+                if case .loaded(let detail) = viewModel.state, detail.canManage {
+                    PlaceCreationMenuButton { action in
+                        presentedAction = action
+                    }
+                }
+
+                if case .loaded(let detail) = viewModel.state {
+                    followButton(
+                        isFollowed: detail.isFollowed,
+                        isDisabled: viewModel.isUpdatingFollow
+                    ) {
+                        UIImpactFeedbackGenerator(style: .light).impactOccurred()
+
+                        if detail.isFollowed {
+                            isUnfollowConfirmationPresented = true
+                        } else {
+                            Task {
+                                await viewModel.setFollowed(
+                                    true,
+                                    slug: detail.slug,
+                                    using: apiClient
+                                )
+                            }
+                        }
+                    }
+                }
             }
-                .padding(.trailing, 16)
-                .padding(.top, 0)
+            .padding(.trailing, 16)
+            .padding(.top, 0)
+        }
+        .alert(unfollowAlertTitle, isPresented: $isUnfollowConfirmationPresented) {
+            if case .loaded(let detail) = viewModel.state {
+                Button("Unfollow", role: .destructive) {
+                    Task {
+                        await viewModel.setFollowed(
+                            false,
+                            slug: detail.slug,
+                            using: apiClient
+                        )
+                    }
+                }
+            }
+
+            Button("Cancel", role: .cancel) {}
+        } message: {
+            Text("Are you sure you want to unfollow?")
         }
         .sheet(item: $presentedAction) { action in
             if case .loaded(let detail) = viewModel.state {
@@ -116,12 +147,23 @@ struct PlaceDetailView: View {
                             await viewModel.load(slug: detail.slug, using: apiClient)
                         }
                     }
-                case .createEvent, .createEventSeries:
+                case .createEvent:
                     MobileEventCreationView(mode: .create, preselectedPlace: detail) { _ in
                         Task {
                             await viewModel.load(slug: detail.slug, using: apiClient)
                         }
                     }
+                case .createEventSeries:
+                    MobileEventCreationView(
+                        mode: .create,
+                        creationKind: .eventSeries,
+                        preselectedPlace: detail,
+                        onSeriesCompleted: {
+                            Task {
+                                await viewModel.load(slug: detail.slug, using: apiClient)
+                            }
+                        }
+                    )
                 }
             }
         }
@@ -129,6 +171,15 @@ struct PlaceDetailView: View {
             if case .idle = viewModel.state {
                 await viewModel.load(slug: place.slug, using: apiClient)
             }
+        }
+        .task(id: placeEventPrefetchKey) {
+            guard case .loaded(let detail) = viewModel.state else {
+                return
+            }
+
+            await EventArtworkPrefetcher.prefetch(
+                events: detail.events + detail.pastEvents
+            )
         }
     }
 
@@ -146,21 +197,11 @@ struct PlaceDetailView: View {
         .padding(.top, 0)
     }
 
-    private struct PlaceDetailActionMenu: View {
-        let type: PlaceListItem.PlaceType
+    private struct PlaceCreationMenuButton: View {
         let onSelect: (PlaceDetailAction) -> Void
 
         var body: some View {
             Menu {
-                Button {
-                    onSelect(.edit)
-                } label: {
-                    Label(
-                        "Edit \(type.displayName)",
-                        systemImage: type == .venue ? "building.2" : "person.2"
-                    )
-                }
-
                 Button {
                     onSelect(.createEvent)
                 } label: {
@@ -173,7 +214,7 @@ struct PlaceDetailView: View {
                     Label("Create Event Series", systemImage: "calendar.badge.clock")
                 }
             } label: {
-                Image(systemName: "ellipsis")
+                Image(systemName: "plus")
                     .font(.system(size: 17, weight: .semibold))
                     .foregroundStyle(.primary)
                     .frame(width: 46, height: 46)
@@ -198,6 +239,49 @@ struct PlaceDetailView: View {
         }
 
         return !detail.pastEvents.isEmpty
+    }
+
+    private var placeEventPrefetchKey: String {
+        guard case .loaded(let detail) = viewModel.state else {
+            return "idle"
+        }
+
+        return (detail.events + detail.pastEvents)
+            .map(\.id.uuidString)
+            .joined(separator: ",")
+    }
+
+    private var unfollowAlertTitle: String {
+        if case .loaded(let detail) = viewModel.state {
+            return "Unfollow \(detail.name)?"
+        }
+
+        return "Unfollow \(place.name)?"
+    }
+
+    private func followButton(
+        isFollowed: Bool,
+        isDisabled: Bool,
+        action: @escaping () -> Void
+    ) -> some View {
+        Button(action: action) {
+            Text(isFollowed ? "Following" : "Follow")
+                .font(.system(size: 15, weight: .bold))
+                .foregroundStyle(isFollowed ? .white : .black)
+                .padding(.horizontal, 20)
+                .frame(height: 46)
+                .contentShape(Capsule())
+                .background {
+                    if !isFollowed {
+                        Capsule()
+                            .fill(.white)
+                    }
+                }
+                .placeDetailLiquidGlass(in: Capsule())
+        }
+        .buttonStyle(.plain)
+        .disabled(isDisabled)
+        .opacity(isDisabled ? 0.72 : 1)
     }
 
     private struct PlaceEventFilterDropdown: View {
@@ -244,38 +328,38 @@ struct PlaceDetailView: View {
         let groups = PlaceEventGrouper.groups(for: events, mode: selectedTab)
 
         if groups.isEmpty {
-            ContentUnavailableView {
-                Label("No Events", systemImage: "calendar")
-            } description: {
-                Text("There aren’t any \(selectedTab.emptyStateName) events for this place yet.")
-            }
-            .foregroundStyle(.white)
+            ProfileEmptyEventsPlaceholder(
+                message: "There aren’t any \(selectedTab.emptyStateName) events for this place yet."
+            )
             .frame(maxWidth: .infinity, minHeight: 220)
         } else {
-            ForEach(groups) { group in
-                VStack(alignment: .leading, spacing: 14) {
-                    Text(group.label)
-                        .font(.system(size: 20, weight: .bold))
-                        .foregroundStyle(.white)
-                        .padding(.horizontal, 16)
+            VStack(alignment: .leading, spacing: 18) {
+                ForEach(groups) { group in
+                    VStack(alignment: .leading, spacing: 14) {
+                        Text(group.label)
+                            .font(.system(size: 20, weight: .bold))
+                            .foregroundStyle(.white)
+                            .padding(.horizontal, 16)
 
-                    ScrollView(.horizontal) {
-                        LazyHStack(alignment: .top, spacing: 12) {
-                            ForEach(group.events) { event in
-                                NavigationLink {
-                                    EventDetailView(event: event)
-                                } label: {
-                                    EventCardView(event: event)
-                                        .frame(width: eventCardWidth)
+                        ScrollView(.horizontal) {
+                            LazyHStack(alignment: .top, spacing: 12) {
+                                ForEach(group.events) { event in
+                                    NavigationLink {
+                                        EventDetailView(event: event)
+                                    } label: {
+                                        EventCardView(event: event)
+                                            .frame(width: eventCardWidth)
+                                            .contentShape(Rectangle())
+                                    }
+                                    .buttonStyle(.plain)
                                 }
-                                .buttonStyle(.plain)
                             }
+                            .padding(.horizontal, 16)
                         }
-                        .padding(.horizontal, 16)
+                        .scrollIndicators(.hidden)
                     }
-                    .scrollIndicators(.hidden)
+                    .padding(.horizontal, -16)
                 }
-                .padding(.horizontal, -16)
             }
         }
     }
@@ -377,60 +461,41 @@ private struct PlaceDetailHeader: View {
     let categoryLabel: String?
     let websiteURL: URL?
     let websiteText: String?
-    let isFollowed: Bool
-    let isFollowDisabled: Bool
-    let onFollowToggle: () -> Void
     @State private var isMapsDialogPresented = false
     @State private var safariRoute: SafariRoute?
     @State private var isImageViewerPresented = false
 
     var body: some View {
-        VStack(alignment: .leading, spacing: 8) {
-            HStack(alignment: .top, spacing: 16) {
-                logo
-
-                Spacer(minLength: 16)
-
-                followButton
-            }
+        VStack(spacing: 12) {
+            logo
             .padding(.top, 64)
 
-            VStack(alignment: .leading, spacing: 2) {
+            VStack(spacing: 3) {
                 Text(name)
-                    .font(.system(size: 26, weight: .bold))
+                    .font(.system(size: 22, weight: .bold))
                     .foregroundStyle(.white)
                     .lineLimit(3)
                     .minimumScaleFactor(0.76)
                     .fixedSize(horizontal: false, vertical: true)
+                    .multilineTextAlignment(.center)
 
-                HStack(alignment: .center, spacing: 10) {
+                HStack(alignment: .center, spacing: 12) {
                     Text("@\(slug)")
-                        .font(.system(size: 16, weight: .medium))
-                        .foregroundStyle(.white.opacity(0.58))
+                        .font(.system(size: 15, weight: .medium))
+                        .foregroundStyle(.white.opacity(0.56))
                         .lineLimit(2)
                         .minimumScaleFactor(0.78)
                         .fixedSize(horizontal: false, vertical: true)
-
-                    if let categoryLabel {
-                        Text(categoryLabel)
-                            .font(.system(size: 12, weight: .semibold))
-                            .foregroundStyle(.white.opacity(0.78))
-                            .padding(.horizontal, 10)
-                            .padding(.vertical, 6)
-                            .background(Color.white.opacity(0.10), in: Capsule())
-                            .fixedSize(horizontal: true, vertical: false)
-                    }
                 }
-                .frame(minHeight: 30, alignment: .center)
             }
-            .frame(maxWidth: .infinity, alignment: .leading)
+            .frame(maxWidth: .infinity)
 
             HStack(alignment: .center, spacing: 16) {
                 if let locationText {
                     Button {
                         isMapsDialogPresented = true
                     } label: {
-                        Label(locationText, systemImage: "mappin.circle")
+                        Text(locationText)
                             .lineLimit(1)
                     }
                     .buttonStyle(.plain)
@@ -447,7 +512,7 @@ private struct PlaceDetailHeader: View {
                     Button {
                         safariRoute = SafariRoute(url: websiteURL)
                     } label: {
-                        Label(websiteText, systemImage: "globe")
+                        Text(websiteText)
                             .lineLimit(1)
                     }
                     .buttonStyle(.plain)
@@ -457,6 +522,7 @@ private struct PlaceDetailHeader: View {
             .foregroundStyle(.white.opacity(0.58))
             .lineLimit(1)
         }
+        .frame(maxWidth: .infinity)
         .sheet(item: $safariRoute) { route in
             SafariView(url: route.url)
                 .ignoresSafeArea()
@@ -466,27 +532,6 @@ private struct PlaceDetailHeader: View {
                 EventArtworkViewer(imageURL: logoURL)
             }
         }
-    }
-
-    private var followButton: some View {
-        Button(action: onFollowToggle) {
-            Text(isFollowed ? "Following" : "Follow")
-                .font(.system(size: 15, weight: .bold))
-                .foregroundStyle(isFollowed ? .white : .black)
-                .padding(.horizontal, 20)
-                .frame(height: 44)
-                .contentShape(Capsule())
-                .background {
-                    if !isFollowed {
-                        Capsule()
-                            .fill(.white)
-                    }
-                }
-                .placeDetailLiquidGlass(in: Capsule())
-        }
-        .buttonStyle(.plain)
-        .disabled(isFollowDisabled)
-        .opacity(isFollowDisabled ? 0.72 : 1)
     }
 
     @ViewBuilder
@@ -509,13 +554,13 @@ private struct PlaceDetailHeader: View {
                         logoPlaceholder
                     }
                 }
-                .frame(width: 92, height: 92)
+                .frame(width: 104, height: 104)
                 .clipShape(RoundedRectangle(cornerRadius: 18, style: .continuous))
             }
             .buttonStyle(.plain)
         } else {
             logoPlaceholder
-                .frame(width: 92, height: 92)
+                .frame(width: 104, height: 104)
         }
     }
 

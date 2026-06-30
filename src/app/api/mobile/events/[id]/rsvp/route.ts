@@ -20,6 +20,7 @@ const updateSchema = z.object({
   notGoingReason: z.enum(RSVP_DECLINE_REASON_VALUES).nullable().optional(),
   reason: z.enum(RSVP_DECLINE_REASON_VALUES).nullable().optional(),
   includePartner: z.boolean().optional(),
+  notifyFriends: z.boolean().optional(),
 });
 
 type RouteContext = {
@@ -121,6 +122,7 @@ export async function POST(request: Request, context: RouteContext) {
   }
 
   const body = updateSchema.parse(await request.json());
+  const shouldNotifyFriends = body.notifyFriends !== false;
   const event = await db.query.events.findFirst({
     where: eq(events.id, eventId),
     columns: {
@@ -248,10 +250,12 @@ export async function POST(request: Request, context: RouteContext) {
       status: body.status,
       includePartner: includedPartnerInRsvp,
       reason: notGoingReason,
+      notifyFriends: shouldNotifyFriends,
     },
   });
 
   if (
+    shouldNotifyFriends &&
     (body.status === "going" || body.status === "interested") &&
     existingUserRsvp?.status !== body.status
   ) {

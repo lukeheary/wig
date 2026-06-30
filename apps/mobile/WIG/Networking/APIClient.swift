@@ -353,6 +353,48 @@ struct APIClient: Sendable {
         )
     }
 
+    static func mobileCreateEventSeries(
+        venueID: UUID? = nil,
+        organizerID: UUID? = nil,
+        title: String,
+        description: String? = nil,
+        coverImageURL: URL? = nil,
+        eventURL: URL? = nil,
+        startAt: Date,
+        endAt: Date? = nil,
+        address: String? = nil,
+        city: String,
+        state: String,
+        categories: [String] = [],
+        status: EventStatus = .active,
+        recurrence: MobileEventSeriesRecurrenceRequest
+    ) throws -> Endpoint<MobileEventSeriesCreateResponse> {
+        let request = MobileEventSeriesCreateRequest(
+            venueId: venueID?.uuidString,
+            organizerId: organizerID?.uuidString,
+            title: title,
+            description: description,
+            coverImageUrl: coverImageURL?.absoluteString,
+            eventUrl: eventURL?.absoluteString,
+            startAt: ISO8601DateFormatter.wigFractional.string(from: startAt),
+            endAt: endAt.map { ISO8601DateFormatter.wigFractional.string(from: $0) },
+            address: address,
+            city: city,
+            state: state,
+            categories: categories,
+            status: status,
+            recurrence: recurrence
+        )
+
+        return Endpoint(
+            path: "/api/mobile/event-series",
+            method: .post,
+            body: try JSONEncoder().encode(request),
+            requiresAuthentication: false,
+            includesAuthenticationIfAvailable: true
+        )
+    }
+
     static func mobileCreatePlace(
         type: PlaceListItem.PlaceType,
         name: String,
@@ -554,7 +596,8 @@ struct APIClient: Sendable {
         eventID: UUID,
         status: EventRSVPStatus,
         notGoingReason: EventRSVPDeclineReason? = nil,
-        includePartner: Bool = false
+        includePartner: Bool = false,
+        notifyFriends: Bool = true
     ) throws -> Endpoint<EventRSVPState> {
         Endpoint(
             path: "/api/mobile/events/\(eventID.uuidString)/rsvp",
@@ -563,7 +606,8 @@ struct APIClient: Sendable {
                 EventRSVPUpdateRequest(
                     status: status,
                     notGoingReason: notGoingReason,
-                    includePartner: includePartner
+                    includePartner: includePartner,
+                    notifyFriends: notifyFriends
                 )
             ),
             requiresAuthentication: false,
@@ -828,6 +872,7 @@ private struct EventRSVPUpdateRequest: Encodable {
     let status: EventRSVPStatus
     let notGoingReason: EventRSVPDeclineReason?
     let includePartner: Bool
+    let notifyFriends: Bool
 }
 
 struct MobilePartnerResponse: Decodable, Hashable, Sendable {
@@ -901,6 +946,30 @@ private struct MobileEventCreateRequest: Encodable {
     let state: String
     let categories: [String]
     let status: EventStatus
+}
+
+private struct MobileEventSeriesCreateRequest: Encodable {
+    let venueId: String?
+    let organizerId: String?
+    let title: String
+    let description: String?
+    let coverImageUrl: String?
+    let eventUrl: String?
+    let startAt: String
+    let endAt: String?
+    let address: String?
+    let city: String
+    let state: String
+    let categories: [String]
+    let status: EventStatus
+    let recurrence: MobileEventSeriesRecurrenceRequest
+}
+
+struct MobileEventSeriesRecurrenceRequest: Encodable, Hashable, Sendable {
+    let frequency: MobileEventSeriesFrequency
+    let interval: Int
+    let daysOfWeek: [Int]?
+    let untilDate: String?
 }
 
 private struct MobilePlaceCreateRequest: Encodable {
@@ -982,8 +1051,32 @@ struct MobileEventCreateResponse: Decodable, Hashable, Sendable {
     let id: UUID
 }
 
+struct MobileEventSeriesCreateResponse: Decodable, Hashable, Sendable {
+    let seriesId: UUID
+    let createdEvents: Int
+    let firstEventId: UUID?
+}
+
+enum MobileEventSeriesFrequency: String, Codable, CaseIterable, Hashable, Sendable {
+    case daily
+    case weekly
+    case monthly
+
+    var title: String {
+        switch self {
+        case .daily:
+            return "Daily"
+        case .weekly:
+            return "Weekly"
+        case .monthly:
+            return "Monthly"
+        }
+    }
+}
+
 struct MobilePlaceCreateResponse: Decodable, Hashable, Sendable {
     let id: UUID
+    let slug: String
 }
 
 enum MobileScraperType: String, Codable, CaseIterable, Hashable, Sendable {

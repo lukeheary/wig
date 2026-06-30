@@ -10,6 +10,12 @@ struct WIGApp: App {
     private let apiClient: APIClient
 
     init() {
+        URLCache.shared = URLCache(
+            memoryCapacity: 128 * 1024 * 1024,
+            diskCapacity: 1_024 * 1024 * 1024,
+            diskPath: "wig-remote-image-cache"
+        )
+
         let redirectScheme = AppConfig.shared.oauthCallbackScheme
         let redirectURL = "\(redirectScheme)://callback"
 
