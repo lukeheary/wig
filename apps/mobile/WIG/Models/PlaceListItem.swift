@@ -56,6 +56,15 @@ struct PlaceListItem: Decodable, Identifiable, Hashable, Sendable {
         case categoryLabels
     }
 
+    // Stable, collision-proof identity for list rendering. A venue and an organizer
+    // can share the same underlying `id`, so `id` alone is not unique across the feed;
+    // combining it with the type guarantees each row has a distinct identity (avoids
+    // SwiftUI reusing a row's view — and its captured navigation value — for the
+    // wrong place).
+    var listRowID: String {
+        "\(type.rawValue):\(id.uuidString)"
+    }
+
     var locationText: String {
         [city, state]
             .compactMap { value in

@@ -6,7 +6,6 @@ import UIKit
 
 struct EventDetailView: View {
     let event: EventFeedItem
-    private let heroTopOffset: CGFloat = -10
 
     @Environment(Clerk.self) private var clerk
     @Environment(\.apiClient) private var apiClient
@@ -18,9 +17,12 @@ struct EventDetailView: View {
     @State private var isEditEventPresented = false
     @State private var isCalendarComposerPresented = false
     @State private var isRSVPMenuExpanded = false
+    @State private var isRSVPMenuHitTestingEnabled = false
     @State private var rsvpMenuMode: RSVPMenuMode = .rsvp
     @State private var partnerRelationship: MobilePartnerRelationship?
     @State private var editedEvent: EventFeedItem?
+    @State private var currentUserSocialUser: EventSocialUser?
+    @State private var isAuthSheetPresented = false
 
     init(event: EventFeedItem) {
         self.event = event
@@ -33,33 +35,91 @@ struct EventDetailView: View {
     }
 
     var body: some View {
-        ScrollView {
-            VStack(alignment: .leading, spacing: 22) {
-                hero
-                details
-                attendeeSections
-                if isAuthenticated {
-                    rsvpErrorMessage
+        GeometryReader { proxy in
+            ScrollView {
+                VStack(alignment: .leading, spacing: 0) {
+                    EventDetailHero(
+                        imageURL: currentEvent.displayImageURL,
+                        containerWidth: proxy.size.width,
+                        topInset: proxy.safeAreaInsets.top,
+                        onImageTap: {
+                            if currentEvent.posterImageURL != nil {
+                                isImageViewerPresented = true
+                            }
+                        },
+                        header: {
+                            VStack(alignment: .leading, spacing: 0) {
+                                details
+
+                                if isAuthenticated {
+                                    inlineRSVPSection
+                                        .padding(.top, 20)
+                                } else {
+                                    guestRSVPButton
+                                        .padding(.top, 20)
+                                }
+                            }
+                        },
+                        topLeadingControls: {
+                            FloatingGlassIconButton(systemImage: "chevron.left") {
+                                dismiss()
+                            }
+                        },
+                        topTrailingControls: {
+                            topTrailingControls
+                        },
+                        leadingAccessory: {
+                            if currentEvent.posterImageURL != nil {
+                                FloatingGlassIconButton(
+                                    systemImage: "arrow.up.left.and.arrow.down.right",
+                                    foregroundColor: .white,
+                                    size: 46
+                                ) {
+                                    isImageViewerPresented = true
+                                }
+                            }
+                        }
+                    )
+
+                    VStack(alignment: .leading, spacing: 20) {
+                        rsvpdSection
+                        about
+                    }
+                    .padding(.horizontal, 16)
+                    .padding(.top, 10)
+                    .padding(.bottom, 36)
                 }
-                about
+                .frame(maxWidth: .infinity, alignment: .leading)
             }
-            .padding(.horizontal, 16)
-            .padding(.top, 0)
-            .padding(.bottom, 36)
-        }
-        .background(Color(red: 0.07, green: 0.07, blue: 0.08).ignoresSafeArea())
+            .scrollIndicators(.hidden)
+            .background(AppTheme.background.ignoresSafeArea())
         .background(SwipeBackEnabler())
         .navigationBarBackButtonHidden()
         .toolbar(.hidden, for: .navigationBar)
-        .overlay(alignment: .top) {
-            topControls
-        }
         .overlay {
-            rsvpMenuDismissOverlay
-        }
-        .safeAreaInset(edge: .bottom, spacing: 0) {
             if isAuthenticated {
-                floatingRSVPMenu
+                ZStack(alignment: .bottom) {
+                    if isRSVPMenuExpanded {
+                        Color.clear
+                            .contentShape(Rectangle())
+                            .ignoresSafeArea()
+                            .onTapGesture {
+                                closeRSVPMenu()
+                            }
+                            .transition(.opacity)
+                    }
+
+                    expandedRSVPMenu
+                        .frame(maxWidth: .infinity)
+                        .eventDetailLiquidGlass(in: RoundedRectangle(cornerRadius: 30, style: .continuous))
+                        .padding(.horizontal, 16)
+                        .padding(.bottom, 12)
+                        .opacity(isRSVPMenuExpanded ? 1 : 0)
+                        .offset(y: isRSVPMenuExpanded ? 0 : 360)
+                        .allowsHitTesting(isRSVPMenuHitTestingEnabled)
+                }
+                .allowsHitTesting(isRSVPMenuHitTestingEnabled)
+                .animation(.spring(response: 0.32, dampingFraction: 0.82), value: isRSVPMenuExpanded)
             }
         }
         .task(id: "\(currentEvent.id.uuidString)-\(isAuthenticated)") {
@@ -69,7 +129,8 @@ struct EventDetailView: View {
 
             async let rsvpLoad: Void = rsvpViewModel.load(eventID: currentEvent.id, using: apiClient)
             async let partnerLoad: Void = loadPartner(using: apiClient)
-            _ = await (rsvpLoad, partnerLoad)
+            async let currentUserLoad: Void = loadCurrentUserSocialUser()
+            _ = await (rsvpLoad, partnerLoad, currentUserLoad)
 
             if partnerRelationship?.isAccepted == true, rsvpViewModel.status == nil {
                 rsvpViewModel.setIncludePartner(true)
@@ -98,6 +159,11 @@ struct EventDetailView: View {
         .onDisappear {
             appSession.endEventDetailPresentation()
         }
+        .sheet(isPresented: $isAuthSheetPresented) {
+            WIGAuthSheetView(isDismissable: true)
+                .presentationDetents([.large])
+                .presentationDragIndicator(.visible)
+        }
         .sheet(isPresented: $isShareSheetPresented) {
             ShareSheet(activityItems: [shareURL])
                 .presentationDetents([.medium, .large])
@@ -112,52 +178,28 @@ struct EventDetailView: View {
                 EventArtworkViewer(imageURL: posterImageURL)
             }
         }
-    }
-
-    private var hero: some View {
-        GeometryReader { proxy in
-            let side = proxy.size.width
-
-            eventArtwork
-                .frame(width: side, height: side)
-                .clipShape(RoundedRectangle(cornerRadius: 24, style: .continuous))
-                .overlay {
-                    if isAuthenticated {
-                        EventSocialOverlayView(attendees: displayedEvent.socialAttendees, size: .detail)
-                            .clipShape(RoundedRectangle(cornerRadius: 24, style: .continuous))
-                    }
-                }
-                .overlay(alignment: .bottomLeading) {
-                    if currentEvent.posterImageURL != nil {
-                        FloatingGlassIconButton(
-                            systemImage: "arrow.up.left.and.arrow.down.right",
-                            foregroundColor: .white,
-                            size: 46
-                        ) {
-                            isImageViewerPresented = true
-                        }
-                        .padding(.leading, 12)
-                        .padding(.bottom, 12)
-                    }
-                }
-                .offset(y: heroTopOffset)
         }
-        .aspectRatio(1, contentMode: .fit)
-        .padding(.bottom, heroTopOffset)
+        .ignoresSafeArea(edges: .top)
     }
 
-    private var topControls: some View {
-        HStack {
-            FloatingGlassIconButton(systemImage: "chevron.left") {
-                dismiss()
+    private var topTrailingControls: some View {
+        HStack(spacing: 12) {
+            if currentEvent.eventURL != nil {
+                FloatingGlassIconButton(systemImage: "arrow.up.right") {
+                    openExternalEvent()
+                }
             }
 
-            Spacer()
+            FloatingGlassIconButton(systemImage: "square.and.arrow.up") {
+                isShareSheetPresented = true
+            }
 
-            eventActionsMenu
+            if appSession.isAdmin {
+                FloatingGlassIconButton(systemImage: "square.and.pencil") {
+                    isEditEventPresented = true
+                }
+            }
         }
-        .padding(.horizontal, 26)
-        .padding(.top, 0)
         .sheet(isPresented: $isCalendarComposerPresented) {
             AppleCalendarComposerView(
                 title: currentEvent.title,
@@ -171,151 +213,72 @@ struct EventDetailView: View {
         }
     }
 
-    private var eventActionsMenu: some View {
-        Menu {
-            if appSession.isAdmin {
-                Button {
-                    isEditEventPresented = true
-                } label: {
-                    Label("Edit Event", systemImage: "square.and.pencil")
-                }
-            }
-
-            if currentEvent.eventURL != nil {
-                Button {
-                    openExternalEvent()
-                } label: {
-                    Label(
-                        "View on \(currentEvent.externalSourceName ?? "Event Site")",
-                        systemImage: "arrow.up.right.square"
-                    )
-                }
-            }
-
-            Button {
-                isCalendarComposerPresented = true
-            } label: {
-                Label("Add to Calendar", systemImage: "calendar.badge.plus")
-            }
-
-            Button {
-                isShareSheetPresented = true
-            } label: {
-                Label("Share Event", systemImage: "square.and.arrow.up")
-            }
+    private var guestRSVPButton: some View {
+        Button {
+            isAuthSheetPresented = true
         } label: {
-            Image(systemName: "ellipsis")
-                .font(.system(size: 17, weight: .semibold))
-                .foregroundStyle(.primary)
-                .frame(width: 46, height: 46)
-                .contentShape(Circle())
-                .placeDetailLiquidGlass(in: Circle())
+            Text("RSVP")
+                .font(.system(size: 17, weight: .bold))
+                .foregroundStyle(.white)
+                .lineLimit(1)
+                .padding(.horizontal, 22)
+                .frame(maxWidth: .infinity)
+                .frame(height: 56)
+                .contentShape(Capsule())
+                .eventDetailLiquidGlass(in: Capsule())
         }
         .buttonStyle(.plain)
     }
 
-    @ViewBuilder
-    private var eventArtwork: some View {
-        if let imageURL = currentEvent.posterImageURL {
-            AsyncImage(url: imageURL) { phase in
-                switch phase {
-                case .empty:
-                    artworkPlaceholder
-                case .success(let image):
-                    image
-                        .resizable()
-                        .scaledToFill()
-                        .clipped()
-                case .failure:
-                    artworkPlaceholder
-                @unknown default:
-                    artworkPlaceholder
+    private var details: some View {
+        VStack(alignment: .leading, spacing: 0) {
+            Text(currentEvent.title)
+                .font(.system(size: 26, weight: .bold))
+                .foregroundStyle(.white)
+                .lineSpacing(0.5)
+                .fixedSize(horizontal: false, vertical: true)
+
+            HStack(alignment: .firstTextBaseline, spacing: 6) {
+                Text(currentEvent.formattedStart(format: "EEE, MMM d 'at' h:mm a"))
+                    .font(.system(size: 15, weight: .medium))
+                    .foregroundStyle(AppTheme.accentBlue)
+
+                if !relativeStartDayText.isEmpty {
+                    Text(relativeStartDayText)
+                        .font(.system(size: 11, weight: .semibold))
+                        .foregroundStyle(.white.opacity(0.66))
                 }
             }
-        } else {
-            artworkPlaceholder
-        }
-    }
+            .padding(.top, 6)
 
-    private var artworkPlaceholder: some View {
-        ZStack {
-            LinearGradient(
-                colors: [
-                    Color(red: 0.18, green: 0.20, blue: 0.26),
-                    Color(red: 0.42, green: 0.18, blue: 0.22),
-                    Color(red: 0.09, green: 0.09, blue: 0.10),
-                ],
-                startPoint: .topLeading,
-                endPoint: .bottomTrailing
-            )
-
-            Image(systemName: "music.mic")
-                .font(.system(size: 72, weight: .regular))
-                .foregroundStyle(.white.opacity(0.75))
-        }
-    }
-
-    private var details: some View {
-        VStack(alignment: .leading, spacing: 7) {
-            Text(currentEvent.title)
-                .font(.system(size: 29, weight: .bold))
-                .foregroundStyle(.white)
-                .lineSpacing(1)
-
-            HStack(alignment: .center, spacing: 6) {
-                Text(currentEvent.formattedStart(format: "EEE, MMM d 'at' h:mm a"))
-                    .font(.system(size: 18, weight: .bold))
-                    .foregroundStyle(Color(red: 0.48, green: 0.77, blue: 1.0))
-
-                Text(currentEvent.relativeStartDayText)
-                    .font(.system(size: 14, weight: .semibold))
-                    .foregroundStyle(.white.opacity(0.58))
-            }
-
-            HStack(spacing: 10) {
+            HStack(alignment: .center, spacing: 8) {
                 if let linkedPlace {
                     NavigationLink {
                         PlaceDetailView(place: linkedPlace)
                     } label: {
                         Text(linkedPlace.name)
-                            .font(.system(size: 18, weight: .bold))
-                            .foregroundStyle(.white)
+                            .font(.system(size: 15, weight: .medium))
+                            .foregroundStyle(.white.opacity(0.76))
                             .lineLimit(1)
                     }
                     .buttonStyle(.plain)
                 } else {
                     Text(currentEvent.primaryLocation)
-                        .font(.system(size: 18, weight: .bold))
-                        .foregroundStyle(.white)
+                        .font(.system(size: 15, weight: .medium))
+                        .foregroundStyle(.white.opacity(0.76))
                         .lineLimit(1)
                 }
-            }
 
-            if let organizerPlace {
-                HStack(spacing: 4) {
-                    Text("Organized by")
-                        .foregroundStyle(.white.opacity(0.62))
-
-                    NavigationLink {
-                        PlaceDetailView(place: organizerPlace)
-                    } label: {
-                        Text(organizerPlace.name)
-                            .foregroundStyle(.white)
-                    }
-                    .buttonStyle(.plain)
+                if let category = currentEvent.primaryCategoryLabel {
+                    Text(category)
+                        .font(.system(size: 11, weight: .semibold))
+                        .foregroundStyle(.white.opacity(0.76))
+                        .padding(.horizontal, 10)
+                        .padding(.vertical, 5)
+                        .background(Color.white.opacity(0.08), in: Capsule())
                 }
-                .font(.system(size: 16, weight: .semibold))
             }
-
-            if let category = currentEvent.primaryCategoryLabel {
-                Text(category)
-                    .font(.system(size: 12, weight: .semibold))
-                    .foregroundStyle(.white.opacity(0.78))
-                    .padding(.horizontal, 10)
-                    .padding(.vertical, 6)
-                    .background(Color.white.opacity(0.10), in: Capsule())
-                    .padding(.top, 3)
-            }
+            .padding(.top, 7)
         }
     }
 
@@ -403,177 +366,238 @@ struct EventDetailView: View {
         }
     }
 
-    private var floatingRSVPMenu: some View {
+    private var inlineRSVPSection: some View {
         VStack(spacing: 10) {
-            if isRSVPMenuExpanded {
-                VStack(alignment: .leading, spacing: 14) {
-                    VStack(spacing: 0) {
-                        if let partnerRelationship, partnerRelationship.isAccepted {
-                            RSVPPartnerRow(
-                                partner: partnerRelationship.partner,
-                                isOn: Binding(
-                                    get: { rsvpViewModel.includePartner },
-                                    set: { nextValue in
-                                        handlePartnerToggle(nextValue)
-                                    }
-                                ),
-                                isLoading: rsvpViewModel.isSaving
-                            )
+            rsvpErrorMessage
 
-                            Divider()
-                                .overlay(.white.opacity(0.08))
-                                .padding(.leading, 14)
-                        }
-
-                        RSVPNotifyFriendsRow(
-                            isOn: Binding(
-                                get: { rsvpViewModel.notifyFriends },
-                                set: { nextValue in
-                                    rsvpViewModel.setNotifyFriends(nextValue)
-                                }
-                            ),
-                            isLoading: rsvpViewModel.isSaving
-                        )
-                    }
-                    .background(Color.white.opacity(0.07), in: RoundedRectangle(cornerRadius: 22, style: .continuous))
-
-                    VStack(spacing: 2) {
-                        switch rsvpMenuMode {
-                        case .rsvp:
-                            ForEach(RSVPMenuOption.allCases) { option in
-                                RSVPMenuOptionButton(
-                                    option: option,
-                                    isSelected: rsvpViewModel.status == option.status,
-                                    hasSelection: rsvpViewModel.status != nil,
-                                    isLoading: rsvpViewModel.isSaving
-                                ) {
-                                    selectRSVP(option.status)
-                                }
-                            }
-
-                        case .declineReason:
-                            ForEach(EventRSVPDeclineReason.allCases, id: \.self) { reason in
-                                RSVPDeclineReasonMenuButton(
-                                    reason: reason,
-                                    isSelected: rsvpViewModel.status == .notGoing
-                                        && rsvpViewModel.notGoingReason == reason,
-                                    isLoading: rsvpViewModel.isSaving
-                                ) {
-                                    saveNotGoing(reason: reason)
-                                }
-                            }
-
-                            RSVPDeclineSkipButton(isLoading: rsvpViewModel.isSaving) {
-                                saveNotGoing(reason: nil)
-                            }
-                        }
-                    }
-                    .padding(8)
-                    .background(Color.white.opacity(0.07), in: RoundedRectangle(cornerRadius: 22, style: .continuous))
-                }
-                .padding(18)
-                .frame(maxWidth: .infinity)
-                .eventDetailLiquidGlass(in: RoundedRectangle(cornerRadius: 30, style: .continuous))
-                .transition(.move(edge: .bottom).combined(with: .opacity))
-            }
-
-            Button {
-                guard !rsvpViewModel.isSaving else {
-                    return
-                }
-
-                withAnimation(.spring(response: 0.32, dampingFraction: 0.82)) {
-                    if isRSVPMenuExpanded {
-                        isRSVPMenuExpanded = false
-                    } else {
-                        rsvpMenuMode = .rsvp
-                        isRSVPMenuExpanded = true
-                    }
-                }
-            } label: {
-                HStack(spacing: 10) {
-                    if rsvpViewModel.isSaving {
-                        ProgressView()
-                            .tint(.white)
-                            .frame(width: 18, height: 18)
-                    } else if let rsvpButtonSystemImage {
-                        Image(systemName: rsvpButtonSystemImage)
-                            .font(.system(size: 14, weight: .bold))
-                    }
-
-                    Text(rsvpButtonTitle)
-                        .font(.system(size: 17, weight: .bold))
-                        .lineLimit(1)
-
-                    Image(systemName: isRSVPMenuExpanded ? "chevron.down" : "chevron.up")
-                        .font(.system(size: 12, weight: .bold))
-                        .opacity(0.72)
-                }
-                .foregroundStyle(rsvpButtonColor)
-                .padding(.horizontal, 22)
-                .frame(maxWidth: .infinity)
-                .frame(height: 56)
-                .contentShape(Capsule())
-                .eventDetailLiquidGlass(in: Capsule())
-            }
-            .buttonStyle(.plain)
-            .disabled(rsvpViewModel.isSaving)
+            rsvpTriggerButton
         }
-        .padding(.horizontal, 16)
-        .padding(.bottom, 8)
         .frame(maxWidth: .infinity)
         .animation(.spring(response: 0.32, dampingFraction: 0.82), value: isRSVPMenuExpanded)
         .animation(.snappy(duration: 0.18), value: rsvpViewModel.status)
     }
 
-    @ViewBuilder
-    private var rsvpMenuDismissOverlay: some View {
-        if isRSVPMenuExpanded {
-            Color.clear
-                .contentShape(Rectangle())
-                .ignoresSafeArea()
-                .onTapGesture {
+    private var rsvpTriggerButton: some View {
+        Button {
+            guard !rsvpViewModel.isSaving else {
+                return
+            }
+
+            withAnimation(.spring(response: 0.32, dampingFraction: 0.82)) {
+                if isRSVPMenuExpanded {
                     closeRSVPMenu()
+                } else {
+                    rsvpMenuMode = .rsvp
+                    isRSVPMenuHitTestingEnabled = true
+                    isRSVPMenuExpanded = true
                 }
+            }
+        } label: {
+            HStack(spacing: 10) {
+                if rsvpViewModel.isSaving {
+                    ProgressView()
+                        .tint(.white)
+                        .frame(width: 18, height: 18)
+                } else if let rsvpButtonSystemImage {
+                    Image(systemName: rsvpButtonSystemImage)
+                        .font(.system(size: 14, weight: .bold))
+                }
+
+                Text(rsvpButtonTitle)
+                    .font(.system(size: 17, weight: .bold))
+                    .lineLimit(1)
+
+                Image(systemName: isRSVPMenuExpanded ? "chevron.down" : "chevron.up")
+                    .font(.system(size: 12, weight: .bold))
+                    .opacity(0.72)
+            }
+            .foregroundStyle(rsvpButtonColor)
+            .padding(.horizontal, 22)
+            .frame(maxWidth: .infinity)
+            .frame(height: 56)
+            .contentShape(Capsule())
+            .eventDetailLiquidGlass(in: Capsule())
+        }
+        .buttonStyle(.plain)
+        .disabled(rsvpViewModel.isSaving)
+    }
+
+    private var expandedRSVPMenu: some View {
+        VStack(alignment: .leading, spacing: 0) {
+            switch rsvpMenuMode {
+            case .rsvp:
+                primaryRSVPMenuContent
+            case .declineReason:
+                declineReasonMenuContent
+            case .more:
+                rsvpMoreMenuContent
+            }
+        }
+        .padding(.horizontal, 10)
+        .padding(.vertical, 12)
+    }
+
+    private var primaryRSVPMenuContent: some View {
+        VStack(alignment: .leading, spacing: 0) {
+            VStack(spacing: 2) {
+                ForEach(RSVPMenuOption.allCases) { option in
+                    RSVPMenuOptionButton(
+                        option: option,
+                        isSelected: rsvpViewModel.status == option.status,
+                        hasSelection: rsvpViewModel.status != nil,
+                        isLoading: rsvpViewModel.isSaving
+                    ) {
+                        selectRSVP(option.status)
+                    }
+                }
+            }
+
+            Divider()
+                .overlay(.white.opacity(0.08))
+                .padding(.horizontal, 14)
+                .padding(.vertical, 6)
+
+            RSVPMenuNavigationButton(
+                title: "More",
+                direction: .forward,
+                isLoading: rsvpViewModel.isSaving
+            ) {
+                withAnimation(.spring(response: 0.28, dampingFraction: 0.86)) {
+                    rsvpMenuMode = .more
+                }
+            }
         }
     }
 
-    private var about: some View {
-        VStack(alignment: .leading, spacing: 16) {
-            if let description = currentEvent.description?.trimmingCharacters(in: .whitespacesAndNewlines),
-               !description.isEmpty
-            {
-                Text(description)
-                    .font(.system(size: 15, weight: .medium))
-                    .foregroundStyle(.white.opacity(0.64))
-                    .lineSpacing(5)
+    private var declineReasonMenuContent: some View {
+        VStack(alignment: .leading, spacing: 0) {
+            RSVPMenuNavigationButton(
+                title: "Back",
+                direction: .back,
+                isLoading: rsvpViewModel.isSaving
+            ) {
+                withAnimation(.spring(response: 0.28, dampingFraction: 0.86)) {
+                    rsvpMenuMode = .rsvp
+                }
             }
 
-            ForEach(currentEvent.formattedAddressLines, id: \.self) { line in
-                Text(line)
-                    .font(.system(size: 15, weight: .medium))
+            Divider()
+                .overlay(.white.opacity(0.08))
+                .padding(.horizontal, 14)
+                .padding(.vertical, 6)
+
+            VStack(spacing: 2) {
+                ForEach(EventRSVPDeclineReason.allCases, id: \.self) { reason in
+                    RSVPDeclineReasonMenuButton(
+                        reason: reason,
+                        isSelected: rsvpViewModel.status == .notGoing
+                            && rsvpViewModel.notGoingReason == reason,
+                        isLoading: rsvpViewModel.isSaving
+                    ) {
+                        saveNotGoing(reason: reason)
+                    }
+                }
+
+                RSVPDeclineSkipButton(isLoading: rsvpViewModel.isSaving) {
+                    saveNotGoing(reason: nil)
+                }
+            }
+        }
+    }
+
+    private var rsvpMoreMenuContent: some View {
+        VStack(alignment: .leading, spacing: 0) {
+            RSVPMenuNavigationButton(
+                title: "Back",
+                direction: .back,
+                isLoading: rsvpViewModel.isSaving
+            ) {
+                withAnimation(.spring(response: 0.28, dampingFraction: 0.86)) {
+                    rsvpMenuMode = .rsvp
+                }
+            }
+
+            Divider()
+                .overlay(.white.opacity(0.08))
+                .padding(.horizontal, 14)
+                .padding(.vertical, 6)
+
+            if let partnerRelationship, partnerRelationship.isAccepted {
+                RSVPPartnerRow(
+                    partner: partnerRelationship.partner,
+                    isOn: Binding(
+                        get: { rsvpViewModel.includePartner },
+                        set: { nextValue in
+                            handlePartnerToggle(nextValue)
+                        }
+                    ),
+                    isLoading: rsvpViewModel.isSaving
+                )
+
+                Divider()
+                    .overlay(.white.opacity(0.08))
+                    .padding(.leading, 14)
+            }
+
+            RSVPNotifyFriendsRow(
+                isOn: Binding(
+                    get: { rsvpViewModel.notifyFriends },
+                    set: { nextValue in
+                        rsvpViewModel.setNotifyFriends(nextValue)
+                    }
+                ),
+                isLoading: rsvpViewModel.isSaving
+            )
+        }
+    }
+
+    @ViewBuilder
+    private var about: some View {
+        if let description = currentEvent.description?.trimmingCharacters(in: .whitespacesAndNewlines),
+           !description.isEmpty
+        {
+            VStack(alignment: .leading, spacing: 14) {
+                Text("About")
+                    .font(.system(size: 20, weight: .bold))
+                    .foregroundStyle(.white)
+
+                Text(description)
+                    .font(.system(size: 14, weight: .medium))
                     .foregroundStyle(.white.opacity(0.64))
+                    .lineSpacing(4)
             }
         }
     }
 
     @ViewBuilder
-    private var attendeeSections: some View {
-        if !displayedEvent.friendsGoing.isEmpty || !displayedEvent.friendsInterested.isEmpty {
-            VStack(alignment: .leading, spacing: 18) {
-                if !displayedEvent.friendsGoing.isEmpty {
-                    EventAttendeeSection(
-                        title: "Going",
-                        attendees: displayedEvent.friendsGoing
-                    )
+    private var rsvpdSection: some View {
+        if isAuthenticated, hasFriendRSVPs {
+            VStack(alignment: .leading, spacing: 10) {
+                HStack(alignment: .firstTextBaseline, spacing: 12) {
+                    Text("Friends")
+                        .font(.system(size: 20, weight: .bold))
+                        .foregroundStyle(.white)
+
+                    Spacer(minLength: 12)
+
+                    Text(friendSummaryText)
+                        .font(.system(size: 14, weight: .medium))
+                        .foregroundStyle(.white.opacity(0.56))
+                        .multilineTextAlignment(.trailing)
                 }
 
-                if !displayedEvent.friendsInterested.isEmpty {
-                    EventAttendeeSection(
-                        title: "Interested",
-                        attendees: displayedEvent.friendsInterested
+                NavigationLink {
+                    EventRSVPListView(
+                        goingAttendees: friendGoingAttendees,
+                        interestedAttendees: friendInterestedAttendees,
+                        notGoingAttendees: []
+                    )
+                } label: {
+                    EventRSVPSummaryRow(
+                        attendees: rsvpSummaryAttendees
                     )
                 }
+                .buttonStyle(.plain)
             }
         }
     }
@@ -597,9 +621,7 @@ struct EventDetailView: View {
             return
         }
 
-        withAnimation(.spring(response: 0.28, dampingFraction: 0.86)) {
-            isRSVPMenuExpanded = false
-        }
+        closeRSVPMenu()
 
         Task {
             if await rsvpViewModel.toggle(
@@ -619,9 +641,7 @@ struct EventDetailView: View {
             UISelectionFeedbackGenerator().selectionChanged()
         }
 
-        withAnimation(.spring(response: 0.28, dampingFraction: 0.86)) {
-            isRSVPMenuExpanded = false
-        }
+        closeRSVPMenu()
 
         Task {
             if await rsvpViewModel.toggle(
@@ -638,7 +658,10 @@ struct EventDetailView: View {
     }
 
     private func closeRSVPMenu() {
+        isRSVPMenuHitTestingEnabled = false
+
         withAnimation(.spring(response: 0.28, dampingFraction: 0.86)) {
+            rsvpMenuMode = .rsvp
             isRSVPMenuExpanded = false
         }
     }
@@ -738,12 +761,104 @@ struct EventDetailView: View {
     private var displayedEvent: EventFeedItem {
         currentEvent.updatingCurrentUserRSVP(
             status: rsvpViewModel.status,
-            notGoingReason: rsvpViewModel.notGoingReason
+            notGoingReason: rsvpViewModel.notGoingReason,
+            currentUser: currentUserSocialUser
+        )
+    }
+
+    private var displayedNotGoingAttendees: [EventSocialRSVP] {
+        guard rsvpViewModel.status == .notGoing,
+              let currentUserSocialUser
+        else {
+            return []
+        }
+
+        return [
+            EventSocialRSVP(
+                status: .notGoing,
+                user: currentUserSocialUser
+            )
+        ]
+    }
+
+    private var friendGoingAttendees: [EventSocialRSVP] {
+        displayedEvent.friendsGoing.filter { !$0.user.isCurrentUser }
+    }
+
+    private var friendInterestedAttendees: [EventSocialRSVP] {
+        displayedEvent.friendsInterested.filter { !$0.user.isCurrentUser }
+    }
+
+    private var hasFriendRSVPs: Bool {
+        !friendGoingAttendees.isEmpty || !friendInterestedAttendees.isEmpty
+    }
+
+    private var rsvpSummaryAttendees: [EventSocialAttendee] {
+        (friendGoingAttendees + friendInterestedAttendees).map { rsvp in
+            EventSocialAttendee(
+                id: rsvp.user.id,
+                firstName: rsvp.user.firstName,
+                lastName: rsvp.user.lastName,
+                avatarImageURL: rsvp.user.avatarImageURL,
+                status: rsvp.status
+            )
+        }
+    }
+
+    private var friendSummaryText: String {
+        let goingCount = friendGoingAttendees.count
+        let interestedCount = friendInterestedAttendees.count
+
+        if goingCount > 0, interestedCount > 0 {
+            return "\(goingCount) Going  •  \(interestedCount) Interested"
+        }
+
+        if goingCount > 0 {
+            return "\(goingCount) Going"
+        }
+
+        if interestedCount > 0 {
+            return "\(interestedCount) Interested"
+        }
+
+        return ""
+    }
+
+    // Captures the signed-in user's identity (once, before any RSVP invalidates the
+    // profile cache) so a first-time RSVP shows up immediately in the going /
+    // interested lists and avatar stack without waiting for a fresh fetch.
+    private func loadCurrentUserSocialUser() async {
+        guard currentUserSocialUser == nil else {
+            return
+        }
+
+        if ProfileViewModel.currentUserSummary == nil {
+            await ProfileViewModel().load(using: apiClient)
+        }
+
+        guard let summary = ProfileViewModel.currentUserSummary else {
+            return
+        }
+
+        let nameParts = summary.name
+            .split(separator: " ", maxSplits: 1, omittingEmptySubsequences: true)
+            .map(String.init)
+
+        currentUserSocialUser = EventSocialUser(
+            id: summary.id,
+            firstName: nameParts.first,
+            lastName: nameParts.count > 1 ? nameParts[1] : nil,
+            avatarImageURL: summary.avatarImageURL,
+            isCurrentUser: true
         )
     }
 
     private var shareURL: URL {
         URL(string: "https://www.whoisgoing.com/event/\(currentEvent.id.uuidString)")!
+    }
+
+    private var relativeStartDayText: String {
+        currentEvent.relativeStartDayText.trimmingCharacters(in: .whitespacesAndNewlines)
     }
 
     private func mergeUpdatedEvent(_ updatedEvent: EventFeedItem) -> EventFeedItem {
@@ -842,7 +957,7 @@ private struct EventAttendeeSection: View {
     var body: some View {
         VStack(alignment: .leading, spacing: 12) {
             Text(title)
-                .font(.system(size: 23, weight: .bold))
+                .font(.system(size: 20, weight: .bold))
                 .foregroundStyle(.white)
 
             VStack(spacing: 0) {
@@ -878,6 +993,78 @@ private struct EventAttendeeSection: View {
                     .stroke(.white.opacity(0.08), lineWidth: 1)
             )
         }
+    }
+}
+
+private struct EventRSVPSummaryRow: View {
+    let attendees: [EventSocialAttendee]
+
+    var body: some View {
+        HStack(spacing: 14) {
+            if !attendees.isEmpty {
+                EventSocialOverlayView(attendees: attendees, size: .summaryRow)
+            } else {
+                Color.clear
+                    .frame(width: 40, height: 40)
+            }
+
+            Spacer(minLength: 12)
+
+            Image(systemName: "chevron.right")
+                .font(.system(size: 13, weight: .bold))
+                .foregroundStyle(.white.opacity(0.7))
+        }
+        .padding(.vertical, 4)
+        .frame(maxWidth: .infinity, alignment: .leading)
+        .contentShape(Rectangle())
+    }
+}
+
+private struct EventRSVPListView: View {
+    let goingAttendees: [EventSocialRSVP]
+    let interestedAttendees: [EventSocialRSVP]
+    let notGoingAttendees: [EventSocialRSVP]
+
+    var body: some View {
+        ScrollView {
+            VStack(alignment: .leading, spacing: 18) {
+                if !goingAttendees.isEmpty {
+                    EventAttendeeSection(
+                        title: "Going",
+                        attendees: goingAttendees
+                    )
+                }
+
+                if !interestedAttendees.isEmpty {
+                    EventAttendeeSection(
+                        title: "Interested",
+                        attendees: interestedAttendees
+                    )
+                }
+
+                if !notGoingAttendees.isEmpty {
+                    EventAttendeeSection(
+                        title: "Can't Go",
+                        attendees: notGoingAttendees
+                    )
+                }
+
+                if goingAttendees.isEmpty && interestedAttendees.isEmpty && notGoingAttendees.isEmpty {
+                    Text("No RSVPs yet")
+                        .font(.system(size: 15, weight: .medium))
+                        .foregroundStyle(.white.opacity(0.58))
+                        .frame(maxWidth: .infinity, alignment: .center)
+                        .padding(.top, 24)
+                }
+            }
+            .padding(.horizontal, 16)
+            .padding(.top, 18)
+            .padding(.bottom, 36)
+        }
+        .background(AppTheme.background.ignoresSafeArea())
+        .navigationTitle("RSVP'd")
+        .navigationBarTitleDisplayMode(.inline)
+        .toolbar(.visible, for: .navigationBar)
     }
 }
 
@@ -1078,25 +1265,12 @@ private struct RSVPPartnerRow: View {
 
     var body: some View {
         HStack(spacing: 12) {
-            Text("RSVP with \(partner.displayName)")
+            Text("RSVP with \(partner.firstNameDisplay)")
                 .font(.system(size: 15, weight: .bold))
                 .foregroundStyle(.white)
                 .lineLimit(1)
 
             Spacer(minLength: 12)
-
-            UserAvatarView(
-                imageURL: partner.avatarImageURL,
-                name: partner.displayName,
-                size: 34,
-                identityKey: partner.id
-            )
-            .overlay {
-                if isOn {
-                    Circle()
-                        .strokeBorder(AppTheme.accentBlue, lineWidth: 2)
-                }
-            }
 
             Toggle("", isOn: $isOn)
                 .labelsHidden()
@@ -1152,10 +1326,18 @@ private struct RSVPMenuOptionButton: View {
 
                 Spacer(minLength: 8)
 
-                Image(systemName: "checkmark.circle.fill")
-                    .font(.system(size: 16, weight: .semibold))
-                    .opacity(isSelected ? 1 : 0)
-                    .foregroundStyle(option.status.rsvpTintColor)
+                HStack(spacing: 8) {
+                    Image(systemName: "checkmark.circle.fill")
+                        .font(.system(size: 16, weight: .semibold))
+                        .opacity(isSelected ? 1 : 0)
+                        .foregroundStyle(option.status.rsvpTintColor)
+
+                    if option.status == .notGoing {
+                        Image(systemName: "chevron.right")
+                            .font(.system(size: 14, weight: .bold))
+                            .foregroundStyle(.white.opacity(0.72))
+                    }
+                }
             }
             .padding(.horizontal, 14)
             .frame(height: 58)
@@ -1218,11 +1400,11 @@ private struct RSVPDeclineSkipButton: View {
     var body: some View {
         Button(action: action) {
             HStack(spacing: 12) {
-                Image(systemName: "arrow.uturn.forward")
+                Image(systemName: "minus.circle")
                     .font(.system(size: 15, weight: .bold))
                     .frame(width: 22)
 
-                Text("Skip")
+                Text("No reason")
                     .font(.system(size: 15, weight: .bold))
                     .lineLimit(1)
 
@@ -1238,9 +1420,56 @@ private struct RSVPDeclineSkipButton: View {
     }
 }
 
+private struct RSVPMenuNavigationButton: View {
+    let title: String
+    let direction: RSVPMenuNavigationDirection
+    let isLoading: Bool
+    let action: () -> Void
+
+    var body: some View {
+        Button(action: action) {
+            HStack(spacing: 12) {
+                if direction == .back {
+                    Image(systemName: "chevron.left")
+                        .font(.system(size: 14, weight: .bold))
+                        .foregroundStyle(.white.opacity(0.72))
+                        .frame(width: 22)
+                } else {
+                    Color.clear
+                        .frame(width: 22, height: 14)
+                }
+
+                Text(title)
+                    .font(.system(size: 15, weight: .bold))
+                    .foregroundStyle(.white)
+                    .lineLimit(1)
+
+                Spacer(minLength: 8)
+
+                if direction == .forward {
+                    Image(systemName: "chevron.right")
+                        .font(.system(size: 14, weight: .bold))
+                        .foregroundStyle(.white.opacity(0.72))
+                }
+            }
+            .padding(.horizontal, 14)
+            .frame(height: 48)
+            .contentShape(RoundedRectangle(cornerRadius: 16, style: .continuous))
+        }
+        .buttonStyle(.plain)
+        .disabled(isLoading)
+    }
+}
+
 private enum RSVPMenuMode {
     case rsvp
     case declineReason
+    case more
+}
+
+private enum RSVPMenuNavigationDirection {
+    case back
+    case forward
 }
 
 private extension EventRSVPStatus {
@@ -1272,6 +1501,20 @@ private extension EventRSVPDeclineReason {
 }
 
 private extension MobilePartnerUser {
+    var firstNameDisplay: String {
+        if let firstName = firstName?.trimmingCharacters(in: .whitespacesAndNewlines),
+           !firstName.isEmpty
+        {
+            return firstName
+        }
+
+        let components = displayName
+            .split(separator: " ")
+            .map(String.init)
+
+        return components.first ?? displayName
+    }
+
     var displayName: String {
         let fullName = [firstName, lastName]
             .compactMap { $0?.trimmingCharacters(in: .whitespacesAndNewlines) }

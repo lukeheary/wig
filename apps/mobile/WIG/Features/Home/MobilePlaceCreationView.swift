@@ -17,6 +17,7 @@ struct MobilePlaceCreationView: View {
 
     @State private var selectedLogoImageItem: PhotosPickerItem?
     @State private var selectedLogoImage: UIImage?
+    @State private var didRemoveExistingLogo = false
     @State private var selectedGooglePlaceName: String?
     @State private var name = ""
     @State private var descriptionText = ""
@@ -63,6 +64,20 @@ struct MobilePlaceCreationView: View {
         }
     }
 
+    // The place's current logo (edit mode only), shown until the user picks a new
+    // image or removes it.
+    private var existingLogoURL: URL? {
+        guard case .edit(let place) = mode else {
+            return nil
+        }
+
+        return place.displayLogoURL
+    }
+
+    private var hasExistingLogo: Bool {
+        existingLogoURL != nil && !didRemoveExistingLogo
+    }
+
     var body: some View {
         NavigationStack {
             Form {
@@ -70,8 +85,8 @@ struct MobilePlaceCreationView: View {
                 locationSection
                 detailsSection
                 categoriesSection
-                if isVenue {
-                    venueScrapersSection
+                if showsScrapersSection {
+                    placeScrapersSection
                 }
             }
             .scrollContentBackground(.hidden)
@@ -137,6 +152,14 @@ struct MobilePlaceCreationView: View {
         type == .venue
     }
 
+    private var showsScrapersSection: Bool {
+        if case .edit = mode {
+            return true
+        }
+
+        return isVenue
+    }
+
     private var navigationTitle: String {
         switch mode {
         case .create:
@@ -172,6 +195,16 @@ struct MobilePlaceCreationView: View {
                             .scaledToFill()
                             .frame(maxWidth: .infinity, maxHeight: .infinity)
                             .clipped()
+                    } else if hasExistingLogo {
+                        RemoteImageView(url: existingLogoURL) { image in
+                            image
+                                .resizable()
+                                .scaledToFill()
+                                .frame(maxWidth: .infinity, maxHeight: .infinity)
+                                .clipped()
+                        } placeholder: {
+                            logoPlaceholder
+                        }
                     } else {
                         logoPlaceholder
                     }
@@ -186,10 +219,13 @@ struct MobilePlaceCreationView: View {
             .buttonStyle(.plain)
             .listRowInsets(EdgeInsets(top: 10, leading: 16, bottom: 10, trailing: 16))
 
-            if selectedLogoImage != nil {
+            if selectedLogoImage != nil || hasExistingLogo {
                 InlineActionButton(title: "Remove Image", systemImage: "trash", role: .destructive) {
                     selectedLogoImageItem = nil
                     selectedLogoImage = nil
+                    if existingLogoURL != nil {
+                        didRemoveExistingLogo = true
+                    }
                 }
             }
         }
@@ -329,8 +365,8 @@ struct MobilePlaceCreationView: View {
         }
     }
 
-    private var venueScrapersSection: some View {
-        Section("Venue Scrapers") {
+    private var placeScrapersSection: some View {
+        Section("\(type.displayName) Scrapers") {
             if venueScraperRows.isEmpty {
                 Text("No scrapers configured.")
                     .font(.system(size: 14, weight: .medium))
@@ -349,7 +385,7 @@ struct MobilePlaceCreationView: View {
 
                         ClearableInputField(
                             row.scraper == .ticketmaster
-                                ? "Venue Name"
+                                ? "\(type.displayName) Name"
                                 : row.scraper == .posh
                                     ? "Posh URL"
                                     : "Scraper URL",
@@ -557,7 +593,7 @@ struct MobilePlaceCreationView: View {
                         name: trimmedName,
                         description: trimmedDescription.isEmpty ? nil : trimmedDescription,
                         logoImageURL: uploadedLogoURL,
-                        keepExistingLogo: selectedLogoImage == nil,
+                        keepExistingLogo: selectedLogoImage == nil && !didRemoveExistingLogo,
                         address: isVenue && !trimmedAddress.isEmpty ? trimmedAddress : nil,
                         city: trimmedCity.isEmpty ? nil : trimmedCity,
                         state: trimmedState.isEmpty ? nil : trimmedState,
@@ -605,11 +641,6 @@ struct MobilePlaceCreationView: View {
     }
 
     private func loadVenueScrapersIfNeeded() async {
-        guard isVenue else {
-            venueScraperRows = []
-            return
-        }
-
         guard case .edit(let place) = mode else {
             venueScraperRows = []
             return
@@ -624,7 +655,7 @@ struct MobilePlaceCreationView: View {
     }
 
     private func saveVenueScrapers(slug: String) async throws {
-        guard isVenue else {
+        guard showsScrapersSection else {
             return
         }
 

@@ -2,9 +2,9 @@ import SwiftUI
 import UIKit
 
 enum AppTheme {
-    static let background = Color(red: 0.07, green: 0.07, blue: 0.08)
+    static let background = Color.black
     static let accentBlue = Color(red: 0.5607843137, green: 0.8235294118, blue: 1.0)
-    static let uiBackground = UIColor(red: 0.07, green: 0.07, blue: 0.08, alpha: 1)
+    static let uiBackground = UIColor.black
 }
 
 struct AppRootView: View {

@@ -11,7 +11,7 @@ struct ActivityView: View {
     @State private var activityActionErrorMessage: String?
     @State private var visibleActivityCount = ActivityView.activityPageSize
 
-    private let background = Color(red: 0.07, green: 0.07, blue: 0.08)
+    private let background = AppTheme.background
     private static let activityPageSize = 20
 
     init(resetFiltersTrigger: Int = 0) {
@@ -139,6 +139,12 @@ struct ActivityView: View {
             } else {
                 ScrollView {
                     LazyVStack(alignment: .leading, spacing: 22) {
+                        Text("Activity")
+                            .font(.system(size: 20, weight: .bold))
+                            .foregroundStyle(.white)
+                            .padding(.horizontal, 16)
+                            .padding(.bottom, -12)
+
                         ForEach(groupedActivities(visibleActivities)) { section in
                             ActivitySectionView(
                                 section: section,
@@ -588,22 +594,15 @@ private struct ActivitySectionView: View {
     let onRespondToRequest: (ActivityFeedItem, ActivityRequestResponse) async -> Void
 
     var body: some View {
-        VStack(alignment: .leading, spacing: 10) {
-            Text(section.title)
-                .font(.system(size: 20, weight: .bold))
-                .foregroundStyle(.white)
-                .padding(.horizontal, 16)
-
-            VStack(alignment: .leading, spacing: 16) {
-                ForEach(section.activities) { activity in
-                    ActivityRowView(
-                        activity: activity,
-                        onRespondToRequest: onRespondToRequest
-                    )
-                }
+        VStack(alignment: .leading, spacing: 16) {
+            ForEach(section.activities) { activity in
+                ActivityRowView(
+                    activity: activity,
+                    onRespondToRequest: onRespondToRequest
+                )
             }
-            .padding(.horizontal, 16)
         }
+        .padding(.horizontal, 16)
     }
 }
 

@@ -1419,7 +1419,7 @@ private struct PlaceLookupSheet: View {
             .frame(maxWidth: .infinity, minHeight: 240)
         } else {
             LazyVStack(spacing: 12) {
-                ForEach(viewModel.places) { place in
+                ForEach(viewModel.places, id: \.listRowID) { place in
                     Button {
                         select(place)
                     } label: {

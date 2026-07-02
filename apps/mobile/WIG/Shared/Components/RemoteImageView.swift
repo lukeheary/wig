@@ -42,8 +42,15 @@ actor RemoteImagePipeline {
                 return nil
             }
 
-            memoryCache.setObject(image, forKey: cacheKey, cost: data.count)
-            return image
+            // Decode the pixel data now, on this background actor. UIImage(data:)
+            // defers decoding until the image is first drawn — which would otherwise
+            // happen on the main thread mid-scroll, causing a one-time hitch the first
+            // time each image scrolls into view. Decoding up front makes the first
+            // appearance as smooth as subsequent ones.
+            let decodedImage = image.preparingForDisplay() ?? image
+
+            memoryCache.setObject(decodedImage, forKey: cacheKey, cost: data.count)
+            return decodedImage
         } catch {
             return nil
         }

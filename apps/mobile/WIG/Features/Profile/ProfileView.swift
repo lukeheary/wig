@@ -316,9 +316,11 @@ struct ProfileView: View {
                                     .buttonStyle(.plain)
                                 }
                             }
-                            .padding(.horizontal, 16)
+                            .scrollTargetLayout()
                         }
                         .scrollIndicators(.hidden)
+                        .contentMargins(.horizontal, 16, for: .scrollContent)
+                        .scrollTargetBehavior(.viewAligned)
                     }
                     .padding(.horizontal, -16)
                 }
@@ -1138,9 +1140,11 @@ private struct UserProfileEventsSection: View {
                                     .buttonStyle(.plain)
                                 }
                             }
-                            .padding(.horizontal, 16)
+                            .scrollTargetLayout()
                         }
                         .scrollIndicators(.hidden)
+                        .contentMargins(.horizontal, 16, for: .scrollContent)
+                        .scrollTargetBehavior(.viewAligned)
                     }
                     .padding(.horizontal, -16)
                 }
@@ -1376,10 +1380,14 @@ private struct ProfilePageSkeletonContent: View {
                                 .frame(width: 220)
                         }
                     }
+                    .scrollTargetLayout()
                 }
                 .scrollIndicators(.hidden)
+                .contentMargins(.horizontal, 16, for: .scrollContent)
+                .scrollTargetBehavior(.viewAligned)
             }
             .frame(maxWidth: .infinity, alignment: .leading)
+            .padding(.horizontal, -16)
         }
     }
 
@@ -2454,11 +2462,15 @@ private struct FriendAvatarView: View {
             size: size,
             identityKey: user?.id ?? user?.username ?? user?.name
         )
+        .overlay(
+            Circle()
+                .strokeBorder(.white.opacity(0.08), lineWidth: 1)
+        )
     }
 }
 
 private enum ProfileTheme {
-    static let background = Color(red: 0.07, green: 0.07, blue: 0.08)
+    static let background = AppTheme.background
     static let cardBackground = Color(red: 0.11, green: 0.11, blue: 0.13)
 }
 

@@ -1,5 +1,4 @@
 import ClerkKit
-import ClerkKitUI
 import SwiftUI
 
 struct MainTabView: View {
@@ -103,8 +102,7 @@ struct MainTabView: View {
             await preloadAuthenticatedTabs()
         }
         .sheet(isPresented: $isAuthSheetPresented) {
-            AuthView(isDismissable: true)
-                .environment(Clerk.shared)
+            WIGAuthSheetView(isDismissable: true)
                 .presentationDetents([.large])
                 .presentationDragIndicator(.visible)
         }
@@ -202,8 +200,7 @@ struct MainTabView: View {
             await preloadAuthenticatedTabs()
         }
         .sheet(isPresented: $isAuthSheetPresented) {
-            AuthView(isDismissable: true)
-                .environment(Clerk.shared)
+            WIGAuthSheetView(isDismissable: true)
                 .presentationDetents([.large])
                 .presentationDragIndicator(.visible)
         }

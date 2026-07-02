@@ -16,6 +16,7 @@
 		1DE08FF7F8809AF0B032AF4E /* FriendsFeed.swift in Sources */ = {isa = PBXBuildFile; fileRef = CD2B5220253C407CE688D6CD /* FriendsFeed.swift */; };
 		2005B0B56B784F7DBD9D4891 /* String+RelativeFormatting.swift in Sources */ = {isa = PBXBuildFile; fileRef = 93B648A6CF116F820A4EC31A /* String+RelativeFormatting.swift */; };
 		209ADA49B59EADEA2A0F420A /* EventCardView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 709F1EBBDBBCDE6FCB12FA4A /* EventCardView.swift */; };
+		EE01A0110000000000000001 /* EventDetailHero.swift in Sources */ = {isa = PBXBuildFile; fileRef = EE01A0110000000000000002 /* EventDetailHero.swift */; };
 		233EB5D015FC6F40B756515F /* ActivityViewModel.swift in Sources */ = {isa = PBXBuildFile; fileRef = 34E2A1629E4DD0D3110094F1 /* ActivityViewModel.swift */; };
 		2658DD8EFCF8B0FF3E913064 /* SwipeBackEnabler.swift in Sources */ = {isa = PBXBuildFile; fileRef = 79255FC37317019099AE7A40 /* SwipeBackEnabler.swift */; };
 		4B65B4FA113617995A70D5DE /* ActivityView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 6BA9DD584D4093550867347E /* ActivityView.swift */; };
@@ -30,6 +31,7 @@
 		873D8937503E7AABA38DB6A1 /* ClerkKit in Frameworks */ = {isa = PBXBuildFile; productRef = 1659B060E821F873E702D5B2 /* ClerkKit */; };
 		9196A75A5399103EDDB45E99 /* ScreenPlaceholderView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 67D77BC3A226DC29941244AF /* ScreenPlaceholderView.swift */; };
 		9BA970A1210F0773F55CEC94 /* SignedOutView.swift in Sources */ = {isa = PBXBuildFile; fileRef = DC1F5481F6C16EA27B43C269 /* SignedOutView.swift */; };
+		B2C3D4E5F6A7B8C9D0E1F2A3 /* WIGAuthSheetView.swift in Sources */ = {isa = PBXBuildFile; fileRef = A1B2C3D4E5F6A7B8C9D0E1F2 /* WIGAuthSheetView.swift */; };
 		A9492F2220679223A901BAA2 /* MobileEventCreationView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 042BFE9D9AEF36729D6E23BB /* MobileEventCreationView.swift */; };
 		AC3DAD789D77E9A30DAA2162 /* UserProfile.swift in Sources */ = {isa = PBXBuildFile; fileRef = 184FF519AEEF1B3325EA5631 /* UserProfile.swift */; };
 		AF7E3CC7140B4144E76DDE92 /* ClerkKitUI in Frameworks */ = {isa = PBXBuildFile; productRef = 3F3358C5AA8DE45E833048D7 /* ClerkKitUI */; };
@@ -72,6 +74,7 @@
 		68E5A730E47D03B7A196879B /* WIGApp.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = WIGApp.swift; sourceTree = "<group>"; };
 		6BA9DD584D4093550867347E /* ActivityView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ActivityView.swift; sourceTree = "<group>"; };
 		709F1EBBDBBCDE6FCB12FA4A /* EventCardView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = EventCardView.swift; sourceTree = "<group>"; };
+		EE01A0110000000000000002 /* EventDetailHero.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = EventDetailHero.swift; sourceTree = "<group>"; };
 		79255FC37317019099AE7A40 /* SwipeBackEnabler.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SwipeBackEnabler.swift; sourceTree = "<group>"; };
 		7F4829999F082A6083275D78 /* Gift.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = Gift.swift; sourceTree = "<group>"; };
 		8210D0E005DECC2D0CE8900C /* EventDetailView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = EventDetailView.swift; sourceTree = "<group>"; };
@@ -93,8 +96,10 @@
 		C4B12A3FE36D056CEF6A6FBD /* RemoteImageView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = RemoteImageView.swift; sourceTree = "<group>"; };
 		CD2B5220253C407CE688D6CD /* FriendsFeed.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = FriendsFeed.swift; sourceTree = "<group>"; };
 		DC1F5481F6C16EA27B43C269 /* SignedOutView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SignedOutView.swift; sourceTree = "<group>"; };
+		A1B2C3D4E5F6A7B8C9D0E1F2 /* WIGAuthSheetView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = WIGAuthSheetView.swift; sourceTree = "<group>"; };
 		E9F25C520369E8D97B2E2329 /* AppSession.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AppSession.swift; sourceTree = "<group>"; };
 		F1A0ACCD8478786570AD3796 /* Debug.xcconfig */ = {isa = PBXFileReference; lastKnownFileType = text.xcconfig; path = Debug.xcconfig; sourceTree = "<group>"; };
+		ADEADBEEF0000000000C0F16 /* ProdLocal.xcconfig */ = {isa = PBXFileReference; lastKnownFileType = text.xcconfig; path = ProdLocal.xcconfig; sourceTree = "<group>"; };
 		FB7522ACC7AF252899EB4576 /* PlaceDetailViewModel.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = PlaceDetailViewModel.swift; sourceTree = "<group>"; };
 		FD0F542B4F30067E41ACD974 /* HomeView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = HomeView.swift; sourceTree = "<group>"; };
 /* End PBXFileReference section */
@@ -214,6 +219,7 @@
 			isa = PBXGroup;
 			children = (
 				709F1EBBDBBCDE6FCB12FA4A /* EventCardView.swift */,
+				EE01A0110000000000000002 /* EventDetailHero.swift */,
 				3A87D39D7D4AE13FC019729E /* FloatingGlassIconButton.swift */,
 				C4B12A3FE36D056CEF6A6FBD /* RemoteImageView.swift */,
 				67D77BC3A226DC29941244AF /* ScreenPlaceholderView.swift */,
@@ -239,6 +245,7 @@
 			isa = PBXGroup;
 			children = (
 				F1A0ACCD8478786570AD3796 /* Debug.xcconfig */,
+				ADEADBEEF0000000000C0F16 /* ProdLocal.xcconfig */,
 				A475F5DF3650AE1E3FB243DC /* Release.xcconfig */,
 			);
 			path = Config;
@@ -287,6 +294,7 @@
 			children = (
 				849CE0A638A3798C811514B1 /* AuthGate.swift */,
 				DC1F5481F6C16EA27B43C269 /* SignedOutView.swift */,
+				A1B2C3D4E5F6A7B8C9D0E1F2 /* WIGAuthSheetView.swift */,
 			);
 			path = Auth;
 			sourceTree = "<group>";
@@ -384,6 +392,7 @@
 				FE7A9BA137F5A6BA54F396A9 /* AppSession.swift in Sources */,
 				78874F058F64EDC1351DAE0C /* AuthGate.swift in Sources */,
 				209ADA49B59EADEA2A0F420A /* EventCardView.swift in Sources */,
+				EE01A0110000000000000001 /* EventDetailHero.swift in Sources */,
 				196D7DA54199A138C311C529 /* EventDetailView.swift in Sources */,
 				DEA8D387E941A5D6DE8FEEE4 /* EventFeedItem.swift in Sources */,
 				F74EA1B7DFBC703848E6041D /* EventFeedViewModel.swift in Sources */,
@@ -407,6 +416,7 @@
 				0225D821CFF385E0C146E58A /* RemoteImageView.swift in Sources */,
 				9196A75A5399103EDDB45E99 /* ScreenPlaceholderView.swift in Sources */,
 				9BA970A1210F0773F55CEC94 /* SignedOutView.swift in Sources */,
+				B2C3D4E5F6A7B8C9D0E1F2A3 /* WIGAuthSheetView.swift in Sources */,
 				2005B0B56B784F7DBD9D4891 /* String+RelativeFormatting.swift in Sources */,
 				2658DD8EFCF8B0FF3E913064 /* SwipeBackEnabler.swift in Sources */,
 				4FE88C2815D0EAE2441402A7 /* UIImage+Upload.swift in Sources */,
@@ -484,6 +494,70 @@
 			};
 			name = Debug;
 		};
+		ADEADBEEF0000000000C0001 /* Prod Local */ = {
+			isa = XCBuildConfiguration;
+			buildSettings = {
+				ALWAYS_SEARCH_USER_PATHS = NO;
+				CLANG_ANALYZER_NONNULL = YES;
+				CLANG_ANALYZER_NUMBER_OBJECT_CONVERSION = YES_AGGRESSIVE;
+				CLANG_CXX_LANGUAGE_STANDARD = "gnu++14";
+				CLANG_CXX_LIBRARY = "libc++";
+				CLANG_ENABLE_MODULES = YES;
+				CLANG_ENABLE_OBJC_ARC = YES;
+				CLANG_ENABLE_OBJC_WEAK = YES;
+				CLANG_WARN_BLOCK_CAPTURE_AUTORELEASING = YES;
+				CLANG_WARN_BOOL_CONVERSION = YES;
+				CLANG_WARN_COMMA = YES;
+				CLANG_WARN_CONSTANT_CONVERSION = YES;
+				CLANG_WARN_DEPRECATED_OBJC_IMPLEMENTATIONS = YES;
+				CLANG_WARN_DIRECT_OBJC_ISA_USAGE = YES_ERROR;
+				CLANG_WARN_DOCUMENTATION_COMMENTS = YES;
+				CLANG_WARN_EMPTY_BODY = YES;
+				CLANG_WARN_ENUM_CONVERSION = YES;
+				CLANG_WARN_INFINITE_RECURSION = YES;
+				CLANG_WARN_INT_CONVERSION = YES;
+				CLANG_WARN_NON_LITERAL_NULL_CONVERSION = YES;
+				CLANG_WARN_OBJC_IMPLICIT_RETAIN_SELF = YES;
+				CLANG_WARN_OBJC_LITERAL_CONVERSION = YES;
+				CLANG_WARN_OBJC_ROOT_CLASS = YES_ERROR;
+				CLANG_WARN_QUOTED_INCLUDE_IN_FRAMEWORK_HEADER = YES;
+				CLANG_WARN_RANGE_LOOP_ANALYSIS = YES;
+				CLANG_WARN_STRICT_PROTOTYPES = YES;
+				CLANG_WARN_SUSPICIOUS_MOVE = YES;
+				CLANG_WARN_UNGUARDED_AVAILABILITY = YES_AGGRESSIVE;
+				CLANG_WARN_UNREACHABLE_CODE = YES;
+				CLANG_WARN__DUPLICATE_METHOD_MATCH = YES;
+				COPY_PHASE_STRIP = NO;
+				DEBUG_INFORMATION_FORMAT = dwarf;
+				ENABLE_STRICT_OBJC_MSGSEND = YES;
+				ENABLE_TESTABILITY = YES;
+				GCC_C_LANGUAGE_STANDARD = gnu11;
+				GCC_DYNAMIC_NO_PIC = NO;
+				GCC_NO_COMMON_BLOCKS = YES;
+				GCC_OPTIMIZATION_LEVEL = 0;
+				GCC_PREPROCESSOR_DEFINITIONS = (
+					"$(inherited)",
+					"DEBUG=1",
+				);
+				GCC_WARN_64_TO_32_BIT_CONVERSION = YES;
+				GCC_WARN_ABOUT_RETURN_TYPE = YES_ERROR;
+				GCC_WARN_UNDECLARED_SELECTOR = YES;
+				GCC_WARN_UNINITIALIZED_AUTOS = YES_AGGRESSIVE;
+				GCC_WARN_UNUSED_FUNCTION = YES;
+				GCC_WARN_UNUSED_VARIABLE = YES;
+				IPHONEOS_DEPLOYMENT_TARGET = 17.0;
+				MTL_ENABLE_DEBUG_INFO = INCLUDE_SOURCE;
+				MTL_FAST_MATH = YES;
+				ONLY_ACTIVE_ARCH = YES;
+				PRODUCT_NAME = "$(TARGET_NAME)";
+				SDKROOT = iphoneos;
+				SWIFT_ACTIVE_COMPILATION_CONDITIONS = DEBUG;
+				SWIFT_OPTIMIZATION_LEVEL = "-Onone";
+				SWIFT_VERSION = 5.1;
+				TARGETED_DEVICE_FAMILY = 1;
+			};
+			name = "Prod Local";
+		};
 		8DB5EA8B965479DA8D5D29CC /* Release */ = {
 			isa = XCBuildConfiguration;
 			buildSettings = {
@@ -551,15 +625,16 @@
 				CODE_SIGN_ENTITLEMENTS = WIG/Support/WIG.entitlements;
 				CODE_SIGN_IDENTITY = "iPhone Developer";
 				CODE_SIGN_STYLE = Automatic;
-				CURRENT_PROJECT_VERSION = 7;
+				CURRENT_PROJECT_VERSION = 8;
 				DEVELOPMENT_TEAM = V347D294CZ;
 				INFOPLIST_FILE = WIG/Support/Info.plist;
 				INFOPLIST_KEY_CFBundleDisplayName = "Who Is Going";
+				IPHONEOS_DEPLOYMENT_TARGET = 26.6;
 				LD_RUNPATH_SEARCH_PATHS = (
 					"$(inherited)",
 					"@executable_path/Frameworks",
 				);
-				MARKETING_VERSION = 1.0.6;
+				MARKETING_VERSION = 1.0.7;
 				PRODUCT_BUNDLE_IDENTIFIER = com.whoisgoing.app;
 				PRODUCT_NAME = WIG;
 				SDKROOT = iphoneos;
@@ -567,6 +642,34 @@
 				SUPPORTS_MACCATALYST = NO;
 			};
 			name = Debug;
+		};
+		ADEADBEEF0000000000C0002 /* Prod Local */ = {
+			isa = XCBuildConfiguration;
+			baseConfigurationReference = ADEADBEEF0000000000C0F16 /* ProdLocal.xcconfig */;
+			buildSettings = {
+				APS_ENVIRONMENT = development;
+				ASSETCATALOG_COMPILER_APPICON_NAME = AppIcon;
+				ASSETCATALOG_COMPILER_GLOBAL_ACCENT_COLOR_NAME = AccentColor;
+				CODE_SIGN_ENTITLEMENTS = WIG/Support/WIG.entitlements;
+				CODE_SIGN_IDENTITY = "iPhone Developer";
+				CODE_SIGN_STYLE = Automatic;
+				CURRENT_PROJECT_VERSION = 8;
+				DEVELOPMENT_TEAM = V347D294CZ;
+				INFOPLIST_FILE = WIG/Support/Info.plist;
+				INFOPLIST_KEY_CFBundleDisplayName = "Who Is Going";
+				IPHONEOS_DEPLOYMENT_TARGET = 26.6;
+				LD_RUNPATH_SEARCH_PATHS = (
+					"$(inherited)",
+					"@executable_path/Frameworks",
+				);
+				MARKETING_VERSION = 1.0.7;
+				PRODUCT_BUNDLE_IDENTIFIER = com.whoisgoing.app;
+				PRODUCT_NAME = WIG;
+				SDKROOT = iphoneos;
+				SUPPORTED_PLATFORMS = "iphoneos iphonesimulator";
+				SUPPORTS_MACCATALYST = NO;
+			};
+			name = "Prod Local";
 		};
 		DB87D3D9EC2576FAAC576C29 /* Release */ = {
 			isa = XCBuildConfiguration;
@@ -578,15 +681,16 @@
 				CODE_SIGN_ENTITLEMENTS = WIG/Support/WIG.entitlements;
 				CODE_SIGN_IDENTITY = "iPhone Developer";
 				CODE_SIGN_STYLE = Automatic;
-				CURRENT_PROJECT_VERSION = 7;
+				CURRENT_PROJECT_VERSION = 8;
 				DEVELOPMENT_TEAM = V347D294CZ;
 				INFOPLIST_FILE = WIG/Support/Info.plist;
 				INFOPLIST_KEY_CFBundleDisplayName = "Who Is Going";
+				IPHONEOS_DEPLOYMENT_TARGET = 26.6;
 				LD_RUNPATH_SEARCH_PATHS = (
 					"$(inherited)",
 					"@executable_path/Frameworks",
 				);
-				MARKETING_VERSION = 1.0.6;
+				MARKETING_VERSION = 1.0.7;
 				PRODUCT_BUNDLE_IDENTIFIER = com.whoisgoing.app;
 				PRODUCT_NAME = WIG;
 				SDKROOT = iphoneos;
@@ -602,6 +706,7 @@
 			isa = XCConfigurationList;
 			buildConfigurations = (
 				93918B0D8B665897D2FECB4A /* Debug */,
+				ADEADBEEF0000000000C0002 /* Prod Local */,
 				DB87D3D9EC2576FAAC576C29 /* Release */,
 			);
 			defaultConfigurationIsVisible = 0;
@@ -611,6 +716,7 @@
 			isa = XCConfigurationList;
 			buildConfigurations = (
 				1343768D4ECAE534035CBB19 /* Debug */,
+				ADEADBEEF0000000000C0001 /* Prod Local */,
 				8DB5EA8B965479DA8D5D29CC /* Release */,
 			);
 			defaultConfigurationIsVisible = 0;

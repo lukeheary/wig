@@ -34,11 +34,6 @@ struct HomeView: View {
         formatter.dateFormat = "MMM d"
         return formatter
     }()
-    private static let weekRangeDayFormatter: DateFormatter = {
-        let formatter = DateFormatter()
-        formatter.dateFormat = "d"
-        return formatter
-    }()
     private static var weekCalendar: Calendar = {
         var calendar = Calendar(identifier: .gregorian)
         calendar.firstWeekday = 2
@@ -285,9 +280,11 @@ struct HomeView: View {
                                         .buttonStyle(.plain)
                                     }
                                 }
-                                .padding(.horizontal, 16)
+                                .scrollTargetLayout()
                             }
                             .scrollIndicators(.hidden)
+                            .contentMargins(.horizontal, 16, for: .scrollContent)
+                            .scrollTargetBehavior(.viewAligned)
                         }
                     }
                     .padding(.top, index == 0 && !shouldShowRecentActivity ? 16 : 0)
@@ -340,7 +337,7 @@ struct HomeView: View {
                                 .padding(.horizontal, 16)
                                 .padding(.top, emptyStateRecentUsers.isEmpty ? 8 : 4)
 
-                            ForEach(emptyStateSuggestedPlaces) { place in
+                            ForEach(emptyStateSuggestedPlaces, id: \.listRowID) { place in
                                 NavigationLink {
                                     PlaceDetailView(place: place)
                                 } label: {
@@ -426,7 +423,7 @@ struct HomeView: View {
                                 .padding(.horizontal, 16)
                                 .padding(.top, 8)
 
-                            ForEach(searchVenueResults) { place in
+                            ForEach(searchVenueResults, id: \.listRowID) { place in
                                 NavigationLink {
                                     PlaceDetailView(place: place)
                                 } label: {
@@ -571,20 +568,20 @@ struct HomeView: View {
             }
 
             if !isSearchPresented {
-                VStack(spacing: -1) {
+                VStack(spacing: 1) {
                     Text(visibleWeekRelativeTitle)
-                        .font(.system(size: 9, weight: .semibold))
+                        .font(.system(size: 11, weight: .semibold))
                         .foregroundStyle(.white.opacity(0.56))
                         .lineLimit(1)
 
                     Text(visibleWeekRangeTitle)
-                        .font(.system(size: 12, weight: .semibold))
-                        .foregroundStyle(.white.opacity(0.88))
+                        .font(.system(size: 13, weight: .semibold))
+                        .foregroundStyle(.white.opacity(0.92))
                         .lineLimit(1)
                         .minimumScaleFactor(0.8)
                 }
-                .padding(.horizontal, 18)
-                .frame(height: 46)
+                .padding(.horizontal, 20)
+                .frame(width: 156, height: 46)
                 .contentShape(Capsule())
                 .homeLiquidGlass(in: Capsule())
                 .frame(maxWidth: .infinity)
@@ -673,15 +670,6 @@ struct HomeView: View {
         let startDate = EventFeedViewModel.displayRangeStartDate(for: selectedWeekStart)
         let weekEnd = EventFeedViewModel.weekEndDate(for: selectedWeekStart) ?? startDate
         let inclusiveEndDate = Self.weekCalendar.date(byAdding: .day, value: -1, to: weekEnd) ?? startDate
-
-        let sameMonth = Self.weekCalendar.component(.month, from: startDate) ==
-            Self.weekCalendar.component(.month, from: inclusiveEndDate)
-        let sameYear = Self.weekCalendar.component(.year, from: startDate) ==
-            Self.weekCalendar.component(.year, from: inclusiveEndDate)
-
-        if sameMonth && sameYear {
-            return "\(Self.weekRangeMonthFormatter.string(from: startDate)) - \(Self.weekRangeDayFormatter.string(from: inclusiveEndDate))"
-        }
 
         return "\(Self.weekRangeMonthFormatter.string(from: startDate)) - \(Self.weekRangeMonthFormatter.string(from: inclusiveEndDate))"
     }
@@ -1029,11 +1017,19 @@ struct HomeView: View {
             return 0
         }
 
-        if event.isFollowed {
+        if event.isFollowed, event.hasPosterArtwork {
             return 1
         }
 
-        return 2
+        if event.isFollowed {
+            return 2
+        }
+
+        if event.displayImageURL != nil {
+            return 3
+        }
+
+        return 4
     }
 
     private func visibleSectionDay(for event: EventFeedItem) -> Date {
@@ -1052,7 +1048,7 @@ struct HomeView: View {
            let yesterday = Self.weekCalendar.date(byAdding: .day, value: -1, to: startOfToday),
            Self.weekCalendar.isDate(startOfDay, inSameDayAs: yesterday)
         {
-            return "Last Night's Events"
+            return "Last Night"
         }
 
         if Self.weekCalendar.isDate(startOfDay, inSameDayAs: startOfToday) {
@@ -1071,7 +1067,7 @@ struct HomeView: View {
     }
 
     private var feedBackground: some View {
-        Color(red: 0.07, green: 0.07, blue: 0.08)
+        AppTheme.background
             .ignoresSafeArea()
     }
 }
@@ -1499,23 +1495,33 @@ private struct EventSearchRow: View {
             artwork
                 .frame(width: 84, height: 84)
                 .clipShape(RoundedRectangle(cornerRadius: 15, style: .continuous))
+                .overlay(alignment: .bottomTrailing) {
+                    if !event.socialAttendees.isEmpty {
+                        EventSocialOverlayView(attendees: event.socialAttendees, size: .searchRow)
+                            .padding(6)
+                    }
+                }
 
-            VStack(alignment: .leading, spacing: 7) {
+            VStack(alignment: .leading, spacing: 3) {
                 Text(event.title)
                     .font(.system(size: 14, weight: .semibold))
                     .foregroundStyle(.white)
+                    .multilineTextAlignment(.leading)
                     .lineLimit(2)
-                    .minimumScaleFactor(0.88)
+                    .lineSpacing(1)
+                    .frame(maxWidth: .infinity, alignment: .leading)
 
                 Text(event.formattedStart(format: "EEE, MMM d 'at' h:mm a"))
-                    .font(.system(size: 13, weight: .semibold))
-                    .foregroundStyle(Color(red: 0.48, green: 0.77, blue: 1.0))
+                    .font(.system(size: 13, weight: .medium))
+                    .foregroundStyle(AppTheme.accentBlue)
                     .lineLimit(1)
+                    .minimumScaleFactor(0.82)
 
                 Text(event.primaryLocation)
                     .font(.system(size: 13, weight: .medium))
-                    .foregroundStyle(.white.opacity(0.62))
+                    .foregroundStyle(.white.opacity(0.76))
                     .lineLimit(1)
+                    .minimumScaleFactor(0.82)
             }
             .frame(maxWidth: .infinity, alignment: .leading)
         }
@@ -1989,9 +1995,11 @@ private struct EventSkeletonSectionView: View {
                             .frame(width: cardWidth)
                     }
                 }
-                .padding(.horizontal, 16)
+                .scrollTargetLayout()
             }
             .scrollIndicators(.hidden)
+            .contentMargins(.horizontal, 16, for: .scrollContent)
+            .scrollTargetBehavior(.viewAligned)
             .allowsHitTesting(false)
         }
     }
@@ -2031,44 +2039,17 @@ struct EventCardSkeletonView: View {
     let seed: Int
     @State private var isHighlighted = false
 
-    private let cardHeight: CGFloat = 312
-    private let posterSize: CGFloat = 200
-    private let imageCornerRadius: CGFloat = 14
+    private let cardHeight: CGFloat = 284
     private let cardCornerRadius: CGFloat = 18
 
     var body: some View {
-        VStack(alignment: .leading, spacing: 10) {
-            skeletonBlock(cornerRadius: imageCornerRadius)
-                .frame(width: posterSize, height: posterSize)
-
-            VStack(alignment: .leading, spacing: 7) {
-                skeletonBlock(cornerRadius: 5)
-                    .frame(height: 14)
-                    .padding(.trailing, CGFloat(14 + seed * 11))
-
-                skeletonBlock(cornerRadius: 5)
-                    .frame(height: 14)
-                    .padding(.trailing, CGFloat(54 - seed * 7))
-
-                skeletonBlock(cornerRadius: 5)
-                    .frame(width: 132, height: 13)
-
-                skeletonBlock(cornerRadius: 5)
-                    .frame(width: 164, height: 13)
-                    .padding(.top, 1)
+        RoundedRectangle(cornerRadius: cardCornerRadius, style: .continuous)
+            .fill(Color(red: 0.11, green: 0.11, blue: 0.13))
+            .overlay {
+                RoundedRectangle(cornerRadius: cardCornerRadius, style: .continuous)
+                    .fill(skeletonFill)
             }
-        }
-        .padding(10)
-        .frame(maxWidth: .infinity, minHeight: cardHeight, maxHeight: cardHeight, alignment: .topLeading)
-        .clipped()
-        .background(
-            RoundedRectangle(cornerRadius: cardCornerRadius, style: .continuous)
-                .fill(Color(red: 0.11, green: 0.11, blue: 0.13))
-        )
-        .overlay(
-            RoundedRectangle(cornerRadius: cardCornerRadius, style: .continuous)
-                .strokeBorder(.white.opacity(0.03), lineWidth: 1)
-        )
+            .frame(maxWidth: .infinity, minHeight: cardHeight, maxHeight: cardHeight, alignment: .topLeading)
         .onAppear {
             withAnimation(
                 .easeInOut(duration: 0.92)
@@ -2080,19 +2061,16 @@ struct EventCardSkeletonView: View {
         }
     }
 
-    private func skeletonBlock(cornerRadius: CGFloat) -> some View {
-        RoundedRectangle(cornerRadius: cornerRadius, style: .continuous)
-            .fill(
-                LinearGradient(
-                    colors: [
-                        Color.white.opacity(isHighlighted ? 0.11 : 0.055),
-                        Color.white.opacity(isHighlighted ? 0.17 : 0.085),
-                        Color.white.opacity(isHighlighted ? 0.10 : 0.05),
-                    ],
-                    startPoint: .topLeading,
-                    endPoint: .bottomTrailing
-                )
-            )
+    private var skeletonFill: LinearGradient {
+        LinearGradient(
+            colors: [
+                Color.white.opacity(isHighlighted ? 0.11 : 0.055),
+                Color.white.opacity(isHighlighted ? 0.17 : 0.085),
+                Color.white.opacity(isHighlighted ? 0.10 : 0.05),
+            ],
+            startPoint: .topLeading,
+            endPoint: .bottomTrailing
+        )
     }
 }
 
