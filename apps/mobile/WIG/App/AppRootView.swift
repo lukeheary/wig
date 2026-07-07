@@ -22,9 +22,6 @@ struct AppRootView: View {
                 AuthGate()
                     .transition(.opacity)
             }
-
-            StatusBarScrim()
-                .allowsHitTesting(false)
         }
         .task {
             try? await Task.sleep(for: .milliseconds(700))
@@ -36,23 +33,46 @@ struct AppRootView: View {
     }
 }
 
-private struct StatusBarScrim: View {
-    var body: some View {
-        VStack {
-            LinearGradient(
-                colors: [
-                    .black.opacity(0.46),
-                    .black.opacity(0.24),
-                    .clear,
-                ],
-                startPoint: .top,
-                endPoint: .bottom
-            )
-            .frame(height: 116)
+// A soft black gradient behind the iOS status bar so the time / signal / battery stay
+// legible over light content. This is applied per-screen (on each tab's root content,
+// inside its NavigationStack) rather than globally, so that pushed detail pages that
+// paint their own artwork background to the very top — the event and place pages — do
+// not get an unwanted black fade over their hero. See `topStatusBarScrim()`.
+struct StatusBarScrim: View {
+    @EnvironmentObject private var appSession: AppSession
 
-            Spacer()
+    var body: some View {
+        if appSession.isEventDetailPresented {
+            EmptyView()
+        } else {
+            VStack {
+                LinearGradient(
+                    colors: [
+                        .black.opacity(0.46),
+                        .black.opacity(0.24),
+                        .clear,
+                    ],
+                    startPoint: .top,
+                    endPoint: .bottom
+                )
+                .frame(height: 116)
+
+                Spacer()
+            }
+            .ignoresSafeArea()
+            .allowsHitTesting(false)
         }
-        .ignoresSafeArea()
+    }
+}
+
+extension View {
+    // Overlays the status-bar scrim at the top of this view. Apply to a tab's root
+    // content INSIDE its NavigationStack so pushed pages (event / place detail) cover
+    // it and are never darkened at the top.
+    func topStatusBarScrim() -> some View {
+        overlay(alignment: .top) {
+            StatusBarScrim()
+        }
     }
 }
 

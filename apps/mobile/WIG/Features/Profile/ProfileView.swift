@@ -32,6 +32,7 @@ struct ProfileView: View {
         NavigationStack {
             content
                 .background(ProfileTheme.background.ignoresSafeArea())
+                .topStatusBarScrim()
                 .toolbar(.hidden, for: .navigationBar)
                 .task {
                     if case .idle = viewModel.state {

@@ -5,6 +5,7 @@ struct ActivityView: View {
     let resetFiltersTrigger: Int
 
     @Environment(\.apiClient) private var apiClient
+    @EnvironmentObject private var appSession: AppSession
     @StateObject private var viewModel = ActivityViewModel()
     @State private var selectedFilter: ActivityFeedFilter = .upcoming
     @State private var selectedCityFilter: ActivityCityFilter?
@@ -22,6 +23,7 @@ struct ActivityView: View {
         NavigationStack {
             content
                 .background(background.ignoresSafeArea())
+                .topStatusBarScrim()
                 .toolbar(.hidden, for: .navigationBar)
                 .overlay(alignment: .topLeading) {
                     HStack(spacing: 10) {
@@ -63,6 +65,9 @@ struct ActivityView: View {
                 }
                 .onChange(of: selectedCityFilter) { _, _ in
                     resetVisibleActivityCount()
+                }
+                .onChange(of: selectedCityFilter) { _, newValue in
+                    appSession.selectedCityContext = newValue?.selectedCityContext
                 }
                 .onChange(of: resetFiltersTrigger) { _, _ in
                     resetFilters()
@@ -139,9 +144,7 @@ struct ActivityView: View {
             } else {
                 ScrollView {
                     LazyVStack(alignment: .leading, spacing: 22) {
-                        Text("Activity")
-                            .font(.system(size: 20, weight: .bold))
-                            .foregroundStyle(.white)
+                        activityHeader(response: response)
                             .padding(.horizontal, 16)
                             .padding(.bottom, -12)
 
@@ -265,6 +268,15 @@ struct ActivityView: View {
     private func effectiveCityFilter(for response: ActivityFeedResponse) -> ActivityCityFilter {
         let cities = availableCityFilters
 
+        // Prefer the selection shared across tabs so the most recent city choice on any
+        // page (Home / Places / Activity) wins here too — the tabs stay alive, so local
+        // state would otherwise keep showing this page's own stale selection.
+        if let sharedFilter = appSession.selectedCityContext.flatMap(ActivityCityFilter.init),
+           cities.contains(sharedFilter)
+        {
+            return sharedFilter
+        }
+
         if let selectedCityFilter, cities.contains(selectedCityFilter) {
             return selectedCityFilter
         }
@@ -315,6 +327,49 @@ struct ActivityView: View {
         }
 
         visibleActivityCount = min(visibleActivityCount + Self.activityPageSize, totalCount)
+    }
+
+    private func activityHeader(response: ActivityFeedResponse) -> some View {
+        (
+            Text("Activity")
+                .font(.system(size: 20, weight: .bold))
+                .foregroundStyle(.white)
+            +
+            (headerLocationName(for: response).map { location in
+                Text(" in \(location)")
+                    .font(.system(size: 20, weight: .medium))
+                    .foregroundStyle(.white.opacity(0.5))
+            } ?? Text(""))
+        )
+    }
+
+    private func headerLocationName(for response: ActivityFeedResponse) -> String? {
+        switch effectiveCityFilter(for: response) {
+        case .city(let city, _):
+            return city
+        case .all:
+            return nil
+        }
+    }
+}
+
+private extension ActivityCityFilter {
+    init?(_ context: SelectedCityContext) {
+        switch context {
+        case .all:
+            self = .all
+        case .city(let city, let state):
+            self = .city(city: city, state: state)
+        }
+    }
+
+    var selectedCityContext: SelectedCityContext? {
+        switch self {
+        case .all:
+            return .all
+        case .city(let city, let state):
+            return .city(city: city, state: state)
+        }
     }
 }
 

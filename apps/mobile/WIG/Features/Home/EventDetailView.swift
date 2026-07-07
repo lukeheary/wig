@@ -91,6 +91,10 @@ struct EventDetailView: View {
                 .frame(maxWidth: .infinity, alignment: .leading)
             }
             .scrollIndicators(.hidden)
+            // Fill the whole screen (including behind the status bar) with the app
+            // background, but keep the SCROLL CONTENT within the top safe area. If the
+            // scroll content underlaps the status bar while the nav bar is hidden, iOS
+            // injects an automatic status-bar scrim (the "black fade" at the top).
             .background(AppTheme.background.ignoresSafeArea())
         .background(SwipeBackEnabler())
         .navigationBarBackButtonHidden()
@@ -154,9 +158,19 @@ struct EventDetailView: View {
         }
         .onAppear {
             appSession.beginEventDetailPresentation()
+
+            let appearance = UINavigationBarAppearance()
+            appearance.configureWithTransparentBackground()
+            UINavigationBar.appearance().standardAppearance = appearance
+            UINavigationBar.appearance().scrollEdgeAppearance = appearance
         }
         .onDisappear {
             appSession.endEventDetailPresentation()
+
+            let appearance = UINavigationBarAppearance()
+            appearance.configureWithDefaultBackground()
+            UINavigationBar.appearance().standardAppearance = appearance
+            UINavigationBar.appearance().scrollEdgeAppearance = appearance
         }
         .sheet(isPresented: $isAuthSheetPresented) {
             WIGAuthSheetView(isDismissable: true)
@@ -181,7 +195,6 @@ struct EventDetailView: View {
             }
         }
         }
-        .ignoresSafeArea(edges: .top)
     }
 
     private var topTrailingControls: some View {
@@ -285,34 +298,62 @@ struct EventDetailView: View {
             }
             .padding(.top, 6)
 
-            HStack(alignment: .center, spacing: 8) {
-                if let linkedPlace {
-                    NavigationLink {
-                        PlaceDetailView(place: linkedPlace)
-                    } label: {
-                        Text(linkedPlace.name)
-                            .font(.system(size: 15, weight: .medium))
-                            .foregroundStyle(.white.opacity(0.76))
-                            .lineLimit(1)
+            // Keep the venue name and category tags on one line when the full
+            // (untruncated) venue name plus all the tags fit. If they don't, drop all
+            // the tags to the next line instead of squeezing / truncating the venue.
+            ViewThatFits(in: .horizontal) {
+                HStack(alignment: .center, spacing: 8) {
+                    venueLabel
+
+                    if !currentEvent.eventDetailCategoryLabels.isEmpty {
+                        categoryPills
                     }
-                    .buttonStyle(.plain)
-                } else {
-                    Text(currentEvent.primaryLocation)
-                        .font(.system(size: 15, weight: .medium))
-                        .foregroundStyle(.white.opacity(0.76))
-                        .lineLimit(1)
                 }
 
-                if let category = currentEvent.primaryCategoryLabel {
-                    Text(category)
-                        .font(.system(size: 11, weight: .semibold))
-                        .foregroundStyle(.white.opacity(0.76))
-                        .padding(.horizontal, 10)
-                        .padding(.vertical, 5)
-                        .background(Color.white.opacity(0.08), in: Capsule())
+                VStack(alignment: .leading, spacing: 8) {
+                    venueLabel
+
+                    if !currentEvent.eventDetailCategoryLabels.isEmpty {
+                        ScrollView(.horizontal, showsIndicators: false) {
+                            categoryPills
+                        }
+                    }
                 }
             }
             .padding(.top, 7)
+        }
+    }
+
+    @ViewBuilder
+    private var venueLabel: some View {
+        if let linkedPlace {
+            NavigationLink {
+                PlaceDetailView(place: linkedPlace)
+            } label: {
+                Text(linkedPlace.name)
+                    .font(.system(size: 15, weight: .medium))
+                    .foregroundStyle(.white.opacity(0.76))
+                    .lineLimit(1)
+            }
+            .buttonStyle(.plain)
+        } else {
+            Text(currentEvent.primaryLocation)
+                .font(.system(size: 15, weight: .medium))
+                .foregroundStyle(.white.opacity(0.76))
+                .lineLimit(1)
+        }
+    }
+
+    private var categoryPills: some View {
+        HStack(spacing: 6) {
+            ForEach(currentEvent.eventDetailCategoryLabels, id: \.self) { category in
+                Text(category)
+                    .font(.system(size: 10, weight: .semibold))
+                    .foregroundStyle(.white.opacity(0.76))
+                    .padding(.horizontal, 8)
+                    .padding(.vertical, 4)
+                    .background(Color.white.opacity(0.08), in: Capsule())
+            }
         }
     }
 
@@ -648,7 +689,7 @@ struct EventDetailView: View {
                     .fill(Color.white.opacity(0.08))
                     .frame(maxWidth: .infinity)
                     .frame(height: 1)
-                    .padding(.top, 12)
+                    .padding(.top, 6)
             }
         }
     }
@@ -1054,7 +1095,7 @@ private struct EventRSVPFriendsRow: View {
     var body: some View {
         HStack(alignment: .center, spacing: 14) {
             ScrollView(.horizontal, showsIndicators: false) {
-                HStack(alignment: .top, spacing: 12) {
+                HStack(alignment: .top, spacing: 6) {
                     ForEach(attendees) { attendee in
                         EventFriendAvatarTile(attendee: attendee)
                     }

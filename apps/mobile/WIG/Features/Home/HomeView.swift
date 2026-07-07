@@ -58,6 +58,7 @@ struct HomeView: View {
         NavigationStack {
             content
                 .background(feedBackground)
+                .topStatusBarScrim()
                 .toolbar(.hidden, for: .navigationBar)
                 .task {
                     if case .idle = viewModel.state {
@@ -108,6 +109,9 @@ struct HomeView: View {
                 }
                 .onChange(of: resetToCurrentWeekTrigger) { _, _ in
                     resetToCurrentWeek()
+                }
+                .onChange(of: selectedLocationFilter) { _, newValue in
+                    appSession.selectedCityContext = newValue?.selectedCityContext
                 }
                 .onChange(of: isSearchPresented) { _, isPresented in
                     guard showsNativeSearch,
@@ -258,9 +262,10 @@ struct HomeView: View {
 
                 ForEach(Array(groupedEvents.enumerated()), id: \.element.day) { index, section in
                     VStack(alignment: .leading, spacing: 12) {
-                        Text(section.title)
-                            .font(.system(size: 20, weight: .bold))
-                            .foregroundStyle(.white)
+                        sectionHeader(
+                            section.title,
+                            showsLocation: index == 0
+                        )
                             .padding(.horizontal, 16)
 
                         if section.events.isEmpty {
@@ -287,7 +292,10 @@ struct HomeView: View {
                             .scrollTargetBehavior(.viewAligned)
                         }
                     }
-                    .padding(.top, index == 0 && !shouldShowRecentActivity ? 16 : 0)
+                    // Match the 82pt top offset used above the first header on the
+                    // Places and Activity tabs (64 base + 18) so switching tabs doesn't
+                    // shift the header. The recent-activity block above already adds 18.
+                    .padding(.top, index == 0 && !shouldShowRecentActivity ? 18 : 0)
                 }
             }
             .padding(.top, 64)
@@ -886,11 +894,18 @@ struct HomeView: View {
     }
 
     private var effectiveLocationFilter: HomeLocationFilter {
-        guard let selectedLocationFilter else {
-            return defaultLocationFilter
+        // Prefer the selection shared across tabs so the most recent city choice on any
+        // page (Home / Places / Activity) wins here too — the tabs stay alive, so local
+        // state would otherwise keep showing this page's own stale selection.
+        if let sharedFilter = appSession.selectedCityContext.flatMap(HomeLocationFilter.init),
+           availableLocationFilters.contains(sharedFilter)
+        {
+            return sharedFilter
         }
 
-        if availableLocationFilters.contains(selectedLocationFilter) {
+        if let selectedLocationFilter,
+           availableLocationFilters.contains(selectedLocationFilter)
+        {
             return selectedLocationFilter
         }
 
@@ -1058,6 +1073,29 @@ struct HomeView: View {
         return Self.sectionTitleFormatter.string(from: day)
     }
 
+    private func sectionHeader(_ title: String, showsLocation: Bool) -> some View {
+        (
+            Text(title)
+                .font(.system(size: 20, weight: .bold))
+                .foregroundStyle(.white)
+            +
+            ((showsLocation ? headerLocationName : nil).map { location in
+                Text(" in \(location)")
+                    .font(.system(size: 20, weight: .medium))
+                    .foregroundStyle(.white.opacity(0.5))
+            } ?? Text(""))
+        )
+    }
+
+    private var headerLocationName: String? {
+        switch effectiveLocationFilter {
+        case .city(let city, _):
+            return city
+        case .all:
+            return nil
+        }
+    }
+
     private static func startOfWeek(for date: Date) -> Date {
         let startOfDay = weekCalendar.startOfDay(for: date)
         let weekday = weekCalendar.component(.weekday, from: startOfDay)
@@ -1069,6 +1107,26 @@ struct HomeView: View {
     private var feedBackground: some View {
         AppTheme.background
             .ignoresSafeArea()
+    }
+}
+
+private extension HomeLocationFilter {
+    init?(_ context: SelectedCityContext) {
+        switch context {
+        case .all:
+            self = .all
+        case .city(let city, let state):
+            self = .city(city: city, state: state)
+        }
+    }
+
+    var selectedCityContext: SelectedCityContext? {
+        switch self {
+        case .all:
+            return .all
+        case .city(let city, let state):
+            return .city(city: city, state: state)
+        }
     }
 }
 

@@ -115,6 +115,24 @@ struct EventFeedItem: Codable, Identifiable, Hashable, Sendable {
         return categoryLabels[category] ?? category.capitalized
     }
 
+    var eventDetailCategoryLabels: [String] {
+        var seen = Set<String>()
+
+        return categories
+            .map { category in
+                let label = categoryLabels[category] ?? category.capitalized
+                return label.singularizedForEventDetail()
+            }
+            .filter { label in
+                guard !label.isEmpty, !seen.contains(label) else {
+                    return false
+                }
+
+                seen.insert(label)
+                return true
+            }
+    }
+
     var externalSourceName: String? {
         guard let host = eventURL?.host() else {
             return nil
@@ -243,6 +261,38 @@ struct EventFeedItem: Codable, Identifiable, Hashable, Sendable {
         formatter.dateFormat = format
         formatter.timeZone = timeZone
         return formatter
+    }
+}
+
+private extension String {
+    func singularizedForEventDetail() -> String {
+        let trimmed = trimmingCharacters(in: .whitespacesAndNewlines)
+        guard !trimmed.isEmpty else {
+            return trimmed
+        }
+
+        switch trimmed.lowercased() {
+        case "clubs":
+            return "Club"
+        case "bars":
+            return "Bar"
+        default:
+            break
+        }
+
+        if trimmed == trimmed.uppercased() {
+            return trimmed
+        }
+
+        if trimmed.lowercased().hasSuffix("ies"), trimmed.count > 3 {
+            return String(trimmed.dropLast(3)) + "y"
+        }
+
+        if trimmed.lowercased().hasSuffix("s"), trimmed.count > 1, !trimmed.lowercased().hasSuffix("ss") {
+            return String(trimmed.dropLast())
+        }
+
+        return trimmed
     }
 }
 

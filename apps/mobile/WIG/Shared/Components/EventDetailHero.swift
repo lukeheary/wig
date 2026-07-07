@@ -49,11 +49,16 @@ struct EventDetailHero<
     private let dynamicIslandClearance: CGFloat = 56
     private let headerSpacing: CGFloat = 18
     private let bottomTail: CGFloat = 8
-    private let solidTail: CGFloat = 12
-    private let fadeHeight: CGFloat = 184
+    private let solidTail: CGFloat = 22
+    private let fadeHeight: CGFloat = 200
     // Extends the tinted background above the hero so pulling / overscrolling at the
     // top reveals more of the fade instead of a hard cutoff line.
     private let overscrollExtension: CGFloat = 500
+    // Extends the tinted background below the hero's bottom edge so the fade gradient
+    // has room to finish reaching transparent before it would otherwise be clipped at
+    // the hero bounds — without this the fade cuts off mid-transition as a hard line
+    // just under the RSVP button.
+    private let bottomExtension: CGFloat = 280
 
     init(
         imageURL: URL?,
@@ -82,7 +87,11 @@ struct EventDetailHero<
     }
 
     private var imageTopOffset: CGFloat {
-        max(topInset, dynamicIslandClearance) + topGap
+        // The event page keeps its scroll content within the top safe area (so iOS
+        // doesn't draw a status-bar scrim), which means the safe area already provides
+        // the space above the artwork. We only need a small gap below it here — adding
+        // the safe-area inset again would push the artwork too far down.
+        topGap
     }
 
     var body: some View {
@@ -120,10 +129,14 @@ struct EventDetailHero<
             tint
         }
         // Grow the whole background upward beyond the hero's top edge so the tint
-        // continues smoothly offscreen above the status bar during overscroll.
+        // continues smoothly offscreen above the status bar during overscroll, and
+        // downward past the bottom edge so the fade gradient can finish into the app
+        // background instead of being clipped mid-transition (the hard line under the
+        // RSVP button).
         // (No drawingGroup here — it would rasterize to the hero bounds and clip the
-        // upward overflow, which is exactly the region we need during overscroll.)
+        // overflow, which is exactly the region we need above and below.)
         .padding(.top, -overscrollExtension)
+        .padding(.bottom, -bottomExtension)
     }
 
     private var tint: some View {
@@ -140,7 +153,7 @@ struct EventDetailHero<
                             height: overscrollExtension + imageTopOffset + imageSide + 24
                         )
                         .clipped()
-                        .overlay(palette.baseColor.opacity(0.22))
+                        .overlay(palette.baseColor.opacity(0.14))
                         .mask(
                             LinearGradient(
                                 stops: [
@@ -167,13 +180,13 @@ struct EventDetailHero<
                 LinearGradient(
                     stops: [
                         .init(color: .white, location: 0.0),
-                        .init(color: .white.opacity(0.95), location: 0.16),
-                        .init(color: .white.opacity(0.82), location: 0.34),
-                        .init(color: .white.opacity(0.62), location: 0.5),
-                        .init(color: .white.opacity(0.42), location: 0.64),
-                        .init(color: .white.opacity(0.24), location: 0.78),
-                        .init(color: .white.opacity(0.1), location: 0.9),
-                        .init(color: .white.opacity(0.03), location: 0.96),
+                        .init(color: .white.opacity(0.96), location: 0.12),
+                        .init(color: .white.opacity(0.88), location: 0.26),
+                        .init(color: .white.opacity(0.72), location: 0.42),
+                        .init(color: .white.opacity(0.52), location: 0.56),
+                        .init(color: .white.opacity(0.32), location: 0.70),
+                        .init(color: .white.opacity(0.16), location: 0.82),
+                        .init(color: .white.opacity(0.06), location: 0.92),
                         .init(color: .clear, location: 1.0),
                     ],
                     startPoint: .top,
@@ -425,7 +438,7 @@ private extension UIColor {
         }
 
         let mutedSaturation = min(max(saturation * 0.85, 0), 0.62)
-        let readableBrightness = min(max(brightness * 0.6, 0.16), 0.34)
+        let readableBrightness = min(max(brightness * 0.7, 0.20), 0.42)
 
         return UIColor(
             hue: hue,

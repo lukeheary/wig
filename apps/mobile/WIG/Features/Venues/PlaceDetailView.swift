@@ -18,6 +18,10 @@ struct PlaceDetailView: View {
 
     private let topWashHeight: CGFloat = 460
 
+    // Grows the tinted wash this far above the top edge (matching the event hero) so
+    // overscrolling past the top keeps showing a continuous fade, never a hard cutoff.
+    private let overscrollExtension: CGFloat = 500
+
     private let eventCardWidth: CGFloat = 220
 
     var body: some View {
@@ -88,19 +92,7 @@ struct PlaceDetailView: View {
                 .padding(.bottom, 48)
                 .frame(maxWidth: .infinity, alignment: .topLeading)
                 .background(alignment: .top) {
-                    topColorWash
-                        .frame(maxWidth: .infinity)
-                        .frame(height: topWashHeight + proxy.safeAreaInsets.top)
-                        .offset(y: -proxy.safeAreaInsets.top)
-                }
-                .background(alignment: .top) {
-                    // Solid tint reaching far above the top edge, abutting the wash's
-                    // top, so overscrolling past the top reveals a continuous fill
-                    // instead of a hard cutoff. Hidden at rest (above the content).
-                    (logoTint ?? Color.clear)
-                        .frame(maxWidth: .infinity)
-                        .frame(height: 520)
-                        .offset(y: -(proxy.safeAreaInsets.top + 520))
+                    topColorWash(safeAreaTop: proxy.safeAreaInsets.top)
                 }
             }
             .background(AppTheme.background.ignoresSafeArea())
@@ -404,34 +396,59 @@ struct PlaceDetailView: View {
     // A blurred bloom of the logo tinted with its dominant color, filling the top of
     // the page and dissolving into the black app background — the same artwork-derived
     // treatment as the place cards, giving the page a little color up top.
-    private var topColorWash: some View {
+    //
+    // Like the event hero, the whole wash is grown upward beyond the top edge (a solid
+    // color region above the visible fade) so overscrolling past the top keeps showing
+    // a continuous fade instead of a hard cutoff at the card edge.
+    private func topColorWash(safeAreaTop: CGFloat) -> some View {
         let tint = logoTint ?? .clear
+        // Solid region from `overscrollExtension` above the device top down to the top
+        // edge; then the visible fade over the same region it always occupied.
+        let solidHeight = overscrollExtension
+        let visibleFadeHeight = topWashHeight + safeAreaTop
 
         return ZStack {
             tint
 
             if let blurredLogo {
-                Image(uiImage: blurredLogo)
-                    .resizable()
-                    .scaledToFill()
-                    .frame(maxWidth: .infinity, maxHeight: .infinity)
-                    .clipped()
-                    .overlay(Color.black.opacity(0.32))
-                    .overlay(tint.opacity(0.34))
+                VStack(spacing: 0) {
+                    Image(uiImage: blurredLogo)
+                        .resizable()
+                        .scaledToFill()
+                        .frame(maxWidth: .infinity)
+                        .frame(height: solidHeight + visibleFadeHeight)
+                        .clipped()
+                        .overlay(Color.black.opacity(0.32))
+                        .overlay(tint.opacity(0.34))
+
+                    Spacer(minLength: 0)
+                }
             }
         }
+        .frame(maxWidth: .infinity)
         .mask(
-            LinearGradient(
-                stops: [
-                    .init(color: .white, location: 0.0),
-                    .init(color: .white.opacity(0.7), location: 0.45),
-                    .init(color: .white.opacity(0.25), location: 0.75),
-                    .init(color: .clear, location: 1.0),
-                ],
-                startPoint: .top,
-                endPoint: .bottom
-            )
+            VStack(spacing: 0) {
+                // Solid through the overscroll region so pulling past the top stays filled.
+                Color.white
+                    .frame(height: solidHeight)
+
+                LinearGradient(
+                    stops: [
+                        .init(color: .white, location: 0.0),
+                        .init(color: .white.opacity(0.7), location: 0.45),
+                        .init(color: .white.opacity(0.25), location: 0.75),
+                        .init(color: .clear, location: 1.0),
+                    ],
+                    startPoint: .top,
+                    endPoint: .bottom
+                )
+                .frame(height: visibleFadeHeight)
+
+                Color.clear
+                    .frame(maxWidth: .infinity, maxHeight: .infinity)
+            }
         )
+        .padding(.top, -(overscrollExtension + safeAreaTop))
     }
 
     private var currentLogoURL: URL? {

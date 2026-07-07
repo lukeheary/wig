@@ -7,6 +7,7 @@ struct VenuesView: View {
     let resetFiltersTrigger: Int
 
     @Environment(\.apiClient) private var apiClient
+    @EnvironmentObject private var appSession: AppSession
     @StateObject private var viewModel = VenuesViewModel()
     @State private var selectedLocationFilter: PlaceLocationFilter?
     @State private var selectedPlaceFilter: PlaceKindFilter = .all
@@ -20,6 +21,7 @@ struct VenuesView: View {
         NavigationStack {
             content
                 .background(venuesBackground)
+                .topStatusBarScrim()
                 .navigationDestination(for: PlaceListItem.self) { place in
                     PlaceDetailView(place: place)
                 }
@@ -39,6 +41,9 @@ struct VenuesView: View {
                 }
                 .onChange(of: resetFiltersTrigger) { _, _ in
                     resetFilters()
+                }
+                .onChange(of: selectedLocationFilter) { _, newValue in
+                    appSession.selectedCityContext = newValue?.selectedCityContext
                 }
         }
     }
@@ -95,8 +100,9 @@ struct VenuesView: View {
                 ScrollView {
                     VStack(alignment: .leading, spacing: 12) {
                         placesHeader(locationName: headerLocationName(for: response))
+                        let sections = groupedPlaces(in: response)
 
-                        if filteredPlaces(in: response).isEmpty {
+                        if sections.isEmpty {
                             ContentUnavailableView {
                                 Label("No Places Found", systemImage: "building.2")
                             } description: {
@@ -111,11 +117,21 @@ struct VenuesView: View {
                         // actually drew, which offset each NavigationLink's tap target
                         // onto the adjacent row. Eager layout keeps hit-testing aligned.
                         VStack(alignment: .leading, spacing: 12) {
-                            ForEach(filteredPlaces(in: response), id: \.listRowID) { place in
-                                NavigationLink(value: place) {
-                                    PlaceRowView(place: place)
+                            ForEach(sections) { section in
+                                VStack(alignment: .leading, spacing: 12) {
+                                    Text(section.title)
+                                        .font(.system(size: 16, weight: .medium))
+                                        .foregroundStyle(.white.opacity(0.42))
+                                        .padding(.horizontal, 2)
+
+                                    ForEach(section.places, id: \.listRowID) { place in
+                                        NavigationLink(value: place) {
+                                            PlaceRowView(place: place)
+                                        }
+                                        .buttonStyle(.plain)
+                                    }
                                 }
-                                .buttonStyle(.plain)
+                                .padding(.top, 6)
                             }
                         }
                     }
@@ -216,6 +232,52 @@ struct VenuesView: View {
             .filter { seen.insert($0.listRowID).inserted }
     }
 
+    private func groupedPlaces(in response: MobilePlacesResponse) -> [PlaceListSection] {
+        Dictionary(
+            grouping: filteredPlaces(in: response).sorted(by: sortPlaces),
+            by: sectionTitle(for:)
+        )
+        .map { key, places in
+            PlaceListSection(title: key, places: places)
+        }
+        .sorted(by: sortPlaceSections)
+    }
+
+    private func sortPlaces(_ lhs: PlaceListItem, _ rhs: PlaceListItem) -> Bool {
+        let lhsName = lhs.name.trimmingCharacters(in: .whitespacesAndNewlines)
+        let rhsName = rhs.name.trimmingCharacters(in: .whitespacesAndNewlines)
+        let comparison = lhsName.localizedCaseInsensitiveCompare(rhsName)
+
+        if comparison != .orderedSame {
+            return comparison == .orderedAscending
+        }
+
+        return lhs.listRowID < rhs.listRowID
+    }
+
+    private func sectionTitle(for place: PlaceListItem) -> String {
+        let name = place.name.trimmingCharacters(in: .whitespacesAndNewlines)
+        guard let first = name.first else {
+            return "#"
+        }
+
+        let letter = String(first).uppercased()
+        return letter.range(of: "[A-Z]", options: .regularExpression) != nil ? letter : "#"
+    }
+
+    private func sortPlaceSections(_ lhs: PlaceListSection, _ rhs: PlaceListSection) -> Bool {
+        switch (lhs.title, rhs.title) {
+        case ("#", "#"):
+            return false
+        case ("#", _):
+            return false
+        case (_, "#"):
+            return true
+        default:
+            return lhs.title.localizedCaseInsensitiveCompare(rhs.title) == .orderedAscending
+        }
+    }
+
     private func availableLocationFilters(for response: MobilePlacesResponse) -> [PlaceLocationFilter] {
         var cityFilters = response.availableCities.reduce(into: [PlaceLocationFilter]()) { filters, city in
             let filter = PlaceLocationFilter.city(city: city.city, state: city.state)
@@ -246,6 +308,15 @@ struct VenuesView: View {
 
     private func effectiveLocationFilter(for response: MobilePlacesResponse) -> PlaceLocationFilter {
         let locations = availableLocationFilters(for: response)
+
+        // Prefer the selection shared across tabs so the most recent city choice on any
+        // page (Home / Places / Activity) wins here too — the tabs stay alive, so local
+        // state would otherwise keep showing this page's own stale selection.
+        if let sharedFilter = appSession.selectedCityContext.flatMap(PlaceLocationFilter.init),
+           locations.contains(sharedFilter)
+        {
+            return sharedFilter
+        }
 
         if let selectedLocationFilter, locations.contains(selectedLocationFilter) {
             return selectedLocationFilter
@@ -311,6 +382,33 @@ struct VenuesView: View {
         selectedPlaceFilter = .all
         selectedCategoryID = nil
     }
+}
+
+private extension PlaceLocationFilter {
+    init?(_ context: SelectedCityContext) {
+        switch context {
+        case .all:
+            self = .all
+        case .city(let city, let state):
+            self = .city(city: city, state: state)
+        }
+    }
+
+    var selectedCityContext: SelectedCityContext? {
+        switch self {
+        case .all:
+            return .all
+        case .city(let city, let state):
+            return .city(city: city, state: state)
+        }
+    }
+}
+
+private struct PlaceListSection: Identifiable {
+    let title: String
+    let places: [PlaceListItem]
+
+    var id: String { title }
 }
 
 private enum PlaceLocationFilter: Hashable, Identifiable {
