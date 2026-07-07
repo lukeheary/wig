@@ -28,7 +28,7 @@ type GoogleGeocodeResponse = {
 };
 
 function extractCityAndState(
-  components: GoogleGeocodeResponse["results"][number]["address_components"] = []
+  components: NonNullable<GoogleGeocodeResponse["results"]>[number]["address_components"] = []
 ) {
   let city = "";
   let state = "";
@@ -135,7 +135,7 @@ export async function GET(request: Request) {
     "https://maps.googleapis.com/maps/api/place/autocomplete/json"
   );
   url.searchParams.set("input", query);
-  url.searchParams.set("types", searchType === "cities" ? "(cities)" : "establishment");
+  url.searchParams.set("types", "establishment");
   url.searchParams.set("components", "country:us");
   url.searchParams.set("key", apiKey);
 

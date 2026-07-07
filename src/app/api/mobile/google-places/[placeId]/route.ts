@@ -208,18 +208,14 @@ export async function GET(
   url.searchParams.set("place_id", placeId);
   url.searchParams.set(
     "fields",
-    (
-      searchType === "cities"
-        ? ["address_components", "formatted_address", "geometry", "name"]
-        : [
-            "address_components",
-            "formatted_address",
-            "geometry",
-            "name",
-            "opening_hours",
-            "website",
-          ]
-    ).join(",")
+    [
+      "address_components",
+      "formatted_address",
+      "geometry",
+      "name",
+      "opening_hours",
+      "website",
+    ].join(",")
   );
   url.searchParams.set("key", apiKey);
 
