@@ -132,18 +132,28 @@ struct APIClient: Sendable {
         )
     }
 
-    static func mobileGooglePlaceSearch(query: String) -> Endpoint<MobileGooglePlaceSearchResponse> {
+    static func mobileGooglePlaceSearch(
+        query: String,
+        searchType: MobileGooglePlaceSearchType = .establishments
+    ) -> Endpoint<MobileGooglePlaceSearchResponse> {
         Endpoint(
             path: "/api/mobile/google-places",
-            queryItems: [URLQueryItem(name: "query", value: query)],
+            queryItems: [
+                URLQueryItem(name: "query", value: query),
+                URLQueryItem(name: "searchType", value: searchType.rawValue),
+            ],
             requiresAuthentication: false,
             includesAuthenticationIfAvailable: true
         )
     }
 
-    static func mobileGooglePlaceDetail(placeID: String) -> Endpoint<MobileGooglePlaceDetail> {
+    static func mobileGooglePlaceDetail(
+        placeID: String,
+        searchType: MobileGooglePlaceSearchType = .establishments
+    ) -> Endpoint<MobileGooglePlaceDetail> {
         Endpoint(
             path: "/api/mobile/google-places/\(placeID)",
+            queryItems: [URLQueryItem(name: "searchType", value: searchType.rawValue)],
             requiresAuthentication: false,
             includesAuthenticationIfAvailable: true
         )
@@ -395,6 +405,59 @@ struct APIClient: Sendable {
         )
     }
 
+    static func mobileEventSeriesDetail(seriesID: UUID) -> Endpoint<MobileEventSeriesDetail> {
+        Endpoint(
+            path: "/api/mobile/event-series/\(seriesID.uuidString)",
+            requiresAuthentication: false,
+            includesAuthenticationIfAvailable: true
+        )
+    }
+
+    static func mobileUpdateEventSeries(
+        seriesID: UUID,
+        venueID: UUID? = nil,
+        organizerID: UUID? = nil,
+        title: String,
+        description: String? = nil,
+        coverImageURL: URL? = nil,
+        removeCoverImage: Bool = false,
+        eventURL: URL? = nil,
+        startAt: Date,
+        endAt: Date? = nil,
+        address: String? = nil,
+        city: String,
+        state: String,
+        categories: [String] = [],
+        status: EventStatus = .active,
+        recurrence: MobileEventSeriesRecurrenceRequest
+    ) throws -> Endpoint<MobileEventSeriesCreateResponse> {
+        let request = MobileEventSeriesUpdateRequest(
+            venueId: venueID?.uuidString,
+            organizerId: organizerID?.uuidString,
+            title: title,
+            description: description,
+            coverImageUrl: coverImageURL?.absoluteString,
+            removeCoverImage: removeCoverImage,
+            eventUrl: eventURL?.absoluteString,
+            startAt: ISO8601DateFormatter.wigFractional.string(from: startAt),
+            endAt: endAt.map { ISO8601DateFormatter.wigFractional.string(from: $0) },
+            address: address,
+            city: city,
+            state: state,
+            categories: categories,
+            status: status,
+            recurrence: recurrence
+        )
+
+        return Endpoint(
+            path: "/api/mobile/event-series/\(seriesID.uuidString)",
+            method: .patch,
+            body: try JSONEncoder().encode(request),
+            requiresAuthentication: false,
+            includesAuthenticationIfAvailable: true
+        )
+    }
+
     static func mobileCreatePlace(
         type: PlaceListItem.PlaceType,
         name: String,
@@ -426,6 +489,30 @@ struct APIClient: Sendable {
             path: "/api/mobile/places",
             method: .post,
             body: try JSONEncoder().encode(request),
+            requiresAuthentication: false,
+            includesAuthenticationIfAvailable: true
+        )
+    }
+
+    static func mobileCreateMetroArea(
+        name: String,
+        state: String,
+        latitude: Double,
+        longitude: Double,
+        radiusMiles: Double
+    ) throws -> Endpoint<MobileMetroAreaCreateResponse> {
+        Endpoint(
+            path: "/api/mobile/admin/metro-areas",
+            method: .post,
+            body: try JSONEncoder().encode(
+                MobileMetroAreaCreateRequest(
+                    name: name,
+                    state: state,
+                    latitude: latitude,
+                    longitude: longitude,
+                    radiusMiles: radiusMiles
+                )
+            ),
             requiresAuthentication: false,
             includesAuthenticationIfAvailable: true
         )
@@ -965,6 +1052,24 @@ private struct MobileEventSeriesCreateRequest: Encodable {
     let recurrence: MobileEventSeriesRecurrenceRequest
 }
 
+private struct MobileEventSeriesUpdateRequest: Encodable {
+    let venueId: String?
+    let organizerId: String?
+    let title: String
+    let description: String?
+    let coverImageUrl: String?
+    let removeCoverImage: Bool
+    let eventUrl: String?
+    let startAt: String
+    let endAt: String?
+    let address: String?
+    let city: String
+    let state: String
+    let categories: [String]
+    let status: EventStatus
+    let recurrence: MobileEventSeriesRecurrenceRequest
+}
+
 struct MobileEventSeriesRecurrenceRequest: Encodable, Hashable, Sendable {
     let frequency: MobileEventSeriesFrequency
     let interval: Int
@@ -1031,6 +1136,14 @@ private struct MobilePlaceScrapersUpdateRequest: Encodable {
     let scrapers: [MobilePlaceScraperConfig]
 }
 
+private struct MobileMetroAreaCreateRequest: Encodable {
+    let name: String
+    let state: String
+    let latitude: Double
+    let longitude: Double
+    let radiusMiles: Double
+}
+
 struct MobileUploadResponse: Decodable, Hashable, Sendable {
     let url: URL
 }
@@ -1077,6 +1190,15 @@ enum MobileEventSeriesFrequency: String, Codable, CaseIterable, Hashable, Sendab
 struct MobilePlaceCreateResponse: Decodable, Hashable, Sendable {
     let id: UUID
     let slug: String
+}
+
+struct MobileMetroAreaCreateResponse: Decodable, Hashable, Sendable {
+    let id: UUID
+    let name: String
+    let state: String
+    let latitude: Double
+    let longitude: Double
+    let radiusMiles: Double
 }
 
 enum MobileScraperType: String, Codable, CaseIterable, Hashable, Sendable {
@@ -1134,6 +1256,8 @@ struct MobileGooglePlaceDetail: Decodable, Hashable, Sendable {
     let formattedAddress: String
     let website: URL?
     let hours: VenueHours?
+    let latitude: Double?
+    let longitude: Double?
 
     enum CodingKeys: String, CodingKey {
         case placeID = "placeId"
@@ -1144,7 +1268,14 @@ struct MobileGooglePlaceDetail: Decodable, Hashable, Sendable {
         case formattedAddress
         case website
         case hours
+        case latitude
+        case longitude
     }
+}
+
+enum MobileGooglePlaceSearchType: String, Codable, Hashable, Sendable {
+    case establishments
+    case cities
 }
 
 enum EventStatus: String, Codable, CaseIterable, Hashable, Sendable {

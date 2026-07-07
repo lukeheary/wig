@@ -158,6 +158,7 @@ struct ActivityEventSummary: Decodable, Identifiable, Hashable, Sendable {
             description: description,
             coverImageURL: coverImageURL,
             eventURL: eventURL,
+            seriesID: nil,
             startAt: startAt,
             endAt: endAt,
             address: address,

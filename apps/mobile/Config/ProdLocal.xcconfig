@@ -1,0 +1,11 @@
+#include "Base.xcconfig"
+#include? "Production.xcconfig"
+
+// A debuggable build (DEBUG flag on, no optimization) that points at the
+// production backend. Unlike the "WIG Prod Local" scheme's runtime environment
+// variables — which only apply when Xcode launches the app under the debugger —
+// these values are baked into Info.plist at build time, so the app stays on
+// production even when relaunched from the home screen.
+SWIFT_ACTIVE_COMPILATION_CONDITIONS = DEBUG
+CODE_SIGNING_ALLOWED[sdk=iphonesimulator*] = NO
+CODE_SIGNING_REQUIRED[sdk=iphonesimulator*] = NO

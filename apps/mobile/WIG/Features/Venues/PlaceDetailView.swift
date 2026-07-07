@@ -1,3 +1,5 @@
+import CoreImage
+import CoreImage.CIFilterBuiltins
 import SafariServices
 import SwiftUI
 import UIKit
@@ -11,72 +13,90 @@ struct PlaceDetailView: View {
     @State private var selectedTab: PlaceEventsTab = .upcoming
     @State private var presentedAction: PlaceDetailAction?
     @State private var isUnfollowConfirmationPresented = false
+    @State private var blurredLogo: UIImage?
+    @State private var logoTint: Color?
+
+    private let topWashHeight: CGFloat = 460
+
+    // Grows the tinted wash this far above the top edge (matching the event hero) so
+    // overscrolling past the top keeps showing a continuous fade, never a hard cutoff.
+    private let overscrollExtension: CGFloat = 500
 
     private let eventCardWidth: CGFloat = 220
 
     var body: some View {
-        ScrollView {
-            VStack(alignment: .leading, spacing: 22) {
-                switch viewModel.state {
-                case .idle, .loading:
-                    PlaceDetailHeader(
-                        name: place.name,
-                        slug: place.slug,
-                        type: place.type,
-                        logoURL: place.displayLogoURL,
-                        locationText: place.locationText.isEmpty ? nil : place.locationText,
-                        categoryLabel: nil,
-                        websiteURL: nil,
-                        websiteText: nil
-                    )
+        GeometryReader { proxy in
+            ScrollView {
+                VStack(alignment: .leading, spacing: 22) {
+                    switch viewModel.state {
+                    case .idle, .loading:
+                        let seededDetail = seededDetailState
 
-                    PlaceDetailEventSkeletonSection(cardWidth: eventCardWidth)
+                        PlaceDetailHeader(
+                            name: seededDetail.name,
+                            type: seededDetail.type,
+                            logoURL: seededDetail.displayLogoURL,
+                            cityStateText: seededDetail.cityStateText,
+                            mapsQueryText: seededDetail.locationText,
+                            categoryLabel: seededDetail.primaryCategoryLabel,
+                            websiteURL: seededDetail.website,
+                            instagramHandle: seededDetail.instagram
+                        )
 
-                case .failed(let message):
-                    PlaceDetailHeader(
-                        name: place.name,
-                        slug: place.slug,
-                        type: place.type,
-                        logoURL: place.displayLogoURL,
-                        locationText: place.locationText.isEmpty ? nil : place.locationText,
-                        categoryLabel: nil,
-                        websiteURL: nil,
-                        websiteText: nil
-                    )
+                        PlaceDetailEventSkeletonSection(cardWidth: eventCardWidth)
 
-                    ContentUnavailableView {
-                        Label("Couldn’t Load Place", systemImage: "wifi.exclamationmark")
-                    } description: {
-                        Text(message)
-                    } actions: {
-                        Button("Try Again") {
-                            Task {
-                                await viewModel.load(slug: place.slug, using: apiClient)
+                    case .failed(let message):
+                        let seededDetail = seededDetailState
+
+                        PlaceDetailHeader(
+                            name: seededDetail.name,
+                            type: seededDetail.type,
+                            logoURL: seededDetail.displayLogoURL,
+                            cityStateText: seededDetail.cityStateText,
+                            mapsQueryText: seededDetail.locationText,
+                            categoryLabel: seededDetail.primaryCategoryLabel,
+                            websiteURL: seededDetail.website,
+                            instagramHandle: seededDetail.instagram
+                        )
+
+                        ContentUnavailableView {
+                            Label("Couldn’t Load Place", systemImage: "wifi.exclamationmark")
+                        } description: {
+                            Text(message)
+                        } actions: {
+                            Button("Try Again") {
+                                Task {
+                                    await viewModel.load(slug: place.slug, using: apiClient)
+                                }
                             }
                         }
+                        .foregroundStyle(.white)
+
+                    case .loaded(let detail):
+                        PlaceDetailHeader(
+                            name: detail.name,
+                            type: detail.type,
+                            logoURL: detail.displayLogoURL,
+                            cityStateText: detail.cityStateText,
+                            mapsQueryText: detail.locationText,
+                            categoryLabel: detail.primaryCategoryLabel,
+                            websiteURL: detail.website,
+                            instagramHandle: detail.instagram
+                        )
+
+                        eventGroups(for: detail)
                     }
-                    .foregroundStyle(.white)
-
-                case .loaded(let detail):
-                    PlaceDetailHeader(
-                        name: detail.name,
-                        slug: detail.slug,
-                        type: detail.type,
-                        logoURL: detail.displayLogoURL,
-                        locationText: detail.locationText,
-                        categoryLabel: detail.primaryCategoryLabel,
-                        websiteURL: detail.website,
-                        websiteText: detail.websiteDisplayText
-                    )
-
-                    eventGroups(for: detail)
+                }
+                .padding(.horizontal, 16)
+                .padding(.top, 18)
+                .padding(.bottom, 48)
+                .frame(maxWidth: .infinity, alignment: .topLeading)
+                .background(alignment: .top) {
+                    topColorWash(safeAreaTop: proxy.safeAreaInsets.top)
                 }
             }
-            .padding(.horizontal, 16)
-            .padding(.top, 18)
-            .padding(.bottom, 48)
+            .background(AppTheme.background.ignoresSafeArea())
         }
-        .background(placeBackground)
         .background(SwipeBackEnabler())
         .navigationBarBackButtonHidden()
         .toolbar(.hidden, for: .navigationBar)
@@ -172,6 +192,9 @@ struct PlaceDetailView: View {
                 await viewModel.load(slug: place.slug, using: apiClient)
             }
         }
+        .task(id: currentLogoURL) {
+            await loadLogoArtwork()
+        }
         .task(id: placeEventPrefetchKey) {
             guard case .loaded(let detail) = viewModel.state else {
                 return
@@ -195,6 +218,10 @@ struct PlaceDetailView: View {
         }
         .padding(.leading, 16)
         .padding(.top, 0)
+    }
+
+    private var seededDetailState: PlaceDetail {
+        PlaceDetailViewModel.cachedDetail(for: place.slug) ?? PlaceDetail(listItem: place)
     }
 
     private struct PlaceCreationMenuButton: View {
@@ -354,9 +381,11 @@ struct PlaceDetailView: View {
                                     .buttonStyle(.plain)
                                 }
                             }
-                            .padding(.horizontal, 16)
+                            .scrollTargetLayout()
                         }
                         .scrollIndicators(.hidden)
+                        .contentMargins(.horizontal, 16, for: .scrollContent)
+                        .scrollTargetBehavior(.viewAligned)
                     }
                     .padding(.horizontal, -16)
                 }
@@ -364,9 +393,184 @@ struct PlaceDetailView: View {
         }
     }
 
-    private var placeBackground: some View {
-        Color(red: 0.07, green: 0.07, blue: 0.08)
-            .ignoresSafeArea()
+    // A blurred bloom of the logo tinted with its dominant color, filling the top of
+    // the page and dissolving into the black app background — the same artwork-derived
+    // treatment as the place cards, giving the page a little color up top.
+    //
+    // Like the event hero, the whole wash is grown upward beyond the top edge (a solid
+    // color region above the visible fade) so overscrolling past the top keeps showing
+    // a continuous fade instead of a hard cutoff at the card edge.
+    private func topColorWash(safeAreaTop: CGFloat) -> some View {
+        let tint = logoTint ?? .clear
+        // Solid region from `overscrollExtension` above the device top down to the top
+        // edge; then the visible fade over the same region it always occupied.
+        let solidHeight = overscrollExtension
+        let visibleFadeHeight = topWashHeight + safeAreaTop
+
+        return ZStack {
+            tint
+
+            if let blurredLogo {
+                VStack(spacing: 0) {
+                    Image(uiImage: blurredLogo)
+                        .resizable()
+                        .scaledToFill()
+                        .frame(maxWidth: .infinity)
+                        .frame(height: solidHeight + visibleFadeHeight)
+                        .clipped()
+                        .overlay(Color.black.opacity(0.32))
+                        .overlay(tint.opacity(0.34))
+
+                    Spacer(minLength: 0)
+                }
+            }
+        }
+        .frame(maxWidth: .infinity)
+        .mask(
+            VStack(spacing: 0) {
+                // Solid through the overscroll region so pulling past the top stays filled.
+                Color.white
+                    .frame(height: solidHeight)
+
+                LinearGradient(
+                    stops: [
+                        .init(color: .white, location: 0.0),
+                        .init(color: .white.opacity(0.7), location: 0.45),
+                        .init(color: .white.opacity(0.25), location: 0.75),
+                        .init(color: .clear, location: 1.0),
+                    ],
+                    startPoint: .top,
+                    endPoint: .bottom
+                )
+                .frame(height: visibleFadeHeight)
+
+                Color.clear
+                    .frame(maxWidth: .infinity, maxHeight: .infinity)
+            }
+        )
+        .padding(.top, -(overscrollExtension + safeAreaTop))
+    }
+
+    private var currentLogoURL: URL? {
+        if case .loaded(let detail) = viewModel.state {
+            return detail.displayLogoURL
+        }
+
+        return place.displayLogoURL
+    }
+
+    private func loadLogoArtwork() async {
+        guard let url = currentLogoURL else {
+            blurredLogo = nil
+            logoTint = nil
+            return
+        }
+
+        guard let image = await RemoteImagePipeline.shared.image(for: url) else {
+            return
+        }
+
+        // CoreImage sampling + blur off the main thread.
+        let processed = await Task.detached(priority: .userInitiated) { () -> (UIImage?, Color?) in
+            let tint = image.placeDetailTintColor.map(Color.init(uiColor:))
+            let blurred = image.placeDetailBlurredBackdrop()
+            return (blurred, tint)
+        }.value
+
+        blurredLogo = processed.0
+        logoTint = processed.1
+    }
+}
+
+private enum PlaceDetailImageProcessing {
+    static let context = CIContext(options: [.workingColorSpace: NSNull()])
+}
+
+private extension UIImage {
+    // Average color of the logo, adjusted into a dark, tasteful tint for the top wash.
+    var placeDetailTintColor: UIColor? {
+        guard let cgImage else { return nil }
+
+        let ciImage = CIImage(cgImage: cgImage)
+        let extent = ciImage.extent
+        guard extent.width > 0, extent.height > 0 else { return nil }
+
+        let filter = CIFilter.areaAverage()
+        filter.inputImage = ciImage
+        filter.extent = extent
+
+        guard let outputImage = filter.outputImage else { return nil }
+
+        var bitmap = [UInt8](repeating: 0, count: 4)
+        PlaceDetailImageProcessing.context.render(
+            outputImage,
+            toBitmap: &bitmap,
+            rowBytes: 4,
+            bounds: CGRect(x: 0, y: 0, width: 1, height: 1),
+            format: .RGBA8,
+            colorSpace: nil
+        )
+
+        return UIColor(
+            red: CGFloat(bitmap[0]) / 255,
+            green: CGFloat(bitmap[1]) / 255,
+            blue: CGFloat(bitmap[2]) / 255,
+            alpha: 1
+        ).placeDetailAdjusted()
+    }
+
+    // Small, heavily blurred copy of the logo used as the top backdrop bloom.
+    func placeDetailBlurredBackdrop() -> UIImage? {
+        guard let cgImage else { return nil }
+
+        let maxDimension: CGFloat = 160
+        let scale = min(maxDimension / max(size.width, size.height), 1)
+        let targetSize = CGSize(width: size.width * scale, height: size.height * scale)
+        let renderer = UIGraphicsImageRenderer(size: targetSize)
+        let thumbnail = renderer.image { _ in
+            draw(in: CGRect(origin: .zero, size: targetSize))
+        }
+
+        guard let thumbnailCGImage = thumbnail.cgImage else { return nil }
+
+        let inputImage = CIImage(cgImage: thumbnailCGImage)
+        let clampedImage = inputImage.clampedToExtent()
+        let filter = CIFilter.gaussianBlur()
+        filter.inputImage = clampedImage
+        filter.radius = 40
+
+        guard let outputImage = filter.outputImage else { return thumbnail }
+
+        guard let blurredCGImage = PlaceDetailImageProcessing.context.createCGImage(
+            outputImage,
+            from: inputImage.extent
+        ) else {
+            return thumbnail
+        }
+
+        return UIImage(cgImage: blurredCGImage, scale: thumbnail.scale, orientation: thumbnail.imageOrientation)
+    }
+}
+
+private extension UIColor {
+    // Keep the sampled hue but darken so the top wash reads as a subtle tint that
+    // keeps the white header text readable before it fades to black.
+    func placeDetailAdjusted() -> UIColor {
+        var hue: CGFloat = 0
+        var saturation: CGFloat = 0
+        var brightness: CGFloat = 0
+        var alpha: CGFloat = 0
+
+        guard getHue(&hue, saturation: &saturation, brightness: &brightness, alpha: &alpha) else {
+            return self
+        }
+
+        return UIColor(
+            hue: hue,
+            saturation: min(max(saturation * 0.9, 0), 0.85),
+            brightness: min(max(brightness, 0), 0.36),
+            alpha: 1
+        )
     }
 }
 
@@ -386,9 +590,13 @@ private struct PlaceDetailEventSkeletonSection: View {
                             .frame(width: cardWidth)
                     }
                 }
+                .scrollTargetLayout()
             }
             .scrollIndicators(.hidden)
+            .contentMargins(.horizontal, 16, for: .scrollContent)
+            .scrollTargetBehavior(.viewAligned)
             .allowsHitTesting(false)
+            .padding(.horizontal, -16)
         }
     }
 }
@@ -396,38 +604,17 @@ private struct PlaceDetailEventSkeletonSection: View {
 private struct PlaceDetailEventSkeletonCard: View {
     let seed: Int
     @State private var isHighlighted = false
+    private let cardHeight: CGFloat = 286
+    private let cardCornerRadius: CGFloat = 18
 
     var body: some View {
-        VStack(alignment: .leading, spacing: 14) {
-            RoundedRectangle(cornerRadius: 14, style: .continuous)
-                .fill(shimmerFill)
-                .frame(height: 200)
-
-            VStack(alignment: .leading, spacing: 10) {
-                RoundedRectangle(cornerRadius: 6, style: .continuous)
+        RoundedRectangle(cornerRadius: cardCornerRadius, style: .continuous)
+            .fill(Color.white.opacity(0.04))
+            .overlay {
+                RoundedRectangle(cornerRadius: cardCornerRadius, style: .continuous)
                     .fill(shimmerFill)
-                    .frame(height: 14)
-
-                RoundedRectangle(cornerRadius: 6, style: .continuous)
-                    .fill(shimmerFill)
-                    .frame(width: 150, height: 14)
-
-                RoundedRectangle(cornerRadius: 6, style: .continuous)
-                    .fill(shimmerFill)
-                    .frame(width: 110, height: 12)
             }
-            .padding(.horizontal, 2)
-        }
-        .padding(14)
-        .frame(maxWidth: .infinity, alignment: .leading)
-        .background(
-            RoundedRectangle(cornerRadius: 18, style: .continuous)
-                .fill(Color.white.opacity(0.04))
-        )
-        .overlay(
-            RoundedRectangle(cornerRadius: 18, style: .continuous)
-                .stroke(Color.white.opacity(0.06), lineWidth: 1)
-        )
+            .frame(maxWidth: .infinity, minHeight: cardHeight, maxHeight: cardHeight, alignment: .topLeading)
         .onAppear {
             withAnimation(
                 .easeInOut(duration: 1.15)
@@ -454,13 +641,13 @@ private struct PlaceDetailEventSkeletonCard: View {
 
 private struct PlaceDetailHeader: View {
     let name: String
-    let slug: String
     let type: PlaceListItem.PlaceType
     let logoURL: URL?
-    let locationText: String?
+    let cityStateText: String?
+    let mapsQueryText: String?
     let categoryLabel: String?
     let websiteURL: URL?
-    let websiteText: String?
+    let instagramHandle: String?
     @State private var isMapsDialogPresented = false
     @State private var safariRoute: SafariRoute?
     @State private var isImageViewerPresented = false
@@ -480,47 +667,64 @@ private struct PlaceDetailHeader: View {
                     .multilineTextAlignment(.center)
 
                 HStack(alignment: .center, spacing: 12) {
-                    Text("@\(slug)")
-                        .font(.system(size: 15, weight: .medium))
-                        .foregroundStyle(.white.opacity(0.56))
-                        .lineLimit(2)
-                        .minimumScaleFactor(0.78)
-                        .fixedSize(horizontal: false, vertical: true)
+                    Group {
+                        if let cityStateText {
+                            Text(cityStateText)
+                        } else if let categoryLabel {
+                            Text(categoryLabel)
+                        }
+                    }
+                    .font(.system(size: 15, weight: .medium))
+                    .foregroundStyle(.white.opacity(0.56))
+                    .lineLimit(2)
+                    .minimumScaleFactor(0.78)
+                    .fixedSize(horizontal: false, vertical: true)
                 }
             }
             .frame(maxWidth: .infinity)
 
-            HStack(alignment: .center, spacing: 16) {
-                if let locationText {
-                    Button {
+            HStack(alignment: .center, spacing: 12) {
+                if mapsQueryText != nil {
+                    PlaceDetailActionCircleButton {
+                    Image(systemName: "location")
+                        .font(.system(size: 18, weight: .semibold))
+                        .foregroundStyle(.white)
+                    } action: {
                         isMapsDialogPresented = true
-                    } label: {
-                        Text(locationText)
-                            .lineLimit(1)
                     }
-                    .buttonStyle(.plain)
-                    .confirmationDialog(locationText, isPresented: $isMapsDialogPresented) {
-                        Button("Open in Maps") {
-                            openInMaps(address: locationText)
+                    .confirmationDialog("Open Location", isPresented: $isMapsDialogPresented) {
+                        if let mapsQueryText {
+                            Button("Open in Maps") {
+                                openInMaps(address: mapsQueryText)
+                            }
                         }
 
                         Button("Cancel", role: .cancel) {}
+                    } message: {
+                        if let mapsQueryText {
+                            Text(mapsQueryText)
+                        }
                     }
                 }
 
-                if let websiteText, let websiteURL {
-                    Button {
+                if let websiteURL {
+                    PlaceDetailActionCircleButton {
+                        Image(systemName: "globe")
+                            .font(.system(size: 18, weight: .semibold))
+                            .foregroundStyle(.white)
+                    } action: {
                         safariRoute = SafariRoute(url: websiteURL)
-                    } label: {
-                        Text(websiteText)
-                            .lineLimit(1)
                     }
-                    .buttonStyle(.plain)
+                }
+
+                if let instagramURL {
+                    PlaceDetailActionCircleButton {
+                        InstagramGlyph()
+                    } action: {
+                        openInstagram(url: instagramURL)
+                    }
                 }
             }
-            .font(.system(size: 13, weight: .medium))
-            .foregroundStyle(.white.opacity(0.58))
-            .lineLimit(1)
         }
         .frame(maxWidth: .infinity)
         .sheet(item: $safariRoute) { route in
@@ -540,27 +744,28 @@ private struct PlaceDetailHeader: View {
             Button {
                 isImageViewerPresented = true
             } label: {
-                AsyncImage(url: logoURL) { phase in
-                    switch phase {
-                    case .empty:
-                        logoPlaceholder
-                    case .success(let image):
-                        image
-                            .resizable()
-                            .scaledToFill()
-                    case .failure:
-                        logoPlaceholder
-                    @unknown default:
-                        logoPlaceholder
-                    }
+                RemoteImageView(url: logoURL) { image in
+                    image
+                        .resizable()
+                        .scaledToFill()
+                } placeholder: {
+                    logoPlaceholder
                 }
                 .frame(width: 104, height: 104)
                 .clipShape(RoundedRectangle(cornerRadius: 18, style: .continuous))
+                .overlay(
+                    RoundedRectangle(cornerRadius: 18, style: .continuous)
+                        .strokeBorder(.white.opacity(0.08), lineWidth: 1)
+                )
             }
             .buttonStyle(.plain)
         } else {
             logoPlaceholder
                 .frame(width: 104, height: 104)
+                .overlay(
+                    RoundedRectangle(cornerRadius: 18, style: .continuous)
+                        .strokeBorder(.white.opacity(0.08), lineWidth: 1)
+                )
         }
     }
 
@@ -583,6 +788,88 @@ private struct PlaceDetailHeader: View {
         }
 
         UIApplication.shared.open(url)
+    }
+
+    private var instagramURL: URL? {
+        guard let handle = cleanedInstagramHandle else {
+            return nil
+        }
+
+        return URL(string: "instagram://user?username=\(handle)")
+            ?? URL(string: "https://www.instagram.com/\(handle)")
+    }
+
+    private var cleanedInstagramHandle: String? {
+        guard let instagramHandle else {
+            return nil
+        }
+
+        let trimmed = instagramHandle
+            .trimmingCharacters(in: .whitespacesAndNewlines)
+            .replacingOccurrences(of: "@", with: "")
+        return trimmed.isEmpty ? nil : trimmed
+    }
+
+    private func openInstagram(url: URL) {
+        if UIApplication.shared.canOpenURL(url) {
+            UIApplication.shared.open(url)
+            return
+        }
+
+        if let handle = cleanedInstagramHandle,
+           let webURL = URL(string: "https://www.instagram.com/\(handle)") {
+            UIApplication.shared.open(webURL)
+        }
+    }
+}
+
+private struct PlaceDetailActionCircleButton<Content: View>: View {
+    let content: Content
+    let action: () -> Void
+
+    init(
+        @ViewBuilder content: () -> Content,
+        action: @escaping () -> Void
+    ) {
+        self.content = content()
+        self.action = action
+    }
+
+    var body: some View {
+        Button(action: action) {
+            content
+                .frame(width: 46, height: 46)
+                .contentShape(Circle())
+                .placeDetailLiquidGlass(in: Circle())
+        }
+        .buttonStyle(.plain)
+    }
+}
+
+private struct InstagramGlyph: View {
+    private let side: CGFloat = 22
+
+    var body: some View {
+        let lineWidth = side * 0.09
+
+        // Camera body
+        RoundedRectangle(cornerRadius: side * 0.28, style: .continuous)
+            .strokeBorder(.white, lineWidth: lineWidth)
+            .frame(width: side, height: side)
+            .overlay {
+                // Lens
+                Circle()
+                    .strokeBorder(.white, lineWidth: lineWidth)
+                    .frame(width: side * 0.42, height: side * 0.42)
+            }
+            .overlay(alignment: .topTrailing) {
+                // Flash — spaced between the lens and the outer square, touching neither
+                Circle()
+                    .fill(.white)
+                    .frame(width: side * 0.10, height: side * 0.10)
+                    .padding(.top, side * 0.23)
+                    .padding(.trailing, side * 0.23)
+            }
     }
 }
 
@@ -713,8 +1000,11 @@ private enum PlaceEventGrouper {
             slug: "big-night-live",
             name: "Big Night Live",
             logoImageURL: nil,
+            address: nil,
             city: "Boston",
             state: "MA",
+            website: nil,
+            instagram: nil,
             upcomingEventCount: 48,
             updatedAt: nil
         )

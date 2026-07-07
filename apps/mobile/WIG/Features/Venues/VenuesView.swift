@@ -1,9 +1,13 @@
+import CoreImage
+import CoreImage.CIFilterBuiltins
 import SwiftUI
+import UIKit
 
 struct VenuesView: View {
     let resetFiltersTrigger: Int
 
     @Environment(\.apiClient) private var apiClient
+    @EnvironmentObject private var appSession: AppSession
     @StateObject private var viewModel = VenuesViewModel()
     @State private var selectedLocationFilter: PlaceLocationFilter?
     @State private var selectedPlaceFilter: PlaceKindFilter = .all
@@ -17,6 +21,10 @@ struct VenuesView: View {
         NavigationStack {
             content
                 .background(venuesBackground)
+                .topStatusBarScrim()
+                .navigationDestination(for: PlaceListItem.self) { place in
+                    PlaceDetailView(place: place)
+                }
                 .toolbar(.hidden, for: .navigationBar)
                 .task {
                     if case .idle = viewModel.state {
@@ -34,6 +42,9 @@ struct VenuesView: View {
                 .onChange(of: resetFiltersTrigger) { _, _ in
                     resetFilters()
                 }
+                .onChange(of: selectedLocationFilter) { _, newValue in
+                    appSession.selectedCityContext = newValue?.selectedCityContext
+                }
         }
     }
 
@@ -42,13 +53,15 @@ struct VenuesView: View {
         switch viewModel.state {
         case .idle, .loading:
             ScrollView {
-                LazyVStack(spacing: 12) {
+                LazyVStack(alignment: .leading, spacing: 12) {
+                    placesHeader(locationName: selectedLocationName)
+
                     ForEach(0..<6, id: \.self) { index in
                         PlaceRowSkeletonView(seed: index)
                     }
                 }
                 .padding(.horizontal, 16)
-                .padding(.top, 78)
+                .padding(.top, 82)
                 .padding(.bottom, 48)
             }
             .overlay(alignment: .topLeading) {
@@ -85,8 +98,11 @@ struct VenuesView: View {
                 .background(venuesBackground)
             } else {
                 ScrollView {
-                    LazyVStack(spacing: 12) {
-                        if filteredPlaces(in: response).isEmpty {
+                    VStack(alignment: .leading, spacing: 12) {
+                        placesHeader(locationName: headerLocationName(for: response))
+                        let sections = groupedPlaces(in: response)
+
+                        if sections.isEmpty {
                             ContentUnavailableView {
                                 Label("No Places Found", systemImage: "building.2")
                             } description: {
@@ -96,17 +112,31 @@ struct VenuesView: View {
                             .padding(.top, 48)
                         }
 
-                        ForEach(filteredPlaces(in: response)) { place in
-                            NavigationLink {
-                                PlaceDetailView(place: place)
-                            } label: {
-                                PlaceRowView(place: place)
+                        // A plain VStack (not LazyVStack): the lazy layout was
+                        // estimating row positions that drifted from where rows
+                        // actually drew, which offset each NavigationLink's tap target
+                        // onto the adjacent row. Eager layout keeps hit-testing aligned.
+                        VStack(alignment: .leading, spacing: 12) {
+                            ForEach(sections) { section in
+                                VStack(alignment: .leading, spacing: 12) {
+                                    Text(section.title)
+                                        .font(.system(size: 16, weight: .medium))
+                                        .foregroundStyle(.white.opacity(0.42))
+                                        .padding(.horizontal, 2)
+
+                                    ForEach(section.places, id: \.listRowID) { place in
+                                        NavigationLink(value: place) {
+                                            PlaceRowView(place: place)
+                                        }
+                                        .buttonStyle(.plain)
+                                    }
+                                }
+                                .padding(.top, 6)
                             }
-                            .buttonStyle(.plain)
                         }
                     }
                     .padding(.horizontal, 16)
-                    .padding(.top, 78)
+                    .padding(.top, 82)
                     .padding(.bottom, 48)
                 }
                 .overlay(alignment: .topLeading) {
@@ -121,8 +151,40 @@ struct VenuesView: View {
     }
 
     private var venuesBackground: some View {
-        Color(red: 0.07, green: 0.07, blue: 0.08)
+        AppTheme.background
             .ignoresSafeArea()
+    }
+
+    private func placesHeader(locationName: String?) -> some View {
+        return (
+            Text(selectedPlaceFilter.headerTitle)
+                .font(.system(size: 20, weight: .bold))
+                .foregroundStyle(.white)
+            +
+            (locationName.map { location in
+                Text(" in \(location)")
+                    .font(.system(size: 20, weight: .medium))
+                    .foregroundStyle(.white.opacity(0.5))
+            } ?? Text(""))
+        )
+    }
+
+    private var selectedLocationName: String? {
+        switch selectedLocationFilter {
+        case .city(let city, _):
+            return city
+        default:
+            return nil
+        }
+    }
+
+    private func headerLocationName(for response: MobilePlacesResponse) -> String? {
+        switch effectiveLocationFilter(for: response) {
+        case .city(let city, _):
+            return city
+        case .all:
+            return nil
+        }
     }
 
     private func filterControls(for response: MobilePlacesResponse) -> some View {
@@ -161,10 +223,59 @@ struct VenuesView: View {
     }
 
     private func filteredPlaces(in response: MobilePlacesResponse) -> [PlaceListItem] {
-        response.places
+        var seen = Set<String>()
+        return response.places
             .filter(effectiveLocationFilter(for: response).includes)
             .filter(selectedPlaceFilter.includes)
             .filter(categoryFilterIncludes)
+            // Drop any duplicate rows so ForEach identities stay unique.
+            .filter { seen.insert($0.listRowID).inserted }
+    }
+
+    private func groupedPlaces(in response: MobilePlacesResponse) -> [PlaceListSection] {
+        Dictionary(
+            grouping: filteredPlaces(in: response).sorted(by: sortPlaces),
+            by: sectionTitle(for:)
+        )
+        .map { key, places in
+            PlaceListSection(title: key, places: places)
+        }
+        .sorted(by: sortPlaceSections)
+    }
+
+    private func sortPlaces(_ lhs: PlaceListItem, _ rhs: PlaceListItem) -> Bool {
+        let lhsName = lhs.name.trimmingCharacters(in: .whitespacesAndNewlines)
+        let rhsName = rhs.name.trimmingCharacters(in: .whitespacesAndNewlines)
+        let comparison = lhsName.localizedCaseInsensitiveCompare(rhsName)
+
+        if comparison != .orderedSame {
+            return comparison == .orderedAscending
+        }
+
+        return lhs.listRowID < rhs.listRowID
+    }
+
+    private func sectionTitle(for place: PlaceListItem) -> String {
+        let name = place.name.trimmingCharacters(in: .whitespacesAndNewlines)
+        guard let first = name.first else {
+            return "#"
+        }
+
+        let letter = String(first).uppercased()
+        return letter.range(of: "[A-Z]", options: .regularExpression) != nil ? letter : "#"
+    }
+
+    private func sortPlaceSections(_ lhs: PlaceListSection, _ rhs: PlaceListSection) -> Bool {
+        switch (lhs.title, rhs.title) {
+        case ("#", "#"):
+            return false
+        case ("#", _):
+            return false
+        case (_, "#"):
+            return true
+        default:
+            return lhs.title.localizedCaseInsensitiveCompare(rhs.title) == .orderedAscending
+        }
     }
 
     private func availableLocationFilters(for response: MobilePlacesResponse) -> [PlaceLocationFilter] {
@@ -197,6 +308,15 @@ struct VenuesView: View {
 
     private func effectiveLocationFilter(for response: MobilePlacesResponse) -> PlaceLocationFilter {
         let locations = availableLocationFilters(for: response)
+
+        // Prefer the selection shared across tabs so the most recent city choice on any
+        // page (Home / Places / Activity) wins here too — the tabs stay alive, so local
+        // state would otherwise keep showing this page's own stale selection.
+        if let sharedFilter = appSession.selectedCityContext.flatMap(PlaceLocationFilter.init),
+           locations.contains(sharedFilter)
+        {
+            return sharedFilter
+        }
 
         if let selectedLocationFilter, locations.contains(selectedLocationFilter) {
             return selectedLocationFilter
@@ -264,6 +384,33 @@ struct VenuesView: View {
     }
 }
 
+private extension PlaceLocationFilter {
+    init?(_ context: SelectedCityContext) {
+        switch context {
+        case .all:
+            self = .all
+        case .city(let city, let state):
+            self = .city(city: city, state: state)
+        }
+    }
+
+    var selectedCityContext: SelectedCityContext? {
+        switch self {
+        case .all:
+            return .all
+        case .city(let city, let state):
+            return .city(city: city, state: state)
+        }
+    }
+}
+
+private struct PlaceListSection: Identifiable {
+    let title: String
+    let places: [PlaceListItem]
+
+    var id: String { title }
+}
+
 private enum PlaceLocationFilter: Hashable, Identifiable {
     case all
     case city(city: String, state: String)
@@ -312,6 +459,19 @@ private enum PlaceKindFilter: String, CaseIterable, Identifiable {
         switch self {
         case .all:
             return "All"
+        case .venues:
+            return "Venues"
+        case .organizers:
+            return "Organizers"
+        case .following:
+            return "Following"
+        }
+    }
+
+    var headerTitle: String {
+        switch self {
+        case .all:
+            return "Places"
         case .venues:
             return "Venues"
         case .organizers:
@@ -525,12 +685,22 @@ private extension View {
 struct PlaceRowView: View {
     let place: PlaceListItem
 
+    private let cardCornerRadius: CGFloat = 18
+    private let logoSide: CGFloat = 84
+    private let fallbackTint = Color(red: 0.11, green: 0.11, blue: 0.13)
+
+    @State private var loadedLogo: UIImage?
+    @State private var blurredLogo: UIImage?
+    @State private var tint: Color?
+
+    private var tintColor: Color { tint ?? fallbackTint }
+
     var body: some View {
         ZStack(alignment: .bottomTrailing) {
             HStack(alignment: .center, spacing: 12) {
                 placeLogo
 
-                VStack(alignment: .leading, spacing: 7) {
+                VStack(alignment: .leading, spacing: 3) {
                     Text(place.name)
                         .font(.system(size: 14, weight: .semibold))
                         .foregroundStyle(.white)
@@ -539,58 +709,78 @@ struct PlaceRowView: View {
 
                     if !place.locationText.isEmpty {
                         Text(place.locationText)
-                            .font(.system(size: 13, weight: .semibold))
-                            .foregroundStyle(Color(red: 0.48, green: 0.77, blue: 1.0))
+                            .font(.system(size: 13, weight: .medium))
+                            .foregroundStyle(Color(red: 0.55, green: 0.8, blue: 1.0))
                             .lineLimit(1)
                     }
 
                     if let eventCountText = place.eventCountText {
                         Text(eventCountText)
                             .font(.system(size: 13, weight: .medium))
-                            .foregroundStyle(.white.opacity(0.62))
+                            .foregroundStyle(.white.opacity(0.7))
                             .lineLimit(1)
                     }
                 }
                 .frame(maxWidth: .infinity, alignment: .leading)
             }
             .padding(9)
-            .frame(minHeight: 102, alignment: .topLeading)
+            .frame(height: 102, alignment: .topLeading)
 
             Text(place.type.displayName)
                 .font(.system(size: 11, weight: .semibold))
-                .foregroundStyle(.white.opacity(0.36))
+                .foregroundStyle(.white.opacity(0.5))
                 .padding(.trailing, 9)
                 .padding(.bottom, 9)
         }
-        .background(
-            RoundedRectangle(cornerRadius: 18, style: .continuous)
-                .fill(Color(red: 0.11, green: 0.11, blue: 0.13))
-        )
+        .frame(height: 102)
+        .background { backdrop }
+        .clipShape(RoundedRectangle(cornerRadius: cardCornerRadius, style: .continuous))
+        .overlay {
+            RoundedRectangle(cornerRadius: cardCornerRadius, style: .continuous)
+                .strokeBorder(Color.white.opacity(0.08), lineWidth: 1)
+        }
+        .contentShape(RoundedRectangle(cornerRadius: cardCornerRadius, style: .continuous))
+        .task(id: place.listRowID) {
+            await loadLogo()
+        }
     }
 
-    @ViewBuilder
-    private var placeLogo: some View {
-        if let logoURL = place.displayLogoURL {
-            AsyncImage(url: logoURL) { phase in
-                switch phase {
-                case .empty:
-                    logoPlaceholder
-                case .success(let image):
-                    image
-                        .resizable()
-                        .scaledToFill()
-                case .failure:
-                    logoPlaceholder
-                @unknown default:
-                    logoPlaceholder
-                }
+    // Dark tint sampled from the logo, with a heavily blurred, darkened copy of the
+    // logo bloomed across the whole card — the same idea as the event detail hero's
+    // artwork-derived backdrop, so the card glows with the place's own color.
+    private var backdrop: some View {
+        ZStack {
+            tintColor
+
+            if let blurredLogo {
+                Image(uiImage: blurredLogo)
+                    .resizable()
+                    .scaledToFill()
+                    .overlay(Color.black.opacity(0.30))
+                    .overlay(tintColor.opacity(0.32))
             }
-            .frame(width: 84, height: 84)
-            .clipShape(RoundedRectangle(cornerRadius: 15, style: .continuous))
-        } else {
-            logoPlaceholder
-                .frame(width: 84, height: 84)
         }
+    }
+
+    private var placeLogo: some View {
+        Group {
+            if let loadedLogo {
+                Image(uiImage: loadedLogo)
+                    .resizable()
+                    .scaledToFill()
+            } else if place.displayLogoURL != nil {
+                Rectangle().fill(.white.opacity(0.06))
+            } else {
+                logoPlaceholder
+            }
+        }
+        .frame(width: logoSide, height: logoSide)
+        .clipShape(RoundedRectangle(cornerRadius: 15, style: .continuous))
+        .overlay(
+            RoundedRectangle(cornerRadius: 15, style: .continuous)
+                .strokeBorder(Color.white.opacity(0.14), lineWidth: 1)
+        )
+        .shadow(color: .black.opacity(0.28), radius: 8, x: 0, y: 4)
     }
 
     private var logoPlaceholder: some View {
@@ -609,7 +799,165 @@ struct PlaceRowView: View {
                 .font(.system(size: 30, weight: .semibold))
                 .foregroundStyle(.white.opacity(0.72))
         }
-        .clipShape(RoundedRectangle(cornerRadius: 16, style: .continuous))
+    }
+
+    private func loadLogo() async {
+        guard let logoURL = place.displayLogoURL else {
+            loadedLogo = nil
+            blurredLogo = nil
+            tint = nil
+            return
+        }
+
+        if let cached = PlaceLogoCache.shared.entry(for: logoURL) {
+            loadedLogo = cached.image
+            blurredLogo = cached.blurred
+            tint = cached.tint
+            return
+        }
+
+        guard let image = await RemoteImagePipeline.shared.image(for: logoURL) else {
+            return
+        }
+
+        // Sample the tint and build the blurred backdrop on a background task so the
+        // first appearance of a row while scrolling doesn't hitch the main thread.
+        let fallback = fallbackTint
+        let entry = await Task.detached(priority: .userInitiated) { () -> PlaceLogoCache.Entry in
+            let sampledTint = image.placeCardTintColor.map(Color.init(uiColor:)) ?? fallback
+            let blurred = image.placeCardBlurredBackdrop()
+            return PlaceLogoCache.Entry(image: image, blurred: blurred, tint: sampledTint)
+        }.value
+
+        PlaceLogoCache.shared.store(image: entry.image, blurred: entry.blurred, tint: entry.tint, for: logoURL)
+
+        loadedLogo = entry.image
+        blurredLogo = entry.blurred
+        tint = entry.tint
+    }
+}
+
+// Decoded logo + blurred backdrop + tint cached per URL so rows recycled during
+// scrolling skip the CoreImage color sampling and blur.
+private final class PlaceLogoCache {
+    static let shared = PlaceLogoCache()
+
+    struct Entry {
+        let image: UIImage
+        let blurred: UIImage?
+        let tint: Color
+    }
+
+    private let cache: NSCache<NSURL, CacheBox> = {
+        let cache = NSCache<NSURL, CacheBox>()
+        cache.countLimit = 200
+        return cache
+    }()
+
+    final class CacheBox {
+        let entry: Entry
+        init(_ entry: Entry) { self.entry = entry }
+    }
+
+    func entry(for url: URL) -> Entry? {
+        cache.object(forKey: url as NSURL)?.entry
+    }
+
+    func store(image: UIImage, blurred: UIImage?, tint: Color, for url: URL) {
+        cache.setObject(CacheBox(Entry(image: image, blurred: blurred, tint: tint)), forKey: url as NSURL)
+    }
+}
+
+private enum PlaceCardImageProcessing {
+    static let context = CIContext(options: [.workingColorSpace: NSNull()])
+}
+
+private extension UIImage {
+    // Average color of the whole logo, adjusted into a dark, readable tint that
+    // still reads as the logo's dominant color.
+    var placeCardTintColor: UIColor? {
+        guard let cgImage else { return nil }
+
+        let ciImage = CIImage(cgImage: cgImage)
+        let extent = ciImage.extent
+        guard extent.width > 0, extent.height > 0 else { return nil }
+
+        let filter = CIFilter.areaAverage()
+        filter.inputImage = ciImage
+        filter.extent = extent
+
+        guard let outputImage = filter.outputImage else { return nil }
+
+        var bitmap = [UInt8](repeating: 0, count: 4)
+        PlaceCardImageProcessing.context.render(
+            outputImage,
+            toBitmap: &bitmap,
+            rowBytes: 4,
+            bounds: CGRect(x: 0, y: 0, width: 1, height: 1),
+            format: .RGBA8,
+            colorSpace: nil
+        )
+
+        return UIColor(
+            red: CGFloat(bitmap[0]) / 255,
+            green: CGFloat(bitmap[1]) / 255,
+            blue: CGFloat(bitmap[2]) / 255,
+            alpha: 1
+        ).placeCardAdjusted()
+    }
+
+    // Small, heavily blurred copy of the logo used as the card's colored backdrop.
+    func placeCardBlurredBackdrop() -> UIImage? {
+        guard let cgImage else { return nil }
+
+        let maxDimension: CGFloat = 120
+        let scale = min(maxDimension / max(size.width, size.height), 1)
+        let targetSize = CGSize(width: size.width * scale, height: size.height * scale)
+        let renderer = UIGraphicsImageRenderer(size: targetSize)
+        let thumbnail = renderer.image { _ in
+            draw(in: CGRect(origin: .zero, size: targetSize))
+        }
+
+        guard let thumbnailCGImage = thumbnail.cgImage else { return nil }
+
+        let inputImage = CIImage(cgImage: thumbnailCGImage)
+        let clampedImage = inputImage.clampedToExtent()
+        let filter = CIFilter.gaussianBlur()
+        filter.inputImage = clampedImage
+        filter.radius = 30
+
+        guard let outputImage = filter.outputImage else { return thumbnail }
+
+        guard let blurredCGImage = PlaceCardImageProcessing.context.createCGImage(
+            outputImage,
+            from: inputImage.extent
+        ) else {
+            return thumbnail
+        }
+
+        return UIImage(cgImage: blurredCGImage, scale: thumbnail.scale, orientation: thumbnail.imageOrientation)
+    }
+}
+
+private extension UIColor {
+    // Keep the sampled hue but cap brightness so white text stays readable and dark
+    // logos still fade into a color that matches their background.
+    func placeCardAdjusted() -> UIColor {
+        var hue: CGFloat = 0
+        var saturation: CGFloat = 0
+        var brightness: CGFloat = 0
+        var alpha: CGFloat = 0
+
+        guard getHue(&hue, saturation: &saturation, brightness: &brightness, alpha: &alpha) else {
+            return self
+        }
+
+        return UIColor(
+            hue: hue,
+            saturation: min(max(saturation * 0.9, 0), 0.9),
+            brightness: min(max(brightness, 0), 0.34),
+            alpha: 1
+        )
     }
 }
 

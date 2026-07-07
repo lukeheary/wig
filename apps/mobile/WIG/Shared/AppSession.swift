@@ -1,13 +1,30 @@
 import SwiftUI
 
+// The city filter selection shared across the Home, Places, and Activity tabs so it
+// persists when switching between them. `nil` means "unset" (each page falls back to
+// its own default, e.g. the user's city); `.all` and `.city` are explicit user
+// choices that propagate to every tab.
+enum SelectedCityContext: Hashable, Sendable {
+    case all
+    case city(city: String, state: String)
+}
+
 @MainActor
 final class AppSession: ObservableObject {
     @Published var isAuthBypassed = false
     @Published var isAdmin = false
     @Published private(set) var eventDetailPresentationCount = 0
+    @Published var selectedCityContext: SelectedCityContext?
 
     var shouldShowFloatingCreationButton: Bool {
         isAdmin && eventDetailPresentationCount == 0
+    }
+
+    // True while an individual event detail page is on screen. The event page shows
+    // its own artwork-tinted background to the top, so the global status-bar scrim is
+    // hidden there.
+    var isEventDetailPresented: Bool {
+        eventDetailPresentationCount > 0
     }
 
     func skipAuth() {
@@ -17,6 +34,7 @@ final class AppSession: ObservableObject {
     func reset() {
         isAuthBypassed = false
         isAdmin = false
+        selectedCityContext = nil
     }
 
     func updateAdminStatus(_ isAdmin: Bool) {

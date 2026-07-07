@@ -6,6 +6,7 @@ struct MobileEventCreationView: View {
     enum Mode {
         case create
         case edit(EventFeedItem)
+        case editSeries(MobileEventSeriesDetail)
     }
 
     enum CreationKind {
@@ -93,6 +94,27 @@ struct MobileEventCreationView: View {
             _selectedOrganizer = State(initialValue: Self.prefilledPlace(from: event, kind: .organizer))
             _selectedCategoryKeys = State(initialValue: Set(event.categories))
             _existingCoverImageURL = State(initialValue: event.posterImageURL)
+
+        case .editSeries(let series):
+            _title = State(initialValue: series.title)
+            _descriptionText = State(initialValue: series.description ?? "")
+            _eventURLText = State(initialValue: series.eventURL?.absoluteString ?? "")
+            _address = State(initialValue: series.address ?? "")
+            _city = State(initialValue: series.city)
+            _state = State(initialValue: series.state)
+            _startAt = State(initialValue: series.startAt)
+            _endAt = State(initialValue: series.endAt ?? series.startAt.addingTimeInterval(2 * 60 * 60))
+            _hasEndAt = State(initialValue: series.endAt != nil)
+            _selectedStatus = State(initialValue: series.status)
+            _selectedVenue = State(initialValue: Self.prefilledPlace(from: series, kind: .venue))
+            _selectedOrganizer = State(initialValue: Self.prefilledPlace(from: series, kind: .organizer))
+            _selectedCategoryKeys = State(initialValue: Set(series.categories))
+            _existingCoverImageURL = State(initialValue: series.coverImageURL)
+            _recurrenceFrequency = State(initialValue: series.frequency)
+            _recurrenceInterval = State(initialValue: series.interval)
+            _recurrenceDaysOfWeek = State(initialValue: Set(series.daysOfWeek))
+            _hasSeriesEndDate = State(initialValue: series.untilDate != nil)
+            _seriesEndDate = State(initialValue: series.untilDate ?? Calendar.current.date(byAdding: .month, value: 3, to: .now) ?? .now)
         }
     }
 
@@ -104,7 +126,7 @@ struct MobileEventCreationView: View {
                 detailsSection
                 locationSection
                 categoriesSection
-                if isCreatingEventSeries {
+                if isEditingEventSeries || isCreatingEventSeries {
                     recurrenceSection
                 }
             }
@@ -163,7 +185,7 @@ struct MobileEventCreationView: View {
                 applyVenueScheduleDefaults()
             }
             .onChange(of: recurrenceFrequency) { _, frequency in
-                if isCreatingEventSeries && frequency != .daily {
+                if (isEditingEventSeries || isCreatingEventSeries) && frequency != .daily {
                     applyDefaultRecurrenceDayIfNeeded()
                 }
             }
@@ -290,7 +312,7 @@ struct MobileEventCreationView: View {
     @ViewBuilder
     private var detailsSection: some View {
         Section("Details") {
-            ClearableInputField(isCreatingEventSeries ? "Series Title" : "Event Title", text: $title)
+            ClearableInputField(isSeriesForm ? "Series Title" : "Event Title", text: $title)
                 .textInputAutocapitalization(.words)
 
             VStack(alignment: .leading, spacing: 8) {
@@ -315,7 +337,7 @@ struct MobileEventCreationView: View {
             }
         }
 
-        Section(isCreatingEventSeries ? "First Event" : "Schedule") {
+        Section(isSeriesForm ? "First Event" : "Schedule") {
             DatePicker(
                 "Start Date",
                 selection: startDateBinding,
@@ -665,7 +687,7 @@ struct MobileEventCreationView: View {
         let finalState = cleaned(locationSource?.state) ?? cleaned(state)?.uppercased()
 
         guard !trimmedTitle.isEmpty else {
-            alertMessage = isCreatingEventSeries
+            alertMessage = isSeriesForm
                 ? "Please enter a series title."
                 : "Please enter an event title."
             return
@@ -687,7 +709,7 @@ struct MobileEventCreationView: View {
             return
         }
 
-        if isCreatingEventSeries {
+        if isEditingEventSeries || isCreatingEventSeries {
             applyDefaultRecurrenceDayIfNeeded()
 
             if recurrenceFrequency == .weekly && recurrenceDaysOfWeek.isEmpty {
@@ -815,6 +837,32 @@ struct MobileEventCreationView: View {
                 NotificationCenter.default.post(name: .mobileEventDidChange, object: updatedEvent.id)
                 onCompleted?(updatedEvent)
                 dismiss()
+
+            case .editSeries(let series):
+                let updatedSeries = try await apiClient.send(
+                    APIClient.mobileUpdateEventSeries(
+                        seriesID: series.id,
+                        venueID: finalVenueID,
+                        organizerID: finalOrganizerID,
+                        title: trimmedTitle,
+                        description: trimmedDescription.isEmpty ? nil : trimmedDescription,
+                        coverImageURL: uploadedCoverURL ?? existingCoverImageURL,
+                        removeCoverImage: uploadedCoverURL == nil && existingCoverImageURL == nil,
+                        eventURL: eventURLValue,
+                        startAt: startAt,
+                        endAt: endDate,
+                        address: finalAddress,
+                        city: finalCity,
+                        state: finalState,
+                        categories: orderedSelectedCategories,
+                        status: selectedStatus,
+                        recurrence: eventSeriesRecurrenceRequest
+                    )
+                )
+
+                NotificationCenter.default.post(name: .mobileEventDidChange, object: updatedSeries.firstEventId)
+                onSeriesCompleted?()
+                dismiss()
             }
         } catch {
             alertMessage = error.localizedDescription
@@ -836,6 +884,8 @@ struct MobileEventCreationView: View {
             folder = "events/pending/\(UUID().uuidString)"
         case .edit(let event):
             folder = "events/\(event.id.uuidString)"
+        case .editSeries(let series):
+            folder = "event-series/\(series.id.uuidString)"
         }
 
         let uploadedImage = try await apiClient.send(
@@ -855,6 +905,8 @@ struct MobileEventCreationView: View {
             return isCreatingEventSeries ? "Create Event Series" : "Create Event"
         case .edit:
             return "Edit Event"
+        case .editSeries:
+            return "Edit Event Series"
         }
     }
 
@@ -863,7 +915,7 @@ struct MobileEventCreationView: View {
             switch mode {
             case .create:
                 return isCreatingEventSeries ? "Creating Series..." : "Creating..."
-            case .edit:
+            case .edit, .editSeries:
                 return "Saving..."
             }
         }
@@ -871,7 +923,7 @@ struct MobileEventCreationView: View {
         switch mode {
         case .create:
             return isCreatingEventSeries ? "Create Series" : "Create"
-        case .edit:
+        case .edit, .editSeries:
             return "Save"
         }
     }
@@ -882,6 +934,8 @@ struct MobileEventCreationView: View {
             return isCreatingEventSeries ? "Couldn't Create Event Series" : "Couldn't Create Event"
         case .edit:
             return "Couldn't Save Event"
+        case .editSeries:
+            return "Couldn't Save Event Series"
         }
     }
 
@@ -891,6 +945,18 @@ struct MobileEventCreationView: View {
         }
 
         return false
+    }
+
+    private var isEditingEventSeries: Bool {
+        if case .editSeries = mode {
+            return true
+        }
+
+        return false
+    }
+
+    private var isSeriesForm: Bool {
+        isCreatingEventSeries || isEditingEventSeries
     }
 
     private var coverImagePlaceholder: some View {
@@ -979,6 +1045,73 @@ struct MobileEventCreationView: View {
         }
     }
 
+    private static func prefilledPlace(
+        from series: MobileEventSeriesDetail,
+        kind: PlacePickerKind
+    ) -> PlaceDetail? {
+        switch kind {
+        case .venue:
+            guard
+                let id = series.venueID,
+                let slug = series.venueSlug,
+                let name = series.venueName
+            else {
+                return nil
+            }
+
+            return PlaceDetail(
+                id: id,
+                type: .venue,
+                slug: slug,
+                name: name,
+                description: nil,
+                logoImageURL: series.venueLogoImageURL,
+                coverImageURL: nil,
+                address: series.address,
+                city: series.city,
+                state: series.state,
+                website: nil,
+                instagram: nil,
+                hours: nil,
+                categories: series.categories,
+                categoryLabels: series.categoryLabels,
+                updatedAt: nil,
+                events: [],
+                pastEvents: []
+            )
+
+        case .organizer:
+            guard
+                let id = series.organizerID,
+                let slug = series.organizerSlug,
+                let name = series.organizerName
+            else {
+                return nil
+            }
+
+            return PlaceDetail(
+                id: id,
+                type: .organizer,
+                slug: slug,
+                name: name,
+                description: nil,
+                logoImageURL: series.organizerLogoImageURL,
+                coverImageURL: nil,
+                address: series.address,
+                city: series.city,
+                state: series.state,
+                website: nil,
+                instagram: nil,
+                hours: nil,
+                categories: series.categories,
+                categoryLabels: series.categoryLabels,
+                updatedAt: nil,
+                events: [],
+                pastEvents: []
+            )
+        }
+    }
+
     private var orderedSelectedCategories: [String] {
         viewModel.categories
             .map(\.key)
@@ -1053,7 +1186,7 @@ struct MobileEventCreationView: View {
             get: { startAt },
             set: { newDate in
                 startAt = Self.combineDate(newDate, withTimeFrom: startAt)
-                if isCreatingEventSeries && recurrenceFrequency != .daily {
+                if isSeriesForm && recurrenceFrequency != .daily {
                     recurrenceDaysOfWeek = [Self.weekdayIndex(for: startAt)]
                 }
 
@@ -1419,7 +1552,7 @@ private struct PlaceLookupSheet: View {
             .frame(maxWidth: .infinity, minHeight: 240)
         } else {
             LazyVStack(spacing: 12) {
-                ForEach(viewModel.places) { place in
+                ForEach(viewModel.places, id: \.listRowID) { place in
                     Button {
                         select(place)
                     } label: {

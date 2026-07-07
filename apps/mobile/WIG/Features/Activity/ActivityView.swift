@@ -5,13 +5,14 @@ struct ActivityView: View {
     let resetFiltersTrigger: Int
 
     @Environment(\.apiClient) private var apiClient
+    @EnvironmentObject private var appSession: AppSession
     @StateObject private var viewModel = ActivityViewModel()
     @State private var selectedFilter: ActivityFeedFilter = .upcoming
     @State private var selectedCityFilter: ActivityCityFilter?
     @State private var activityActionErrorMessage: String?
     @State private var visibleActivityCount = ActivityView.activityPageSize
 
-    private let background = Color(red: 0.07, green: 0.07, blue: 0.08)
+    private let background = AppTheme.background
     private static let activityPageSize = 20
 
     init(resetFiltersTrigger: Int = 0) {
@@ -22,6 +23,7 @@ struct ActivityView: View {
         NavigationStack {
             content
                 .background(background.ignoresSafeArea())
+                .topStatusBarScrim()
                 .toolbar(.hidden, for: .navigationBar)
                 .overlay(alignment: .topLeading) {
                     HStack(spacing: 10) {
@@ -63,6 +65,9 @@ struct ActivityView: View {
                 }
                 .onChange(of: selectedCityFilter) { _, _ in
                     resetVisibleActivityCount()
+                }
+                .onChange(of: selectedCityFilter) { _, newValue in
+                    appSession.selectedCityContext = newValue?.selectedCityContext
                 }
                 .onChange(of: resetFiltersTrigger) { _, _ in
                     resetFilters()
@@ -139,6 +144,10 @@ struct ActivityView: View {
             } else {
                 ScrollView {
                     LazyVStack(alignment: .leading, spacing: 22) {
+                        activityHeader(response: response)
+                            .padding(.horizontal, 16)
+                            .padding(.bottom, -12)
+
                         ForEach(groupedActivities(visibleActivities)) { section in
                             ActivitySectionView(
                                 section: section,
@@ -259,6 +268,15 @@ struct ActivityView: View {
     private func effectiveCityFilter(for response: ActivityFeedResponse) -> ActivityCityFilter {
         let cities = availableCityFilters
 
+        // Prefer the selection shared across tabs so the most recent city choice on any
+        // page (Home / Places / Activity) wins here too — the tabs stay alive, so local
+        // state would otherwise keep showing this page's own stale selection.
+        if let sharedFilter = appSession.selectedCityContext.flatMap(ActivityCityFilter.init),
+           cities.contains(sharedFilter)
+        {
+            return sharedFilter
+        }
+
         if let selectedCityFilter, cities.contains(selectedCityFilter) {
             return selectedCityFilter
         }
@@ -309,6 +327,49 @@ struct ActivityView: View {
         }
 
         visibleActivityCount = min(visibleActivityCount + Self.activityPageSize, totalCount)
+    }
+
+    private func activityHeader(response: ActivityFeedResponse) -> some View {
+        (
+            Text("Activity")
+                .font(.system(size: 20, weight: .bold))
+                .foregroundStyle(.white)
+            +
+            (headerLocationName(for: response).map { location in
+                Text(" in \(location)")
+                    .font(.system(size: 20, weight: .medium))
+                    .foregroundStyle(.white.opacity(0.5))
+            } ?? Text(""))
+        )
+    }
+
+    private func headerLocationName(for response: ActivityFeedResponse) -> String? {
+        switch effectiveCityFilter(for: response) {
+        case .city(let city, _):
+            return city
+        case .all:
+            return nil
+        }
+    }
+}
+
+private extension ActivityCityFilter {
+    init?(_ context: SelectedCityContext) {
+        switch context {
+        case .all:
+            self = .all
+        case .city(let city, let state):
+            self = .city(city: city, state: state)
+        }
+    }
+
+    var selectedCityContext: SelectedCityContext? {
+        switch self {
+        case .all:
+            return .all
+        case .city(let city, let state):
+            return .city(city: city, state: state)
+        }
     }
 }
 
@@ -588,22 +649,15 @@ private struct ActivitySectionView: View {
     let onRespondToRequest: (ActivityFeedItem, ActivityRequestResponse) async -> Void
 
     var body: some View {
-        VStack(alignment: .leading, spacing: 10) {
-            Text(section.title)
-                .font(.system(size: 20, weight: .bold))
-                .foregroundStyle(.white)
-                .padding(.horizontal, 16)
-
-            VStack(alignment: .leading, spacing: 16) {
-                ForEach(section.activities) { activity in
-                    ActivityRowView(
-                        activity: activity,
-                        onRespondToRequest: onRespondToRequest
-                    )
-                }
+        VStack(alignment: .leading, spacing: 16) {
+            ForEach(section.activities) { activity in
+                ActivityRowView(
+                    activity: activity,
+                    onRespondToRequest: onRespondToRequest
+                )
             }
-            .padding(.horizontal, 16)
         }
+        .padding(.horizontal, 16)
     }
 }
 

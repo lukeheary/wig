@@ -15,6 +15,11 @@ final class ProfileViewModel: ObservableObject {
     private static var cachedResponse: FriendsFeedResponse?
     private static var inFlightLoad: Task<FriendsFeedResponse, Error>?
 
+    /// The signed-in user's summary, if the friends feed has been loaded.
+    static var currentUserSummary: FriendUserSummary? {
+        cachedResponse?.profile
+    }
+
     func load(using apiClient: APIClient, forceRefresh: Bool = false) async {
         if !forceRefresh, let cachedResponse = Self.cachedResponse {
             state = .loaded(cachedResponse)

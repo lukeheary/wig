@@ -22,6 +22,7 @@ struct ProfileView: View {
     @State private var isRemovingPartnerConfirmationPresented = false
     @State private var partnerErrorMessage: String?
     @State private var friendRequestActionErrorMessage: String?
+    @State private var isAdminSettingsPresented = false
 
     init(resetFiltersTrigger: Int = 0) {
         self.resetFiltersTrigger = resetFiltersTrigger
@@ -31,6 +32,7 @@ struct ProfileView: View {
         NavigationStack {
             content
                 .background(ProfileTheme.background.ignoresSafeArea())
+                .topStatusBarScrim()
                 .toolbar(.hidden, for: .navigationBar)
                 .task {
                     if case .idle = viewModel.state {
@@ -152,6 +154,9 @@ struct ProfileView: View {
                         .presentationDetents([.medium, .large])
                         .presentationDragIndicator(.visible)
                     }
+                }
+                .navigationDestination(isPresented: $isAdminSettingsPresented) {
+                    AdminSettingsView()
                 }
         }
     }
@@ -316,9 +321,11 @@ struct ProfileView: View {
                                     .buttonStyle(.plain)
                                 }
                             }
-                            .padding(.horizontal, 16)
+                            .scrollTargetLayout()
                         }
                         .scrollIndicators(.hidden)
+                        .contentMargins(.horizontal, 16, for: .scrollContent)
+                        .scrollTargetBehavior(.viewAligned)
                     }
                     .padding(.horizontal, -16)
                 }
@@ -623,6 +630,12 @@ struct ProfileView: View {
 
     private var signOutButton: some View {
         Menu {
+            if appSession.isAdmin {
+                Button("Admin Settings") {
+                    isAdminSettingsPresented = true
+                }
+            }
+
             Button("Sign Out") {
                 Task {
                     try? await clerk.auth.signOut(sessionId: clerk.session?.id)
@@ -1138,9 +1151,11 @@ private struct UserProfileEventsSection: View {
                                     .buttonStyle(.plain)
                                 }
                             }
-                            .padding(.horizontal, 16)
+                            .scrollTargetLayout()
                         }
                         .scrollIndicators(.hidden)
+                        .contentMargins(.horizontal, 16, for: .scrollContent)
+                        .scrollTargetBehavior(.viewAligned)
                     }
                     .padding(.horizontal, -16)
                 }
@@ -1376,10 +1391,14 @@ private struct ProfilePageSkeletonContent: View {
                                 .frame(width: 220)
                         }
                     }
+                    .scrollTargetLayout()
                 }
                 .scrollIndicators(.hidden)
+                .contentMargins(.horizontal, 16, for: .scrollContent)
+                .scrollTargetBehavior(.viewAligned)
             }
             .frame(maxWidth: .infinity, alignment: .leading)
+            .padding(.horizontal, -16)
         }
     }
 
@@ -2454,11 +2473,15 @@ private struct FriendAvatarView: View {
             size: size,
             identityKey: user?.id ?? user?.username ?? user?.name
         )
+        .overlay(
+            Circle()
+                .strokeBorder(.white.opacity(0.08), lineWidth: 1)
+        )
     }
 }
 
 private enum ProfileTheme {
-    static let background = Color(red: 0.07, green: 0.07, blue: 0.08)
+    static let background = AppTheme.background
     static let cardBackground = Color(red: 0.11, green: 0.11, blue: 0.13)
 }
 
@@ -2519,6 +2542,301 @@ private extension String {
         }
 
         return parts.dropFirst().joined(separator: " ")
+    }
+}
+
+private struct AdminSettingsView: View {
+    @Environment(\.dismiss) private var dismiss
+    @State private var presentedPlaceCreationType: PlaceListItem.PlaceType?
+    @State private var isEventCreationSheetPresented = false
+    @State private var isEventSeriesCreationSheetPresented = false
+    @State private var isMetroAreaSheetPresented = false
+
+    var body: some View {
+        ScrollView {
+            VStack(alignment: .leading, spacing: 22) {
+                Text("Admin Settings")
+                    .font(.system(size: 20, weight: .bold))
+                    .foregroundStyle(.white)
+                    .padding(.bottom, -10)
+
+                VStack(spacing: 12) {
+                    AdminSettingsActionButton(
+                        title: "Add Event",
+                        systemImage: "calendar.badge.plus"
+                    ) {
+                        isEventCreationSheetPresented = true
+                    }
+
+                    AdminSettingsActionButton(
+                        title: "Add Event Series",
+                        systemImage: "calendar.badge.clock"
+                    ) {
+                        isEventSeriesCreationSheetPresented = true
+                    }
+
+                    AdminSettingsActionButton(
+                        title: "Add Venue",
+                        systemImage: "building.2"
+                    ) {
+                        presentedPlaceCreationType = .venue
+                    }
+
+                    AdminSettingsActionButton(
+                        title: "Add Organizer",
+                        systemImage: "person.2.badge.plus"
+                    ) {
+                        presentedPlaceCreationType = .organizer
+                    }
+
+                    AdminSettingsActionButton(
+                        title: "Add Metro Area",
+                        systemImage: "mappin.and.ellipse"
+                    ) {
+                        isMetroAreaSheetPresented = true
+                    }
+                }
+            }
+            .padding(.horizontal, 16)
+            .padding(.top, 82)
+            .padding(.bottom, 48)
+        }
+        .scrollIndicators(.hidden)
+        .background(ProfileTheme.background.ignoresSafeArea())
+        .background(SwipeBackEnabler())
+        .toolbar(.hidden, for: .navigationBar)
+        .navigationBarBackButtonHidden()
+        .overlay(alignment: .topLeading) {
+            FloatingGlassIconButton(systemImage: "chevron.left") {
+                dismiss()
+            }
+            .padding(.leading, 16)
+            .padding(.top, 0)
+        }
+        .sheet(isPresented: $isEventCreationSheetPresented) {
+            MobileEventCreationView()
+                .presentationDetents([.large])
+                .presentationDragIndicator(.visible)
+        }
+        .sheet(isPresented: $isEventSeriesCreationSheetPresented) {
+            MobileEventCreationView(creationKind: .eventSeries)
+                .presentationDetents([.large])
+                .presentationDragIndicator(.visible)
+        }
+        .sheet(item: $presentedPlaceCreationType) { type in
+            MobilePlaceCreationView(type: type)
+                .presentationDetents([.large])
+                .presentationDragIndicator(.visible)
+        }
+        .sheet(isPresented: $isMetroAreaSheetPresented) {
+            MetroAreaCreationView()
+                .presentationDetents([.medium, .large])
+                .presentationDragIndicator(.visible)
+        }
+    }
+}
+
+private struct AdminSettingsActionButton: View {
+    let title: String
+    let systemImage: String
+    let action: () -> Void
+
+    var body: some View {
+        Button(action: action) {
+            HStack(spacing: 14) {
+                ZStack {
+                    RoundedRectangle(cornerRadius: 16, style: .continuous)
+                        .fill(Color.white.opacity(0.08))
+
+                    Image(systemName: systemImage)
+                        .font(.system(size: 18, weight: .semibold))
+                        .foregroundStyle(AppTheme.accentBlue)
+                }
+                .frame(width: 52, height: 52)
+
+                Text(title)
+                    .font(.system(size: 17, weight: .semibold))
+                    .foregroundStyle(.white)
+
+                Spacer(minLength: 12)
+
+                Image(systemName: "chevron.right")
+                    .font(.system(size: 14, weight: .semibold))
+                    .foregroundStyle(.white.opacity(0.4))
+            }
+            .padding(16)
+            .frame(maxWidth: .infinity, alignment: .leading)
+            .background(
+                RoundedRectangle(cornerRadius: 20, style: .continuous)
+                    .fill(ProfileTheme.cardBackground)
+            )
+            .overlay(
+                RoundedRectangle(cornerRadius: 20, style: .continuous)
+                    .strokeBorder(.white.opacity(0.08), lineWidth: 1)
+            )
+        }
+        .buttonStyle(.plain)
+    }
+}
+
+private struct MetroAreaCreationView: View {
+    @Environment(\.apiClient) private var apiClient
+    @Environment(\.dismiss) private var dismiss
+
+    @State private var selectedCityDetail: MobileGooglePlaceDetail?
+    @State private var isCitySearchPresented = false
+    @State private var radiusMiles = "20"
+    @State private var isSubmitting = false
+    @State private var alertMessage: String?
+
+    var body: some View {
+        NavigationStack {
+            Form {
+                Section {
+                    Button {
+                        isCitySearchPresented = true
+                    } label: {
+                        HStack(spacing: 12) {
+                            Image(systemName: "mappin.and.ellipse")
+                                .foregroundStyle(AppTheme.accentBlue)
+
+                            VStack(alignment: .leading, spacing: 4) {
+                                Text(selectedCityLabel)
+                                    .foregroundStyle(selectedCityDetail == nil ? .white.opacity(0.62) : .white)
+
+                                if let selectedCityDetail,
+                                   let latitude = selectedCityDetail.latitude,
+                                   let longitude = selectedCityDetail.longitude {
+                                    Text("\(latitude.formatted(.number.precision(.fractionLength(4)))), \(longitude.formatted(.number.precision(.fractionLength(4))))")
+                                        .font(.system(size: 12, weight: .medium))
+                                        .foregroundStyle(.white.opacity(0.5))
+                                }
+                            }
+
+                            Spacer(minLength: 8)
+
+                            Image(systemName: "chevron.right")
+                                .font(.system(size: 13, weight: .semibold))
+                                .foregroundStyle(.white.opacity(0.36))
+                        }
+                    }
+                    .buttonStyle(.plain)
+                } header: {
+                    Text("City")
+                } footer: {
+                    Text("Search for a city using Google Places, then we’ll use that city center for the metro area.")
+                }
+
+                Section {
+                    TextField("Radius in miles", text: $radiusMiles)
+                        .keyboardType(.decimalPad)
+                } header: {
+                    Text("Radius")
+                } footer: {
+                    Text("Events within this radius of the selected city center will be included.")
+                }
+            }
+            .scrollContentBackground(.hidden)
+            .background(Color(uiColor: .systemGroupedBackground))
+            .navigationTitle("Add Metro Area")
+            .navigationBarTitleDisplayMode(.inline)
+            .toolbar {
+                ToolbarItem(placement: .cancellationAction) {
+                    Button("Cancel") {
+                        dismiss()
+                    }
+                }
+
+                ToolbarItem(placement: .confirmationAction) {
+                    Button("Add") {
+                        Task {
+                            await submit()
+                        }
+                    }
+                    .disabled(isSubmitting)
+                }
+            }
+            .sheet(isPresented: $isCitySearchPresented) {
+                GooglePlaceSearchSheet(
+                    title: "Search Cities",
+                    placeholder: "Search for a city",
+                    emptyPrompt: "Search for a city to create a metro area.",
+                    iconSystemName: "mappin.and.ellipse",
+                    searchType: .cities
+                ) { detail in
+                    selectedCityDetail = detail
+                }
+            }
+            .alert(
+                "Couldn't Add Metro Area",
+                isPresented: Binding(
+                    get: { alertMessage != nil },
+                    set: { isPresented in
+                        if !isPresented {
+                            alertMessage = nil
+                        }
+                    }
+                )
+            ) {
+                Button("OK", role: .cancel) {}
+            } message: {
+                Text(alertMessage ?? "Please try again.")
+            }
+        }
+    }
+
+    private var selectedCityLabel: String {
+        guard let selectedCityDetail else {
+            return "Select a city"
+        }
+
+        let cityName = selectedCityDetail.city.ifEmpty(selectedCityDetail.name)
+        return "\(cityName), \(selectedCityDetail.state)"
+    }
+
+    private func submit() async {
+        guard let selectedCityDetail else {
+            alertMessage = "Please select a city."
+            return
+        }
+
+        let cityName = selectedCityDetail.city.ifEmpty(selectedCityDetail.name)
+        let state = selectedCityDetail.state.trimmingCharacters(in: .whitespacesAndNewlines).uppercased()
+
+        guard !cityName.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty, state.count == 2 else {
+            alertMessage = "Please select a valid city."
+            return
+        }
+
+        guard let latitude = selectedCityDetail.latitude, let longitude = selectedCityDetail.longitude else {
+            alertMessage = "We couldn't load coordinates for that city. Please try another result."
+            return
+        }
+
+        guard let parsedRadius = Double(radiusMiles), parsedRadius >= 1, parsedRadius <= 200 else {
+            alertMessage = "Please enter a radius between 1 and 200 miles."
+            return
+        }
+
+        isSubmitting = true
+        defer {
+            isSubmitting = false
+        }
+
+        do {
+            _ = try await apiClient.send(
+                APIClient.mobileCreateMetroArea(
+                    name: cityName,
+                    state: state,
+                    latitude: latitude,
+                    longitude: longitude,
+                    radiusMiles: parsedRadius
+                )
+            )
+            dismiss()
+        } catch {
+            alertMessage = error.localizedDescription
+        }
     }
 }
 

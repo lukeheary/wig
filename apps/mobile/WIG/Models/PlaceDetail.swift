@@ -57,6 +57,14 @@ struct PlaceDetail: Decodable, Identifiable, Hashable, Sendable {
         return location.isEmpty ? nil : location
     }
 
+    var cityStateText: String? {
+        let location = [city, state]
+            .compactMap(cleaned)
+            .joined(separator: ", ")
+
+        return location.isEmpty ? nil : location
+    }
+
     var websiteDisplayText: String? {
         guard let host = website?.host() else {
             return nil
@@ -108,14 +116,14 @@ extension PlaceDetail {
             description: nil,
             logoImageURL: listItem.logoImageURL,
             coverImageURL: nil,
-            address: nil,
+            address: listItem.address,
             city: listItem.city,
             state: listItem.state,
-            website: nil,
-            instagram: nil,
+            website: listItem.website,
+            instagram: listItem.instagram,
             hours: nil,
-            categories: [],
-            categoryLabels: [:],
+            categories: listItem.categories,
+            categoryLabels: listItem.categoryLabels,
             updatedAt: listItem.updatedAt,
             isFollowed: listItem.isFollowed,
             canManage: false,
