@@ -5,6 +5,12 @@ type GooglePlaceDetailsResponse = {
     name?: string;
     formatted_address?: string;
     website?: string;
+    geometry?: {
+      location?: {
+        lat?: number;
+        lng?: number;
+      };
+    };
     address_components?: Array<{
       long_name: string;
       short_name: string;
@@ -17,6 +23,26 @@ type GooglePlaceDetailsResponse = {
       }>;
     };
   };
+  status?: string;
+  error_message?: string;
+};
+
+type GoogleGeocodeResponse = {
+  results?: Array<{
+    place_id?: string;
+    formatted_address?: string;
+    geometry?: {
+      location?: {
+        lat?: number;
+        lng?: number;
+      };
+    };
+    address_components?: Array<{
+      long_name: string;
+      short_name: string;
+      types: string[];
+    }>;
+  }>;
   status?: string;
   error_message?: string;
 };
@@ -108,10 +134,13 @@ function mapOpeningHours(
 }
 
 export async function GET(
-  _request: Request,
+  request: Request,
   { params }: { params: Promise<{ placeId: string }> }
 ) {
   const { placeId } = await params;
+  const { searchParams } = new URL(request.url);
+  const searchType =
+    searchParams.get("searchType") === "cities" ? "cities" : "establishments";
   const apiKey = process.env.NEXT_PUBLIC_GOOGLE_MAPS_API_KEY;
 
   if (!apiKey) {
@@ -121,19 +150,76 @@ export async function GET(
     );
   }
 
+  if (searchType === "cities") {
+    const url = new URL("https://maps.googleapis.com/maps/api/geocode/json");
+    url.searchParams.set("place_id", placeId);
+    url.searchParams.set("key", apiKey);
+
+    const response = await fetch(url, { cache: "no-store" });
+    const payload = (await response.json()) as GoogleGeocodeResponse;
+
+    if (!response.ok || payload.status === "REQUEST_DENIED") {
+      return NextResponse.json(
+        { error: payload.error_message || "Failed to load Google city details" },
+        { status: 500 }
+      );
+    }
+
+    const result = payload.results?.[0];
+    if (!result?.address_components) {
+      return NextResponse.json({ error: "Place not found" }, { status: 404 });
+    }
+
+    let city = "";
+    let state = "";
+
+    for (const component of result.address_components) {
+      if (component.types.includes("locality")) {
+        city = component.long_name;
+      }
+      if (!city && component.types.includes("postal_town")) {
+        city = component.long_name;
+      }
+      if (!city && component.types.includes("administrative_area_level_3")) {
+        city = component.long_name;
+      }
+      if (component.types.includes("administrative_area_level_1")) {
+        state = component.short_name;
+      }
+    }
+
+    return NextResponse.json({
+      placeId,
+      name: city || result.formatted_address?.split(",")[0]?.trim() || "",
+      address: "",
+      city,
+      state,
+      formattedAddress: result.formatted_address ?? "",
+      website: null,
+      hours: null,
+      latitude: result.geometry?.location?.lat ?? null,
+      longitude: result.geometry?.location?.lng ?? null,
+    });
+  }
+
   const url = new URL(
     "https://maps.googleapis.com/maps/api/place/details/json"
   );
   url.searchParams.set("place_id", placeId);
   url.searchParams.set(
     "fields",
-    [
-      "address_components",
-      "formatted_address",
-      "name",
-      "opening_hours",
-      "website",
-    ].join(",")
+    (
+      searchType === "cities"
+        ? ["address_components", "formatted_address", "geometry", "name"]
+        : [
+            "address_components",
+            "formatted_address",
+            "geometry",
+            "name",
+            "opening_hours",
+            "website",
+          ]
+    ).join(",")
   );
   url.searchParams.set("key", apiKey);
 
@@ -167,6 +253,12 @@ export async function GET(
     if (component.types.includes("locality")) {
       city = component.long_name;
     }
+    if (!city && component.types.includes("postal_town")) {
+      city = component.long_name;
+    }
+    if (!city && component.types.includes("administrative_area_level_2")) {
+      city = component.long_name;
+    }
     if (component.types.includes("administrative_area_level_1")) {
       state = component.short_name;
     }
@@ -181,5 +273,7 @@ export async function GET(
     formattedAddress: place.formatted_address ?? "",
     website: place.website ?? null,
     hours: mapOpeningHours(place.opening_hours),
+    latitude: place.geometry?.location?.lat ?? null,
+    longitude: place.geometry?.location?.lng ?? null,
   });
 }

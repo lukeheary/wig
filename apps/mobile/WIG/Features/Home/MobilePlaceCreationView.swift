@@ -117,7 +117,13 @@ struct MobilePlaceCreationView: View {
                 await loadVenueScrapersIfNeeded()
             }
             .sheet(isPresented: $isGooglePlacePickerPresented) {
-                GooglePlaceLookupSheet { place in
+                GooglePlaceSearchSheet(
+                    title: "Search Google Places",
+                    placeholder: "Search Google Places",
+                    emptyPrompt: "Search for a venue to auto-fill its details.",
+                    iconSystemName: "building.2",
+                    searchType: .establishments
+                ) { place in
                     applyGooglePlace(place)
                 }
             }
@@ -803,20 +809,24 @@ private struct EditablePlaceScraperRow: Identifiable, Hashable {
 }
 
 @MainActor
-private final class GooglePlaceLookupViewModel: ObservableObject {
+private final class GooglePlaceSearchViewModel: ObservableObject {
     @Published private(set) var predictions: [MobileGooglePlacePrediction] = []
     @Published private(set) var isLoading = false
     @Published private(set) var loadError: String?
     private var activeQuery = ""
 
-    func load(query: String, using apiClient: APIClient) async {
+    func load(
+        query: String,
+        searchType: MobileGooglePlaceSearchType,
+        using apiClient: APIClient
+    ) async {
         let normalizedQuery = query.trimmingCharacters(in: .whitespacesAndNewlines)
         activeQuery = normalizedQuery
 
         guard normalizedQuery.count >= 2 else {
             predictions = []
-            isLoading = false
             loadError = nil
+            isLoading = false
             return
         }
 
@@ -830,7 +840,10 @@ private final class GooglePlaceLookupViewModel: ObservableObject {
 
         do {
             let response = try await apiClient.send(
-                APIClient.mobileGooglePlaceSearch(query: normalizedQuery)
+                APIClient.mobileGooglePlaceSearch(
+                    query: normalizedQuery,
+                    searchType: searchType
+                )
             )
 
             guard activeQuery == normalizedQuery else {
@@ -849,14 +862,20 @@ private final class GooglePlaceLookupViewModel: ObservableObject {
     }
 }
 
-private struct GooglePlaceLookupSheet: View {
+struct GooglePlaceSearchSheet: View {
+    let title: String
+    let placeholder: String
+    let emptyPrompt: String
+    let iconSystemName: String
+    let searchType: MobileGooglePlaceSearchType
     let onSelect: (MobileGooglePlaceDetail) -> Void
 
     @Environment(\.apiClient) private var apiClient
     @Environment(\.dismiss) private var dismiss
-    @StateObject private var viewModel = GooglePlaceLookupViewModel()
+    @StateObject private var viewModel = GooglePlaceSearchViewModel()
     @State private var query = ""
     @State private var selectedPlaceID: String?
+    @State private var selectionErrorMessage: String?
 
     var body: some View {
         NavigationStack {
@@ -871,7 +890,7 @@ private struct GooglePlaceLookupSheet: View {
                                 .font(.system(size: 16, weight: .medium))
                                 .foregroundStyle(.white.opacity(0.65))
 
-                            TextField("Search Google Places", text: $query)
+                            TextField(placeholder, text: $query)
                                 .font(.system(size: 16, weight: .medium))
                                 .foregroundStyle(.white)
                                 .textInputAutocapitalization(.words)
@@ -908,7 +927,7 @@ private struct GooglePlaceLookupSheet: View {
                 }
                 .scrollIndicators(.hidden)
             }
-            .navigationTitle("Search Google Places")
+            .navigationTitle(title)
             .navigationBarTitleDisplayMode(.inline)
             .toolbar {
                 ToolbarItem(placement: .cancellationAction) {
@@ -917,8 +936,27 @@ private struct GooglePlaceLookupSheet: View {
                     }
                 }
             }
+            .alert(
+                "Couldn't Load Place",
+                isPresented: Binding(
+                    get: { selectionErrorMessage != nil },
+                    set: { isPresented in
+                        if !isPresented {
+                            selectionErrorMessage = nil
+                        }
+                    }
+                )
+            ) {
+                Button("OK", role: .cancel) {}
+            } message: {
+                Text(selectionErrorMessage ?? "Please try another result.")
+            }
             .task(id: normalizedQuery) {
-                await viewModel.load(query: normalizedQuery, using: apiClient)
+                await viewModel.load(
+                    query: normalizedQuery,
+                    searchType: searchType,
+                    using: apiClient
+                )
             }
         }
     }
@@ -932,7 +970,7 @@ private struct GooglePlaceLookupSheet: View {
                 .foregroundStyle(.white)
         } else if let loadError = viewModel.loadError, viewModel.predictions.isEmpty {
             ContentUnavailableView {
-                Label("Google Places", systemImage: "wifi.exclamationmark")
+                Label(title, systemImage: "wifi.exclamationmark")
             } description: {
                 Text(loadError)
             }
@@ -940,11 +978,9 @@ private struct GooglePlaceLookupSheet: View {
             .frame(maxWidth: .infinity, minHeight: 220)
         } else if viewModel.predictions.isEmpty {
             ContentUnavailableView {
-                Label("Google Places", systemImage: "building.2")
+                Label(title, systemImage: iconSystemName)
             } description: {
-                Text(normalizedQuery.isEmpty
-                     ? "Search for a venue to auto-fill its details."
-                     : "No results matched your search.")
+                Text(normalizedQuery.isEmpty ? emptyPrompt : "No results matched your search.")
             }
             .foregroundStyle(.white)
             .frame(maxWidth: .infinity, minHeight: 240)
@@ -961,7 +997,7 @@ private struct GooglePlaceLookupSheet: View {
                                 RoundedRectangle(cornerRadius: 14, style: .continuous)
                                     .fill(Color.white.opacity(0.08))
 
-                                Image(systemName: "building.2")
+                                Image(systemName: iconSystemName)
                                     .font(.system(size: 17, weight: .semibold))
                                     .foregroundStyle(AppTheme.accentBlue)
                             }
@@ -1017,12 +1053,15 @@ private struct GooglePlaceLookupSheet: View {
 
         do {
             let detail = try await apiClient.send(
-                APIClient.mobileGooglePlaceDetail(placeID: prediction.placeID)
+                APIClient.mobileGooglePlaceDetail(
+                    placeID: prediction.placeID,
+                    searchType: searchType
+                )
             )
             onSelect(detail)
             dismiss()
         } catch {
-            // Keep the sheet open so the user can try another result.
+            selectionErrorMessage = error.localizedDescription
         }
     }
 }

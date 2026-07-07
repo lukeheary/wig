@@ -42,7 +42,7 @@ struct EventCardView: View {
                             .lineSpacing(1)
                             .frame(maxWidth: .infinity, alignment: .leading)
 
-                        Text(event.formattedStart(format: "MMM d 'at' h:mm a"))
+                        Text(event.formattedStart(format: "EEE, MMM d 'at' h:mm a"))
                             .font(.system(size: 13, weight: .medium))
                             .foregroundStyle(AppTheme.accentBlue)
                             .lineLimit(1)
@@ -676,6 +676,7 @@ private struct EventSocialAvatarView: View {
             description: "A stacked lineup of local bands with late-night DJs.",
             coverImageURL: nil,
             eventURL: nil,
+            seriesID: nil,
             startAt: .now,
             endAt: nil,
             address: "242 51st Street",

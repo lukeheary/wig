@@ -413,6 +413,7 @@ export async function GET(_request: Request, context: RouteContext) {
       description: mapped.description,
       coverImageUrl: mapped.coverImageUrl,
       eventUrl: mapped.eventUrl,
+      seriesId: mapped.seriesId,
       startAt: mapped.startAt,
       endAt: mapped.endAt,
       address: mapped.address,

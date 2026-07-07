@@ -49,9 +49,7 @@ struct VenuesView: View {
         case .idle, .loading:
             ScrollView {
                 LazyVStack(alignment: .leading, spacing: 12) {
-                    Text(selectedPlaceFilter.headerTitle)
-                        .font(.system(size: 20, weight: .bold))
-                        .foregroundStyle(.white)
+                    placesHeader(locationName: selectedLocationName)
 
                     ForEach(0..<6, id: \.self) { index in
                         PlaceRowSkeletonView(seed: index)
@@ -96,9 +94,7 @@ struct VenuesView: View {
             } else {
                 ScrollView {
                     VStack(alignment: .leading, spacing: 12) {
-                        Text(selectedPlaceFilter.headerTitle)
-                            .font(.system(size: 20, weight: .bold))
-                            .foregroundStyle(.white)
+                        placesHeader(locationName: headerLocationName(for: response))
 
                         if filteredPlaces(in: response).isEmpty {
                             ContentUnavailableView {
@@ -141,6 +137,38 @@ struct VenuesView: View {
     private var venuesBackground: some View {
         AppTheme.background
             .ignoresSafeArea()
+    }
+
+    private func placesHeader(locationName: String?) -> some View {
+        return (
+            Text(selectedPlaceFilter.headerTitle)
+                .font(.system(size: 20, weight: .bold))
+                .foregroundStyle(.white)
+            +
+            (locationName.map { location in
+                Text(" in \(location)")
+                    .font(.system(size: 20, weight: .medium))
+                    .foregroundStyle(.white.opacity(0.5))
+            } ?? Text(""))
+        )
+    }
+
+    private var selectedLocationName: String? {
+        switch selectedLocationFilter {
+        case .city(let city, _):
+            return city
+        default:
+            return nil
+        }
+    }
+
+    private func headerLocationName(for response: MobilePlacesResponse) -> String? {
+        switch effectiveLocationFilter(for: response) {
+        case .city(let city, _):
+            return city
+        case .all:
+            return nil
+        }
     }
 
     private func filterControls(for response: MobilePlacesResponse) -> some View {
@@ -342,7 +370,6 @@ private enum PlaceKindFilter: String, CaseIterable, Identifiable {
         }
     }
 
-    // Title shown as the page header for each filter.
     var headerTitle: String {
         switch self {
         case .all:

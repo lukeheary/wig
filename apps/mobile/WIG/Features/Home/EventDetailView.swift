@@ -15,6 +15,7 @@ struct EventDetailView: View {
     @State private var isShareSheetPresented = false
     @State private var isImageViewerPresented = false
     @State private var isEditEventPresented = false
+    @State private var editingSeriesRoute: EventSeriesEditRoute?
     @State private var isCalendarComposerPresented = false
     @State private var isRSVPMenuExpanded = false
     @State private var isRSVPMenuHitTestingEnabled = false
@@ -42,11 +43,9 @@ struct EventDetailView: View {
                         imageURL: currentEvent.displayImageURL,
                         containerWidth: proxy.size.width,
                         topInset: proxy.safeAreaInsets.top,
-                        onImageTap: {
-                            if currentEvent.posterImageURL != nil {
-                                isImageViewerPresented = true
-                            }
-                        },
+                        // Tapping the image itself does nothing; expanding is only via
+                        // the expand button (leadingAccessory) below.
+                        onImageTap: {},
                         header: {
                             VStack(alignment: .leading, spacing: 0) {
                                 details
@@ -173,6 +172,9 @@ struct EventDetailView: View {
                 editedEvent = mergeUpdatedEvent(updatedEvent)
             }
         }
+        .sheet(item: $editingSeriesRoute) { route in
+            EventSeriesEditSheet(seriesID: route.id)
+        }
         .fullScreenCover(isPresented: $isImageViewerPresented) {
             if let posterImageURL = currentEvent.posterImageURL {
                 EventArtworkViewer(imageURL: posterImageURL)
@@ -195,9 +197,7 @@ struct EventDetailView: View {
             }
 
             if appSession.isAdmin {
-                FloatingGlassIconButton(systemImage: "square.and.pencil") {
-                    isEditEventPresented = true
-                }
+                editButton
             }
         }
         .sheet(isPresented: $isCalendarComposerPresented) {
@@ -213,8 +213,42 @@ struct EventDetailView: View {
         }
     }
 
+    @ViewBuilder
+    private var editButton: some View {
+        if let seriesID = currentEvent.seriesID {
+            Menu {
+                Button {
+                    closeRSVPMenu()
+                    isEditEventPresented = true
+                } label: {
+                    Label("Edit Event", systemImage: "calendar")
+                }
+
+                Button {
+                    closeRSVPMenu()
+                    editingSeriesRoute = EventSeriesEditRoute(id: seriesID)
+                } label: {
+                    Label("Edit Event Series", systemImage: "calendar.badge.clock")
+                }
+            } label: {
+                Image(systemName: "square.and.pencil")
+                    .font(.system(size: 17, weight: .semibold))
+                    .foregroundStyle(.white)
+                    .frame(width: 46, height: 46)
+                    .contentShape(Circle())
+                    .eventDetailLiquidGlass(in: Circle())
+            }
+            .buttonStyle(.plain)
+        } else {
+            FloatingGlassIconButton(systemImage: "square.and.pencil") {
+                isEditEventPresented = true
+            }
+        }
+    }
+
     private var guestRSVPButton: some View {
         Button {
+            UIImpactFeedbackGenerator(style: .light).impactOccurred()
             isAuthSheetPresented = true
         } label: {
             Text("RSVP")
@@ -295,8 +329,11 @@ struct EventDetailView: View {
                 slug: slug,
                 name: name,
                 logoImageURL: currentEvent.venueLogoImageURL,
+                address: nil,
                 city: currentEvent.city,
                 state: currentEvent.state,
+                website: nil,
+                instagram: nil,
                 upcomingEventCount: 0,
                 updatedAt: currentEvent.updatedAt,
                 isFollowed: currentEvent.isFollowed
@@ -321,8 +358,11 @@ struct EventDetailView: View {
                 slug: slug,
                 name: name,
                 logoImageURL: currentEvent.organizerLogoImageURL,
+                address: nil,
                 city: currentEvent.city,
                 state: currentEvent.state,
+                website: nil,
+                instagram: nil,
                 upcomingEventCount: 0,
                 updatedAt: currentEvent.updatedAt,
                 isFollowed: currentEvent.isFollowed
@@ -348,8 +388,11 @@ struct EventDetailView: View {
             slug: slug,
             name: name,
             logoImageURL: currentEvent.organizerLogoImageURL,
+            address: nil,
             city: currentEvent.city,
             state: currentEvent.state,
+            website: nil,
+            instagram: nil,
             upcomingEventCount: 0,
             updatedAt: currentEvent.updatedAt,
             isFollowed: currentEvent.isFollowed
@@ -382,6 +425,8 @@ struct EventDetailView: View {
             guard !rsvpViewModel.isSaving else {
                 return
             }
+
+            UIImpactFeedbackGenerator(style: .light).impactOccurred()
 
             withAnimation(.spring(response: 0.32, dampingFraction: 0.82)) {
                 if isRSVPMenuExpanded {
@@ -593,11 +638,17 @@ struct EventDetailView: View {
                         notGoingAttendees: []
                     )
                 } label: {
-                    EventRSVPSummaryRow(
+                    EventRSVPFriendsRow(
                         attendees: rsvpSummaryAttendees
                     )
                 }
                 .buttonStyle(.plain)
+
+                Rectangle()
+                    .fill(Color.white.opacity(0.08))
+                    .frame(maxWidth: .infinity)
+                    .frame(height: 1)
+                    .padding(.top, 12)
             }
         }
     }
@@ -810,7 +861,7 @@ struct EventDetailView: View {
         let interestedCount = friendInterestedAttendees.count
 
         if goingCount > 0, interestedCount > 0 {
-            return "\(goingCount) Going  •  \(interestedCount) Interested"
+            return "\(goingCount) Going • \(interestedCount) Interested"
         }
 
         if goingCount > 0 {
@@ -868,6 +919,7 @@ struct EventDetailView: View {
             description: updatedEvent.description,
             coverImageURL: updatedEvent.coverImageURL,
             eventURL: updatedEvent.eventURL,
+            seriesID: updatedEvent.seriesID ?? currentEvent.seriesID,
             startAt: updatedEvent.startAt,
             endAt: updatedEvent.endAt,
             address: updatedEvent.address,
@@ -996,17 +1048,19 @@ private struct EventAttendeeSection: View {
     }
 }
 
-private struct EventRSVPSummaryRow: View {
+private struct EventRSVPFriendsRow: View {
     let attendees: [EventSocialAttendee]
 
     var body: some View {
-        HStack(spacing: 14) {
-            if !attendees.isEmpty {
-                EventSocialOverlayView(attendees: attendees, size: .summaryRow)
-            } else {
-                Color.clear
-                    .frame(width: 40, height: 40)
+        HStack(alignment: .center, spacing: 14) {
+            ScrollView(.horizontal, showsIndicators: false) {
+                HStack(alignment: .top, spacing: 12) {
+                    ForEach(attendees) { attendee in
+                        EventFriendAvatarTile(attendee: attendee)
+                    }
+                }
             }
+            .scrollDisabled(true)
 
             Spacer(minLength: 12)
 
@@ -1017,6 +1071,59 @@ private struct EventRSVPSummaryRow: View {
         .padding(.vertical, 4)
         .frame(maxWidth: .infinity, alignment: .leading)
         .contentShape(Rectangle())
+    }
+}
+
+private struct EventFriendAvatarTile: View {
+    let attendee: EventSocialAttendee
+
+    var body: some View {
+        VStack(spacing: 8) {
+            ZStack {
+                Circle()
+                    .fill(strokeColor)
+
+                UserAvatarView(
+                    imageURL: attendee.avatarImageURL,
+                    name: displayName,
+                    size: 50,
+                    identityKey: attendee.id
+                )
+            }
+            .frame(width: 54, height: 54)
+
+            Text(firstName)
+                .font(.system(size: 11, weight: .medium))
+                .foregroundStyle(.white.opacity(0.64))
+                .lineLimit(1)
+                .frame(width: 60)
+        }
+    }
+
+    private var firstName: String {
+        if let firstName = attendee.firstName?.trimmingCharacters(in: .whitespacesAndNewlines),
+           !firstName.isEmpty
+        {
+            return firstName
+        }
+
+        return displayName
+            .split(separator: " ")
+            .map(String.init)
+            .first ?? displayName
+    }
+
+    private var displayName: String {
+        let name = [attendee.firstName, attendee.lastName]
+            .compactMap { $0?.trimmingCharacters(in: .whitespacesAndNewlines) }
+            .filter { !$0.isEmpty }
+            .joined(separator: " ")
+
+        return name.isEmpty ? "Friend" : name
+    }
+
+    private var strokeColor: Color {
+        attendee.status.rsvpTintColor
     }
 }
 
@@ -1586,6 +1693,75 @@ private extension View {
     }
 }
 
+private struct EventSeriesEditRoute: Identifiable {
+    let id: UUID
+}
+
+private struct EventSeriesEditSheet: View {
+    let seriesID: UUID
+
+    @Environment(\.apiClient) private var apiClient
+    @State private var state: LoadState = .loading
+
+    var body: some View {
+        Group {
+            switch state {
+            case .loading:
+                ProgressView("Loading series...")
+                    .frame(maxWidth: .infinity, maxHeight: .infinity)
+                    .tint(.white)
+                    .foregroundStyle(.white)
+                    .background(AppTheme.background)
+
+            case .loaded(let series):
+                MobileEventCreationView(
+                    mode: .editSeries(series),
+                    onSeriesCompleted: {
+                        NotificationCenter.default.post(name: .mobileEventDidChange, object: seriesID)
+                    }
+                )
+
+            case .failed(let message):
+                ContentUnavailableView {
+                    Label("Couldn't Load Series", systemImage: "wifi.exclamationmark")
+                } description: {
+                    Text(message)
+                } actions: {
+                    Button("Try Again") {
+                        Task {
+                            await load()
+                        }
+                    }
+                }
+                .foregroundStyle(.white)
+                .background(AppTheme.background)
+            }
+        }
+        .task {
+            await load()
+        }
+    }
+
+    private func load() async {
+        state = .loading
+
+        do {
+            let series = try await apiClient.send(
+                APIClient.mobileEventSeriesDetail(seriesID: seriesID)
+            )
+            state = .loaded(series)
+        } catch {
+            state = .failed(error.localizedDescription)
+        }
+    }
+
+    private enum LoadState {
+        case loading
+        case loaded(MobileEventSeriesDetail)
+        case failed(String)
+    }
+}
+
 @MainActor
 private final class EventRSVPViewModel: ObservableObject {
     @Published private(set) var status: EventRSVPStatus?
@@ -1696,6 +1872,7 @@ private final class EventRSVPViewModel: ObservableObject {
             description: "Haute and Freddy bring a bright, theatrical set to the room.",
             coverImageURL: nil,
             eventURL: URL(string: "https://ticketmaster.com"),
+            seriesID: nil,
             startAt: .now,
             endAt: nil,
             address: "50 Church Street",

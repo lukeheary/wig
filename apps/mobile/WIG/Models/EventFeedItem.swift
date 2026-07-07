@@ -25,6 +25,7 @@ struct EventFeedItem: Codable, Identifiable, Hashable, Sendable {
     let description: String?
     let coverImageURL: URL?
     let eventURL: URL?
+    let seriesID: UUID?
     let startAt: Date
     let endAt: Date?
     let address: String?
@@ -59,6 +60,7 @@ struct EventFeedItem: Codable, Identifiable, Hashable, Sendable {
         case description
         case coverImageURL = "coverImageUrl"
         case eventURL = "eventUrl"
+        case seriesID = "seriesId"
         case startAt
         case endAt
         case address
@@ -281,6 +283,7 @@ extension EventFeedItem {
         description = try container.decodeIfPresent(String.self, forKey: .description)
         coverImageURL = try container.decodeOptionalURL(forKey: .coverImageURL)
         eventURL = try container.decodeOptionalURL(forKey: .eventURL)
+        seriesID = try container.decodeIfPresent(UUID.self, forKey: .seriesID)
         startAt = try container.decode(Date.self, forKey: .startAt)
         endAt = try container.decodeIfPresent(Date.self, forKey: .endAt)
         address = try container.decodeIfPresent(String.self, forKey: .address)
@@ -311,6 +314,64 @@ extension EventFeedItem {
         )
         friendsGoing = try container.decodeIfPresent([EventSocialRSVP].self, forKey: .friendsGoing) ?? []
         friendsInterested = try container.decodeIfPresent([EventSocialRSVP].self, forKey: .friendsInterested) ?? []
+    }
+}
+
+struct MobileEventSeriesDetail: Decodable, Identifiable, Hashable, Sendable {
+    let id: UUID
+    let title: String
+    let description: String?
+    let coverImageURL: URL?
+    let eventURL: URL?
+    let startAt: Date
+    let endAt: Date?
+    let address: String?
+    let city: String
+    let state: String
+    let timeZone: String?
+    let venueID: UUID?
+    let venueName: String?
+    let venueSlug: String?
+    let venueLogoImageURL: URL?
+    let organizerID: UUID?
+    let organizerName: String?
+    let organizerSlug: String?
+    let organizerLogoImageURL: URL?
+    let categories: [String]
+    let categoryLabels: [String: String]
+    let status: EventStatus
+    let frequency: MobileEventSeriesFrequency
+    let interval: Int
+    let daysOfWeek: [Int]
+    let untilDate: Date?
+
+    enum CodingKeys: String, CodingKey {
+        case id
+        case title
+        case description
+        case coverImageURL = "coverImageUrl"
+        case eventURL = "eventUrl"
+        case startAt
+        case endAt
+        case address
+        case city
+        case state
+        case timeZone
+        case venueID = "venueId"
+        case venueName
+        case venueSlug
+        case venueLogoImageURL = "venueLogoImageUrl"
+        case organizerID = "organizerId"
+        case organizerName
+        case organizerSlug
+        case organizerLogoImageURL = "organizerLogoImageUrl"
+        case categories
+        case categoryLabels
+        case status
+        case frequency
+        case interval
+        case daysOfWeek
+        case untilDate
     }
 }
 

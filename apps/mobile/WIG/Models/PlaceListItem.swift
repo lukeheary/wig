@@ -28,8 +28,11 @@ struct PlaceListItem: Decodable, Identifiable, Hashable, Sendable {
     let slug: String
     let name: String
     let logoImageURL: URL?
+    let address: String?
     let city: String?
     let state: String?
+    let website: URL?
+    let instagram: String?
     var metroAreaCity: String? = nil
     var metroAreaState: String? = nil
     let upcomingEventCount: Int
@@ -44,8 +47,11 @@ struct PlaceListItem: Decodable, Identifiable, Hashable, Sendable {
         case slug
         case name
         case logoImageURL = "logoImageUrl"
+        case address
         case city
         case state
+        case website
+        case instagram
         case metroAreaCity
         case metroAreaState
         case upcomingEventCount
@@ -120,8 +126,11 @@ extension PlaceListItem {
         slug = try container.decode(String.self, forKey: .slug)
         name = try container.decode(String.self, forKey: .name)
         logoImageURL = try container.decodeOptionalURL(forKey: .logoImageURL)
+        address = try container.decodeIfPresent(String.self, forKey: .address)
         city = try container.decodeIfPresent(String.self, forKey: .city)
         state = try container.decodeIfPresent(String.self, forKey: .state)
+        website = try container.decodeOptionalURL(forKey: .website)
+        instagram = try container.decodeIfPresent(String.self, forKey: .instagram)
         metroAreaCity = try container.decodeIfPresent(String.self, forKey: .metroAreaCity)
         metroAreaState = try container.decodeIfPresent(String.self, forKey: .metroAreaState)
 

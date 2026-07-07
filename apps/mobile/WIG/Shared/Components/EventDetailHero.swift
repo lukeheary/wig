@@ -140,7 +140,6 @@ struct EventDetailHero<
                             height: overscrollExtension + imageTopOffset + imageSide + 24
                         )
                         .clipped()
-                        .overlay(Color.black.opacity(0.34))
                         .overlay(palette.baseColor.opacity(0.22))
                         .mask(
                             LinearGradient(

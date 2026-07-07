@@ -12,15 +12,54 @@ final class PlaceDetailViewModel: ObservableObject {
     @Published private(set) var state: State = .idle
     @Published private(set) var isUpdatingFollow = false
 
+    private static var cachedDetails: [String: PlaceDetail] = [:]
+    private static var inFlightLoads: [String: Task<PlaceDetail, Error>] = [:]
+
+    static func cachedDetail(for slug: String) -> PlaceDetail? {
+        cachedDetails[slug]
+    }
+
+    static func seedCache(with detail: PlaceDetail) {
+        cachedDetails[detail.slug] = detail
+    }
+
     func load(slug: String, using apiClient: APIClient) async {
-        state = .loading
+        if let cachedDetail = Self.cachedDetail(for: slug) {
+            state = .loaded(cachedDetail)
+        } else {
+            state = .loading
+        }
+
+        if let inFlightLoad = Self.inFlightLoads[slug] {
+            do {
+                let detail = try await inFlightLoad.value
+                Self.seedCache(with: detail)
+                state = .loaded(detail)
+            } catch {
+                if Self.cachedDetail(for: slug) == nil {
+                    state = .failed(error.localizedDescription)
+                }
+            }
+
+            return
+        }
 
         do {
-            let detail = try await apiClient.send(APIClient.mobilePlaceDetail(slug: slug))
+            let loadTask = Task {
+                try await apiClient.send(APIClient.mobilePlaceDetail(slug: slug))
+            }
+            Self.inFlightLoads[slug] = loadTask
+
+            let detail = try await loadTask.value
+            Self.seedCache(with: detail)
             state = .loaded(detail)
         } catch {
-            state = .failed(error.localizedDescription)
+            if Self.cachedDetail(for: slug) == nil {
+                state = .failed(error.localizedDescription)
+            }
         }
+
+        Self.inFlightLoads[slug] = nil
     }
 
     func setFollowed(_ isFollowed: Bool, slug: String, using apiClient: APIClient) async {
@@ -42,6 +81,7 @@ final class PlaceDetailViewModel: ObservableObject {
             }
 
             detail.isFollowed = followState.isFollowed
+            Self.seedCache(with: detail)
             state = .loaded(detail)
         } catch {
             state = .loaded(previousDetail)

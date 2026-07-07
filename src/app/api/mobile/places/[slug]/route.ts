@@ -1,9 +1,16 @@
 import { auth } from "@clerk/nextjs/server";
 import { NextResponse } from "next/server";
-import { and, asc, desc, eq, gte, inArray, lt } from "drizzle-orm";
+import { and, asc, desc, eq, gte, inArray, lt, or } from "drizzle-orm";
 import { z } from "zod";
 import { db } from "@/server/db";
-import { eventRsvps, events, placeFollows, places, users } from "@/server/db/schema";
+import {
+  eventRsvps,
+  events,
+  placeFollows,
+  places,
+  userFriends,
+  users,
+} from "@/server/db/schema";
 import {
   filterExistingCategoryKeys,
   mapEventCategoryData,
@@ -96,7 +103,20 @@ function mapMobileEvent(
   currentUserRsvp?: {
     status: "going" | "interested" | "not_going";
     notGoingReason: string | null;
-  } | null
+  } | null,
+  socialRsvps: Array<{
+    status: "going" | "interested";
+    user: {
+      id: string;
+      firstName: string | null;
+      lastName: string | null;
+      avatarImageUrl: string | null;
+      isCurrentUser: boolean;
+      isFriend: boolean;
+    };
+    isCurrentUser: boolean;
+    isFriend: boolean;
+  }> = []
 ) {
   const mapped = mapEventCategoryData(event);
 
@@ -106,6 +126,7 @@ function mapMobileEvent(
     description: mapped.description,
     coverImageUrl: mapped.coverImageUrl,
     eventUrl: mapped.eventUrl,
+    seriesId: mapped.seriesId,
     startAt: mapped.startAt,
     endAt: mapped.endAt,
     address: mapped.address,
@@ -130,6 +151,8 @@ function mapMobileEvent(
     }),
     userRsvpStatus: currentUserRsvp?.status ?? null,
     userRsvpNotGoingReason: currentUserRsvp?.notGoingReason ?? null,
+    friendsGoing: socialRsvps.filter((rsvp) => rsvp.status === "going"),
+    friendsInterested: socialRsvps.filter((rsvp) => rsvp.status === "interested"),
   };
 }
 
@@ -204,6 +227,24 @@ export async function GET(
   const canManagePlace = editPermissions.isAdmin || editPermissions.manageablePlaceIds.has(place.id);
   const allEvents = [...upcomingEvents, ...pastEvents];
   const eventIds = allEvents.map((event) => event.id);
+  const socialRsvpsMap = new Map<
+    string,
+    Array<{
+      eventId: string;
+      userId: string;
+      status: "going" | "interested";
+      user: {
+        id: string;
+        firstName: string | null;
+        lastName: string | null;
+        avatarImageUrl: string | null;
+        isCurrentUser: boolean;
+        isFriend: boolean;
+      };
+      isCurrentUser: boolean;
+      isFriend: boolean;
+    }>
+  >();
   const currentUserRsvpMap =
     userId && eventIds.length > 0
       ? new Map(
@@ -228,6 +269,125 @@ export async function GET(
           ])
         )
       : new Map();
+
+  const addSocialRsvp = (
+    rsvp: {
+      eventId: string;
+      userId: string;
+      status: "going" | "interested";
+      user: {
+        id: string;
+        firstName: string | null;
+        lastName: string | null;
+        avatarImageUrl: string | null;
+        isCurrentUser: boolean;
+        isFriend: boolean;
+      };
+      isCurrentUser: boolean;
+      isFriend: boolean;
+    }
+  ) => {
+    if (!socialRsvpsMap.has(rsvp.eventId)) {
+      socialRsvpsMap.set(rsvp.eventId, []);
+    }
+
+    const attendees = socialRsvpsMap.get(rsvp.eventId)!;
+    const existingIndex = attendees.findIndex(
+      (attendee) => attendee.userId === rsvp.userId
+    );
+
+    if (existingIndex >= 0) {
+      if (
+        attendees[existingIndex].status === "interested" &&
+        rsvp.status === "going"
+      ) {
+        attendees[existingIndex] = rsvp;
+      }
+
+      return;
+    }
+
+    attendees.push(rsvp);
+  };
+
+  if (userId && eventIds.length > 0) {
+    const [currentUserRsvps, mirroredPartnerRsvps, friendConnections] =
+      await Promise.all([
+        db.query.eventRsvps.findMany({
+          where: and(
+            inArray(eventRsvps.eventId, eventIds),
+            eq(eventRsvps.userId, userId)
+          ),
+          with: {
+            user: true,
+          },
+        }),
+        db.query.eventRsvps.findMany({
+          where: and(
+            inArray(eventRsvps.eventId, eventIds),
+            eq(eventRsvps.partnerRsvpByUserId, userId),
+            inArray(eventRsvps.status, ["going", "interested"])
+          ),
+          with: {
+            user: true,
+          },
+        }),
+        db.query.userFriends.findMany({
+          where: and(
+            or(eq(userFriends.userId, userId), eq(userFriends.friendUserId, userId)),
+            eq(userFriends.status, "accepted")
+          ),
+        }),
+      ]);
+
+    const friendIds = friendConnections.map((friendship) =>
+      friendship.userId === userId
+        ? friendship.friendUserId
+        : friendship.userId
+    );
+    const friendIdSet = new Set(friendIds);
+
+    const friendRsvps =
+      friendIds.length > 0
+        ? await db.query.eventRsvps.findMany({
+            where: and(
+              inArray(eventRsvps.eventId, eventIds),
+              inArray(eventRsvps.userId, friendIds),
+              inArray(eventRsvps.status, ["going", "interested"])
+            ),
+            with: {
+              user: true,
+            },
+          })
+        : [];
+
+    for (const rsvp of [
+      ...currentUserRsvps,
+      ...mirroredPartnerRsvps,
+      ...friendRsvps,
+    ]) {
+      if (!rsvp.user || (rsvp.status !== "going" && rsvp.status !== "interested")) {
+        continue;
+      }
+
+      addSocialRsvp({
+        eventId: rsvp.eventId,
+        userId: rsvp.userId,
+        status: rsvp.status,
+        user: {
+          id: rsvp.user.id,
+          firstName: rsvp.user.firstName,
+          lastName: rsvp.user.lastName,
+          avatarImageUrl: rsvp.user.avatarImageUrl,
+          isCurrentUser: rsvp.userId === userId,
+          isFriend: friendIdSet.has(rsvp.userId),
+        },
+        isCurrentUser: rsvp.userId === userId,
+        isFriend: friendIdSet.has(rsvp.userId),
+      });
+    }
+  }
+
   const follow =
     userId
       ? await db.query.placeFollows.findFirst({
@@ -261,10 +421,20 @@ export async function GET(
     isFollowed: Boolean(follow),
     canManage: canManagePlace,
     events: upcomingEvents.map((event) =>
-      mapMobileEvent(event, editPermissions, currentUserRsvpMap.get(event.id))
+      mapMobileEvent(
+        event,
+        editPermissions,
+        currentUserRsvpMap.get(event.id),
+        socialRsvpsMap.get(event.id) ?? []
+      )
     ),
     pastEvents: pastEvents.map((event) =>
-      mapMobileEvent(event, editPermissions, currentUserRsvpMap.get(event.id))
+      mapMobileEvent(
+        event,
+        editPermissions,
+        currentUserRsvpMap.get(event.id),
+        socialRsvpsMap.get(event.id) ?? []
+      )
     ),
   });
 }

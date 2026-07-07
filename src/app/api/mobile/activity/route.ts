@@ -438,6 +438,7 @@ export async function GET(request: Request) {
           title: event.title,
           description: event.description,
           coverImageUrl: event.coverImageUrl,
+          seriesId: event.seriesId,
           eventUrl: event.eventUrl,
           startAt: event.startAt,
           endAt: event.endAt,
