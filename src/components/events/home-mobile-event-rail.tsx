@@ -22,6 +22,7 @@ import {
 import { EventCard } from "@/components/calendar/event-card";
 import { useEventCardLink } from "@/components/events/use-event-card-link";
 import { useMediaQuery } from "@/hooks/use-media-query";
+import { useImageDominantColor } from "@/hooks/use-image-dominant-color";
 import { getEventStatusLabel } from "@/lib/event-status";
 import {
   cn,
@@ -143,7 +144,6 @@ function DesktopRailScroller({
   scrollToStartSignal?: number;
 }) {
   const scrollRef = useRef<HTMLDivElement>(null);
-  const [hoveredSide, setHoveredSide] = useState<"left" | "right" | null>(null);
   const {
     canScrollLeft,
     canScrollRight,
@@ -196,7 +196,7 @@ function DesktopRailScroller({
       {/*  className="inset-x-0 -bottom-[4] z-20"*/}
       {/*/>*/}
 
-      <div className="relative" onMouseLeave={() => setHoveredSide(null)}>
+      <div className="relative">
         <div
           ref={scrollRef}
           className="overflow-x-auto [scrollbar-width:none] [&::-webkit-scrollbar]:hidden"
@@ -219,21 +219,12 @@ function DesktopRailScroller({
         </div>
 
         {canScrollLeft ? (
-          <div
-            className="absolute inset-y-0 left-0 z-10 hidden w-24 md:block"
-            onMouseEnter={() => setHoveredSide("left")}
-            onMouseLeave={() => setHoveredSide(null)}
-          >
+          <div className="absolute inset-y-0 left-0 z-10 hidden w-24 md:block">
             <button
               type="button"
               aria-label="Scroll events left"
               onClick={() => handleScroll("left")}
-              className={cn(
-                "absolute inset-0 bg-gradient-to-r from-background via-background/95 via-40% to-transparent text-foreground transition-opacity duration-200",
-                hoveredSide === "left"
-                  ? "opacity-100"
-                  : "pointer-events-none opacity-0"
-              )}
+              className="absolute inset-0 bg-gradient-to-r from-background via-background/95 via-40% to-transparent text-foreground transition-opacity duration-200 opacity-100"
             >
               <ChevronLeft className="absolute left-4 top-1/2 h-6 w-6 -translate-y-1/2 drop-shadow-[0_2px_8px_rgba(0,0,0,0.55)]" />
             </button>
@@ -241,21 +232,12 @@ function DesktopRailScroller({
         ) : null}
 
         {canScrollRight ? (
-          <div
-            className="absolute inset-y-0 right-0 z-10 hidden w-24 md:block"
-            onMouseEnter={() => setHoveredSide("right")}
-            onMouseLeave={() => setHoveredSide(null)}
-          >
+          <div className="absolute inset-y-0 right-0 z-10 hidden w-24 md:block">
             <button
               type="button"
               aria-label="Scroll events right"
               onClick={() => handleScroll("right")}
-              className={cn(
-                "absolute inset-0 bg-gradient-to-l from-background via-background/95 via-40% to-transparent text-foreground transition-opacity duration-200",
-                hoveredSide === "right"
-                  ? "opacity-100"
-                  : "pointer-events-none opacity-0"
-              )}
+              className="absolute inset-0 bg-gradient-to-l from-background via-background/95 via-40% to-transparent text-foreground transition-opacity duration-200 opacity-100"
             >
               <ChevronRight className="absolute right-4 top-1/2 h-6 w-6 -translate-y-1/2 drop-shadow-[0_2px_8px_rgba(0,0,0,0.55)]" />
             </button>
@@ -318,6 +300,9 @@ function MobileRailScroller({
 
 function HomeMiniEventCard({ event }: { event: EventCardItem }) {
   const { eventHref, handleClick } = useEventCardLink(event.id);
+  const dayOfWeek = formatEventDate(event.startAt, event.timeZone, event.state, {
+    weekday: "short",
+  });
   const month = formatEventDate(event.startAt, event.timeZone, event.state, {
     month: "short",
   });
@@ -331,61 +316,76 @@ function HomeMiniEventCard({ event }: { event: EventCardItem }) {
   const socialUsers = getSocialUsers(event);
   const hasInactiveStatus = event.status !== "active";
   const eventImageUrl = getEventImageUrl(event);
+  const shelfColor = useImageDominantColor(eventImageUrl);
   const subtitle = event.venue?.name || event.organizer?.name || "TBA";
 
   return (
     <Link href={eventHref} className="group block h-full" onClick={handleClick}>
-      <Card className="relative flex h-full cursor-pointer flex-col overflow-hidden !border-none bg-card p-2 transition-all duration-300">
-        <div className="relative aspect-[0.98] overflow-hidden rounded-2xl bg-muted">
+      <Card className="relative h-full cursor-pointer overflow-hidden rounded-[18px] !border-none bg-[#111116] p-0 shadow-[0_10px_30px_rgba(0,0,0,0.28)] ring-1 ring-white/[0.08] transition-all duration-300">
+        <div className="relative flex h-full min-h-[304px] flex-col overflow-hidden">
           {eventImageUrl ? (
             <Image
               src={eventImageUrl}
               alt={event.title}
               fill
+              sizes="212px"
               className={cn(
                 "object-cover transition-transform duration-500 group-hover:scale-[1.03]",
                 hasInactiveStatus && "opacity-50 blur-[2px]"
               )}
             />
           ) : (
-            <div className="absolute inset-0 flex items-center justify-center bg-gradient-to-br from-primary/30 to-primary/10">
+            <div className="absolute inset-0 flex items-center justify-center bg-gradient-to-br from-primary/30 via-card to-background">
               <Calendar className="h-12 w-12 text-muted-foreground/20" />
             </div>
           )}
 
+          <div
+            className="absolute inset-x-0 bottom-0 h-[48%]"
+            style={{
+              background: `linear-gradient(to bottom, transparent 0%, ${shelfColor} 45%, ${shelfColor} 100%)`,
+            }}
+          />
+          <div className="absolute inset-0 bg-[linear-gradient(to_bottom,transparent_0%,transparent_40%,rgba(0,0,0,0.08)_54%,rgba(0,0,0,0.16)_100%)]" />
+
+          <EventSocialOverlay
+            users={socialUsers}
+            size="md"
+            placement="top-right"
+            stackClassName="drop-shadow-[0_8px_24px_rgba(0,0,0,0.45)]"
+          />
+
           {hasInactiveStatus && (
-            <div className="absolute inset-x-2 bottom-2">
-              <span className="inline-flex rounded-full bg-card/95 px-2 py-1 text-[10px] font-semibold uppercase tracking-[0.12em] text-white backdrop-blur">
+            <div className="absolute inset-x-3 top-3 z-10">
+              <span className="inline-flex rounded-full bg-black/60 px-2 py-1 text-[10px] font-semibold uppercase tracking-[0.12em] text-white backdrop-blur">
                 {getEventStatusLabel(event.status)}
               </span>
             </div>
           )}
 
-          <EventSocialOverlay users={socialUsers} size="md" />
-        </div>
+          <div className="font-space-grotesk relative z-10 mt-auto space-y-1 px-4 pb-4 pt-24 text-white">
+            <h3 className="line-clamp-2 text-sm/5 font-semibold tracking-tight transition-colors group-hover:text-white">
+              {titleMain}
+              {trailingParenthetical ? (
+                <span className="whitespace-nowrap">
+                  {" "}
+                  {trailingParenthetical}
+                </span>
+              ) : null}
+            </h3>
 
-        <div className="font-space-grotesk flex flex-1 flex-col px-1 pb-1 pt-3">
-          <h3 className="line-clamp-2 text-sm/5 font-medium transition-colors group-hover:text-primary">
-            {titleMain}
-            {trailingParenthetical ? (
-              <span className="whitespace-nowrap">
-                {" "}
-                {trailingParenthetical}
-              </span>
-            ) : null}
-          </h3>
+            <div
+              className={cn(
+                "text-[13px] font-medium leading-tight text-neon-teal",
+                hasInactiveStatus && "line-through"
+              )}
+            >
+              {dayOfWeek}, {month} {day} at {startTime}
+            </div>
 
-          <div
-            className={cn(
-              "pt-1 text-[13px] font-medium leading-tight text-neon-teal",
-              hasInactiveStatus && "line-through"
-            )}
-          >
-            {month} {day} at {startTime}
-          </div>
-
-          <div className="pt-1 text-[13px] text-primary/70">
-            <span className="line-clamp-1">{subtitle}</span>
+            <div className="line-clamp-1 text-[13px] font-medium leading-tight text-white/75">
+              {subtitle}
+            </div>
           </div>
         </div>
       </Card>
@@ -435,7 +435,7 @@ export function HomeMobileEventRail({
           scrollToStartSignal={isDesktop ? scrollToStartSignal : undefined}
         >
           {events.map((event) => (
-            <div key={event.id} className="w-[280px] shrink-0 self-stretch">
+            <div key={event.id} className="w-[260px] shrink-0 self-stretch">
               <EventCard event={event} />
             </div>
           ))}

@@ -226,7 +226,7 @@ function EventSkeletonGrid({
   const desktopSkeletonCards = Array.from({ length: count }).map((_, index) => (
     <div
       key={`event-skeleton-${index}`}
-      className="w-[280px] shrink-0 self-stretch rounded-2xl bg-card p-2 shadow-sm"
+      className="w-[260px] shrink-0 self-stretch rounded-2xl bg-card p-2 shadow-sm"
     >
       <div className="flex h-full animate-pulse flex-col">
         <div className="aspect-square rounded-2xl bg-muted" />

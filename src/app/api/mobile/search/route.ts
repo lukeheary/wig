@@ -17,10 +17,32 @@ import {
 import { mapEventCategoryData } from "@/server/utils/categories";
 import { accentInsensitiveLike } from "@/server/db/search";
 
+function searchQueryVariants(query: string) {
+  const trimmed = query.trim();
+  if (!trimmed) {
+    return [];
+  }
+
+  const normalizedWhitespace = trimmed.replace(/\s+/g, " ");
+  const ampersandVariant = normalizedWhitespace.replace(/\s*&\s*/g, " & ");
+  const andVariant = normalizedWhitespace.replace(/\s*&\s*/g, " and ");
+  const swappedAmpersandVariant = normalizedWhitespace.replace(/\s+and\s+/gi, " & ");
+  const swappedAndVariant = normalizedWhitespace.replace(/\s+and\s+/gi, " and ");
+
+  return [...new Set([
+    normalizedWhitespace,
+    ampersandVariant,
+    andVariant,
+    swappedAmpersandVariant,
+    swappedAndVariant,
+  ].map((value) => value.replace(/\s+/g, " ").trim()).filter(Boolean))];
+}
+
 export async function GET(request: Request) {
   try {
     const { searchParams } = new URL(request.url);
     const query = searchParams.get("query")?.trim() ?? "";
+    const queryVariants = searchQueryVariants(query);
     const limitParam = Number(searchParams.get("limit") ?? "12");
     const limit = Number.isFinite(limitParam)
       ? Math.min(Math.max(limitParam, 1), 30)
@@ -52,13 +74,15 @@ export async function GET(request: Request) {
           where: and(
             ...userBaseConditions,
             or(
-              accentInsensitiveLike(users.username, query),
-              accentInsensitiveLike(users.firstName, query, {
-                coalesceToEmpty: true,
-              }),
-              accentInsensitiveLike(users.lastName, query, {
-                coalesceToEmpty: true,
-              })
+              ...queryVariants.flatMap((variant) => [
+                accentInsensitiveLike(users.username, variant),
+                accentInsensitiveLike(users.firstName, variant, {
+                  coalesceToEmpty: true,
+                }),
+                accentInsensitiveLike(users.lastName, variant, {
+                  coalesceToEmpty: true,
+                }),
+              ])
             )
           ),
           columns: {
@@ -104,14 +128,16 @@ export async function GET(request: Request) {
     const matchingPlaces = query
       ? await db.query.places.findMany({
           where: or(
-            accentInsensitiveLike(places.name, query),
-            accentInsensitiveLike(places.slug, query),
-            accentInsensitiveLike(places.city, query, {
-              coalesceToEmpty: true,
-            }),
-            accentInsensitiveLike(places.state, query, {
-              coalesceToEmpty: true,
-            })
+            ...queryVariants.flatMap((variant) => [
+              accentInsensitiveLike(places.name, variant),
+              accentInsensitiveLike(places.slug, variant),
+              accentInsensitiveLike(places.city, variant, {
+                coalesceToEmpty: true,
+              }),
+              accentInsensitiveLike(places.state, variant, {
+                coalesceToEmpty: true,
+              }),
+            ])
           ),
           orderBy: [asc(places.name)],
           limit,
@@ -140,16 +166,18 @@ export async function GET(request: Request) {
             eq(events.status, "active"),
             gte(events.startAt, new Date()),
             or(
-              accentInsensitiveLike(events.title, query),
-              accentInsensitiveLike(events.description, query, {
-                coalesceToEmpty: true,
-              }),
-              accentInsensitiveLike(events.city, query, {
-                coalesceToEmpty: true,
-              }),
-              accentInsensitiveLike(events.state, query, {
-                coalesceToEmpty: true,
-              })
+              ...queryVariants.flatMap((variant) => [
+                accentInsensitiveLike(events.title, variant),
+                accentInsensitiveLike(events.description, variant, {
+                  coalesceToEmpty: true,
+                }),
+                accentInsensitiveLike(events.city, variant, {
+                  coalesceToEmpty: true,
+                }),
+                accentInsensitiveLike(events.state, variant, {
+                  coalesceToEmpty: true,
+                }),
+              ])
             )
           ),
           orderBy: [asc(events.startAt)],

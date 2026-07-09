@@ -1,5 +1,39 @@
 /** @type {import('next').NextConfig} */
 const nextConfig = {
+  async redirects() {
+    return [
+      {
+        source: "/venues-and-organizers",
+        destination: "/places",
+        permanent: true,
+      },
+      {
+        source: "/friends",
+        destination: "/activity",
+        permanent: true,
+      },
+      {
+        source: "/friends/list",
+        destination: "/activity?view=list",
+        permanent: true,
+      },
+      {
+        source: "/friends/requests",
+        destination: "/activity?view=requests",
+        permanent: true,
+      },
+      {
+        source: "/friends/search",
+        destination: "/activity/search",
+        permanent: true,
+      },
+      {
+        source: "/friends/activity",
+        destination: "/activity",
+        permanent: true,
+      },
+    ];
+  },
   images: {
     remotePatterns: [
       {

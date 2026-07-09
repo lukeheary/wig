@@ -106,7 +106,7 @@ export function PlacePage({ actionMenuType }: PlacePageProps) {
         <p className="mb-4 text-muted-foreground">
           The place you&apos;re looking for doesn&apos;t exist
         </p>
-        <Link href="/venues-and-organizers">
+        <Link href="/places">
           <Button>Browse Places</Button>
         </Link>
       </div>

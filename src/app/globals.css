@@ -57,6 +57,14 @@
   }
   body {
     @apply bg-background text-foreground;
+    font-family:
+      -apple-system,
+      BlinkMacSystemFont,
+      "SF Pro Display",
+      "SF Pro Text",
+      "Helvetica Neue",
+      Arial,
+      sans-serif;
   }
   /* Remove all focus rings globally */
   *:focus,
@@ -110,7 +118,14 @@
 
 @layer utilities {
   .font-space-grotesk {
-    font-family: var(--font-space-grotesk), sans-serif;
+    font-family:
+      -apple-system,
+      BlinkMacSystemFont,
+      "SF Pro Display",
+      "SF Pro Text",
+      "Helvetica Neue",
+      Arial,
+      sans-serif;
   }
 }
 

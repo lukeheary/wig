@@ -14,6 +14,7 @@ struct MobilePlaceCreationView: View {
 
     private let mode: Mode
     private let onCompleted: (() -> Void)?
+    private let onDeleted: (() -> Void)?
 
     @State private var selectedLogoImageItem: PhotosPickerItem?
     @State private var selectedLogoImage: UIImage?
@@ -29,17 +30,20 @@ struct MobilePlaceCreationView: View {
     @State private var hours: VenueHours?
     @State private var selectedCategoryKeys = Set<String>()
     @State private var isSubmitting = false
+    @State private var isDeleteConfirmationPresented = false
+    @State private var isDeleting = false
     @State private var alertMessage: String?
     @State private var isGooglePlacePickerPresented = false
     @State private var venueScraperRows: [EditablePlaceScraperRow] = []
 
     init(type: PlaceListItem.PlaceType, onCompleted: (() -> Void)? = nil) {
-        self.init(mode: .create(type), onCompleted: onCompleted)
+        self.init(mode: .create(type), onCompleted: onCompleted, onDeleted: nil)
     }
 
-    init(mode: Mode, onCompleted: (() -> Void)? = nil) {
+    init(mode: Mode, onCompleted: (() -> Void)? = nil, onDeleted: (() -> Void)? = nil) {
         self.mode = mode
         self.onCompleted = onCompleted
+        self.onDeleted = onDeleted
 
         if case .edit(let place) = mode {
             _name = State(initialValue: place.name)
@@ -87,6 +91,9 @@ struct MobilePlaceCreationView: View {
                 categoriesSection
                 if showsScrapersSection {
                     placeScrapersSection
+                }
+                if case .edit = mode {
+                    deleteSection
                 }
             }
             .scrollContentBackground(.hidden)
@@ -150,6 +157,17 @@ struct MobilePlaceCreationView: View {
                 Button("OK", role: .cancel) {}
             } message: {
                 Text(alertMessage ?? "Please try again.")
+            }
+            .alert("Delete \(type.displayName)?", isPresented: $isDeleteConfirmationPresented) {
+                Button("Delete \(type.displayName)", role: .destructive) {
+                    Task {
+                        await deletePlace()
+                    }
+                }
+
+                Button("Cancel", role: .cancel) {}
+            } message: {
+                Text("This will delete the \(type.displayName.lowercased()) and all of its upcoming events.")
             }
         }
     }
@@ -423,6 +441,25 @@ struct MobilePlaceCreationView: View {
         }
     }
 
+    @ViewBuilder
+    private var deleteSection: some View {
+        Section {
+            Button(role: .destructive) {
+                isDeleteConfirmationPresented = true
+            } label: {
+                HStack(spacing: 10) {
+                    if isDeleting {
+                        ProgressView()
+                            .tint(.red)
+                    }
+
+                    Text(isDeleting ? "Deleting..." : "Delete \(type.displayName)")
+                }
+            }
+            .disabled(isSubmitting || isDeleting)
+        }
+    }
+
     private var logoPlaceholder: some View {
         VStack(spacing: 10) {
             Image(systemName: isVenue ? "building.2.crop.circle" : "person.crop.circle.badge.plus")
@@ -614,6 +651,30 @@ struct MobilePlaceCreationView: View {
             try await saveVenueScrapers(slug: savedPlace.slug)
             NotificationCenter.default.post(name: .mobilePlaceDidChange, object: savedPlace.id)
             onCompleted?()
+            dismiss()
+        } catch {
+            alertMessage = error.localizedDescription
+        }
+    }
+
+    private func deletePlace() async {
+        guard !isDeleting else {
+            return
+        }
+
+        guard case .edit(let place) = mode else {
+            return
+        }
+
+        isDeleting = true
+        defer {
+            isDeleting = false
+        }
+
+        do {
+            _ = try await apiClient.send(APIClient.mobileDeletePlace(slug: place.slug))
+            NotificationCenter.default.post(name: .mobilePlaceDidChange, object: place.id)
+            onDeleted?()
             dismiss()
         } catch {
             alertMessage = error.localizedDescription

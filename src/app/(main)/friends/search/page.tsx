@@ -81,7 +81,7 @@ function SearchPageContent() {
   return (
     <PageContainer>
       <BackButtonHeader
-        backHref="/friends"
+        backHref="/activity"
         title="Find Friends"
         subtitle="Search by name or username to connect with more people"
       />

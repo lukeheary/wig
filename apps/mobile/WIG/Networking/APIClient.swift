@@ -557,6 +557,15 @@ struct APIClient: Sendable {
         )
     }
 
+    static func mobileDeletePlace(slug: String) -> Endpoint<DeleteSuccessResponse> {
+        Endpoint(
+            path: "/api/mobile/places/\(slug)/delete",
+            method: .post,
+            requiresAuthentication: false,
+            includesAuthenticationIfAvailable: true
+        )
+    }
+
     static func mobileUpdateEvent(
         eventID: UUID,
         venueID: UUID? = nil,
@@ -1199,6 +1208,10 @@ struct MobileMetroAreaCreateResponse: Decodable, Hashable, Sendable {
     let latitude: Double
     let longitude: Double
     let radiusMiles: Double
+}
+
+struct DeleteSuccessResponse: Decodable, Hashable, Sendable {
+    let success: Bool
 }
 
 enum MobileScraperType: String, Codable, CaseIterable, Hashable, Sendable {

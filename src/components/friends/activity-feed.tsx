@@ -159,10 +159,19 @@ export function ActivityItem({ activity }: ActivityItemProps) {
   };
 
   const renderContent = () => {
-    const actorName = (
-      <span className="font-medium text-foreground">
-        {actor.firstName} {actor.lastName}
-      </span>
+    const actorDisplayName =
+      [actor.firstName, actor.lastName].filter(Boolean).join(" ").trim() ||
+      actor.username ||
+      "Someone";
+    const actorName = actor.username ? (
+      <Link
+        href={`/${actor.username}`}
+        className="font-medium text-foreground hover:underline"
+      >
+        {actorDisplayName}
+      </Link>
+    ) : (
+      <span className="font-medium text-foreground">{actorDisplayName}</span>
     );
     const subjectName = activity.partnerFirstName ? (
       <span className="font-medium text-foreground">

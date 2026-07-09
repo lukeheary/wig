@@ -116,7 +116,7 @@ export async function POST(_: Request, context: RouteContext) {
       entityId: friendRequest.id,
       title: accepterName,
       body: "Added you as a friend",
-      actionUrl: "/friends/list",
+      actionUrl: "/activity?view=list",
       metadata: {
         requestId: friendRequest.id,
         requestType: "friend",
@@ -131,7 +131,7 @@ export async function POST(_: Request, context: RouteContext) {
     data: {
       type: "friend_request_accepted",
       entityId: friendRequest.id,
-      actionUrl: "/friends/list",
+      actionUrl: "/activity?view=list",
     },
   });
 

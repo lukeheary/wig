@@ -1,13 +1,19 @@
 import { z } from "zod";
 import { TRPCError } from "@trpc/server";
-import { router, protectedProcedure } from "../init";
-import { users, placeMembers, userSurfaceState } from "@/server/db/schema";
-import { eq, and, ne } from "drizzle-orm";
+import { router, protectedProcedure, publicProcedure } from "../init";
+import {
+  eventRsvps,
+  placeMembers,
+  userFriends,
+  users,
+  userSurfaceState,
+} from "@/server/db/schema";
+import { eq, and, ne, or, inArray, asc } from "drizzle-orm";
 import { clerkClient } from "@clerk/nextjs/server";
 import { addDays } from "date-fns";
 import { USER_SURFACE_VALUES } from "@/lib/user-surface-state";
-
-const RESERVED_USERNAMES = new Set(["luke"]);
+import { isReservedUsername } from "@/lib/reserved-usernames";
+import { mapEventCategoryData } from "@/server/utils/categories";
 
 export const userRouter = router({
   isAdmin: protectedProcedure.query(async ({ ctx }) => {
@@ -77,7 +83,7 @@ export const userRouter = router({
       const userId = ctx.auth.userId;
       const normalizedUsername = input.username.toLowerCase();
 
-      if (RESERVED_USERNAMES.has(normalizedUsername)) {
+      if (isReservedUsername(normalizedUsername)) {
         throw new TRPCError({
           code: "BAD_REQUEST",
           message: "Username is already taken",
@@ -215,6 +221,170 @@ export const userRouter = router({
     return user;
   }),
 
+  getProfileByUsername: publicProcedure
+    .input(
+      z.object({
+        username: z.string().min(1).max(50),
+      })
+    )
+    .query(async ({ ctx, input }) => {
+      const normalizedUsername = input.username.toLowerCase().trim();
+      const targetUser = await ctx.db.query.users.findFirst({
+        where: eq(users.username, normalizedUsername),
+      });
+
+      if (!targetUser || isReservedUsername(normalizedUsername)) {
+        throw new TRPCError({
+          code: "NOT_FOUND",
+          message: "Profile not found",
+        });
+      }
+
+      const now = new Date();
+      const viewerUserId = ctx.auth.userId ?? null;
+
+      const [friendships, pendingRequests, viewerTargetFriendship, profileRsvps] =
+        await Promise.all([
+          ctx.db.query.userFriends.findMany({
+            where: and(
+              or(
+                eq(userFriends.userId, targetUser.id),
+                eq(userFriends.friendUserId, targetUser.id)
+              ),
+              eq(userFriends.status, "accepted")
+            ),
+            with: {
+              user: true,
+              friend: true,
+            },
+          }),
+          ctx.db.query.userFriends.findMany({
+            where: and(
+              eq(userFriends.friendUserId, targetUser.id),
+              eq(userFriends.status, "pending")
+            ),
+          }),
+          viewerUserId
+            ? ctx.db.query.userFriends.findFirst({
+                where: or(
+                  and(
+                    eq(userFriends.userId, viewerUserId),
+                    eq(userFriends.friendUserId, targetUser.id)
+                  ),
+                  and(
+                    eq(userFriends.userId, targetUser.id),
+                    eq(userFriends.friendUserId, viewerUserId)
+                  )
+                ),
+              })
+            : Promise.resolve(null),
+          ctx.db.query.eventRsvps.findMany({
+            where: and(
+              eq(eventRsvps.userId, targetUser.id),
+              inArray(eventRsvps.status, ["going", "interested"])
+            ),
+            with: {
+              event: {
+                with: {
+                  venue: true,
+                  organizer: true,
+                  categoryLinks: {
+                    with: {
+                      category: true,
+                    },
+                  },
+                },
+              },
+            },
+            orderBy: [asc(eventRsvps.updatedAt)],
+          }),
+        ]);
+
+      const friendSummaries = friendships.flatMap((friendship) => {
+        const friend =
+          friendship.userId === targetUser.id
+            ? friendship.friend
+            : friendship.user;
+
+        if (!friend) return [];
+
+        return [
+          {
+            id: friend.id,
+            firstName: friend.firstName,
+            lastName: friend.lastName,
+            username: friend.username,
+            avatarImageUrl: friend.avatarImageUrl,
+            city: friend.city,
+            state: friend.state,
+          },
+        ];
+      });
+
+      const upcomingRsvps = profileRsvps
+        .filter((rsvp) => rsvp.event && rsvp.event.startAt >= now)
+        .sort((a, b) => a.event!.startAt.getTime() - b.event!.startAt.getTime())
+        .slice(0, 12);
+      const pastRsvps = profileRsvps
+        .filter((rsvp) => rsvp.event && rsvp.event.startAt < now)
+        .sort((a, b) => b.event!.startAt.getTime() - a.event!.startAt.getTime())
+        .slice(0, 12);
+
+      const mapProfileEvent = (rsvp: (typeof profileRsvps)[number]) => {
+        if (!rsvp.event) return null;
+        const event = mapEventCategoryData(rsvp.event);
+        const socialRsvp = {
+          id: rsvp.id,
+          userId: targetUser.id,
+          eventId: event.id,
+          status: rsvp.status,
+          notGoingReason: rsvp.notGoingReason,
+          partnerRsvpByUserId: rsvp.partnerRsvpByUserId,
+          createdAt: rsvp.createdAt,
+          updatedAt: rsvp.updatedAt,
+          user: {
+            id: targetUser.id,
+            firstName: targetUser.firstName,
+            lastName: targetUser.lastName,
+            avatarImageUrl: targetUser.avatarImageUrl,
+          },
+        };
+
+        return {
+          ...event,
+          userRsvp: viewerUserId === targetUser.id ? rsvp : null,
+          friendsGoing: rsvp.status === "going" ? [socialRsvp] : [],
+          friendsInterested: rsvp.status === "interested" ? [socialRsvp] : [],
+        };
+      };
+
+      return {
+        profile: {
+          id: targetUser.id,
+          firstName: targetUser.firstName,
+          lastName: targetUser.lastName,
+          username: targetUser.username,
+          avatarImageUrl: targetUser.avatarImageUrl,
+          city: targetUser.city,
+          state: targetUser.state,
+          isCurrentUser: viewerUserId === targetUser.id,
+          friendStatus: viewerTargetFriendship
+            ? viewerTargetFriendship.status === "accepted"
+              ? "accepted"
+              : viewerTargetFriendship.userId === viewerUserId
+                ? "pending_sent"
+                : "pending_received"
+            : "none",
+        },
+        friendCount: friendSummaries.length,
+        requestCount:
+          viewerUserId === targetUser.id ? pendingRequests.length : 0,
+        friends: friendSummaries,
+        upcomingEvents: upcomingRsvps.map(mapProfileEvent).filter(Boolean),
+        pastEvents: pastRsvps.map(mapProfileEvent).filter(Boolean),
+      };
+    }),
+
   getSurfaceState: protectedProcedure
     .input(
       z.object({
@@ -318,7 +488,7 @@ export const userRouter = router({
       const normalizedUsername = input.username?.toLowerCase().trim();
 
       if (normalizedUsername !== undefined) {
-        if (RESERVED_USERNAMES.has(normalizedUsername)) {
+        if (isReservedUsername(normalizedUsername)) {
           throw new TRPCError({
             code: "BAD_REQUEST",
             message: "Username is already taken",

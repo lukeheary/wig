@@ -168,7 +168,7 @@ export const friendsRouter = router({
           data: {
             type: "friend_request",
             entityId: friendRequest.id,
-            actionUrl: "/friends/requests",
+            actionUrl: "/activity?view=requests",
           },
         },
         ctx.db
@@ -251,7 +251,7 @@ export const friendsRouter = router({
           entityId: input.friendRequestId,
           title: accepterName,
           body: "Added you as a friend",
-          actionUrl: "/friends/list",
+          actionUrl: "/activity?view=list",
           metadata: {
             requestId: input.friendRequestId,
             requestType: "friend",
@@ -268,7 +268,7 @@ export const friendsRouter = router({
           data: {
             type: "friend_request_accepted",
             entityId: input.friendRequestId,
-            actionUrl: "/friends/list",
+            actionUrl: "/activity?view=list",
           },
         },
         ctx.db

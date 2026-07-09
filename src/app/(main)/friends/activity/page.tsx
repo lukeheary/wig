@@ -10,7 +10,7 @@ function ActivityPageContent() {
   return (
     <PageContainer>
       <BackButtonHeader
-        backHref="/friends"
+        backHref="/activity"
         title="Activity"
         subtitle="See what your friends are up to"
       />

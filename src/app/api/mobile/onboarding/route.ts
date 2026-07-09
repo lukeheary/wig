@@ -3,8 +3,8 @@ import { and, eq, ne } from "drizzle-orm";
 import { NextRequest, NextResponse } from "next/server";
 import { db } from "@/server/db";
 import { users } from "@/server/db/schema";
+import { isReservedUsername } from "@/lib/reserved-usernames";
 
-const RESERVED_USERNAMES = new Set(["luke"]);
 const USERNAME_PATTERN = /^[a-zA-Z0-9_]{3,20}$/;
 const DATE_OF_BIRTH_PATTERN = /^\d{4}-\d{2}-\d{2}$/;
 
@@ -169,7 +169,7 @@ export async function POST(request: NextRequest) {
       );
     }
 
-    if (RESERVED_USERNAMES.has(normalizedUsername)) {
+    if (isReservedUsername(normalizedUsername)) {
       return NextResponse.json({ error: "Username is already taken" }, { status: 400 });
     }
 

@@ -7,6 +7,8 @@ import UIKit
 struct EventDetailView: View {
     let event: EventFeedItem
 
+    private let heroControlButtonSize: CGFloat = 42
+
     @Environment(Clerk.self) private var clerk
     @Environment(\.apiClient) private var apiClient
     @Environment(\.dismiss) private var dismiss
@@ -60,7 +62,10 @@ struct EventDetailView: View {
                             }
                         },
                         topLeadingControls: {
-                            FloatingGlassIconButton(systemImage: "chevron.left") {
+                            FloatingGlassIconButton(
+                                systemImage: "chevron.left",
+                                size: heroControlButtonSize
+                            ) {
                                 dismiss()
                             }
                         },
@@ -72,7 +77,7 @@ struct EventDetailView: View {
                                 FloatingGlassIconButton(
                                     systemImage: "arrow.up.left.and.arrow.down.right",
                                     foregroundColor: .white,
-                                    size: 46
+                                    size: heroControlButtonSize
                                 ) {
                                     isImageViewerPresented = true
                                 }
@@ -99,6 +104,7 @@ struct EventDetailView: View {
         .background(SwipeBackEnabler())
         .navigationBarBackButtonHidden()
         .toolbar(.hidden, for: .navigationBar)
+        .toolbar(.hidden, for: .tabBar)
         .overlay {
             if isAuthenticated {
                 ZStack(alignment: .bottom) {
@@ -200,12 +206,18 @@ struct EventDetailView: View {
     private var topTrailingControls: some View {
         HStack(spacing: 12) {
             if currentEvent.eventURL != nil {
-                FloatingGlassIconButton(systemImage: "arrow.up.right") {
+                FloatingGlassIconButton(
+                    systemImage: "arrow.up.right",
+                    size: heroControlButtonSize
+                ) {
                     openExternalEvent()
                 }
             }
 
-            FloatingGlassIconButton(systemImage: "square.and.arrow.up") {
+            FloatingGlassIconButton(
+                systemImage: "square.and.arrow.up",
+                size: heroControlButtonSize
+            ) {
                 isShareSheetPresented = true
             }
 
@@ -247,13 +259,16 @@ struct EventDetailView: View {
                 Image(systemName: "square.and.pencil")
                     .font(.system(size: 17, weight: .semibold))
                     .foregroundStyle(.white)
-                    .frame(width: 46, height: 46)
+                    .frame(width: heroControlButtonSize, height: heroControlButtonSize)
                     .contentShape(Circle())
                     .eventDetailLiquidGlass(in: Circle())
             }
             .buttonStyle(.plain)
         } else {
-            FloatingGlassIconButton(systemImage: "square.and.pencil") {
+            FloatingGlassIconButton(
+                systemImage: "square.and.pencil",
+                size: heroControlButtonSize
+            ) {
                 isEditEventPresented = true
             }
         }
@@ -286,7 +301,7 @@ struct EventDetailView: View {
                 .fixedSize(horizontal: false, vertical: true)
 
             HStack(alignment: .firstTextBaseline, spacing: 6) {
-                Text(currentEvent.formattedStart(format: "EEE, MMM d 'at' h:mm a"))
+                Text(compactEventDateTimeText)
                     .font(.system(size: 15, weight: .medium))
                     .foregroundStyle(AppTheme.accentBlue)
 
@@ -298,29 +313,20 @@ struct EventDetailView: View {
             }
             .padding(.top, 6)
 
-            // Keep the venue name and category tags on one line when the full
-            // (untruncated) venue name plus all the tags fit. If they don't, drop all
-            // the tags to the next line instead of squeezing / truncating the venue.
-            ViewThatFits(in: .horizontal) {
-                HStack(alignment: .center, spacing: 8) {
-                    venueLabel
+            venueLabel
+                .padding(.top, 7)
 
-                    if !currentEvent.eventDetailCategoryLabels.isEmpty {
-                        categoryPills
-                    }
-                }
-
-                VStack(alignment: .leading, spacing: 8) {
-                    venueLabel
-
-                    if !currentEvent.eventDetailCategoryLabels.isEmpty {
-                        ScrollView(.horizontal, showsIndicators: false) {
-                            categoryPills
-                        }
-                    }
-                }
+            if let organizerPlace {
+                organizerLabel(place: organizerPlace)
+                    .padding(.top, 6)
             }
-            .padding(.top, 7)
+
+            if !currentEvent.eventDetailCategoryLabels.isEmpty {
+                ScrollView(.horizontal, showsIndicators: false) {
+                    categoryPills
+                }
+                .padding(.top, 8)
+            }
         }
     }
 
@@ -354,6 +360,24 @@ struct EventDetailView: View {
                     .padding(.vertical, 4)
                     .background(Color.white.opacity(0.08), in: Capsule())
             }
+        }
+    }
+
+    private func organizerLabel(place: PlaceListItem) -> some View {
+        HStack(alignment: .firstTextBaseline, spacing: 4) {
+            Text("Organized by")
+                .font(.system(size: 14, weight: .medium))
+                .foregroundStyle(.white.opacity(0.56))
+
+            NavigationLink {
+                PlaceDetailView(place: place)
+            } label: {
+                Text(place.name)
+                    .font(.system(size: 14, weight: .medium))
+                    .foregroundStyle(.white.opacity(0.76))
+                    .lineLimit(1)
+            }
+            .buttonStyle(.plain)
         }
     }
 
@@ -411,6 +435,57 @@ struct EventDetailView: View {
         }
 
         return nil
+    }
+
+    private var compactEventDateTimeText: String {
+        let prefix = currentEvent.formattedStart(format: "EEE, MMM d")
+
+        guard let endAt = currentEvent.endAt else {
+            return "\(prefix) at \(compactTimeString(for: currentEvent.startAt, includeMeridiem: true))"
+        }
+
+        let startMeridiem = meridiemString(for: currentEvent.startAt)
+        let endMeridiem = meridiemString(for: endAt)
+        let includeStartMeridiem = startMeridiem != endMeridiem
+        let startText = compactTimeString(for: currentEvent.startAt, includeMeridiem: includeStartMeridiem)
+        let endText = compactTimeString(for: endAt, includeMeridiem: true)
+
+        return "\(prefix) at \(startText) - \(endText)"
+    }
+
+    private func compactTimeString(for date: Date, includeMeridiem: Bool) -> String {
+        let calendar = eventTimeCalendar
+        let minute = calendar.component(.minute, from: date)
+        let format: String
+
+        switch (minute == 0, includeMeridiem) {
+        case (true, true):
+            format = "h a"
+        case (true, false):
+            format = "h"
+        case (false, true):
+            format = "h:mm a"
+        case (false, false):
+            format = "h:mm"
+        }
+
+        let formatter = DateFormatter()
+        formatter.dateFormat = format
+        formatter.timeZone = currentEvent.displayTimeZone
+        return formatter.string(from: date)
+    }
+
+    private func meridiemString(for date: Date) -> String {
+        let formatter = DateFormatter()
+        formatter.dateFormat = "a"
+        formatter.timeZone = currentEvent.displayTimeZone
+        return formatter.string(from: date)
+    }
+
+    private var eventTimeCalendar: Calendar {
+        var calendar = Calendar(identifier: .gregorian)
+        calendar.timeZone = currentEvent.displayTimeZone
+        return calendar
     }
 
     private var organizerPlace: PlaceListItem? {

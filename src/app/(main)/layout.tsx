@@ -83,6 +83,8 @@ function MainLayoutContent({ children }: { children: React.ReactNode }) {
 
   const isHome = pathname === "/home";
   const isPlaces =
+    pathname === "/places" ||
+    pathname?.startsWith("/places/") ||
     pathname === "/venues-and-organizers" ||
     pathname?.startsWith("/venues-and-organizers/") ||
     pathname?.startsWith("/venue/") ||
@@ -90,7 +92,11 @@ function MainLayoutContent({ children }: { children: React.ReactNode }) {
   const isPlaceDetail =
     (pathname?.startsWith("/venue/") || pathname?.startsWith("/organizer/")) &&
     !pathname?.includes("/edit");
-  const isFriends = pathname === "/friends";
+  const isFriends =
+    pathname === "/activity" ||
+    pathname?.startsWith("/activity/") ||
+    pathname === "/friends" ||
+    pathname?.startsWith("/friends/");
   const isProfile = pathname === "/profile";
   const isSupport = pathname === "/support";
   const isMyPlaces = pathname === "/my-places";
@@ -163,10 +169,8 @@ function MainLayoutContent({ children }: { children: React.ReactNode }) {
                 </Button>
               </Link>
               <Link
-                href="/venues-and-organizers"
-                onClick={() =>
-                  trackNavigationClick("/venues-and-organizers", "desktop_nav")
-                }
+                href="/places"
+                onClick={() => trackNavigationClick("/places", "desktop_nav")}
               >
                 <Button
                   variant="ghost"
@@ -175,12 +179,12 @@ function MainLayoutContent({ children }: { children: React.ReactNode }) {
                     isPlaces ? "text-primary" : "text-muted-foreground"
                   }
                 >
-                  Venues & Organizers
+                  Places
                 </Button>
               </Link>
               <Link
-                href="/friends"
-                onClick={() => trackNavigationClick("/friends", "desktop_nav")}
+                href="/activity"
+                onClick={() => trackNavigationClick("/activity", "desktop_nav")}
               >
                 <Button
                   variant="ghost"
@@ -191,7 +195,7 @@ function MainLayoutContent({ children }: { children: React.ReactNode }) {
                       : "gap-1 text-muted-foreground"
                   }
                 >
-                  Friends
+                  Activity
                 </Button>
               </Link>
             </nav>
@@ -382,12 +386,9 @@ function MainLayoutContent({ children }: { children: React.ReactNode }) {
                     </Link>
 
                     <Link
-                      href="/venues-and-organizers"
+                      href="/places"
                       onClick={() => {
-                        trackNavigationClick(
-                          "/venues-and-organizers",
-                          "mobile_menu"
-                        );
+                        trackNavigationClick("/places", "mobile_menu");
                         closeMobileMenu();
                       }}
                     >
@@ -397,13 +398,13 @@ function MainLayoutContent({ children }: { children: React.ReactNode }) {
                         size="lg"
                       >
                         <MapPin className="mr-3 h-5 w-5" />
-                        Venues & Organizers
+                        Places
                       </Button>
                     </Link>
                     <Link
-                      href="/friends"
+                      href="/activity"
                       onClick={() => {
-                        trackNavigationClick("/friends", "mobile_menu");
+                        trackNavigationClick("/activity", "mobile_menu");
                         closeMobileMenu();
                       }}
                     >
@@ -413,7 +414,7 @@ function MainLayoutContent({ children }: { children: React.ReactNode }) {
                         size="lg"
                       >
                         <Users className="mr-3 h-5 w-5" />
-                        Friends
+                        Activity
                         {/*{receivedRequestsCount > 0 && (*/}
                         {/*  <span className="ml-2 flex h-5 w-5 items-center justify-center rounded-full bg-primary text-[11px] text-primary-foreground">*/}
                         {/*    {receivedRequestsCount}*/}

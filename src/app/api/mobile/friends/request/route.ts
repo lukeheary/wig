@@ -107,7 +107,7 @@ export async function POST(request: Request) {
       data: {
         type: "friend_request",
         entityId: friendRequest.id,
-        actionUrl: "/friends/requests",
+        actionUrl: "/activity?view=requests",
       },
     });
 

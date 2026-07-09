@@ -1,10 +1,5 @@
 import type { Metadata, Viewport } from "next";
 import { createElement } from "react";
-import { Inter } from "next/font/google";
-import { Lato } from "next/font/google";
-import { Urbanist } from "next/font/google";
-import { Lexend } from "next/font/google";
-import { Space_Grotesk } from "next/font/google";
 import Script from "next/script";
 import { ClerkProvider } from "@clerk/nextjs";
 import { TRPCProvider } from "@/components/providers/trpc-provider";
@@ -15,15 +10,6 @@ import { ScrollRestoration } from "@/components/scroll-restoration";
 import { GOOGLE_ANALYTICS_ID } from "@/lib/google-analytics";
 import "./globals.css";
 
-const inter = Inter({ subsets: ["latin"] });
-const lato = Lato({ subsets: ["latin"], weight: ["400", "700"] });
-const urbanist = Urbanist({ subsets: ["latin"], weight: ["400", "700"] });
-const lexend = Lexend({ subsets: ["latin"], weight: ["400", "700"] });
-const spaceGrotesk = Space_Grotesk({
-  subsets: ["latin"],
-  weight: ["400", "500", "700"],
-  variable: "--font-space-grotesk",
-});
 const metadataBaseUrl =
   process.env.NEXT_PUBLIC_APP_URL ||
   (process.env.VERCEL_URL
@@ -55,7 +41,7 @@ export default function RootLayout({
             value: "48bb8a3a-aca5-4981-aea2-7729c02877ca",
           } as any)}
         </head>
-        <body className={`${urbanist.className} ${spaceGrotesk.variable}`}>
+        <body>
           <Script
             src={`https://www.googletagmanager.com/gtag/js?id=${GOOGLE_ANALYTICS_ID}`}
             strategy="afterInteractive"

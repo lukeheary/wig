@@ -688,7 +688,7 @@ function HomePageContent() {
         shouldShowAddFriendsBanner ? (
           <Card className="mb-4 bg-primary/5">
             <Link
-              href="/friends"
+              href="/activity"
               aria-label="Go to friends page"
               onClick={handleAddFriendsBannerClick}
               className="block"
@@ -713,7 +713,7 @@ function HomePageContent() {
           ? {
               title: (
                 <Link
-                  href="/friends"
+                  href="/activity"
                   className="flex items-center gap-1 transition-colors hover:text-primary"
                 >
                   <h1 className="text-xl font-bold tracking-tight">

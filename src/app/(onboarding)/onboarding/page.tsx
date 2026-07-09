@@ -27,8 +27,7 @@ import { GooglePlacesAutocomplete } from "@/components/google-places-autocomplet
 import { S3Uploader } from "@/components/ui/s3-uploader";
 import { UserAvatar } from "@/components/ui/user-avatar";
 import { DateOfBirthInput } from "@/components/ui/date-of-birth-input";
-
-const RESERVED_USERNAMES = new Set(["luke"]);
+import { isReservedUsername as isReservedUsernameValue } from "@/lib/reserved-usernames";
 
 export default function OnboardingPage() {
   const router = useRouter();
@@ -81,7 +80,7 @@ export default function OnboardingPage() {
   // Check if form is valid for enabling submit button
   const isValidUsername = /^[a-zA-Z0-9_]{3,20}$/.test(formData.username);
   const normalizedUsername = formData.username.trim().toLowerCase();
-  const isReservedUsername = RESERVED_USERNAMES.has(normalizedUsername);
+  const isReservedUsername = isReservedUsernameValue(normalizedUsername);
   const isValidDateOfBirth = () => {
     const day = Number.parseInt(formData.dobDay, 10);
     const month = Number.parseInt(formData.dobMonth, 10);

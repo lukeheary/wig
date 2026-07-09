@@ -264,7 +264,7 @@ struct HomeView: View {
                     VStack(alignment: .leading, spacing: 12) {
                         sectionHeader(
                             section.title,
-                            showsLocation: index == 0
+                            showsLocation: index == 0 && isViewingCurrentWeek
                         )
                             .padding(.horizontal, 16)
 
@@ -1094,6 +1094,10 @@ struct HomeView: View {
         case .all:
             return nil
         }
+    }
+
+    private var isViewingCurrentWeek: Bool {
+        selectedWeekStart == Self.startOfWeek(for: .now)
     }
 
     private static func startOfWeek(for date: Date) -> Date {
@@ -2020,6 +2024,8 @@ private extension EventFeedItem {
     }
 
     func matchesSearch(_ query: String) -> Bool {
+        let normalizedQuery = query.wigSearchNormalized
+
         return [
             title,
             venueName,
@@ -2030,8 +2036,23 @@ private extension EventFeedItem {
         ]
         .compactMap { $0 }
         .contains { value in
-            value.localizedCaseInsensitiveContains(query)
+            value.wigSearchNormalized.contains(normalizedQuery)
         }
+    }
+}
+
+private extension String {
+    var wigSearchNormalized: String {
+        folding(options: [.diacriticInsensitive, .caseInsensitive], locale: .current)
+            .lowercased()
+            .replacingOccurrences(of: "&", with: " and ")
+            .replacingOccurrences(
+                of: #"[^a-z0-9]+"#,
+                with: " ",
+                options: .regularExpression
+            )
+            .replacingOccurrences(of: #"\s+"#, with: " ", options: .regularExpression)
+            .trimmingCharacters(in: .whitespacesAndNewlines)
     }
 }
 

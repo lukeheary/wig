@@ -162,11 +162,17 @@ struct PlaceDetailView: View {
             if case .loaded(let detail) = viewModel.state {
                 switch action {
                 case .edit:
-                    MobilePlaceCreationView(mode: .edit(detail)) {
-                        Task {
-                            await viewModel.load(slug: detail.slug, using: apiClient)
+                    MobilePlaceCreationView(
+                        mode: .edit(detail),
+                        onCompleted: {
+                            Task {
+                                await viewModel.load(slug: detail.slug, using: apiClient)
+                            }
+                        },
+                        onDeleted: {
+                            dismiss()
                         }
-                    }
+                    )
                 case .createEvent:
                     MobileEventCreationView(mode: .create, preselectedPlace: detail) { _ in
                         Task {
