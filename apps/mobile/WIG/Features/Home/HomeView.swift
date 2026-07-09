@@ -65,9 +65,6 @@ struct HomeView: View {
                         await loadHome(for: selectedWeekStart, using: apiClient)
                     }
                 }
-                .refreshable {
-                    await loadHome(for: selectedWeekStart, using: apiClient, forceRefresh: true)
-                }
                 .onAppear {
                     if showsNativeSearch {
                         isSearchPresented = true
@@ -84,7 +81,13 @@ struct HomeView: View {
                         await loadHome(for: selectedWeekStart, using: apiClient, forceRefresh: true)
                     }
                 }
-                .onReceive(NotificationCenter.default.publisher(for: .friendRequestDidChange)) { _ in
+                .onReceive(NotificationCenter.default.publisher(for: .friendRequestDidChange)) { notification in
+                    if let userID = notification.userInfo?["userID"] as? String,
+                       let rawStatus = notification.userInfo?["friendStatus"] as? String,
+                       let status = FriendUserSummary.FriendStatus(rawValue: rawStatus) {
+                        searchViewModel.updateFriendStatus(for: userID, status: status)
+                    }
+
                     Task {
                         await loadHome(for: selectedWeekStart, using: apiClient, forceRefresh: true)
                     }
@@ -783,7 +786,7 @@ struct HomeView: View {
             return []
         }
 
-        let count = selectedSearchFilter == .people ? 20 : 5
+        let count = selectedSearchFilter == .people ? 20 : 7
         let sourceUsers = searchViewModel.recentUsers.isEmpty
             ? searchViewModel.users
             : searchViewModel.recentUsers
@@ -1663,6 +1666,7 @@ private struct SearchUserRow: View {
                 Text("Pending")
                     .font(.system(size: 12, weight: .bold))
                     .foregroundStyle(.white.opacity(0.62))
+                    .padding(.trailing, 4)
             } else if user.friendStatus == .pendingReceived {
                 Text("Requested You")
                     .font(.system(size: 12, weight: .bold))
@@ -1940,21 +1944,40 @@ final class HomeSearchDirectoryViewModel: ObservableObject {
     }
 
     func updateFriendStatus(for userID: String, status: FriendUserSummary.FriendStatus) {
-        users = users.map { user in
-            guard user.id == userID else {
-                return user
-            }
+        func updating(_ source: [FriendUserSummary]) -> [FriendUserSummary] {
+            source.map { user in
+                guard user.id == userID else {
+                    return user
+                }
 
-            return FriendUserSummary(
-                id: user.id,
-                name: user.name,
-                username: user.username,
-                avatarImageURL: user.avatarImageURL,
-                city: user.city,
-                state: user.state,
-                friendStatus: status
-            )
+                return FriendUserSummary(
+                    id: user.id,
+                    friendshipID: user.friendshipID,
+                    name: user.name,
+                    username: user.username,
+                    avatarImageURL: user.avatarImageURL,
+                    city: user.city,
+                    state: user.state,
+                    friendStatus: status
+                )
+            }
         }
+
+        users = updating(users)
+        recentUsers = updating(recentUsers)
+
+        guard let cachedResponse = Self.cachedResponse else {
+            return
+        }
+
+        Self.cachedResponse = MobileSearchResponse(
+            events: cachedResponse.events,
+            upcomingEvents: cachedResponse.upcomingEvents,
+            users: updating(cachedResponse.users),
+            recentUsers: updating(cachedResponse.recentUsers),
+            suggestedPlaces: cachedResponse.suggestedPlaces,
+            places: cachedResponse.places
+        )
     }
 }
 

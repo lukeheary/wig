@@ -31,9 +31,6 @@ struct VenuesView: View {
                         await viewModel.load(using: apiClient)
                     }
                 }
-                .refreshable {
-                    await viewModel.load(using: apiClient, forceRefresh: true)
-                }
                 .onReceive(NotificationCenter.default.publisher(for: .mobilePlaceDidChange)) { _ in
                     Task {
                         await viewModel.load(using: apiClient, forceRefresh: true)

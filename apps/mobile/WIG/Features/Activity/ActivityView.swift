@@ -57,9 +57,6 @@ struct ActivityView: View {
                         await viewModel.load(using: apiClient)
                     }
                 }
-                .refreshable {
-                    await viewModel.load(using: apiClient, forceRefresh: true)
-                }
                 .onChange(of: selectedFilter) { _, _ in
                     resetVisibleActivityCount()
                 }

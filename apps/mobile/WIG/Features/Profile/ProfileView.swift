@@ -39,9 +39,6 @@ struct ProfileView: View {
                         await loadProfileScreen()
                     }
                 }
-                .refreshable {
-                    await loadProfileScreen()
-                }
                 .onChange(of: resetFiltersTrigger) { _, _ in
                     resetProfileFilters()
                 }
@@ -694,9 +691,6 @@ struct UserProfileView: View {
                     await viewModel.load(userID: userID, using: apiClient)
                 }
             }
-            .refreshable {
-                await viewModel.load(userID: userID, using: apiClient)
-            }
             .alert(item: $pendingUnfriendProfile) { profile in
                 Alert(
                     title: Text("Unfriend \(profile.name)?"),
@@ -888,6 +882,14 @@ struct UserProfileView: View {
                         pastEvents: current.pastEvents
                     )
                 }
+                NotificationCenter.default.post(
+                    name: .friendRequestDidChange,
+                    object: nil,
+                    userInfo: [
+                        "userID": userID,
+                        "friendStatus": response.friendStatus.rawValue,
+                    ]
+                )
             } catch {
                 // Keep the current profile visible without interrupting the screen.
             }
@@ -1901,6 +1903,8 @@ private struct FriendsListViewContent: View {
                                 subtitle: friend.usernameText,
                                 identityKey: friend.id
                             )
+                            .frame(maxWidth: .infinity, alignment: .leading)
+                            .contentShape(Rectangle())
                         }
                         .buttonStyle(.plain)
 
@@ -1982,6 +1986,8 @@ private struct FriendRequestsView: View {
                                         avatarSize: 44,
                                         verticalPadding: 8
                                     )
+                                    .frame(maxWidth: .infinity, alignment: .leading)
+                                    .contentShape(Rectangle())
                                 }
                                 .buttonStyle(.plain)
                                 .frame(maxWidth: .infinity, alignment: .leading)
@@ -2046,6 +2052,8 @@ private struct FriendRequestsView: View {
                                     ) {
                                         PendingRequestBadge()
                                     }
+                                    .frame(maxWidth: .infinity, alignment: .leading)
+                                    .contentShape(Rectangle())
                                 }
                                 .buttonStyle(.plain)
                                 .frame(maxWidth: .infinity, alignment: .leading)
