@@ -1,5 +1,5 @@
 import { auth } from "@clerk/nextjs/server";
-import { and, asc, eq, gte, inArray, ne, or, sql } from "drizzle-orm";
+import { and, asc, eq, gte, inArray, ne, notInArray, or, sql } from "drizzle-orm";
 import { NextResponse } from "next/server";
 import { db } from "@/server/db";
 import {
@@ -158,7 +158,12 @@ export async function GET(request: Request) {
           }
 
           return db.query.users.findMany({
-            where: and(...userBaseConditions),
+            where: and(
+              ...userBaseConditions,
+              ...(directConnectionIds.size > 0
+                ? [notInArray(users.id, [...directConnectionIds])]
+                : [])
+            ),
             columns: {
               id: true,
               username: true,

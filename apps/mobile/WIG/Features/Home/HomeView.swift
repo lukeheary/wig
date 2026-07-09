@@ -1653,7 +1653,7 @@ private struct SearchUserRow: View {
             subtitle: user.usernameText,
             identityKey: user.id,
             avatarSize: 42,
-            verticalPadding: 10
+            verticalPadding: 0
         ) {
             if user.friendStatus == .accepted {
                 Text("Friends")
@@ -1683,8 +1683,7 @@ private struct SearchUsersList: View {
                     UserProfileView(userID: user.id)
                 } label: {
                     SearchUserRow(user: user)
-                        .padding(.horizontal, 16)
-                        .padding(.vertical, 8)
+                        .padding(9)
                         .frame(maxWidth: .infinity, alignment: .leading)
                         .background(
                             RoundedRectangle(cornerRadius: 18, style: .continuous)
