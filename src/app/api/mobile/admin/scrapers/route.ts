@@ -100,6 +100,19 @@ function getWordSet(...values: Array<string | null | undefined>) {
   );
 }
 
+function safeUrlValue(value: string | null | undefined) {
+  const trimmed = value?.trim();
+  if (!trimmed) {
+    return null;
+  }
+
+  try {
+    return new URL(trimmed).toString();
+  } catch {
+    return null;
+  }
+}
+
 function scoreScrapedVenueMatch(
   scraped: {
     venueName: string;
@@ -283,7 +296,7 @@ async function runSelectedScraper(scraperId: string) {
         name: row.place.name,
         city: row.place.city,
         state: row.place.state,
-        website: row.place.website,
+        website: safeUrlValue(row.place.website),
       },
     },
     venue: result.venue ?? null,
@@ -298,7 +311,7 @@ async function runSelectedScraper(scraperId: string) {
             name: venueMatches[index].name,
             city: venueMatches[index].city,
             state: venueMatches[index].state,
-            website: venueMatches[index].website,
+            website: safeUrlValue(venueMatches[index].website),
           }
         : null,
     })),
@@ -346,7 +359,7 @@ export async function GET(request: Request) {
         name: row.place.name,
         city: row.place.city,
         state: row.place.state,
-        website: row.place.website,
+        website: safeUrlValue(row.place.website),
       },
     })),
   });
