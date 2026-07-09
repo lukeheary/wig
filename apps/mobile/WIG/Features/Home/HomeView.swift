@@ -2036,7 +2036,7 @@ private extension EventFeedItem {
         ]
         .compactMap { $0 }
         .contains { value in
-            value.wigSearchNormalized.contains(normalizedQuery)
+            value.wigSearchNormalized.matchesSearchQuery(normalizedQuery)
         }
     }
 }
@@ -2053,6 +2053,34 @@ private extension String {
             )
             .replacingOccurrences(of: #"\s+"#, with: " ", options: .regularExpression)
             .trimmingCharacters(in: .whitespacesAndNewlines)
+    }
+
+    // Lets partial input such as "Above a" match "Above & Beyond" after
+    // ampersands normalize to the token "and".
+    func matchesSearchQuery(_ normalizedQuery: String) -> Bool {
+        guard !normalizedQuery.isEmpty else {
+            return true
+        }
+
+        if contains(normalizedQuery) {
+            return true
+        }
+
+        let queryTokens = normalizedQuery.split(separator: " ")
+        let valueTokens = split(separator: " ")
+        var valueIndex = valueTokens.startIndex
+
+        for queryToken in queryTokens {
+            guard let matchIndex = valueTokens[valueIndex...].firstIndex(where: {
+                $0.hasPrefix(String(queryToken))
+            }) else {
+                return false
+            }
+
+            valueIndex = valueTokens.index(after: matchIndex)
+        }
+
+        return true
     }
 }
 

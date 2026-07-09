@@ -1396,9 +1396,10 @@ private struct ProfilePageSkeletonContent: View {
                 .scrollIndicators(.hidden)
                 .contentMargins(.horizontal, 16, for: .scrollContent)
                 .scrollTargetBehavior(.viewAligned)
+                // Match Home's full-width carousel while keeping the section header inset.
+                .padding(.horizontal, -16)
             }
             .frame(maxWidth: .infinity, alignment: .leading)
-            .padding(.horizontal, -16)
         }
     }
 

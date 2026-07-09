@@ -28,6 +28,14 @@ function searchQueryVariants(query: string) {
   const andVariant = normalizedWhitespace.replace(/\s*&\s*/g, " and ");
   const swappedAmpersandVariant = normalizedWhitespace.replace(/\s+and\s+/gi, " & ");
   const swappedAndVariant = normalizedWhitespace.replace(/\s+and\s+/gi, " and ");
+  // Treat a trailing partial "and" connector as an ampersand as the user types.
+  // This lets queries such as "Above a" find "Above & Beyond".
+  const partialConnectorVariants = /\s+(?:a|an)$/i.test(normalizedWhitespace)
+    ? [
+        normalizedWhitespace.replace(/\s+(?:a|an)$/i, " &"),
+        normalizedWhitespace.replace(/\s+(?:a|an)$/i, " and"),
+      ]
+    : [];
 
   return [...new Set([
     normalizedWhitespace,
@@ -35,6 +43,7 @@ function searchQueryVariants(query: string) {
     andVariant,
     swappedAmpersandVariant,
     swappedAndVariant,
+    ...partialConnectorVariants,
   ].map((value) => value.replace(/\s+/g, " ").trim()).filter(Boolean))];
 }
 
@@ -96,18 +105,71 @@ export async function GET(request: Request) {
         })
       : [];
     const recentUsers = !query
-      ? await db.query.users.findMany({
-          where: and(...userBaseConditions),
-          columns: {
-            id: true,
-            username: true,
-            firstName: true,
-            lastName: true,
-            avatarImageUrl: true,
-          },
-          orderBy: [sql`${users.createdAt} desc`],
-          limit: 20,
-        })
+      ? await (async () => {
+          const directConnectionIds = new Set(
+            matchedUsers.map((friendship) =>
+              friendship.userId === userId
+                ? friendship.friendUserId
+                : friendship.userId
+            )
+          );
+          const acceptedFriendIds = matchedUsers
+            .filter((friendship) => friendship.status === "accepted")
+            .map((friendship) =>
+              friendship.userId === userId
+                ? friendship.friendUserId
+                : friendship.userId
+            );
+
+          if (userId && acceptedFriendIds.length > 0) {
+            const secondDegreeConnections = await db.query.userFriends.findMany({
+              where: and(
+                eq(userFriends.status, "accepted"),
+                or(
+                  inArray(userFriends.userId, acceptedFriendIds),
+                  inArray(userFriends.friendUserId, acceptedFriendIds)
+                )
+              ),
+              columns: {
+                userId: true,
+                friendUserId: true,
+              },
+            });
+            const friendOfFriendIds = [...new Set(
+              secondDegreeConnections
+                .flatMap((friendship) => [friendship.userId, friendship.friendUserId])
+                .filter((id) => id !== userId && !directConnectionIds.has(id))
+            )];
+
+            if (friendOfFriendIds.length > 0) {
+              return db.query.users.findMany({
+                where: and(...userBaseConditions, inArray(users.id, friendOfFriendIds)),
+                columns: {
+                  id: true,
+                  username: true,
+                  firstName: true,
+                  lastName: true,
+                  avatarImageUrl: true,
+                },
+                orderBy: [sql`random()`],
+                limit: 20,
+              });
+            }
+          }
+
+          return db.query.users.findMany({
+            where: and(...userBaseConditions),
+            columns: {
+              id: true,
+              username: true,
+              firstName: true,
+              lastName: true,
+              avatarImageUrl: true,
+            },
+            orderBy: [sql`random()`],
+            limit: 20,
+          });
+        })()
       : [];
 
     const friendStatusByUserId = new Map<string, "accepted" | "pending_sent" | "pending_received">();
@@ -151,7 +213,7 @@ export async function GET(request: Request) {
             gte(events.startAt, new Date()),
             or(sql`${events.venueId} is not null`, sql`${events.organizerId} is not null`)
           ),
-          orderBy: [asc(events.startAt)],
+          orderBy: [sql`random()`],
           limit: 50,
           columns: {
             venueId: true,
@@ -200,7 +262,7 @@ export async function GET(request: Request) {
             eq(events.status, "active"),
             gte(events.startAt, new Date())
           ),
-          orderBy: [asc(events.startAt)],
+          orderBy: [sql`random()`],
           limit: 10,
           with: {
             venue: true,

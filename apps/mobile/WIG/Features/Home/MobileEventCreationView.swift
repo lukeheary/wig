@@ -29,6 +29,8 @@ struct MobileEventCreationView: View {
     @State private var existingCoverImageURL: URL?
     @State private var isCoverImageViewerPresented = false
     @State private var title = ""
+    @State private var shouldAutoApplyVenueHours = true
+    @State private var isApplyingTitleSuggestion = false
     @State private var descriptionText = ""
     @State private var eventURLText = ""
     @State private var address = ""
@@ -362,7 +364,7 @@ struct MobileEventCreationView: View {
     private var detailsSection: some View {
         Section("Details") {
             VStack(alignment: .leading, spacing: 8) {
-                ClearableInputField(isSeriesForm ? "Series Title" : "Event Title", text: $title)
+                ClearableInputField(isSeriesForm ? "Series Title" : "Event Title", text: titleBinding)
                     .textInputAutocapitalization(.words)
 
                 titleSuggestionsView
@@ -1300,8 +1302,11 @@ struct MobileEventCreationView: View {
     }
 
     private func applyTitleSuggestion(_ suggestion: MobileEventTitleSuggestion) {
+        isApplyingTitleSuggestion = true
         title = suggestion.title
+        isApplyingTitleSuggestion = false
         applySuggestedTimes(startAt: suggestion.startAt, endAt: suggestion.endAt)
+        shouldAutoApplyVenueHours = false
         viewModel.clearTitleSuggestions()
     }
 
@@ -1393,11 +1398,39 @@ struct MobileEventCreationView: View {
         Calendar.current.startOfDay(for: startAt)
     }
 
+    private var titleBinding: Binding<String> {
+        Binding(
+            get: { title },
+            set: { newValue in
+                title = newValue
+
+                if !isApplyingTitleSuggestion {
+                    shouldAutoApplyVenueHours = true
+                }
+            }
+        )
+    }
+
     private var startDateBinding: Binding<Date> {
         Binding(
             get: { startAt },
             set: { newDate in
-                startAt = Self.combineDate(newDate, withTimeFrom: startAt)
+                let previousStartAt = startAt
+                let previousEndAt = endAt
+
+                startAt = Self.combineDate(newDate, withTimeFrom: previousStartAt)
+
+                if hasEndAt && !shouldAutoApplyVenueHours {
+                    let calendar = Calendar.current
+                    let dayOffset = calendar.dateComponents(
+                        [.day],
+                        from: calendar.startOfDay(for: previousStartAt),
+                        to: calendar.startOfDay(for: previousEndAt)
+                    ).day ?? 0
+                    let shiftedEndBaseDate = calendar.date(byAdding: .day, value: dayOffset, to: startAt) ?? startAt
+                    endAt = Self.combineDate(shiftedEndBaseDate, withTimeFrom: previousEndAt)
+                }
+
                 if isSeriesForm && recurrenceFrequency != .daily {
                     recurrenceDaysOfWeek = [Self.weekdayIndex(for: startAt)]
                 }
@@ -1419,6 +1452,10 @@ struct MobileEventCreationView: View {
     }
 
     private func applyVenueScheduleDefaults() {
+        guard shouldAutoApplyVenueHours else {
+            return
+        }
+
         guard let dayHours = selectedVenue?.hours?.hours(for: startAt),
               !dayHours.closed
         else {
