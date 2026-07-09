@@ -322,7 +322,7 @@ export async function GET(request: Request) {
   });
 
   const normalizedSearch = search?.toLowerCase() ?? "";
-  const filteredRows = normalizedSearch.isEmpty
+  const filteredRows = normalizedSearch.length === 0
     ? rows
     : rows.filter(
         (row) =>
