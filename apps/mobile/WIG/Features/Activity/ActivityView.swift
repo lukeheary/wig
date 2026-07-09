@@ -767,34 +767,15 @@ private struct ActivityRowView: View {
         let requestType = activity.type == .partnerRequestReceived ? "partner" : "friend"
         if let settled = requestStore.response(for: activity.id) {
             let verb = settled == .accept ? "accepted" : "declined"
-            (
-                Text("You \(verb) a \(requestType) request from ")
+            Text("You \(verb) a \(requestType) request from \(Text(activity.actorName).fontWeight(.medium)).")
                 .foregroundColor(.white.opacity(0.62))
-                + Text(activity.actorName)
-                .fontWeight(.medium)
-                .foregroundColor(.white.opacity(0.62))
-                + Text(".")
-                .foregroundColor(.white.opacity(0.62))
-            )
         } else if activity.type == .friendRequestAccepted || activity.type == .partnerRequestAccepted {
             let acceptedType = activity.type == .partnerRequestAccepted ? "partner" : "friend"
-            (
-                Text("You accepted a \(acceptedType) request from ")
+            Text("You accepted a \(acceptedType) request from \(Text(activity.actorName).fontWeight(.medium)).")
                 .foregroundColor(.white.opacity(0.62))
-                + Text(activity.actorName)
-                .fontWeight(.medium)
-                .foregroundColor(.white.opacity(0.62))
-                + Text(".")
-                .foregroundColor(.white.opacity(0.62))
-            )
         } else {
-            (
-                Text(activity.actorName)
-                .fontWeight(.medium)
-                .foregroundColor(.white)
-                + Text(" sent you a \(requestType) request.")
+            Text("\(Text(activity.actorName).fontWeight(.medium).foregroundColor(.white)) sent you a \(requestType) request.")
                 .foregroundColor(.white.opacity(0.62))
-            )
         }
     }
 

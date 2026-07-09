@@ -313,19 +313,30 @@ struct EventDetailView: View {
             }
             .padding(.top, 6)
 
-            venueLabel
-                .padding(.top, 7)
+            ViewThatFits(in: .horizontal) {
+                HStack(alignment: .center, spacing: 8) {
+                    venueLabel
+
+                    if !currentEvent.eventDetailCategoryLabels.isEmpty {
+                        categoryPills
+                    }
+                }
+
+                VStack(alignment: .leading, spacing: 8) {
+                    venueLabel
+
+                    if !currentEvent.eventDetailCategoryLabels.isEmpty {
+                        ScrollView(.horizontal, showsIndicators: false) {
+                            categoryPills
+                        }
+                    }
+                }
+            }
+            .padding(.top, 7)
 
             if let organizerPlace {
                 organizerLabel(place: organizerPlace)
                     .padding(.top, 6)
-            }
-
-            if !currentEvent.eventDetailCategoryLabels.isEmpty {
-                ScrollView(.horizontal, showsIndicators: false) {
-                    categoryPills
-                }
-                .padding(.top, 8)
             }
         }
     }

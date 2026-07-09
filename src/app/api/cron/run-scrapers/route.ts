@@ -1,7 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import { db } from "@/server/db";
 import { scrapers, scraperLogs, events, users } from "@/server/db/schema";
-import { eq } from "drizzle-orm";
+import { and, eq, isNull, or } from "drizzle-orm";
 import {
   filterExistingCategoryKeys,
   setEventCategoryKeys,
@@ -204,6 +204,52 @@ async function runScraper(
       error: err instanceof Error ? err.message : "DB insert error",
       data: { eventsFound: eventsFoundData, eventsAdded: [] },
     };
+  }
+
+  // If an event already existed, still enrich it with a venue/organizer link
+  // when the scraper now knows that relationship and the stored row does not.
+  if (venueId || organizerId) {
+    const linkableEvents = insertValues.filter(
+      (value) => value.source && value.externalId
+    );
+
+    await Promise.allSettled(
+      linkableEvents.map(async (value) => {
+        const updates: Partial<{
+          venueId: string | null;
+          organizerId: string | null;
+        }> = {};
+        const missingLinkConditions = [];
+
+        if (venueId) {
+          updates.venueId = venueId;
+          missingLinkConditions.push(isNull(events.venueId));
+        }
+
+        if (organizerId) {
+          updates.organizerId = organizerId;
+          missingLinkConditions.push(isNull(events.organizerId));
+        }
+
+        if (
+          Object.keys(updates).length === 0 ||
+          missingLinkConditions.length === 0
+        ) {
+          return;
+        }
+
+        await db
+          .update(events)
+          .set(updates)
+          .where(
+            and(
+              eq(events.source, value.source!),
+              eq(events.externalId, value.externalId!),
+              or(...missingLinkConditions)
+            )
+          );
+      })
+    );
   }
 
   // Set categories for newly inserted events

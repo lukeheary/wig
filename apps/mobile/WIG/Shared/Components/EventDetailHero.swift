@@ -41,7 +41,7 @@ struct EventDetailHero<
 
     private let horizontalPadding: CGFloat = 16
     private let imageCornerRadius: CGFloat = 22
-    private let cornerControlInset: CGFloat = 16
+    private let cornerControlInset: CGFloat = 12
     private let accessoryInset: CGFloat = 12
     private let topGap: CGFloat = 10
     // Minimum space above the artwork so it clears the Dynamic Island even when the

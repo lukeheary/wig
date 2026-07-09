@@ -801,20 +801,20 @@ struct UserProfileView: View {
     private func userFriendAction(response: UserProfileResponse) -> some View {
         if let profile = response.profile {
             switch profile.friendStatus ?? FriendUserSummary.FriendStatus.none {
-            case .none:
+            case FriendUserSummary.FriendStatus.none:
                 EmptyView()
             case .pendingSent:
                 EmptyView()
             case .pendingReceived:
                 HStack(spacing: 12) {
                     Button("Decline") {
-                        _ = respondToFriendRequest(profile: profile, response: .decline)
+                        respondToFriendRequest(profile: profile, response: .decline)
                     }
                     .profileActionButtonStyle(kind: .secondary, isDisabled: isRespondingToFriendRequest)
                     .disabled(isRespondingToFriendRequest)
 
                     Button("Accept") {
-                        _ = respondToFriendRequest(profile: profile, response: .accept)
+                        respondToFriendRequest(profile: profile, response: .accept)
                     }
                     .profileActionButtonStyle(kind: .accent, isDisabled: isRespondingToFriendRequest)
                     .disabled(isRespondingToFriendRequest)
@@ -827,8 +827,8 @@ struct UserProfileView: View {
 
     @ViewBuilder
     private func navFriendAction(for profile: FriendUserSummary) -> some View {
-        switch profile.friendStatus ?? .none {
-        case .none:
+        switch profile.friendStatus ?? FriendUserSummary.FriendStatus.none {
+        case FriendUserSummary.FriendStatus.none:
             Button("Add Friend") {
                 sendFriendRequest(to: profile.id)
             }
@@ -969,7 +969,7 @@ struct UserProfileView: View {
                         avatarImageURL: $0.avatarImageURL,
                         city: $0.city,
                         state: $0.state,
-                        friendStatus: .none
+                        friendStatus: FriendUserSummary.FriendStatus.none
                     )
                 },
                 friendCount: max(current.friendCount - 1, 0),
@@ -2551,6 +2551,7 @@ private struct AdminSettingsView: View {
     @State private var isEventCreationSheetPresented = false
     @State private var isEventSeriesCreationSheetPresented = false
     @State private var isMetroAreaSheetPresented = false
+    @State private var isAdminScrapersPresented = false
 
     var body: some View {
         ScrollView {
@@ -2595,6 +2596,13 @@ private struct AdminSettingsView: View {
                     ) {
                         isMetroAreaSheetPresented = true
                     }
+
+                    AdminSettingsActionButton(
+                        title: "Scrapers",
+                        systemImage: "play.rectangle.on.rectangle"
+                    ) {
+                        isAdminScrapersPresented = true
+                    }
                 }
             }
             .padding(.horizontal, 16)
@@ -2612,6 +2620,9 @@ private struct AdminSettingsView: View {
             }
             .padding(.leading, 16)
             .padding(.top, 0)
+        }
+        .navigationDestination(isPresented: $isAdminScrapersPresented) {
+            AdminScrapersView()
         }
         .sheet(isPresented: $isEventCreationSheetPresented) {
             MobileEventCreationView()
@@ -2676,6 +2687,478 @@ private struct AdminSettingsActionButton: View {
             )
         }
         .buttonStyle(.plain)
+    }
+}
+
+@MainActor
+private final class AdminScrapersViewModel: ObservableObject {
+    @Published private(set) var scraperRows: [MobileAdminScraperRow] = []
+    @Published private(set) var isLoadingRows = false
+    @Published private(set) var isRunning = false
+    @Published private(set) var isImporting = false
+    @Published private(set) var runResult: MobileAdminScraperRunResponse?
+    @Published private(set) var importedCount: Int?
+    @Published var errorMessage: String?
+
+    func resetSession() {
+        runResult = nil
+        importedCount = nil
+        errorMessage = nil
+    }
+
+    func loadRows(search: String, using apiClient: APIClient) async {
+        isLoadingRows = true
+        defer { isLoadingRows = false }
+
+        do {
+            let response = try await apiClient.send(
+                APIClient.mobileAdminScrapers(
+                    search: search.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty
+                        ? nil
+                        : search.trimmingCharacters(in: .whitespacesAndNewlines)
+                )
+            )
+            scraperRows = response.scrapers
+        } catch {
+            scraperRows = []
+            errorMessage = error.localizedDescription
+        }
+    }
+
+    func runScraper(id: UUID, using apiClient: APIClient) async {
+        isRunning = true
+        resetSession()
+        defer { isRunning = false }
+
+        do {
+            runResult = try await apiClient.send(APIClient.mobileRunAdminScraper(scraperID: id))
+        } catch {
+            errorMessage = error.localizedDescription
+        }
+    }
+
+    func importEvents(
+        scraperID: UUID,
+        events: [MobileAdminScrapedEvent],
+        overrideExisting: Bool,
+        using apiClient: APIClient
+    ) async {
+        isImporting = true
+        errorMessage = nil
+        defer { isImporting = false }
+
+        do {
+            let payload = events.map { event in
+                MobileAdminScrapedEventImport(
+                    title: event.title,
+                    description: event.description,
+                    coverImageUrl: event.coverImageURL?.absoluteString,
+                    eventUrl: event.eventURL?.absoluteString,
+                    externalId: event.externalID,
+                    source: event.source,
+                    startAt: ISO8601DateFormatter.wigFractional.string(from: event.startAt),
+                    endAt: event.endAt.map { ISO8601DateFormatter.wigFractional.string(from: $0) },
+                    venueName: event.venueName,
+                    address: event.address,
+                    city: event.city,
+                    state: event.state,
+                    categories: event.categories,
+                    visibility: event.visibility,
+                    status: "active",
+                    timeZone: nil,
+                    venueId: event.venueMatch?.id.uuidString
+                )
+            }
+
+            let response = try await apiClient.send(
+                APIClient.mobileImportAdminScraperEvents(
+                    scraperID: scraperID,
+                    overrideExisting: overrideExisting,
+                    events: payload
+                )
+            )
+            importedCount = response.created
+        } catch {
+            errorMessage = error.localizedDescription
+        }
+    }
+}
+
+private struct AdminScrapersView: View {
+    @Environment(\.dismiss) private var dismiss
+    @Environment(\.apiClient) private var apiClient
+    @StateObject private var viewModel = AdminScrapersViewModel()
+    @State private var searchText = ""
+    @State private var selectedScraperID: UUID?
+    @State private var overrideExisting = false
+
+    var body: some View {
+        ScrollView {
+            VStack(alignment: .leading, spacing: 22) {
+                Text("Scrapers")
+                    .font(.system(size: 20, weight: .bold))
+                    .foregroundStyle(.white)
+                    .padding(.bottom, -10)
+
+                searchBar
+                scraperSelectionSection
+
+                if let selectedRow {
+                    selectedScraperCard(selectedRow)
+                }
+
+                if let errorMessage = viewModel.errorMessage {
+                    errorCard(errorMessage)
+                }
+
+                if let runResult = viewModel.runResult {
+                    runResultSection(runResult)
+                }
+            }
+            .padding(.horizontal, 16)
+            .padding(.top, 82)
+            .padding(.bottom, 48)
+        }
+        .scrollIndicators(.hidden)
+        .background(ProfileTheme.background.ignoresSafeArea())
+        .background(SwipeBackEnabler())
+        .toolbar(.hidden, for: .navigationBar)
+        .navigationBarBackButtonHidden()
+        .overlay(alignment: .topLeading) {
+            FloatingGlassIconButton(systemImage: "chevron.left") {
+                dismiss()
+            }
+            .padding(.leading, 16)
+            .padding(.top, 0)
+        }
+        .task {
+            await viewModel.loadRows(search: "", using: apiClient)
+            if selectedScraperID == nil {
+                selectedScraperID = viewModel.scraperRows.first?.id
+            }
+        }
+        .task(id: searchText) {
+            await viewModel.loadRows(search: searchText, using: apiClient)
+            if let selectedScraperID,
+               !viewModel.scraperRows.contains(where: { $0.id == selectedScraperID }) {
+                self.selectedScraperID = viewModel.scraperRows.first?.id
+            } else if self.selectedScraperID == nil {
+                self.selectedScraperID = viewModel.scraperRows.first?.id
+            }
+        }
+    }
+
+    private var selectedRow: MobileAdminScraperRow? {
+        guard let selectedScraperID else { return nil }
+        return viewModel.scraperRows.first(where: { $0.id == selectedScraperID })
+    }
+
+    private var searchBar: some View {
+        HStack(spacing: 10) {
+            Image(systemName: "magnifyingglass")
+                .font(.system(size: 16, weight: .medium))
+                .foregroundStyle(.white.opacity(0.65))
+
+            TextField("Search scraper rows...", text: $searchText)
+                .font(.system(size: 16, weight: .medium))
+                .foregroundStyle(.white)
+                .textInputAutocapitalization(.never)
+                .autocorrectionDisabled()
+
+            if !searchText.isEmpty {
+                Button {
+                    searchText = ""
+                } label: {
+                    Image(systemName: "xmark.circle.fill")
+                        .font(.system(size: 16, weight: .semibold))
+                        .foregroundStyle(.white.opacity(0.4))
+                }
+                .buttonStyle(.plain)
+            }
+        }
+        .padding(.horizontal, 16)
+        .frame(height: 50)
+        .background(
+            RoundedRectangle(cornerRadius: 18, style: .continuous)
+                .fill(Color.white.opacity(0.08))
+        )
+        .overlay(
+            RoundedRectangle(cornerRadius: 18, style: .continuous)
+                .strokeBorder(Color.white.opacity(0.08), lineWidth: 1)
+        )
+    }
+
+    private var scraperSelectionSection: some View {
+        VStack(alignment: .leading, spacing: 10) {
+            Text("Select scraper")
+                .font(.system(size: 16, weight: .semibold))
+                .foregroundStyle(.white)
+
+            if viewModel.isLoadingRows && viewModel.scraperRows.isEmpty {
+                Text("Loading scrapers...")
+                    .font(.system(size: 14, weight: .medium))
+                    .foregroundStyle(.white.opacity(0.56))
+            } else if viewModel.scraperRows.isEmpty {
+                Text("No scraper rows found. Configure them from a venue or organizer first.")
+                    .font(.system(size: 14, weight: .medium))
+                    .foregroundStyle(.white.opacity(0.56))
+                    .padding(16)
+                    .frame(maxWidth: .infinity, alignment: .leading)
+                    .background(
+                        RoundedRectangle(cornerRadius: 20, style: .continuous)
+                            .fill(ProfileTheme.cardBackground)
+                    )
+            } else {
+                VStack(spacing: 10) {
+                    ForEach(viewModel.scraperRows.prefix(12)) { row in
+                        Button {
+                            selectedScraperID = row.id
+                            viewModel.resetSession()
+                        } label: {
+                            HStack(spacing: 12) {
+                                VStack(alignment: .leading, spacing: 4) {
+                                    Text(row.place.name)
+                                        .font(.system(size: 15, weight: .semibold))
+                                        .foregroundStyle(.white)
+                                        .lineLimit(1)
+
+                                    Text("\(row.scraper.title) • \(row.searchString)")
+                                        .font(.system(size: 12, weight: .medium))
+                                        .foregroundStyle(.white.opacity(0.54))
+                                        .lineLimit(1)
+                                }
+
+                                Spacer(minLength: 8)
+
+                                if selectedScraperID == row.id {
+                                    Image(systemName: "checkmark.circle.fill")
+                                        .font(.system(size: 18, weight: .semibold))
+                                        .foregroundStyle(AppTheme.accentBlue)
+                                }
+                            }
+                            .padding(14)
+                            .frame(maxWidth: .infinity, alignment: .leading)
+                            .background(
+                                RoundedRectangle(cornerRadius: 18, style: .continuous)
+                                    .fill(ProfileTheme.cardBackground)
+                            )
+                            .overlay(
+                                RoundedRectangle(cornerRadius: 18, style: .continuous)
+                                    .strokeBorder(
+                                        selectedScraperID == row.id
+                                            ? AppTheme.accentBlue.opacity(0.45)
+                                            : .white.opacity(0.08),
+                                        lineWidth: 1
+                                    )
+                            )
+                        }
+                        .buttonStyle(.plain)
+                    }
+                }
+            }
+        }
+    }
+
+    private func selectedScraperCard(_ row: MobileAdminScraperRow) -> some View {
+        VStack(alignment: .leading, spacing: 14) {
+            HStack(spacing: 8) {
+                Text(row.place.name)
+                    .font(.system(size: 17, weight: .semibold))
+                    .foregroundStyle(.white)
+                Text(row.scraper.title)
+                    .font(.system(size: 12, weight: .semibold))
+                    .foregroundStyle(.white.opacity(0.76))
+                    .padding(.horizontal, 8)
+                    .padding(.vertical, 4)
+                    .background(Color.white.opacity(0.08), in: Capsule())
+            }
+
+            Text(row.searchString)
+                .font(.system(size: 13, weight: .medium, design: .monospaced))
+                .foregroundStyle(.white.opacity(0.54))
+
+            Button {
+                Task {
+                    await viewModel.runScraper(id: row.id, using: apiClient)
+                }
+            } label: {
+                HStack(spacing: 8) {
+                    if viewModel.isRunning {
+                        ProgressView()
+                            .tint(.white)
+                    } else {
+                        Image(systemName: "play.fill")
+                    }
+
+                    Text(viewModel.isRunning ? "Running..." : "Run Scraper")
+                        .font(.system(size: 15, weight: .semibold))
+                }
+                .foregroundStyle(.white)
+                .frame(maxWidth: .infinity)
+                .frame(height: 48)
+                .background(
+                    RoundedRectangle(cornerRadius: 16, style: .continuous)
+                        .fill(AppTheme.accentBlue.opacity(0.9))
+                )
+            }
+            .buttonStyle(.plain)
+            .disabled(viewModel.isRunning || viewModel.isImporting)
+        }
+        .padding(16)
+        .frame(maxWidth: .infinity, alignment: .leading)
+        .background(
+            RoundedRectangle(cornerRadius: 20, style: .continuous)
+                .fill(ProfileTheme.cardBackground)
+        )
+    }
+
+    private func errorCard(_ message: String) -> some View {
+        Text(message)
+            .font(.system(size: 14, weight: .medium))
+            .foregroundStyle(.red.opacity(0.9))
+            .padding(16)
+            .frame(maxWidth: .infinity, alignment: .leading)
+            .background(
+                RoundedRectangle(cornerRadius: 20, style: .continuous)
+                    .fill(ProfileTheme.cardBackground)
+            )
+    }
+
+    private func runResultSection(_ result: MobileAdminScraperRunResponse) -> some View {
+        VStack(alignment: .leading, spacing: 16) {
+            HStack {
+                Text("\(result.totalEvents) events found")
+                    .font(.system(size: 18, weight: .bold))
+                    .foregroundStyle(.white)
+                Spacer()
+                if let importedCount = viewModel.importedCount {
+                    Text("\(importedCount) added")
+                        .font(.system(size: 13, weight: .semibold))
+                        .foregroundStyle(.green.opacity(0.9))
+                }
+            }
+
+            if result.scraperRow.place.type == .organizer {
+                Toggle(isOn: $overrideExisting) {
+                    VStack(alignment: .leading, spacing: 4) {
+                        Text("Override existing")
+                            .font(.system(size: 14, weight: .semibold))
+                            .foregroundStyle(.white)
+                        Text("Update events that already exist instead of skipping them.")
+                            .font(.system(size: 12, weight: .medium))
+                            .foregroundStyle(.white.opacity(0.5))
+                    }
+                }
+                .tint(AppTheme.accentBlue)
+            }
+
+            Button {
+                Task {
+                    await viewModel.importEvents(
+                        scraperID: result.scraperRow.id,
+                        events: result.events,
+                        overrideExisting: overrideExisting,
+                        using: apiClient
+                    )
+                }
+            } label: {
+                HStack(spacing: 8) {
+                    if viewModel.isImporting {
+                        ProgressView()
+                            .tint(.white)
+                    } else {
+                        Image(systemName: overrideExisting ? "arrow.triangle.2.circlepath" : "square.and.arrow.down")
+                    }
+
+                    Text(viewModel.isImporting
+                        ? "Adding..."
+                        : (overrideExisting ? "Update All in WIG" : "Add All to WIG"))
+                        .font(.system(size: 15, weight: .semibold))
+                }
+                .foregroundStyle(.white)
+                .frame(maxWidth: .infinity)
+                .frame(height: 48)
+                .background(
+                    RoundedRectangle(cornerRadius: 16, style: .continuous)
+                        .fill(.white.opacity(0.12))
+                )
+            }
+            .buttonStyle(.plain)
+            .disabled(viewModel.isImporting || result.events.isEmpty)
+
+            if !result.errors.isEmpty {
+                VStack(alignment: .leading, spacing: 6) {
+                    Text("Scrape errors")
+                        .font(.system(size: 14, weight: .semibold))
+                        .foregroundStyle(.yellow.opacity(0.9))
+
+                    ForEach(result.errors) { error in
+                        Text("\(error.url): \(error.error)")
+                            .font(.system(size: 12, weight: .medium))
+                            .foregroundStyle(.white.opacity(0.56))
+                    }
+                }
+            }
+
+            VStack(spacing: 12) {
+                ForEach(result.events) { event in
+                    AdminScrapedEventCard(event: event)
+                }
+            }
+        }
+    }
+}
+
+private struct AdminScrapedEventCard: View {
+    let event: MobileAdminScrapedEvent
+
+    var body: some View {
+        VStack(alignment: .leading, spacing: 10) {
+            Text(event.title)
+                .font(.system(size: 16, weight: .semibold))
+                .foregroundStyle(.white)
+
+            Text(dateText)
+                .font(.system(size: 13, weight: .medium))
+                .foregroundStyle(AppTheme.accentBlue)
+
+            Text(locationText)
+                .font(.system(size: 13, weight: .medium))
+                .foregroundStyle(.white.opacity(0.56))
+
+            if let venueMatch = event.venueMatch {
+                Text("Matched venue: \(venueMatch.name)")
+                    .font(.system(size: 12, weight: .semibold))
+                    .foregroundStyle(.white.opacity(0.72))
+            }
+        }
+        .padding(14)
+        .frame(maxWidth: .infinity, alignment: .leading)
+        .background(
+            RoundedRectangle(cornerRadius: 18, style: .continuous)
+                .fill(ProfileTheme.cardBackground)
+        )
+        .overlay(
+            RoundedRectangle(cornerRadius: 18, style: .continuous)
+                .strokeBorder(.white.opacity(0.08), lineWidth: 1)
+        )
+    }
+
+    private var dateText: String {
+        let formatter = DateFormatter()
+        formatter.dateFormat = "EEE, MMM d 'at' h:mm a"
+        return formatter.string(from: event.startAt)
+    }
+
+    private var locationText: String {
+        let venue = event.venueName.trimmingCharacters(in: .whitespacesAndNewlines)
+        if !venue.isEmpty {
+            return venue
+        }
+
+        return [event.city, event.state]
+            .filter { !$0.isEmpty }
+            .joined(separator: ", ")
     }
 }
 
@@ -2824,7 +3307,7 @@ private struct MetroAreaCreationView: View {
         }
 
         do {
-            _ = try await apiClient.send(
+            try await apiClient.send(
                 APIClient.mobileCreateMetroArea(
                     name: cityName,
                     state: state,

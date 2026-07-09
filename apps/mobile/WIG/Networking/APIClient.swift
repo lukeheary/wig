@@ -234,6 +234,52 @@ struct APIClient: Sendable {
         )
     }
 
+    static func mobileAdminScrapers(search: String? = nil) -> Endpoint<MobileAdminScrapersResponse> {
+        var queryItems: [URLQueryItem] = []
+        if let search, !search.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty {
+            queryItems.append(URLQueryItem(name: "search", value: search))
+        }
+
+        return Endpoint(
+            path: "/api/mobile/admin/scrapers",
+            queryItems: queryItems,
+            requiresAuthentication: false,
+            includesAuthenticationIfAvailable: true
+        )
+    }
+
+    static func mobileRunAdminScraper(scraperID: UUID) throws -> Endpoint<MobileAdminScraperRunResponse> {
+        Endpoint(
+            path: "/api/mobile/admin/scrapers",
+            method: .post,
+            body: try JSONEncoder().encode(
+                MobileAdminScraperRunRequest(scraperId: scraperID.uuidString)
+            ),
+            requiresAuthentication: false,
+            includesAuthenticationIfAvailable: true
+        )
+    }
+
+    static func mobileImportAdminScraperEvents(
+        scraperID: UUID,
+        overrideExisting: Bool = false,
+        events: [MobileAdminScrapedEventImport]
+    ) throws -> Endpoint<MobileAdminScraperImportResponse> {
+        Endpoint(
+            path: "/api/mobile/admin/scrapers",
+            method: .patch,
+            body: try JSONEncoder().encode(
+                MobileAdminScraperImportRequest(
+                    scraperId: scraperID.uuidString,
+                    overrideExisting: overrideExisting,
+                    events: events
+                )
+            ),
+            requiresAuthentication: false,
+            includesAuthenticationIfAvailable: true
+        )
+    }
+
     static func mobileUserProfile(userID: String) -> Endpoint<UserProfileResponse> {
         Endpoint(
             path: "/api/mobile/users/\(userID)",
@@ -931,6 +977,103 @@ struct MobileAdminStatusResponse: Decodable, Hashable, Sendable {
     let isAdmin: Bool
 }
 
+struct MobileAdminScrapersResponse: Decodable, Hashable, Sendable {
+    let scrapers: [MobileAdminScraperRow]
+}
+
+struct MobileAdminScraperRow: Decodable, Hashable, Identifiable, Sendable {
+    let id: UUID
+    let placeId: UUID
+    let scraper: MobileScraperType
+    let searchString: String
+    let classificationName: String?
+    let createdAt: Date
+    let updatedAt: Date
+    let place: MobileAdminScraperPlace
+}
+
+struct MobileAdminScraperPlace: Decodable, Hashable, Sendable {
+    let id: UUID
+    let type: PlaceListItem.PlaceType
+    let slug: String
+    let name: String
+    let city: String?
+    let state: String?
+    let website: URL?
+}
+
+struct MobileAdminScraperRunResponse: Decodable, Hashable, Sendable {
+    let scraperRow: MobileAdminScraperRow
+    let venue: MobileAdminScraperVenueSummary?
+    let organizer: MobileAdminScraperOrganizerSummary?
+    let totalEvents: Int
+    let errors: [MobileAdminScraperError]
+    let events: [MobileAdminScrapedEvent]
+}
+
+struct MobileAdminScraperVenueSummary: Decodable, Hashable, Sendable {
+    let id: UUID?
+    let name: String
+    let address: String
+    let city: String
+    let state: String
+}
+
+struct MobileAdminScraperOrganizerSummary: Decodable, Hashable, Sendable {
+    let name: String
+    let url: URL?
+}
+
+struct MobileAdminScraperError: Decodable, Hashable, Sendable, Identifiable {
+    let url: String
+    let error: String
+
+    var id: String { "\(url)|\(error)" }
+}
+
+struct MobileAdminMatchedVenue: Decodable, Hashable, Sendable {
+    let id: UUID
+    let name: String
+    let city: String?
+    let state: String?
+    let website: URL?
+}
+
+struct MobileAdminScrapedEvent: Decodable, Hashable, Identifiable, Sendable {
+    let title: String
+    let description: String?
+    let coverImageURL: URL?
+    let eventURL: URL?
+    let externalID: String?
+    let startAt: Date
+    let endAt: Date?
+    let venueName: String
+    let address: String?
+    let city: String
+    let state: String
+    let categories: [String]
+    let visibility: String
+    let source: String?
+    let eventStatus: String?
+    let venueMatch: MobileAdminMatchedVenue?
+
+    enum CodingKeys: String, CodingKey {
+        case title, description, venueName, address, city, state, categories, visibility, source, eventStatus, venueMatch
+        case coverImageURL = "coverImageUrl"
+        case eventURL = "eventUrl"
+        case externalID = "externalId"
+        case startAt, endAt
+    }
+
+    var id: String {
+        "\(source ?? "event")|\(externalID ?? title)|\(startAt.timeIntervalSince1970)"
+    }
+}
+
+struct MobileAdminScraperImportResponse: Decodable, Hashable, Sendable {
+    let created: Int
+}
+
 enum EventRSVPStatus: String, Codable, Hashable, Sendable {
     case going
     case interested
@@ -1026,6 +1169,36 @@ private struct MobilePartnerRequestRequest: Encodable {
 private struct MobilePushTokenRequest: Encodable {
     let token: String
     let platform: String
+}
+
+private struct MobileAdminScraperRunRequest: Encodable {
+    let scraperId: String
+}
+
+private struct MobileAdminScraperImportRequest: Encodable {
+    let scraperId: String
+    let overrideExisting: Bool
+    let events: [MobileAdminScrapedEventImport]
+}
+
+struct MobileAdminScrapedEventImport: Encodable, Hashable, Sendable {
+    let title: String
+    let description: String?
+    let coverImageUrl: String?
+    let eventUrl: String?
+    let externalId: String?
+    let source: String?
+    let startAt: String
+    let endAt: String?
+    let venueName: String
+    let address: String?
+    let city: String
+    let state: String
+    let categories: [String]
+    let visibility: String
+    let status: String
+    let timeZone: String?
+    let venueId: String?
 }
 
 private struct MobileEventCreateRequest: Encodable {
@@ -1364,7 +1537,7 @@ extension JSONDecoder {
     }
 }
 
-private extension ISO8601DateFormatter {
+extension ISO8601DateFormatter {
     static let wigStandard: ISO8601DateFormatter = {
         let formatter = ISO8601DateFormatter()
         formatter.formatOptions = [.withInternetDateTime]

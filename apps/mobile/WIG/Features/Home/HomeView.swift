@@ -1074,17 +1074,17 @@ struct HomeView: View {
     }
 
     private func sectionHeader(_ title: String, showsLocation: Bool) -> some View {
-        (
+        HStack(spacing: 0) {
             Text(title)
                 .font(.system(size: 20, weight: .bold))
                 .foregroundStyle(.white)
-            +
-            ((showsLocation ? headerLocationName : nil).map { location in
+
+            if let location = showsLocation ? headerLocationName : nil {
                 Text(" in \(location)")
                     .font(.system(size: 20, weight: .medium))
                     .foregroundStyle(.white.opacity(0.5))
-            } ?? Text(""))
-        )
+            }
+        }
     }
 
     private var headerLocationName: String? {
