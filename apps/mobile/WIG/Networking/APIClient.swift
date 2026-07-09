@@ -124,6 +124,23 @@ struct APIClient: Sendable {
         )
     }
 
+    static func mobileEventTitleSuggestions(
+        venueID: UUID,
+        query: String,
+        limit: Int = 8
+    ) -> Endpoint<MobileEventTitleSuggestionsResponse> {
+        Endpoint(
+            path: "/api/mobile/event-title-suggestions",
+            queryItems: [
+                URLQueryItem(name: "venueId", value: venueID.uuidString),
+                URLQueryItem(name: "query", value: query),
+                URLQueryItem(name: "limit", value: String(limit)),
+            ],
+            requiresAuthentication: false,
+            includesAuthenticationIfAvailable: true
+        )
+    }
+
     static func mobilePlaceDetail(slug: String) -> Endpoint<PlaceDetail> {
         Endpoint(
             path: "/api/mobile/places/\(slug)",
@@ -499,6 +516,15 @@ struct APIClient: Sendable {
             path: "/api/mobile/event-series/\(seriesID.uuidString)",
             method: .patch,
             body: try JSONEncoder().encode(request),
+            requiresAuthentication: false,
+            includesAuthenticationIfAvailable: true
+        )
+    }
+
+    static func deleteMobileEventSeries(seriesID: UUID) -> Endpoint<DeleteSuccessResponse> {
+        Endpoint(
+            path: "/api/mobile/event-series/\(seriesID.uuidString)",
+            method: .delete,
             requiresAuthentication: false,
             includesAuthenticationIfAvailable: true
         )
@@ -975,6 +1001,20 @@ struct MobileFriendRequestResponse: Decodable, Hashable, Sendable {
 
 struct MobileAdminStatusResponse: Decodable, Hashable, Sendable {
     let isAdmin: Bool
+}
+
+struct MobileEventTitleSuggestionsResponse: Decodable, Hashable, Sendable {
+    let suggestions: [MobileEventTitleSuggestion]
+}
+
+struct MobileEventTitleSuggestion: Decodable, Hashable, Identifiable, Sendable {
+    let title: String
+    let startAt: Date
+    let endAt: Date?
+
+    var id: String {
+        "\(title)|\(startAt.timeIntervalSince1970)"
+    }
 }
 
 struct MobileAdminScrapersResponse: Decodable, Hashable, Sendable {

@@ -27,6 +27,7 @@ struct MobileEventCreationView: View {
     @State private var selectedCoverImageItem: PhotosPickerItem?
     @State private var selectedCoverImage: UIImage?
     @State private var existingCoverImageURL: URL?
+    @State private var isCoverImageViewerPresented = false
     @State private var title = ""
     @State private var descriptionText = ""
     @State private var eventURLText = ""
@@ -77,6 +78,7 @@ struct MobileEventCreationView: View {
                 _address = State(initialValue: preselectedPlace.address ?? "")
                 _city = State(initialValue: preselectedPlace.city ?? "")
                 _state = State(initialValue: preselectedPlace.state ?? "")
+                _selectedCategoryKeys = State(initialValue: Set(preselectedPlace.categories))
             }
 
         case .edit(let event):
@@ -129,6 +131,7 @@ struct MobileEventCreationView: View {
                 if isEditingEventSeries || isCreatingEventSeries {
                     recurrenceSection
                 }
+                deleteSection
             }
             .scrollContentBackground(.hidden)
             .background(Color(uiColor: .systemGroupedBackground))
@@ -157,9 +160,19 @@ struct MobileEventCreationView: View {
 
                 await PlaceLookupViewModel.preload(using: apiClient)
             }
+            .task(id: titleSuggestionsQueryKey) {
+                await loadTitleSuggestions()
+            }
             .sheet(item: $activePlacePicker) { kind in
                 PlaceLookupSheet(kind: kind) { place in
                     handleSelectedPlace(place, for: kind)
+                }
+            }
+            .fullScreenCover(isPresented: $isCoverImageViewerPresented) {
+                if let selectedCoverImage {
+                    EventArtworkViewer(image: selectedCoverImage)
+                } else if let existingCoverImageURL {
+                    EventArtworkViewer(imageURL: existingCoverImageURL)
                 }
             }
             .onChange(of: selectedCoverImageItem) { _, item in
@@ -210,6 +223,17 @@ struct MobileEventCreationView: View {
                         },
                         secondaryButton: .cancel()
                     )
+                case .deleteSeriesConfirmation:
+                    return Alert(
+                        title: Text("Delete Event Series?"),
+                        message: Text("This will delete the series and all upcoming events in it. This action cannot be undone."),
+                        primaryButton: .destructive(Text("Delete")) {
+                            Task {
+                                await deleteEventSeries()
+                            }
+                        },
+                        secondaryButton: .cancel()
+                    )
                 }
             }
         }
@@ -244,6 +268,7 @@ struct MobileEventCreationView: View {
                     } else {
                         coverImagePlaceholder
                     }
+
                 }
                 .frame(height: 220)
                 .clipShape(RoundedRectangle(cornerRadius: 22, style: .continuous))
@@ -251,6 +276,29 @@ struct MobileEventCreationView: View {
                     RoundedRectangle(cornerRadius: 22, style: .continuous)
                         .strokeBorder(Color(uiColor: .separator).opacity(0.35), lineWidth: 1)
                 )
+            }
+            .overlay(alignment: .bottomLeading) {
+                if selectedCoverImage != nil || existingCoverImageURL != nil {
+                    Button {
+                        isCoverImageViewerPresented = true
+                    } label: {
+                        Image(systemName: "arrow.up.left.and.arrow.down.right")
+                            .font(.system(size: 15, weight: .semibold))
+                            .foregroundStyle(.white)
+                            .frame(width: 44, height: 44)
+                            .background(
+                                Circle()
+                                    .fill(.black.opacity(0.36))
+                                    .background(.ultraThinMaterial, in: Circle())
+                            )
+                            .overlay(
+                                Circle()
+                                    .strokeBorder(.white.opacity(0.18), lineWidth: 1)
+                            )
+                    }
+                    .buttonStyle(.plain)
+                    .padding(14)
+                }
             }
             .buttonStyle(.plain)
             .listRowInsets(EdgeInsets(top: 10, leading: 16, bottom: 10, trailing: 16))
@@ -260,6 +308,7 @@ struct MobileEventCreationView: View {
                     selectedCoverImageItem = nil
                     selectedCoverImage = nil
                     existingCoverImageURL = nil
+                    isCoverImageViewerPresented = false
                 }
             }
         }
@@ -312,8 +361,12 @@ struct MobileEventCreationView: View {
     @ViewBuilder
     private var detailsSection: some View {
         Section("Details") {
-            ClearableInputField(isSeriesForm ? "Series Title" : "Event Title", text: $title)
-                .textInputAutocapitalization(.words)
+            VStack(alignment: .leading, spacing: 8) {
+                ClearableInputField(isSeriesForm ? "Series Title" : "Event Title", text: $title)
+                    .textInputAutocapitalization(.words)
+
+                titleSuggestionsView
+            }
 
             VStack(alignment: .leading, spacing: 8) {
                 Text("Description")
@@ -498,13 +551,26 @@ struct MobileEventCreationView: View {
                 }
             }
 
-            if case .edit = mode {
-                Section {
-                    Button("Delete Event", role: .destructive) {
-                        activeAlert = .deleteConfirmation
-                    }
+        }
+    }
+
+    @ViewBuilder
+    private var deleteSection: some View {
+        switch mode {
+        case .edit:
+            Section {
+                Button("Delete Event", role: .destructive) {
+                    activeAlert = .deleteConfirmation
                 }
             }
+        case .editSeries:
+            Section {
+                Button("Delete Event Series", role: .destructive) {
+                    activeAlert = .deleteSeriesConfirmation
+                }
+            }
+        case .create:
+            EmptyView()
         }
     }
 
@@ -579,9 +645,7 @@ struct MobileEventCreationView: View {
         case .venue:
             selectedVenue = place
 
-            if !place.categories.isEmpty {
-                selectedCategoryKeys = Set(place.categories)
-            }
+            applyDefaultCategories(from: place)
 
             if let address = cleaned(place.address) {
                 self.address = address
@@ -597,6 +661,10 @@ struct MobileEventCreationView: View {
             selectedOrganizer = place
 
             if selectedVenue == nil {
+                applyDefaultCategories(from: place)
+            }
+
+            if selectedVenue == nil {
                 if cleaned(address) == nil, let placeAddress = cleaned(place.address) {
                     address = placeAddress
                 }
@@ -610,6 +678,14 @@ struct MobileEventCreationView: View {
                 }
             }
         }
+    }
+
+    private func applyDefaultCategories(from place: PlaceDetail) {
+        guard !place.categories.isEmpty else {
+            return
+        }
+
+        selectedCategoryKeys = Set(place.categories)
     }
 
     private func handleSelectedPlace(_ place: PlaceListItem, for kind: PlacePickerKind) {
@@ -1139,6 +1215,142 @@ struct MobileEventCreationView: View {
         )
     }
 
+    private var titleSuggestionsQueryKey: String {
+        [
+            selectedVenue?.id.uuidString ?? "no-venue",
+            title.trimmingCharacters(in: .whitespacesAndNewlines),
+        ].joined(separator: "|")
+    }
+
+    @ViewBuilder
+    private var titleSuggestionsView: some View {
+        let titleQuery = title.trimmingCharacters(in: .whitespacesAndNewlines)
+        let visibleSuggestions = viewModel.titleSuggestions.filter {
+            $0.title.caseInsensitiveCompare(titleQuery) != .orderedSame
+        }
+
+        if selectedVenue != nil && !titleQuery.isEmpty {
+            if viewModel.isLoadingTitleSuggestions {
+                HStack(spacing: 8) {
+                    ProgressView()
+                        .tint(AppTheme.accentBlue)
+                    Text("Looking up previous event names...")
+                        .font(.system(size: 12, weight: .medium))
+                        .foregroundStyle(.secondary)
+                }
+                .padding(.vertical, 4)
+            } else if !visibleSuggestions.isEmpty {
+                VStack(alignment: .leading, spacing: 6) {
+                    ForEach(visibleSuggestions) { suggestion in
+                        Button {
+                            applyTitleSuggestion(suggestion)
+                        } label: {
+                            HStack(spacing: 8) {
+                                Image(systemName: "clock.arrow.circlepath")
+                                    .font(.system(size: 13, weight: .semibold))
+                                    .foregroundStyle(AppTheme.accentBlue)
+
+                                Text(suggestion.title)
+                                    .font(.system(size: 14, weight: .medium))
+                                    .foregroundStyle(.primary)
+                                    .lineLimit(1)
+
+                                Spacer(minLength: 8)
+                            }
+                            .padding(.horizontal, 12)
+                            .padding(.vertical, 9)
+                            .background(
+                                RoundedRectangle(cornerRadius: 12, style: .continuous)
+                                    .fill(Color(uiColor: .secondarySystemGroupedBackground))
+                            )
+                        }
+                        .buttonStyle(.plain)
+                    }
+                }
+            }
+        }
+    }
+
+    private func loadTitleSuggestions() async {
+        guard let venueID = selectedVenue?.id else {
+            viewModel.clearTitleSuggestions()
+            return
+        }
+
+        let query = title.trimmingCharacters(in: .whitespacesAndNewlines)
+        guard !query.isEmpty else {
+            viewModel.clearTitleSuggestions()
+            return
+        }
+
+        try? await Task.sleep(for: .milliseconds(180))
+
+        guard !Task.isCancelled,
+              selectedVenue?.id == venueID,
+              title.trimmingCharacters(in: .whitespacesAndNewlines) == query
+        else {
+            return
+        }
+
+        await viewModel.loadTitleSuggestions(
+            venueID: venueID,
+            query: query,
+            using: apiClient
+        )
+    }
+
+    private func applyTitleSuggestion(_ suggestion: MobileEventTitleSuggestion) {
+        title = suggestion.title
+        applySuggestedTimes(startAt: suggestion.startAt, endAt: suggestion.endAt)
+        viewModel.clearTitleSuggestions()
+    }
+
+    private func applySuggestedTimes(startAt suggestedStartAt: Date, endAt suggestedEndAt: Date?) {
+        let calendar = Calendar.current
+        let selectedDateComponents = calendar.dateComponents([.year, .month, .day], from: startAt)
+        let suggestedStartTimeComponents = calendar.dateComponents([.hour, .minute, .second], from: suggestedStartAt)
+
+        var nextStartComponents = DateComponents()
+        nextStartComponents.year = selectedDateComponents.year
+        nextStartComponents.month = selectedDateComponents.month
+        nextStartComponents.day = selectedDateComponents.day
+        nextStartComponents.hour = suggestedStartTimeComponents.hour
+        nextStartComponents.minute = suggestedStartTimeComponents.minute
+        nextStartComponents.second = suggestedStartTimeComponents.second
+
+        guard let nextStartAt = calendar.date(from: nextStartComponents) else {
+            return
+        }
+
+        startAt = nextStartAt
+
+        if let suggestedEndAt {
+            let dayOffset = calendar.dateComponents(
+                [.day],
+                from: calendar.startOfDay(for: suggestedStartAt),
+                to: calendar.startOfDay(for: suggestedEndAt)
+            ).day ?? 0
+            let suggestedEndTimeComponents = calendar.dateComponents([.hour, .minute, .second], from: suggestedEndAt)
+            let endDate = calendar.date(byAdding: .day, value: dayOffset, to: nextStartAt) ?? nextStartAt
+            let selectedEndDateComponents = calendar.dateComponents([.year, .month, .day], from: endDate)
+
+            var nextEndComponents = DateComponents()
+            nextEndComponents.year = selectedEndDateComponents.year
+            nextEndComponents.month = selectedEndDateComponents.month
+            nextEndComponents.day = selectedEndDateComponents.day
+            nextEndComponents.hour = suggestedEndTimeComponents.hour
+            nextEndComponents.minute = suggestedEndTimeComponents.minute
+            nextEndComponents.second = suggestedEndTimeComponents.second
+
+            if let nextEndAt = calendar.date(from: nextEndComponents), nextEndAt > nextStartAt {
+                endAt = nextEndAt
+                hasEndAt = true
+            }
+        } else {
+            hasEndAt = false
+        }
+    }
+
     private var recurrenceIntervalLabel: String {
         let unit: String
         switch recurrenceFrequency {
@@ -1315,11 +1527,37 @@ struct MobileEventCreationView: View {
             activeAlert = .error(error.localizedDescription)
         }
     }
+
+    private func deleteEventSeries() async {
+        guard !isSubmitting else {
+            return
+        }
+
+        guard case .editSeries(let series) = mode else {
+            return
+        }
+
+        isSubmitting = true
+        defer {
+            isSubmitting = false
+        }
+
+        do {
+            try await apiClient.send(APIClient.deleteMobileEventSeries(seriesID: series.id))
+            NotificationCenter.default.post(name: .mobileEventDidChange, object: series.id)
+            onSeriesCompleted?()
+            dismiss()
+        } catch {
+            alertMessage = error.localizedDescription
+            activeAlert = .error(error.localizedDescription)
+        }
+    }
 }
 
 private enum ActiveAlert: Identifiable {
     case error(String)
     case deleteConfirmation
+    case deleteSeriesConfirmation
 
     var id: String {
         switch self {
@@ -1327,6 +1565,8 @@ private enum ActiveAlert: Identifiable {
             return "error-\(message)"
         case .deleteConfirmation:
             return "deleteConfirmation"
+        case .deleteSeriesConfirmation:
+            return "deleteSeriesConfirmation"
         }
     }
 }
@@ -1394,6 +1634,8 @@ private struct InlineActionButton: View {
 private final class MobileEventCreationViewModel: ObservableObject {
     @Published private(set) var categories: [MobileCategoryOption] = []
     @Published private(set) var isLoadingCategories = false
+    @Published private(set) var titleSuggestions: [MobileEventTitleSuggestion] = []
+    @Published private(set) var isLoadingTitleSuggestions = false
     @Published private(set) var loadError: String?
 
     func loadCategories(using apiClient: APIClient) async {
@@ -1413,6 +1655,39 @@ private final class MobileEventCreationViewModel: ObservableObject {
             categories = []
             loadError = error.localizedDescription
         }
+    }
+
+    func loadTitleSuggestions(
+        venueID: UUID,
+        query: String,
+        using apiClient: APIClient
+    ) async {
+        guard !query.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty else {
+            clearTitleSuggestions()
+            return
+        }
+
+        isLoadingTitleSuggestions = true
+        defer {
+            isLoadingTitleSuggestions = false
+        }
+
+        do {
+            let response = try await apiClient.send(
+                APIClient.mobileEventTitleSuggestions(
+                    venueID: venueID,
+                    query: query
+                )
+            )
+            titleSuggestions = response.suggestions
+        } catch {
+            titleSuggestions = []
+        }
+    }
+
+    func clearTitleSuggestions() {
+        titleSuggestions = []
+        isLoadingTitleSuggestions = false
     }
 }
 

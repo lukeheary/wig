@@ -348,3 +348,44 @@ export async function PATCH(
     );
   }
 }
+
+export async function DELETE(
+  _request: Request,
+  context: { params: Promise<{ id: string }> }
+) {
+  try {
+    const { id } = await context.params;
+    const { userId, isPreview } = await currentMobileUserContext();
+
+    if (!userId) {
+      return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
+    }
+
+    const existingSeries = await db.query.eventSeries.findFirst({
+      where: eq(eventSeries.id, id),
+    });
+
+    if (!existingSeries) {
+      return NextResponse.json({ error: "Event series not found" }, { status: 404 });
+    }
+
+    if (!(await canManageSeries(userId, isPreview, existingSeries))) {
+      return NextResponse.json({ error: "Forbidden" }, { status: 403 });
+    }
+
+    const now = new Date();
+    await db
+      .delete(events)
+      .where(and(eq(events.seriesId, id), gte(events.startAt, now)));
+
+    await db.delete(eventSeries).where(eq(eventSeries.id, id));
+
+    return NextResponse.json({ success: true });
+  } catch (error) {
+    console.error("Mobile delete event series error:", error);
+    return NextResponse.json(
+      { error: "Failed to delete event series" },
+      { status: 500 }
+    );
+  }
+}

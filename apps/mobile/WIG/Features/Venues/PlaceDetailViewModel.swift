@@ -19,18 +19,24 @@ final class PlaceDetailViewModel: ObservableObject {
         cachedDetails[slug]
     }
 
+    static func invalidateCache(for slug: String) {
+        cachedDetails[slug] = nil
+        inFlightLoads[slug]?.cancel()
+        inFlightLoads[slug] = nil
+    }
+
     static func seedCache(with detail: PlaceDetail) {
         cachedDetails[detail.slug] = detail
     }
 
-    func load(slug: String, using apiClient: APIClient) async {
-        if let cachedDetail = Self.cachedDetail(for: slug) {
+    func load(slug: String, using apiClient: APIClient, forceRefresh: Bool = false) async {
+        if !forceRefresh, let cachedDetail = Self.cachedDetail(for: slug) {
             state = .loaded(cachedDetail)
         } else {
             state = .loading
         }
 
-        if let inFlightLoad = Self.inFlightLoads[slug] {
+        if !forceRefresh, let inFlightLoad = Self.inFlightLoads[slug] {
             do {
                 let detail = try await inFlightLoad.value
                 Self.seedCache(with: detail)

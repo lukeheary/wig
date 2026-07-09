@@ -26,6 +26,7 @@ struct EventDetailView: View {
     @State private var editedEvent: EventFeedItem?
     @State private var currentUserSocialUser: EventSocialUser?
     @State private var isAuthSheetPresented = false
+    @State private var isTabBarHidden = true
 
     init(event: EventFeedItem) {
         self.event = event
@@ -66,7 +67,7 @@ struct EventDetailView: View {
                                 systemImage: "chevron.left",
                                 size: heroControlButtonSize
                             ) {
-                                dismiss()
+                                closeEventDetail()
                             }
                         },
                         topTrailingControls: {
@@ -101,10 +102,23 @@ struct EventDetailView: View {
             // scroll content underlaps the status bar while the nav bar is hidden, iOS
             // injects an automatic status-bar scrim (the "black fade" at the top).
             .background(AppTheme.background.ignoresSafeArea())
-        .background(SwipeBackEnabler())
+        .background(
+            SwipeBackEnabler { gestureState, isStillOnEventDetail in
+                switch gestureState {
+                case .began, .changed:
+                    isTabBarHidden = false
+                case .cancelled, .failed:
+                    isTabBarHidden = true
+                case .ended:
+                    isTabBarHidden = isStillOnEventDetail
+                default:
+                    break
+                }
+            }
+        )
         .navigationBarBackButtonHidden()
         .toolbar(.hidden, for: .navigationBar)
-        .toolbar(.hidden, for: .tabBar)
+        .toolbar(isTabBarHidden ? .hidden : .visible, for: .tabBar)
         .overlay {
             if isAuthenticated {
                 ZStack(alignment: .bottom) {
@@ -160,9 +174,10 @@ struct EventDetailView: View {
                 return
             }
 
-            dismiss()
+            closeEventDetail()
         }
         .onAppear {
+            isTabBarHidden = true
             appSession.beginEventDetailPresentation()
 
             let appearance = UINavigationBarAppearance()
@@ -201,6 +216,11 @@ struct EventDetailView: View {
             }
         }
         }
+    }
+
+    private func closeEventDetail() {
+        isTabBarHidden = false
+        dismiss()
     }
 
     private var topTrailingControls: some View {
@@ -1345,7 +1365,12 @@ private struct ShareSheet: UIViewControllerRepresentable {
 }
 
 struct EventArtworkViewer: View {
-    let imageURL: URL
+    private enum Source {
+        case url(URL)
+        case image(UIImage)
+    }
+
+    private let source: Source
 
     @Environment(\.dismiss) private var dismiss
     @State private var baseScale: CGFloat = 1
@@ -1365,49 +1390,38 @@ struct EventArtworkViewer: View {
         return max(dragTranslation.height, 0)
     }
 
+    init(imageURL: URL) {
+        source = .url(imageURL)
+    }
+
+    init(image: UIImage) {
+        source = .image(image)
+    }
+
     var body: some View {
         ZStack(alignment: .topTrailing) {
             Color.black
                 .opacity(backgroundOpacity)
                 .ignoresSafeArea()
 
-            AsyncImage(url: imageURL) { phase in
-                switch phase {
-                case .empty:
-                    ProgressView()
-                        .tint(.white)
-                        .frame(maxWidth: .infinity, maxHeight: .infinity)
-                case .success(let image):
-                    image
-                        .resizable()
-                        .scaledToFit()
-                        .frame(maxWidth: .infinity, maxHeight: .infinity)
-                        .scaleEffect(totalScale)
-                        .offset(
-                            x: imageOffset.width + horizontalDragOffset,
-                            y: imageOffset.height + verticalDragOffset
-                        )
-                        .padding(.horizontal, 12)
-                        .padding(.vertical, 28)
-                        .gesture(combinedArtworkGesture)
-                        .onTapGesture(count: 2) {
-                            withAnimation(.spring(response: 0.28, dampingFraction: 0.82)) {
-                                if totalScale > 1.02 {
-                                    resetTransform()
-                                } else {
-                                    baseScale = 2
-                                    pinchScale = 1
-                                }
-                            }
-                        }
-                case .failure:
-                    Image(systemName: "photo")
-                        .font(.system(size: 52, weight: .regular))
-                        .foregroundStyle(.white.opacity(0.72))
-                        .frame(maxWidth: .infinity, maxHeight: .infinity)
-                @unknown default:
-                    EmptyView()
+            switch source {
+            case .url(let imageURL):
+                AsyncImage(url: imageURL) { phase in
+                    switch phase {
+                    case .empty:
+                        ProgressView()
+                            .tint(.white)
+                            .frame(maxWidth: .infinity, maxHeight: .infinity)
+                    case .success(let image):
+                        zoomableArtwork(image)
+                    case .failure:
+                        artworkFailure
+                    @unknown default:
+                        EmptyView()
+                    }
                 }
+            case .image(let uiImage):
+                zoomableArtwork(Image(uiImage: uiImage))
             }
 
             FloatingGlassIconButton(systemImage: "xmark") {
@@ -1417,6 +1431,38 @@ struct EventArtworkViewer: View {
             .padding(.trailing, 26)
         }
         .statusBarHidden()
+    }
+
+    private func zoomableArtwork(_ image: Image) -> some View {
+        image
+            .resizable()
+            .scaledToFit()
+            .frame(maxWidth: .infinity, maxHeight: .infinity)
+            .scaleEffect(totalScale)
+            .offset(
+                x: imageOffset.width + horizontalDragOffset,
+                y: imageOffset.height + verticalDragOffset
+            )
+            .padding(.horizontal, 12)
+            .padding(.vertical, 28)
+            .gesture(combinedArtworkGesture)
+            .onTapGesture(count: 2) {
+                withAnimation(.spring(response: 0.28, dampingFraction: 0.82)) {
+                    if totalScale > 1.02 {
+                        resetTransform()
+                    } else {
+                        baseScale = 2
+                        pinchScale = 1
+                    }
+                }
+            }
+    }
+
+    private var artworkFailure: some View {
+        Image(systemName: "photo")
+            .font(.system(size: 52, weight: .regular))
+            .foregroundStyle(.white.opacity(0.72))
+            .frame(maxWidth: .infinity, maxHeight: .infinity)
     }
 
     private var combinedArtworkGesture: some Gesture {

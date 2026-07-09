@@ -166,7 +166,8 @@ struct PlaceDetailView: View {
                         mode: .edit(detail),
                         onCompleted: {
                             Task {
-                                await viewModel.load(slug: detail.slug, using: apiClient)
+                                PlaceDetailViewModel.invalidateCache(for: detail.slug)
+                                await viewModel.load(slug: detail.slug, using: apiClient, forceRefresh: true)
                             }
                         },
                         onDeleted: {
@@ -176,7 +177,8 @@ struct PlaceDetailView: View {
                 case .createEvent:
                     MobileEventCreationView(mode: .create, preselectedPlace: detail) { _ in
                         Task {
-                            await viewModel.load(slug: detail.slug, using: apiClient)
+                            PlaceDetailViewModel.invalidateCache(for: detail.slug)
+                            await viewModel.load(slug: detail.slug, using: apiClient, forceRefresh: true)
                         }
                     }
                 case .createEventSeries:
@@ -186,7 +188,8 @@ struct PlaceDetailView: View {
                         preselectedPlace: detail,
                         onSeriesCompleted: {
                             Task {
-                                await viewModel.load(slug: detail.slug, using: apiClient)
+                                PlaceDetailViewModel.invalidateCache(for: detail.slug)
+                                await viewModel.load(slug: detail.slug, using: apiClient, forceRefresh: true)
                             }
                         }
                     )
@@ -209,6 +212,12 @@ struct PlaceDetailView: View {
             await EventArtworkPrefetcher.prefetch(
                 events: detail.events + detail.pastEvents
             )
+        }
+        .onReceive(NotificationCenter.default.publisher(for: .mobileEventDidChange)) { _ in
+            Task {
+                PlaceDetailViewModel.invalidateCache(for: place.slug)
+                await viewModel.load(slug: place.slug, using: apiClient, forceRefresh: true)
+            }
         }
     }
 
