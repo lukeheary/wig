@@ -23,6 +23,7 @@ struct ProfileView: View {
     @State private var partnerErrorMessage: String?
     @State private var friendRequestActionErrorMessage: String?
     @State private var isAdminSettingsPresented = false
+    @State private var profileShareURL: URL?
 
     init(resetFiltersTrigger: Int = 0) {
         self.resetFiltersTrigger = resetFiltersTrigger
@@ -53,6 +54,22 @@ struct ProfileView: View {
                     Task {
                         ProfileViewModel.invalidateCache()
                         UserProfileViewModel.invalidateAllCaches()
+                        await loadProfileScreen()
+                    }
+                }
+                .onReceive(NotificationCenter.default.publisher(for: .friendRequestDidChange)) { _ in
+                    ProfileViewModel.invalidateCache()
+                    UserProfileViewModel.invalidateAllCaches()
+
+                    Task {
+                        await loadProfileScreen()
+                    }
+                }
+                .onReceive(NotificationCenter.default.publisher(for: .appDataDidChange)) { _ in
+                    ProfileViewModel.invalidateCache()
+                    UserProfileViewModel.invalidateAllCaches()
+
+                    Task {
                         await loadProfileScreen()
                     }
                 }
@@ -154,6 +171,20 @@ struct ProfileView: View {
                 }
                 .navigationDestination(isPresented: $isAdminSettingsPresented) {
                     AdminSettingsView()
+                }
+                .sheet(
+                    isPresented: Binding(
+                        get: { profileShareURL != nil },
+                        set: { isPresented in
+                            if !isPresented {
+                                profileShareURL = nil
+                            }
+                        }
+                    )
+                ) {
+                    if let profileShareURL {
+                        ProfileShareSheet(activityItems: [profileShareURL])
+                    }
                 }
         }
     }
@@ -263,12 +294,15 @@ struct ProfileView: View {
             .background(ProfileTheme.background)
             .overlay(alignment: .top) {
                 HStack {
-                    if canShowEventsFilter(for: response) {
-                        ProfileEventsFilterButton(
-                            selection: $selectedEventsTab,
-                            rsvpFilter: $selectedEventsRSVPFilter
-                        )
-                    }
+                    ProfileEventNavControls(
+                        selection: $selectedEventsTab,
+                        rsvpFilter: $selectedEventsRSVPFilter,
+                        showsFilter: canShowEventsFilter(for: response),
+                        username: response.profile?.username,
+                        onShare: { username in
+                            profileShareURL = ProfileShareURL.url(for: username)
+                        }
+                    )
 
                     Spacer()
 
@@ -664,6 +698,23 @@ struct ProfileView: View {
     }
 }
 
+private enum ProfileShareURL {
+    static func url(for username: String) -> URL? {
+        let path = username.addingPercentEncoding(withAllowedCharacters: .urlPathAllowed) ?? username
+        return URL(string: "https://www.whoisgoing.com/\(path)")
+    }
+}
+
+private struct ProfileShareSheet: UIViewControllerRepresentable {
+    let activityItems: [Any]
+
+    func makeUIViewController(context: Context) -> UIActivityViewController {
+        UIActivityViewController(activityItems: activityItems, applicationActivities: nil)
+    }
+
+    func updateUIViewController(_ uiViewController: UIActivityViewController, context: Context) {}
+}
+
 struct UserProfileView: View {
     let userID: String
     var showsFriendAction = true
@@ -676,6 +727,7 @@ struct UserProfileView: View {
     @State private var isSendingFriendRequest = false
     @State private var isRespondingToFriendRequest = false
     @State private var pendingUnfriendProfile: FriendUserSummary?
+    @State private var profileShareURL: URL?
 
     var body: some View {
         content
@@ -691,6 +743,11 @@ struct UserProfileView: View {
                     await viewModel.load(userID: userID, using: apiClient)
                 }
             }
+            .onReceive(NotificationCenter.default.publisher(for: .appDataDidChange)) { _ in
+                Task {
+                    await viewModel.load(userID: userID, using: apiClient, forceRefresh: true)
+                }
+            }
             .alert(item: $pendingUnfriendProfile) { profile in
                 Alert(
                     title: Text("Unfriend \(profile.name)?"),
@@ -700,6 +757,20 @@ struct UserProfileView: View {
                     },
                     secondaryButton: .cancel()
                 )
+            }
+            .sheet(
+                isPresented: Binding(
+                    get: { profileShareURL != nil },
+                    set: { isPresented in
+                        if !isPresented {
+                            profileShareURL = nil
+                        }
+                    }
+                )
+            ) {
+                if let profileShareURL {
+                    ProfileShareSheet(activityItems: [profileShareURL])
+                }
             }
             .task(id: userProfileEventPrefetchKey) {
                 guard case .loaded(let response) = viewModel.state else {
@@ -774,17 +845,24 @@ struct UserProfileView: View {
                 dismiss()
             }
 
-            if viewModel.canShowEventsFilter {
-                ProfileEventsFilterButton(
+            if case .loaded(let response) = viewModel.state {
+                ProfileEventNavControls(
                     selection: $selectedEventsTab,
-                    rsvpFilter: $selectedEventsRSVPFilter
+                    rsvpFilter: $selectedEventsRSVPFilter,
+                    showsFilter: viewModel.canShowEventsFilter,
+                    username: response.profile?.username,
+                    onShare: { username in
+                        profileShareURL = ProfileShareURL.url(for: username)
+                    }
                 )
             }
 
             Spacer()
 
-            if showsFriendAction, case .loaded(let response) = viewModel.state, let profile = response.profile {
-                navFriendAction(for: profile)
+            if case .loaded(let response) = viewModel.state, let profile = response.profile {
+                if showsFriendAction {
+                    navFriendAction(for: profile)
+                }
             }
         }
         .padding(.horizontal, 16)
@@ -1034,9 +1112,59 @@ private enum ProfileEventsTab: String, CaseIterable, Identifiable {
     }
 }
 
+private struct ProfileEventNavControls: View {
+    @Binding var selection: ProfileEventsTab
+    @Binding var rsvpFilter: ProfileEventsRSVPFilter
+    let showsFilter: Bool
+    let username: String?
+    let onShare: (String) -> Void
+
+    var body: some View {
+        if showsFilter, let username {
+            HStack(spacing: 0) {
+                ProfileEventsFilterButton(
+                    selection: $selection,
+                    rsvpFilter: $rsvpFilter,
+                    useCombinedStyle: true
+                )
+
+                ProfileShareNavButton(username: username, onShare: onShare, useCombinedStyle: true)
+            }
+            .frame(height: 46)
+            .clipShape(Capsule())
+            .profileLiquidGlass(in: Capsule())
+        } else if showsFilter {
+            ProfileEventsFilterButton(selection: $selection, rsvpFilter: $rsvpFilter)
+        } else if let username {
+            ProfileShareNavButton(username: username, onShare: onShare)
+        }
+    }
+}
+
+private struct ProfileShareNavButton: View {
+    let username: String
+    let onShare: (String) -> Void
+    var useCombinedStyle = false
+
+    var body: some View {
+        Button {
+            onShare(username)
+        } label: {
+            Image(systemName: "square.and.arrow.up")
+                .font(.system(size: 18, weight: .bold))
+                .foregroundStyle(.white)
+                .frame(width: 46, height: 46)
+                .contentShape(Rectangle())
+                .modifier(ProfileNavControlStyle(isCombined: useCombinedStyle))
+        }
+        .buttonStyle(.plain)
+    }
+}
+
 private struct ProfileEventsFilterButton: View {
     @Binding var selection: ProfileEventsTab
     @Binding var rsvpFilter: ProfileEventsRSVPFilter
+    var useCombinedStyle = false
 
     private var hasActiveFilter: Bool {
         selection != .upcoming || rsvpFilter != .all
@@ -1080,10 +1208,23 @@ private struct ProfileEventsFilterButton: View {
                 .font(.system(size: 18, weight: .semibold))
                 .foregroundStyle(hasActiveFilter ? AppTheme.accentBlue : .primary)
                 .frame(width: 46, height: 46)
-                .contentShape(Circle())
-                .profileLiquidGlass(in: Circle())
+                .contentShape(Rectangle())
+                .modifier(ProfileNavControlStyle(isCombined: useCombinedStyle))
         }
         .buttonStyle(.plain)
+    }
+}
+
+private struct ProfileNavControlStyle: ViewModifier {
+    let isCombined: Bool
+
+    @ViewBuilder
+    func body(content: Content) -> some View {
+        if isCombined {
+            content
+        } else {
+            content.profileLiquidGlass(in: Circle())
+        }
     }
 }
 
@@ -1122,6 +1263,10 @@ private struct UserProfileEventsSection: View {
     @Binding var selectedEventsTab: ProfileEventsTab
     @Binding var selectedEventsRSVPFilter: ProfileEventsRSVPFilter
 
+    private var canViewEventDetails: Bool {
+        response.profile?.friendStatus == .accepted
+    }
+
     var body: some View {
         let events = selectedEventsRSVPFilter.filtered(
             events: selectedEventsTab == .upcoming ? response.upcomingEvents : response.pastEvents
@@ -1144,13 +1289,18 @@ private struct UserProfileEventsSection: View {
                         ScrollView(.horizontal) {
                             LazyHStack(alignment: .top, spacing: 12) {
                                 ForEach(group.events) { event in
-                                    NavigationLink {
-                                        EventDetailView(event: event)
-                                    } label: {
-                                        EventCardView(event: event)
+                                    if canViewEventDetails {
+                                        NavigationLink {
+                                            EventDetailView(event: event)
+                                        } label: {
+                                            EventCardView(event: event)
+                                                .frame(width: 220)
+                                        }
+                                        .buttonStyle(.plain)
+                                    } else {
+                                        EventCardView(event: event, obscuresDetails: true)
                                             .frame(width: 220)
                                     }
-                                    .buttonStyle(.plain)
                                 }
                             }
                             .scrollTargetLayout()
@@ -1193,6 +1343,7 @@ private enum ProfileEventGrouper {
     private static func label(for event: EventFeedItem, mode: ProfileEventsTab) -> String {
         var calendar = Calendar(identifier: .gregorian)
         calendar.timeZone = event.displayTimeZone
+        calendar.firstWeekday = 2
         let now = Date()
         let currentWeekStart = calendar.dateInterval(of: .weekOfYear, for: now)?.start ?? now
         let eventWeekStart = calendar.dateInterval(of: .weekOfYear, for: event.startAt)?.start ?? event.startAt
@@ -1514,7 +1665,11 @@ private struct RelationshipSummaryRow: View {
                     onDeclineRequest: onDeclineFriendRequest
                 )
             } label: {
-                RelationshipSummaryLink(count: response.requestCount, label: "Requests")
+                RelationshipSummaryLink(
+                    count: response.requestCount,
+                    label: "Requests",
+                    showsIndicator: response.requestCount > 0
+                )
             }
             .buttonStyle(.plain)
         }
@@ -1843,9 +1998,10 @@ private struct UserRelationshipSummaryRow: View {
 private struct RelationshipSummaryLink: View {
     let count: Int
     let label: String
+    var showsIndicator = false
 
     var body: some View {
-        HStack(spacing: 0) {
+        HStack(spacing: 4) {
             (
                 Text("\(count)")
                     .foregroundColor(.white)
@@ -1855,6 +2011,12 @@ private struct RelationshipSummaryLink: View {
                     .foregroundColor(.white.opacity(0.58))
             )
             .font(.system(size: 13, weight: .regular))
+
+            if showsIndicator {
+                Circle()
+                    .fill(.red)
+                    .frame(width: 6, height: 6)
+            }
         }
     }
 }
@@ -1953,6 +2115,10 @@ private struct FriendRequestsView: View {
     @State private var sentRequests: [FriendUserSummary]
     @State private var activeRequestID: String?
     @State private var selectedUserProfile: RequestSelectedUserProfile?
+    @State private var pendingDeleteRequest: FriendUserSummary?
+    @State private var requestConfirmation: FriendRequestConfirmation?
+    @State private var requestConfirmationToken = UUID()
+    @State private var isRequestConfirmationVisible = false
 
     init(
         receivedRequests: [FriendUserSummary],
@@ -1972,58 +2138,56 @@ private struct FriendRequestsView: View {
                 if receivedRequests.isEmpty {
                     EmptyRequestPlaceholder(message: "No pending friend requests")
                 } else {
-                    RelationshipCard {
-                        ForEach(Array(receivedRequests.enumerated()), id: \.element.id) { index, request in
-                            HStack(spacing: 12) {
-                                Button {
-                                    selectedUserProfile = RequestSelectedUserProfile(id: request.id)
-                                } label: {
-                                    UserListRowView(
-                                        imageURL: request.avatarImageURL,
-                                        name: request.name,
-                                        subtitle: request.usernameText,
-                                        identityKey: request.id,
-                                        avatarSize: 44,
-                                        verticalPadding: 8
-                                    )
+                    VStack(spacing: 12) {
+                        ForEach(receivedRequests) { request in
+                            RelationshipCard(horizontalPadding: 9, verticalPadding: 9) {
+                                HStack(spacing: 12) {
+                                    Button {
+                                        selectedUserProfile = RequestSelectedUserProfile(id: request.id)
+                                    } label: {
+                                        UserListRowView(
+                                            imageURL: request.avatarImageURL,
+                                            name: request.name,
+                                            subtitle: request.usernameText,
+                                            identityKey: request.id,
+                                            avatarSize: 42,
+                                            verticalPadding: 0
+                                        )
+                                        .frame(maxWidth: .infinity, alignment: .leading)
+                                        .contentShape(Rectangle())
+                                    }
+                                    .buttonStyle(.plain)
                                     .frame(maxWidth: .infinity, alignment: .leading)
-                                    .contentShape(Rectangle())
-                                }
-                                .buttonStyle(.plain)
-                                .frame(maxWidth: .infinity, alignment: .leading)
 
-                                HStack(spacing: 8) {
-                                    Button {
-                                        submit(.decline, for: request)
-                                    } label: {
-                                        Image(systemName: "xmark")
-                                            .font(.system(size: 13, weight: .bold))
-                                            .foregroundStyle(.white.opacity(0.75))
-                                            .frame(width: 36, height: 36)
-                                            .background(Circle().fill(Color.white.opacity(0.1)))
+                                    HStack(spacing: 8) {
+                                        Button {
+                                            pendingDeleteRequest = request
+                                        } label: {
+                                            Text("Delete")
+                                                .font(.system(size: 13, weight: .bold))
+                                                .foregroundStyle(.white.opacity(0.82))
+                                                .padding(.horizontal, 12)
+                                                .frame(height: 36)
+                                                .background(Capsule().fill(Color.white.opacity(0.10)))
+                                        }
+                                        .buttonStyle(.plain)
+                                        .disabled(activeRequestID != nil)
+
+                                        Button {
+                                            submit(.accept, for: request)
+                                        } label: {
+                                            Text("Confirm")
+                                                .font(.system(size: 13, weight: .bold))
+                                                .foregroundStyle(.white)
+                                                .padding(.horizontal, 13)
+                                                .frame(height: 36)
+                                                .background(Capsule().fill(AppTheme.accentBlue))
+                                        }
+                                        .buttonStyle(.plain)
+                                        .disabled(activeRequestID != nil)
                                     }
-                                    .buttonStyle(.plain)
-                                    .disabled(activeRequestID != nil)
-
-                                    Button {
-                                        submit(.accept, for: request)
-                                    } label: {
-                                        Image(systemName: "checkmark")
-                                            .font(.system(size: 15, weight: .bold))
-                                            .foregroundStyle(.white)
-                                            .frame(width: 42, height: 42)
-                                            .background(Circle().fill(AppTheme.accentBlue))
-                                    }
-                                    .buttonStyle(.plain)
-                                    .disabled(activeRequestID != nil)
+                                    .opacity(activeRequestID != nil ? 0.5 : 1)
                                 }
-                                .opacity(activeRequestID != nil ? 0.5 : 1)
-                            }
-
-                            if request.id != receivedRequests.last?.id {
-                                Divider()
-                                    .overlay(.white.opacity(0.08))
-                                    .padding(.leading, 62)
                             }
                         }
                     }
@@ -2037,31 +2201,27 @@ private struct FriendRequestsView: View {
                     if sentRequests.isEmpty {
                         EmptyRequestPlaceholder(message: "No sent requests")
                     } else {
-                        RelationshipCard {
-                            ForEach(Array(sentRequests.enumerated()), id: \.element.id) { index, request in
-                                Button {
-                                    selectedUserProfile = RequestSelectedUserProfile(id: request.id)
-                                } label: {
-                                    UserListRowView(
-                                        imageURL: request.avatarImageURL,
-                                        name: request.name,
-                                        subtitle: request.usernameText,
-                                        identityKey: request.id,
-                                        avatarSize: 44,
-                                        verticalPadding: 8
-                                    ) {
-                                        PendingRequestBadge()
+                        VStack(spacing: 12) {
+                            ForEach(sentRequests) { request in
+                                RelationshipCard(horizontalPadding: 9, verticalPadding: 9) {
+                                    Button {
+                                        selectedUserProfile = RequestSelectedUserProfile(id: request.id)
+                                    } label: {
+                                        UserListRowView(
+                                            imageURL: request.avatarImageURL,
+                                            name: request.name,
+                                            subtitle: request.usernameText,
+                                            identityKey: request.id,
+                                            avatarSize: 42,
+                                            verticalPadding: 0
+                                        ) {
+                                            PendingRequestBadge()
+                                        }
+                                        .frame(maxWidth: .infinity, alignment: .leading)
+                                        .contentShape(Rectangle())
                                     }
+                                    .buttonStyle(.plain)
                                     .frame(maxWidth: .infinity, alignment: .leading)
-                                    .contentShape(Rectangle())
-                                }
-                                .buttonStyle(.plain)
-                                .frame(maxWidth: .infinity, alignment: .leading)
-
-                                if request.id != sentRequests.last?.id {
-                                    Divider()
-                                        .overlay(.white.opacity(0.08))
-                                        .padding(.leading, 62)
                                 }
                             }
                         }
@@ -2072,6 +2232,41 @@ private struct FriendRequestsView: View {
         }
         .navigationDestination(item: $selectedUserProfile) { selection in
             UserProfileView(userID: selection.id)
+        }
+        .alert(item: $pendingDeleteRequest) { request in
+            Alert(
+                title: Text("Delete friend request?"),
+                message: Text("Delete the friend request from \(request.name)?"),
+                primaryButton: .destructive(Text("Delete")) {
+                    submit(.decline, for: request)
+                },
+                secondaryButton: .cancel()
+            )
+        }
+        .overlay {
+            if let requestConfirmation {
+                VStack {
+                    HStack {
+                        Spacer(minLength: 0)
+
+                        FriendRequestConfirmationToast(confirmation: requestConfirmation)
+                            .fixedSize(horizontal: true, vertical: false)
+
+                        Spacer(minLength: 0)
+                    }
+                    .padding(.top, 10)
+
+                    Spacer(minLength: 0)
+                }
+                .offset(y: isRequestConfirmationVisible ? 0 : -110)
+                .opacity(isRequestConfirmationVisible ? 1 : 0)
+                .scaleEffect(isRequestConfirmationVisible ? 1 : 0.94)
+                .allowsHitTesting(false)
+                .animation(
+                    .spring(response: 0.35, dampingFraction: 0.60),
+                    value: isRequestConfirmationVisible
+                )
+            }
         }
     }
 
@@ -2102,15 +2297,110 @@ private struct FriendRequestsView: View {
                 NotificationCenter.default.post(name: .friendRequestDidChange, object: nil)
             }
 
+            if succeeded {
+                showRequestConfirmation(response, for: request)
+            }
+
             activeRequestID = nil
         }
+    }
+
+    private func showRequestConfirmation(
+        _ response: ActivityRequestResponse,
+        for request: FriendUserSummary
+    ) {
+        let confirmation = FriendRequestConfirmation(response: response, name: request.name)
+        requestConfirmationToken = confirmation.id
+        isRequestConfirmationVisible = false
+        requestConfirmation = confirmation
+
+        let feedback = UINotificationFeedbackGenerator()
+        feedback.notificationOccurred(response == .accept ? .success : .warning)
+
+        Task { @MainActor in
+            await Task.yield()
+            guard requestConfirmationToken == confirmation.id else {
+                return
+            }
+
+            withAnimation(.spring(response: 0.35, dampingFraction: 0.60)) {
+                isRequestConfirmationVisible = true
+            }
+        }
+
+        Task { @MainActor in
+            try? await Task.sleep(for: .seconds(2))
+            guard requestConfirmationToken == confirmation.id else {
+                return
+            }
+
+            withAnimation(.spring(response: 0.28, dampingFraction: 0.82)) {
+                isRequestConfirmationVisible = false
+            }
+
+            try? await Task.sleep(for: .milliseconds(300))
+            guard requestConfirmationToken == confirmation.id else {
+                return
+            }
+
+            requestConfirmation = nil
+        }
+    }
+}
+
+private struct FriendRequestConfirmation: Identifiable, Equatable {
+    let id = UUID()
+    let response: ActivityRequestResponse
+    let name: String
+
+    var title: String {
+        switch response {
+        case .accept:
+            return "Confirmed \(firstName)"
+        case .decline:
+            return "Deleted \(firstName)'s request"
+        }
+    }
+
+    var systemImage: String {
+        response == .accept ? "checkmark.circle.fill" : "trash.circle.fill"
+    }
+
+    var tint: Color {
+        response == .accept ? AppTheme.accentBlue : Color(red: 0.92, green: 0.36, blue: 0.40)
+    }
+
+    private var firstName: String {
+        name.split(separator: " ").first.map(String.init) ?? name
+    }
+}
+
+private struct FriendRequestConfirmationToast: View {
+    let confirmation: FriendRequestConfirmation
+
+    var body: some View {
+        HStack(spacing: 10) {
+            Image(systemName: confirmation.systemImage)
+                .font(.system(size: 17, weight: .bold))
+                .foregroundStyle(confirmation.tint)
+                .symbolEffect(.bounce, value: confirmation.id)
+
+            Text(confirmation.title)
+                .font(.system(size: 15, weight: .semibold))
+                .foregroundStyle(.white)
+        }
+        .padding(.horizontal, 16)
+        .frame(height: 52)
+        .profileLiquidGlass(in: Capsule())
+        .accessibilityElement(children: .ignore)
+        .accessibilityLabel(confirmation.title)
     }
 }
 
 private struct PendingRequestBadge: View {
     var body: some View {
         Text("Pending")
-            .font(.system(size: 13, weight: .bold))
+            .font(.system(size: 12, weight: .bold))
             .foregroundStyle(.white)
             .padding(.horizontal, 14)
             .frame(height: 34)
@@ -2118,6 +2408,83 @@ private struct PendingRequestBadge: View {
                 Capsule()
                     .strokeBorder(.white.opacity(0.10), lineWidth: 1)
             )
+    }
+}
+
+private struct RequestsPageSkeletonContent: View {
+    @State private var isHighlighted = false
+
+    var body: some View {
+        RelationshipListScreen(title: "Received Requests") {
+            VStack(alignment: .leading, spacing: 12) {
+                RelationshipCard {
+                    ForEach(0 ..< 2, id: \.self) { index in
+                        requestRow
+
+                        if index == 0 {
+                            Divider()
+                                .overlay(.white.opacity(0.08))
+                                .padding(.leading, 56)
+                        }
+                    }
+                }
+
+                Text("Sent Requests")
+                    .font(.system(size: 20, weight: .bold))
+                    .foregroundStyle(.white)
+                    .padding(.top, 16)
+
+                RelationshipCard {
+                    requestRow
+                }
+            }
+        }
+        .onAppear {
+            withAnimation(.easeInOut(duration: 0.9).repeatForever(autoreverses: true)) {
+                isHighlighted = true
+            }
+        }
+    }
+
+    private var requestRow: some View {
+        HStack(spacing: 12) {
+            Circle()
+                .fill(shimmerFill)
+                .frame(width: 44, height: 44)
+
+            VStack(alignment: .leading, spacing: 7) {
+                RoundedRectangle(cornerRadius: 5, style: .continuous)
+                    .fill(shimmerFill)
+                    .frame(width: 126, height: 14)
+
+                RoundedRectangle(cornerRadius: 5, style: .continuous)
+                    .fill(shimmerFill)
+                    .frame(width: 88, height: 11)
+            }
+
+            Spacer()
+
+            Circle()
+                .fill(shimmerFill)
+                .frame(width: 36, height: 36)
+
+            Circle()
+                .fill(shimmerFill)
+                .frame(width: 42, height: 42)
+        }
+        .padding(.vertical, 8)
+    }
+
+    private var shimmerFill: LinearGradient {
+        LinearGradient(
+            colors: [
+                .white.opacity(isHighlighted ? 0.14 : 0.07),
+                .white.opacity(isHighlighted ? 0.22 : 0.12),
+                .white.opacity(isHighlighted ? 0.14 : 0.07),
+            ],
+            startPoint: .topLeading,
+            endPoint: .bottomTrailing
+        )
     }
 }
 
@@ -2130,11 +2497,7 @@ struct RequestsPageView: View {
         Group {
             switch viewModel.state {
             case .idle, .loading:
-                ProgressView("Loading requests...")
-                    .frame(maxWidth: .infinity, maxHeight: .infinity)
-                    .tint(.white)
-                    .foregroundStyle(.white)
-                    .background(ProfileTheme.background)
+                RequestsPageSkeletonContent()
 
             case .failed(let message):
                 ContentUnavailableView {
@@ -2166,6 +2529,16 @@ struct RequestsPageView: View {
         }
         .task {
             if case .idle = viewModel.state {
+                await viewModel.load(using: apiClient, forceRefresh: true)
+            }
+        }
+        .onReceive(NotificationCenter.default.publisher(for: .friendRequestDidChange)) { _ in
+            Task {
+                await viewModel.load(using: apiClient, forceRefresh: true)
+            }
+        }
+        .onReceive(NotificationCenter.default.publisher(for: .appDataDidChange)) { _ in
+            Task {
                 await viewModel.load(using: apiClient, forceRefresh: true)
             }
         }
@@ -2315,9 +2688,17 @@ private struct RelationshipListScreen<Content: View>: View {
 }
 
 private struct RelationshipCard<Content: View>: View {
+    let horizontalPadding: CGFloat
+    let verticalPadding: CGFloat
     let content: Content
 
-    init(@ViewBuilder content: () -> Content) {
+    init(
+        horizontalPadding: CGFloat = 16,
+        verticalPadding: CGFloat = 14,
+        @ViewBuilder content: () -> Content
+    ) {
+        self.horizontalPadding = horizontalPadding
+        self.verticalPadding = verticalPadding
         self.content = content()
     }
 
@@ -2325,8 +2706,8 @@ private struct RelationshipCard<Content: View>: View {
         VStack(spacing: 0) {
             content
         }
-        .padding(.horizontal, 16)
-        .padding(.vertical, 14)
+        .padding(.horizontal, horizontalPadding)
+        .padding(.vertical, verticalPadding)
         .frame(maxWidth: .infinity, alignment: .leading)
         .background(
             RoundedRectangle(cornerRadius: 18, style: .continuous)

@@ -227,7 +227,7 @@ export async function GET(request: Request) {
   const socialRsvpsMap = new Map<
     string,
     Array<{
-      status: "going" | "interested";
+      status: "going" | "interested" | "not_going";
       user: {
         id: string;
         firstName: string | null;
@@ -246,7 +246,7 @@ export async function GET(request: Request) {
     eventId: string,
     rsvp: {
       userId: string;
-      status: "going" | "interested";
+      status: "going" | "interested" | "not_going";
       user: {
         id: string;
         firstName: string | null;
@@ -306,7 +306,7 @@ export async function GET(request: Request) {
             where: and(
               inArray(eventRsvps.eventId, eventIds),
               eq(eventRsvps.partnerRsvpByUserId, userId),
-              inArray(eventRsvps.status, ["going", "interested"])
+              inArray(eventRsvps.status, ["going", "interested", "not_going"])
             ),
             with: {
               user: true,
@@ -317,7 +317,7 @@ export async function GET(request: Request) {
                 where: and(
                   inArray(eventRsvps.eventId, eventIds),
                   inArray(eventRsvps.userId, friendIds),
-                  inArray(eventRsvps.status, ["going", "interested"])
+                inArray(eventRsvps.status, ["going", "interested", "not_going"])
                 ),
                 with: {
                   user: true,
@@ -356,7 +356,7 @@ export async function GET(request: Request) {
   }
 
   for (const rsvp of [...currentUserRsvps, ...mirroredPartnerRsvps, ...friendRsvps]) {
-    if (!rsvp.user || (rsvp.status !== "going" && rsvp.status !== "interested")) {
+    if (!rsvp.user || (rsvp.status !== "going" && rsvp.status !== "interested" && rsvp.status !== "not_going")) {
       continue;
     }
 
@@ -471,6 +471,9 @@ export async function GET(request: Request) {
           ),
           friendsInterested: (socialRsvpsMap.get(event.id) ?? []).filter(
             (rsvp) => rsvp.status === "interested"
+          ),
+          friendsNotGoing: (socialRsvpsMap.get(event.id) ?? []).filter(
+            (rsvp) => rsvp.status === "not_going"
           ),
           venue: venue
             ? {

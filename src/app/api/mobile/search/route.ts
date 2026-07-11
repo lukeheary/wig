@@ -26,8 +26,10 @@ function searchQueryVariants(query: string) {
   const normalizedWhitespace = trimmed.replace(/\s+/g, " ");
   const ampersandVariant = normalizedWhitespace.replace(/\s*&\s*/g, " & ");
   const andVariant = normalizedWhitespace.replace(/\s*&\s*/g, " and ");
-  const swappedAmpersandVariant = normalizedWhitespace.replace(/\s+and\s+/gi, " & ");
-  const swappedAndVariant = normalizedWhitespace.replace(/\s+and\s+/gi, " and ");
+  // Match the connector whether it is between words or the last complete token
+  // being typed. This keeps "Above and" matched to "Above & Beyond".
+  const swappedAmpersandVariant = normalizedWhitespace.replace(/\s+and\b/gi, " &");
+  const swappedAndVariant = normalizedWhitespace.replace(/\s+and\b/gi, " and");
   // Treat a trailing partial "and" connector as an ampersand as the user types.
   // This lets queries such as "Above a" find "Above & Beyond".
   const partialConnectorVariants = /\s+(?:a|an)$/i.test(normalizedWhitespace)
@@ -52,7 +54,7 @@ export async function GET(request: Request) {
     const { searchParams } = new URL(request.url);
     const query = searchParams.get("query")?.trim() ?? "";
     const queryVariants = searchQueryVariants(query);
-    const limitParam = Number(searchParams.get("limit") ?? "12");
+    const limitParam = Number(searchParams.get("limit") ?? "20");
     const limit = Number.isFinite(limitParam)
       ? Math.min(Math.max(limitParam, 1), 30)
       : 12;
@@ -368,7 +370,7 @@ export async function GET(request: Request) {
     const socialRsvpsMap = new Map<
       string,
       Array<{
-        status: "going" | "interested";
+        status: "going" | "interested" | "not_going";
         user: {
           id: string;
           firstName: string | null;
@@ -418,7 +420,7 @@ export async function GET(request: Request) {
           where: and(
             inArray(eventRsvps.eventId, eventIds),
             eq(eventRsvps.partnerRsvpByUserId, userId),
-            inArray(eventRsvps.status, ["going", "interested"])
+            inArray(eventRsvps.status, ["going", "interested", "not_going"])
           ),
           with: {
             user: true,
@@ -429,7 +431,7 @@ export async function GET(request: Request) {
               where: and(
                 inArray(eventRsvps.eventId, eventIds),
                 inArray(eventRsvps.userId, friendIds),
-                inArray(eventRsvps.status, ["going", "interested"])
+                inArray(eventRsvps.status, ["going", "interested", "not_going"])
               ),
               with: {
                 user: true,
@@ -446,7 +448,7 @@ export async function GET(request: Request) {
       }
 
       for (const rsvp of [...currentUserRsvps, ...mirroredPartnerRsvps, ...friendRsvps]) {
-        if (!rsvp.user || (rsvp.status !== "going" && rsvp.status !== "interested")) {
+        if (!rsvp.user || (rsvp.status !== "going" && rsvp.status !== "interested" && rsvp.status !== "not_going")) {
           continue;
         }
 
@@ -528,6 +530,7 @@ export async function GET(request: Request) {
           userRsvpNotGoingReason: currentUserRsvp?.notGoingReason ?? null,
           friendsGoing: socialRsvps.filter((rsvp) => rsvp.status === "going"),
           friendsInterested: socialRsvps.filter((rsvp) => rsvp.status === "interested"),
+          friendsNotGoing: socialRsvps.filter((rsvp) => rsvp.status === "not_going"),
         };
       }),
       upcomingEvents: upcomingEvents.map((event) => {
@@ -576,6 +579,7 @@ export async function GET(request: Request) {
           userRsvpNotGoingReason: currentUserRsvp?.notGoingReason ?? null,
           friendsGoing: socialRsvps.filter((rsvp) => rsvp.status === "going"),
           friendsInterested: socialRsvps.filter((rsvp) => rsvp.status === "interested"),
+          friendsNotGoing: socialRsvps.filter((rsvp) => rsvp.status === "not_going"),
         };
       }),
       users: matchingUsers.map((user) => ({

@@ -39,6 +39,7 @@
 		C0D4A3A39B88A8F47494F318 /* VenuesViewModel.swift in Sources */ = {isa = PBXBuildFile; fileRef = 0B7253E663E8722D44179A1A /* VenuesViewModel.swift */; };
 		C7B1AFD5D5DAD75536ECC395 /* ActivityFeed.swift in Sources */ = {isa = PBXBuildFile; fileRef = ABB9069D0CFEF946D66D463C /* ActivityFeed.swift */; };
 		CA9B0D3B6C19273F055C584F /* MainTabView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 2FAA685514B54FEB5C7493A3 /* MainTabView.swift */; };
+		CAFE1234567890ABCDEF1234 /* AppDataRefresh.swift in Sources */ = {isa = PBXBuildFile; fileRef = CAFE1234567890ABCDEF1235 /* AppDataRefresh.swift */; };
 		D0A5C649C6897F8D058D193C /* PlaceDetailViewModel.swift in Sources */ = {isa = PBXBuildFile; fileRef = FB7522ACC7AF252899EB4576 /* PlaceDetailViewModel.swift */; };
 		D660CF02FF972B340A8A88B0 /* Person.swift in Sources */ = {isa = PBXBuildFile; fileRef = 21CCB7FA0EC72A72E5A18158 /* Person.swift */; };
 		DADC279B33BBB821553BCA3D /* PlaceDetail.swift in Sources */ = {isa = PBXBuildFile; fileRef = 06DBD4E356DEF2762352E743 /* PlaceDetail.swift */; };
@@ -95,6 +96,7 @@
 		C0D13CF91B0EECB51C7BEBC0 /* Assets.xcassets */ = {isa = PBXFileReference; lastKnownFileType = folder.assetcatalog; path = Assets.xcassets; sourceTree = "<group>"; };
 		C47EB2040C338297AF811986 /* AppConfig.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AppConfig.swift; sourceTree = "<group>"; };
 		C4B12A3FE36D056CEF6A6FBD /* RemoteImageView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = RemoteImageView.swift; sourceTree = "<group>"; };
+		CAFE1234567890ABCDEF1235 /* AppDataRefresh.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AppDataRefresh.swift; sourceTree = "<group>"; };
 		CD2B5220253C407CE688D6CD /* FriendsFeed.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = FriendsFeed.swift; sourceTree = "<group>"; };
 		DC1F5481F6C16EA27B43C269 /* SignedOutView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SignedOutView.swift; sourceTree = "<group>"; };
 		E9F25C520369E8D97B2E2329 /* AppSession.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AppSession.swift; sourceTree = "<group>"; };
@@ -231,6 +233,7 @@
 		A668C5133DDC5384BD2CFBCB /* Shared */ = {
 			isa = PBXGroup;
 			children = (
+				CAFE1234567890ABCDEF1235 /* AppDataRefresh.swift */,
 				E9F25C520369E8D97B2E2329 /* AppSession.swift */,
 				1EFBA2EF2E31AA35C105FDAB /* MobileCategoryStore.swift */,
 				2E3FAB7835F02E2A61D359A6 /* PushNotificationManager.swift */,
@@ -383,6 +386,7 @@
 			isa = PBXSourcesBuildPhase;
 			buildActionMask = 2147483647;
 			files = (
+				CAFE1234567890ABCDEF1234 /* AppDataRefresh.swift in Sources */,
 				0E61E35C6BC9885882E28017 /* APIClient.swift in Sources */,
 				C7B1AFD5D5DAD75536ECC395 /* ActivityFeed.swift in Sources */,
 				4B65B4FA113617995A70D5DE /* ActivityView.swift in Sources */,
@@ -561,7 +565,7 @@
 				CODE_SIGN_ENTITLEMENTS = WIG/Support/WIG.entitlements;
 				CODE_SIGN_IDENTITY = "iPhone Developer";
 				CODE_SIGN_STYLE = Automatic;
-				CURRENT_PROJECT_VERSION = 9;
+				CURRENT_PROJECT_VERSION = 10;
 				DEVELOPMENT_TEAM = V347D294CZ;
 				INFOPLIST_FILE = WIG/Support/Info.plist;
 				INFOPLIST_KEY_CFBundleDisplayName = "Who Is Going";
@@ -570,7 +574,7 @@
 					"$(inherited)",
 					"@executable_path/Frameworks",
 				);
-				MARKETING_VERSION = 1.0.8;
+				MARKETING_VERSION = 1.0.9;
 				PRODUCT_BUNDLE_IDENTIFIER = com.whoisgoing.app;
 				PRODUCT_NAME = WIG;
 				SDKROOT = iphoneos;
@@ -653,7 +657,7 @@
 				CODE_SIGN_ENTITLEMENTS = WIG/Support/WIG.entitlements;
 				CODE_SIGN_IDENTITY = "iPhone Developer";
 				CODE_SIGN_STYLE = Automatic;
-				CURRENT_PROJECT_VERSION = 9;
+				CURRENT_PROJECT_VERSION = 10;
 				DEVELOPMENT_TEAM = V347D294CZ;
 				INFOPLIST_FILE = WIG/Support/Info.plist;
 				INFOPLIST_KEY_CFBundleDisplayName = "Who Is Going";
@@ -662,7 +666,7 @@
 					"$(inherited)",
 					"@executable_path/Frameworks",
 				);
-				MARKETING_VERSION = 1.0.8;
+				MARKETING_VERSION = 1.0.9;
 				PRODUCT_BUNDLE_IDENTIFIER = com.whoisgoing.app;
 				PRODUCT_NAME = WIG;
 				SDKROOT = iphoneos;
@@ -681,7 +685,7 @@
 				CODE_SIGN_ENTITLEMENTS = WIG/Support/WIG.entitlements;
 				CODE_SIGN_IDENTITY = "iPhone Developer";
 				CODE_SIGN_STYLE = Automatic;
-				CURRENT_PROJECT_VERSION = 9;
+				CURRENT_PROJECT_VERSION = 10;
 				DEVELOPMENT_TEAM = V347D294CZ;
 				INFOPLIST_FILE = WIG/Support/Info.plist;
 				INFOPLIST_KEY_CFBundleDisplayName = "Who Is Going";
@@ -690,7 +694,7 @@
 					"$(inherited)",
 					"@executable_path/Frameworks",
 				);
-				MARKETING_VERSION = 1.0.8;
+				MARKETING_VERSION = 1.0.9;
 				PRODUCT_BUNDLE_IDENTIFIER = com.whoisgoing.app;
 				PRODUCT_NAME = WIG;
 				SDKROOT = iphoneos;

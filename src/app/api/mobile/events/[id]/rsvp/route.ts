@@ -21,6 +21,7 @@ const updateSchema = z.object({
   reason: z.enum(RSVP_DECLINE_REASON_VALUES).nullable().optional(),
   includePartner: z.boolean().optional(),
   notifyFriends: z.boolean().optional(),
+  notificationOnly: z.boolean().optional(),
 });
 
 type RouteContext = {
@@ -153,6 +154,42 @@ export async function POST(request: Request, context: RouteContext) {
       ? partnerRelationship.recipientId
       : partnerRelationship.requesterId
     : null;
+
+  // The mobile client saves the RSVP immediately, then gives the user a brief
+  // undo window before sending the social notification. Re-check the persisted
+  // RSVP here so an undone or changed response never notifies friends.
+  if (body.notificationOnly) {
+    if (
+      (body.status !== "going" && body.status !== "interested") ||
+      existingUserRsvp?.status !== body.status
+    ) {
+      return NextResponse.json({ notified: false });
+    }
+
+    const mirroredPartnerRsvp = partnerUserId
+      ? await db.query.eventRsvps.findFirst({
+          where: and(
+            eq(eventRsvps.userId, partnerUserId),
+            eq(eventRsvps.eventId, eventId),
+            eq(eventRsvps.partnerRsvpByUserId, userId),
+            eq(eventRsvps.status, body.status)
+          ),
+          columns: { userId: true },
+        })
+      : null;
+
+    await notifyFriendsOfRsvp(
+      {
+        actorUserId: userId,
+        eventId,
+        status: body.status,
+        partnerUserId: mirroredPartnerRsvp ? partnerUserId : null,
+      },
+      db
+    );
+
+    return NextResponse.json({ notified: true });
+  }
   const shouldMirrorPartnerRsvp =
     Boolean(partnerUserId) && body.includePartner === true;
 

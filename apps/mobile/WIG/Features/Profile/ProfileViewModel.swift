@@ -20,6 +20,10 @@ final class ProfileViewModel: ObservableObject {
         cachedResponse?.profile
     }
 
+    static var pendingFriendRequestCount: Int {
+        cachedResponse?.requestCount ?? 0
+    }
+
     func load(using apiClient: APIClient, forceRefresh: Bool = false) async {
         if !forceRefresh, let cachedResponse = Self.cachedResponse {
             state = .loaded(cachedResponse)
@@ -174,13 +178,13 @@ final class UserProfileViewModel: ObservableObject {
         return !response.upcomingEvents.isEmpty || !response.pastEvents.isEmpty
     }
 
-    func load(userID: String, using apiClient: APIClient) async {
-        if let cachedResponse = Self.cachedResponses[userID] {
+    func load(userID: String, using apiClient: APIClient, forceRefresh: Bool = false) async {
+        if !forceRefresh, let cachedResponse = Self.cachedResponses[userID] {
             state = .loaded(cachedResponse)
             return
         }
 
-        if let inFlightLoad = Self.inFlightLoads[userID] {
+        if !forceRefresh, let inFlightLoad = Self.inFlightLoads[userID] {
             state = .loading
 
             do {

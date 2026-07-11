@@ -53,6 +53,7 @@ struct EventFeedItem: Codable, Identifiable, Hashable, Sendable {
     var userRsvpNotGoingReason: EventRSVPDeclineReason? = nil
     var friendsGoing: [EventSocialRSVP] = []
     var friendsInterested: [EventSocialRSVP] = []
+    var friendsNotGoing: [EventSocialRSVP] = []
 
     enum CodingKeys: String, CodingKey {
         case id
@@ -88,6 +89,7 @@ struct EventFeedItem: Codable, Identifiable, Hashable, Sendable {
         case userRsvpNotGoingReason
         case friendsGoing
         case friendsInterested
+        case friendsNotGoing
     }
 
     var primaryLocation: String {
@@ -179,6 +181,13 @@ struct EventFeedItem: Codable, Identifiable, Hashable, Sendable {
         let startOfToday = calendar.startOfDay(for: Date())
         let startOfEventDay = calendar.startOfDay(for: startAt)
         let dayOffset = calendar.dateComponents([.day], from: startOfToday, to: startOfEventDay).day ?? 0
+        let currentWeekStart = calendar.dateInterval(of: .weekOfYear, for: startOfToday)?.start ?? startOfToday
+        let eventWeekStart = calendar.dateInterval(of: .weekOfYear, for: startOfEventDay)?.start ?? startOfEventDay
+        let weeksAway = calendar.dateComponents(
+            [.weekOfYear],
+            from: currentWeekStart,
+            to: eventWeekStart
+        ).weekOfYear ?? 0
 
         switch dayOffset {
         case ..<0:
@@ -188,6 +197,14 @@ struct EventFeedItem: Codable, Identifiable, Hashable, Sendable {
         case 1:
             return " (tomorrow)"
         default:
+            if weeksAway == 1 {
+                return " (next week)"
+            }
+
+            if weeksAway > 1 {
+                return " (in \(weeksAway) weeks)"
+            }
+
             return " (in \(dayOffset) days)"
         }
     }
@@ -364,6 +381,7 @@ extension EventFeedItem {
         )
         friendsGoing = try container.decodeIfPresent([EventSocialRSVP].self, forKey: .friendsGoing) ?? []
         friendsInterested = try container.decodeIfPresent([EventSocialRSVP].self, forKey: .friendsInterested) ?? []
+        friendsNotGoing = try container.decodeIfPresent([EventSocialRSVP].self, forKey: .friendsNotGoing) ?? []
     }
 }
 
@@ -481,13 +499,16 @@ extension EventFeedItem {
 
         // Prefer the current user already present in the lists; otherwise fall back
         // to the supplied identity so a first-time RSVP still shows up immediately.
-        let existingCurrentUser = (friendsGoing + friendsInterested).first { $0.user.isCurrentUser }?.user
+        let existingCurrentUser = (friendsGoing + friendsInterested + friendsNotGoing)
+            .first { $0.user.isCurrentUser }?.user
         let otherGoing = friendsGoing.filter { !$0.user.isCurrentUser }
         let otherInterested = friendsInterested.filter { !$0.user.isCurrentUser }
+        let otherNotGoing = friendsNotGoing.filter { !$0.user.isCurrentUser }
 
         guard let selfUser = existingCurrentUser ?? currentUser else {
             updated.friendsGoing = otherGoing
             updated.friendsInterested = otherInterested
+            updated.friendsNotGoing = otherNotGoing
             return updated
         }
 
@@ -495,12 +516,15 @@ extension EventFeedItem {
         case .going:
             updated.friendsGoing = [EventSocialRSVP(status: .going, user: selfUser)] + otherGoing
             updated.friendsInterested = otherInterested
+            updated.friendsNotGoing = otherNotGoing
         case .interested:
             updated.friendsGoing = otherGoing
             updated.friendsInterested = [EventSocialRSVP(status: .interested, user: selfUser)] + otherInterested
+            updated.friendsNotGoing = otherNotGoing
         case .notGoing, .none:
             updated.friendsGoing = otherGoing
             updated.friendsInterested = otherInterested
+            updated.friendsNotGoing = otherNotGoing
         }
 
         return updated

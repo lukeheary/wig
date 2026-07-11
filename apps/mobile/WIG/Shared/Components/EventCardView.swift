@@ -6,10 +6,10 @@ import UIKit
 
 struct EventCardView: View {
     let event: EventFeedItem
+    var obscuresDetails = false
+    var cardHeight: CGFloat = 284
     @Environment(Clerk.self) private var clerk
     @EnvironmentObject private var appSession: AppSession
-    private let cardHeight: CGFloat = 284
-    private let artworkOverlayHeight: CGFloat = 194
     private let cardCornerRadius: CGFloat = 18
     @State private var artworkPalette = EventCardPalette.fallback
     @State private var loadedArtwork: UIImage?
@@ -20,44 +20,20 @@ struct EventCardView: View {
             let cardWidth = proxy.size.width
 
             ZStack(alignment: .topLeading) {
-                EventCardBackground(
-                    image: loadedArtwork,
-                    blurredImage: blurredArtwork,
-                    palette: artworkPalette,
-                    cardWidth: cardWidth,
-                    cardHeight: cardHeight
-                )
-
-                VStack(alignment: .leading, spacing: 0) {
-                    topArtworkOverlay(cardWidth: cardWidth)
-
-                    Spacer(minLength: 0)
-
-                    VStack(alignment: .leading, spacing: 3) {
-                        Text(event.title)
-                            .font(.system(size: 14, weight: .semibold))
-                            .foregroundStyle(.white)
-                            .multilineTextAlignment(.leading)
-                            .lineLimit(2)
-                            .lineSpacing(1)
-                            .frame(maxWidth: .infinity, alignment: .leading)
-
-                        Text(event.formattedStart(format: "EEE, MMM d 'at' h:mm a"))
-                            .font(.system(size: 13, weight: .medium))
-                            .foregroundStyle(AppTheme.accentBlue)
-                            .lineLimit(1)
-                            .minimumScaleFactor(0.82)
-
-                        Text(event.primaryLocation)
-                            .font(.system(size: 13, weight: .medium))
-                            .foregroundStyle(.white.opacity(0.76))
-                            .lineLimit(1)
-                            .minimumScaleFactor(0.82)
-                    }
-                    .padding(.horizontal, 14)
-                    .padding(.bottom, 14)
+                if obscuresDetails {
+                    EventCardPrivacyOverlay()
+                } else {
+                    EventCardContent(
+                        event: event,
+                        image: loadedArtwork,
+                        blurredImage: blurredArtwork,
+                        palette: artworkPalette,
+                        cardWidth: cardWidth,
+                        cardHeight: cardHeight,
+                        artworkOverlayHeight: artworkOverlayHeight,
+                        isAuthenticated: isAuthenticated
+                    )
                 }
-                .frame(width: cardWidth, height: cardHeight, alignment: .topLeading)
             }
             .frame(width: cardWidth, height: cardHeight, alignment: .topLeading)
         }
@@ -75,6 +51,13 @@ struct EventCardView: View {
         }
         .contentShape(cardShape)
         .task(id: imageURL) {
+            guard !obscuresDetails else {
+                loadedArtwork = nil
+                blurredArtwork = nil
+                artworkPalette = .fallback
+                return
+            }
+
             guard let imageURL else {
                 loadedArtwork = nil
                 blurredArtwork = nil
@@ -84,17 +67,6 @@ struct EventCardView: View {
 
             await loadArtwork(from: imageURL)
         }
-    }
-
-    private func topArtworkOverlay(cardWidth: CGFloat) -> some View {
-        ZStack(alignment: .topTrailing) {
-            if isAuthenticated {
-                EventSocialOverlayView(attendees: event.socialAttendees, size: .card)
-                    .padding(.trailing, 10)
-                    .padding(.top, 10)
-            }
-        }
-        .frame(width: cardWidth, height: artworkOverlayHeight, alignment: .topTrailing)
     }
 
     private var isAuthenticated: Bool {
@@ -107,6 +79,10 @@ struct EventCardView: View {
 
     private var cardShape: some Shape {
         RoundedRectangle(cornerRadius: cardCornerRadius, style: .continuous)
+    }
+
+    private var artworkOverlayHeight: CGFloat {
+        cardHeight * 0.68
     }
 
     private func loadArtwork(from url: URL) async {
@@ -148,6 +124,79 @@ struct EventCardView: View {
             blurredArtwork = processed.blurred
             artworkPalette = processed.palette
         }
+    }
+}
+
+private struct EventCardContent: View {
+    let event: EventFeedItem
+    let image: UIImage?
+    let blurredImage: UIImage?
+    let palette: EventCardPalette
+    let cardWidth: CGFloat
+    let cardHeight: CGFloat
+    let artworkOverlayHeight: CGFloat
+    let isAuthenticated: Bool
+
+    var body: some View {
+        ZStack(alignment: .topLeading) {
+            EventCardBackground(
+                image: image,
+                blurredImage: blurredImage,
+                palette: palette,
+                cardWidth: cardWidth,
+                cardHeight: cardHeight
+            )
+
+            VStack(alignment: .leading, spacing: 0) {
+                ZStack(alignment: .topTrailing) {
+                    if isAuthenticated {
+                        EventSocialOverlayView(attendees: event.socialAttendees, size: .card)
+                            .padding(.trailing, 10)
+                            .padding(.top, 10)
+                    }
+                }
+                .frame(width: cardWidth, height: artworkOverlayHeight, alignment: .topTrailing)
+
+                Spacer(minLength: 0)
+
+                VStack(alignment: .leading, spacing: 3) {
+                    Text(event.title)
+                        .font(.system(size: 14, weight: .semibold))
+                        .foregroundStyle(.white)
+                        .multilineTextAlignment(.leading)
+                        .lineLimit(2)
+                        .lineSpacing(1)
+                        .frame(maxWidth: .infinity, alignment: .leading)
+
+                    Text(event.formattedStart(format: "EEE, MMM d 'at' h:mm a"))
+                        .font(.system(size: 13, weight: .medium))
+                        .foregroundStyle(AppTheme.accentBlue)
+                        .lineLimit(1)
+                        .minimumScaleFactor(0.82)
+
+                    Text(event.primaryLocation)
+                        .font(.system(size: 13, weight: .medium))
+                        .foregroundStyle(.white.opacity(0.76))
+                        .lineLimit(1)
+                        .minimumScaleFactor(0.82)
+                }
+                .padding(.horizontal, 14)
+                .padding(.bottom, 14)
+            }
+            .frame(width: cardWidth, height: cardHeight, alignment: .topLeading)
+        }
+    }
+}
+
+private struct EventCardPrivacyOverlay: View {
+    var body: some View {
+        Image(systemName: "lock.fill")
+            .font(.system(size: 20, weight: .semibold))
+            .foregroundStyle(.white.opacity(0.82))
+        .frame(maxWidth: .infinity, maxHeight: .infinity)
+        .background(Color(red: 0.14, green: 0.14, blue: 0.16))
+        .accessibilityElement(children: .ignore)
+        .accessibilityLabel("Private event")
     }
 }
 

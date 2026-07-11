@@ -12,6 +12,9 @@ struct VenuesView: View {
     @State private var selectedLocationFilter: PlaceLocationFilter?
     @State private var selectedPlaceFilter: PlaceKindFilter = .all
     @State private var selectedCategoryID: String?
+    @State private var isPlaceSearchPresented = false
+    @State private var placeSearchText = ""
+    @FocusState private var isPlaceSearchFocused: Bool
 
     init(resetFiltersTrigger: Int = 0) {
         self.resetFiltersTrigger = resetFiltersTrigger
@@ -32,6 +35,11 @@ struct VenuesView: View {
                     }
                 }
                 .onReceive(NotificationCenter.default.publisher(for: .mobilePlaceDidChange)) { _ in
+                    Task {
+                        await viewModel.load(using: apiClient, forceRefresh: true)
+                    }
+                }
+                .onReceive(NotificationCenter.default.publisher(for: .appDataDidChange)) { _ in
                     Task {
                         await viewModel.load(using: apiClient, forceRefresh: true)
                     }
@@ -62,11 +70,12 @@ struct VenuesView: View {
                 .padding(.bottom, 48)
             }
             .overlay(alignment: .topLeading) {
-                loadingFilterControls
+                topControls(for: nil)
                     .padding(.horizontal, 16)
                     .padding(.top, 0)
             }
             .scrollIndicators(.hidden)
+            .scrollDismissesKeyboard(.interactively)
             .background(venuesBackground)
 
         case .failed(let message):
@@ -96,7 +105,7 @@ struct VenuesView: View {
             } else {
                 ScrollView {
                     VStack(alignment: .leading, spacing: 12) {
-                        placesHeader(locationName: headerLocationName(for: response))
+                        placesHeaderMenu(for: response)
                         let sections = groupedPlaces(in: response)
 
                         if sections.isEmpty {
@@ -137,11 +146,12 @@ struct VenuesView: View {
                     .padding(.bottom, 48)
                 }
                 .overlay(alignment: .topLeading) {
-                    filterControls(for: response)
+                    topControls(for: response)
                         .padding(.horizontal, 16)
                         .padding(.top, 0)
                 }
                 .scrollIndicators(.hidden)
+                .scrollDismissesKeyboard(.interactively)
                 .background(venuesBackground)
             }
         }
@@ -166,6 +176,25 @@ struct VenuesView: View {
         )
     }
 
+    private func placesHeaderMenu(for response: MobilePlacesResponse) -> some View {
+        Menu {
+            ForEach(availableLocationFilters(for: response)) { location in
+                Button {
+                    selectedLocationFilter = location
+                } label: {
+                    if location == effectiveLocationFilter(for: response) {
+                        Label(location.title, systemImage: "checkmark")
+                    } else {
+                        Text(location.title)
+                    }
+                }
+            }
+        } label: {
+            placesHeader(locationName: headerLocationName(for: response))
+        }
+        .buttonStyle(.plain)
+    }
+
     private var selectedLocationName: String? {
         switch selectedLocationFilter {
         case .city(let city, _):
@@ -187,16 +216,17 @@ struct VenuesView: View {
     private func filterControls(for response: MobilePlacesResponse) -> some View {
         HStack(spacing: 10) {
             PlaceLeadingControls(
+                selection: $selectedPlaceFilter,
+                categories: availableCategoryFilters(for: response),
+                selectedCategoryID: selectedCategoryID,
+                onSelectCategory: { selectedCategoryID = $0 },
+                onSearch: presentPlaceSearch,
                 locationSelection: Binding(
                     get: { effectiveLocationFilter(for: response) },
                     set: { selectedLocationFilter = $0 }
                 ),
                 locations: availableLocationFilters(for: response),
-                hasActiveLocationSelection: effectiveLocationFilter(for: response) != defaultLocationFilter(for: response),
-                selection: $selectedPlaceFilter,
-                categories: availableCategoryFilters(for: response),
-                selectedCategoryID: selectedCategoryID,
-                onSelectCategory: { selectedCategoryID = $0 }
+                hasActiveLocationSelection: effectiveLocationFilter(for: response) != defaultLocationFilter(for: response)
             )
         }
         .frame(maxWidth: .infinity, alignment: .leading)
@@ -206,16 +236,67 @@ struct VenuesView: View {
     private var loadingFilterControls: some View {
         HStack(spacing: 10) {
             PlaceLeadingControls(
-                locationSelection: .constant(.all),
-                locations: [.all],
-                hasActiveLocationSelection: false,
                 selection: .constant(.all),
                 categories: [],
                 selectedCategoryID: nil,
-                onSelectCategory: { _ in }
+                onSelectCategory: { _ in },
+                onSearch: presentPlaceSearch,
+                locationSelection: .constant(.city(city: "Boston", state: "MA")),
+                locations: [.city(city: "Boston", state: "MA")],
+                hasActiveLocationSelection: false
             )
         }
         .frame(maxWidth: .infinity, alignment: .leading)
+        .padding(.bottom, 4)
+    }
+
+    @ViewBuilder
+    private func topControls(for response: MobilePlacesResponse?) -> some View {
+        if isPlaceSearchPresented {
+            placeSearchControls
+        } else if let response {
+            filterControls(for: response)
+        } else {
+            loadingFilterControls
+        }
+    }
+
+    private var placeSearchControls: some View {
+        HStack(spacing: 10) {
+            HStack(spacing: 10) {
+                Image(systemName: "magnifyingglass")
+                    .font(.system(size: 18, weight: .medium))
+                    .foregroundStyle(.white.opacity(0.62))
+
+                TextField("Search places...", text: $placeSearchText)
+                    .font(.system(size: 17, weight: .medium))
+                    .foregroundStyle(.white)
+                    .textInputAutocapitalization(.never)
+                    .autocorrectionDisabled()
+                    .submitLabel(.search)
+                    .focused($isPlaceSearchFocused)
+
+                if !placeSearchText.isEmpty {
+                    Button {
+                        placeSearchText = ""
+                    } label: {
+                        Image(systemName: "xmark.circle.fill")
+                            .font(.system(size: 18, weight: .semibold))
+                            .foregroundStyle(.white.opacity(0.48))
+                    }
+                    .buttonStyle(.plain)
+                }
+            }
+            .padding(.horizontal, 16)
+            .frame(height: 46)
+            .frame(maxWidth: .infinity)
+            .contentShape(Capsule())
+            .placeLiquidGlass(in: Capsule())
+
+            FloatingGlassIconButton(systemImage: "xmark") {
+                dismissPlaceSearch()
+            }
+        }
         .padding(.bottom, 4)
     }
 
@@ -225,6 +306,7 @@ struct VenuesView: View {
             .filter(effectiveLocationFilter(for: response).includes)
             .filter(selectedPlaceFilter.includes)
             .filter(categoryFilterIncludes)
+            .filter(matchesPlaceSearch)
             // Drop any duplicate rows so ForEach identities stay unique.
             .filter { seen.insert($0.listRowID).inserted }
     }
@@ -289,18 +371,12 @@ struct VenuesView: View {
             lhs.title.localizedCaseInsensitiveCompare(rhs.title) == .orderedAscending
         }
 
-        if let currentUserLocation = response.currentUserLocation {
-            let userFilter = PlaceLocationFilter.city(
-                city: currentUserLocation.city,
-                state: currentUserLocation.state
-            )
-
-            if !cityFilters.contains(userFilter) {
-                cityFilters.insert(userFilter, at: 0)
-            }
+        let bostonFilter = PlaceLocationFilter.city(city: "Boston", state: "MA")
+        if !cityFilters.contains(bostonFilter) {
+            cityFilters.append(bostonFilter)
         }
 
-        return [.all] + cityFilters
+        return cityFilters
     }
 
     private func effectiveLocationFilter(for response: MobilePlacesResponse) -> PlaceLocationFilter {
@@ -326,7 +402,14 @@ struct VenuesView: View {
         let locations = availableLocationFilters(for: response)
 
         if let currentUserLocation = response.currentUserLocation {
-            return .city(city: currentUserLocation.city, state: currentUserLocation.state)
+            let userFilter = PlaceLocationFilter.city(
+                city: currentUserLocation.city,
+                state: currentUserLocation.state
+            )
+
+            if locations.contains(userFilter) {
+                return userFilter
+            }
         }
 
         return locations.first { location in
@@ -335,7 +418,7 @@ struct VenuesView: View {
             }
 
             return city.localizedCaseInsensitiveCompare("Boston") == .orderedSame
-        } ?? locations.first ?? .all
+        } ?? .city(city: "Boston", state: "MA")
     }
 
     private func availableCategoryFilters(for response: MobilePlacesResponse) -> [PlaceCategoryFilter] {
@@ -372,6 +455,37 @@ struct VenuesView: View {
         }
 
         return place.categories.contains(selectedCategoryID)
+    }
+
+    private func matchesPlaceSearch(_ place: PlaceListItem) -> Bool {
+        let query = placeSearchText.trimmingCharacters(in: .whitespacesAndNewlines)
+        guard !query.isEmpty else {
+            return true
+        }
+
+        return [place.name, place.city, place.state]
+            .compactMap { $0 }
+            .contains { value in
+                value.localizedCaseInsensitiveContains(query)
+            }
+    }
+
+    private func presentPlaceSearch() {
+        isPlaceSearchPresented = true
+
+        Task { @MainActor in
+            try? await Task.sleep(for: .milliseconds(150))
+
+            if isPlaceSearchPresented {
+                isPlaceSearchFocused = true
+            }
+        }
+    }
+
+    private func dismissPlaceSearch() {
+        isPlaceSearchFocused = false
+        placeSearchText = ""
+        isPlaceSearchPresented = false
     }
 
     private func resetFilters() {
@@ -492,37 +606,6 @@ private enum PlaceKindFilter: String, CaseIterable, Identifiable {
     }
 }
 
-private struct PlaceLocationFilterMenu: View {
-    @Binding var selection: PlaceLocationFilter
-    let locations: [PlaceLocationFilter]
-    let hasActiveSelection: Bool
-    var useCombinedStyle = false
-
-    var body: some View {
-        Menu {
-            ForEach(locations) { location in
-                Button {
-                    selection = location
-                } label: {
-                    if location == selection {
-                        Label(location.title, systemImage: "checkmark")
-                    } else {
-                        Text(location.title)
-                    }
-                }
-            }
-        } label: {
-            Image(systemName: "map")
-                .font(.system(size: 18, weight: .semibold))
-                .foregroundStyle(hasActiveSelection ? AppTheme.accentBlue : .primary)
-                .frame(width: 46, height: 46)
-                .contentShape(Rectangle())
-                .modifier(PlaceStandaloneControlStyle(isStandalone: !useCombinedStyle))
-        }
-        .buttonStyle(.plain)
-    }
-}
-
 private struct PlaceKindFilterMenu: View {
     @Binding var selection: PlaceKindFilter
     let categories: [PlaceCategoryFilter]
@@ -588,23 +671,17 @@ private struct PlaceKindFilterMenu: View {
 }
 
 private struct PlaceLeadingControls: View {
-    @Binding var locationSelection: PlaceLocationFilter
-    let locations: [PlaceLocationFilter]
-    let hasActiveLocationSelection: Bool
     @Binding var selection: PlaceKindFilter
     let categories: [PlaceCategoryFilter]
     let selectedCategoryID: String?
     let onSelectCategory: (String?) -> Void
+    let onSearch: () -> Void
+    @Binding var locationSelection: PlaceLocationFilter
+    let locations: [PlaceLocationFilter]
+    let hasActiveLocationSelection: Bool
 
     var body: some View {
         HStack(spacing: 0) {
-            PlaceLocationFilterMenu(
-                selection: $locationSelection,
-                locations: locations,
-                hasActiveSelection: hasActiveLocationSelection,
-                useCombinedStyle: true
-            )
-
             PlaceKindFilterMenu(
                 selection: $selection,
                 categories: categories,
@@ -612,11 +689,55 @@ private struct PlaceLeadingControls: View {
                 onSelectCategory: onSelectCategory,
                 useCombinedStyle: true
             )
+
+            Button(action: onSearch) {
+                Image(systemName: "magnifyingglass")
+                    .font(.system(size: 18, weight: .semibold))
+                    .foregroundStyle(.primary)
+                    .frame(width: 46, height: 46)
+                    .contentShape(Rectangle())
+            }
+            .buttonStyle(.plain)
+
+            PlaceCityFilterMenu(
+                selection: $locationSelection,
+                locations: locations,
+                hasActiveSelection: hasActiveLocationSelection
+            )
         }
         .frame(height: 46)
         .clipShape(Capsule())
         .placeLiquidGlass(in: Capsule())
         .shadow(color: .black.opacity(0.12), radius: 14, x: 0, y: 8)
+    }
+}
+
+private struct PlaceCityFilterMenu: View {
+    @Binding var selection: PlaceLocationFilter
+    let locations: [PlaceLocationFilter]
+    let hasActiveSelection: Bool
+
+    var body: some View {
+        Menu {
+            ForEach(locations) { location in
+                Button {
+                    selection = location
+                } label: {
+                    if location == selection {
+                        Label(location.title, systemImage: "checkmark")
+                    } else {
+                        Text(location.title)
+                    }
+                }
+            }
+        } label: {
+            Image(systemName: "map")
+                .font(.system(size: 18, weight: .semibold))
+                .foregroundStyle(hasActiveSelection ? AppTheme.accentBlue : .primary)
+                .frame(width: 46, height: 46)
+                .contentShape(Rectangle())
+        }
+        .buttonStyle(.plain)
     }
 }
 

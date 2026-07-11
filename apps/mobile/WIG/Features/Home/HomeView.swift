@@ -3,6 +3,7 @@ import SwiftUI
 
 struct HomeView: View {
     let showsNativeSearch: Bool
+    let searchesUsersOnly: Bool
     let resetToCurrentWeekTrigger: Int
     let onShowActivity: () -> Void
     let onSearchDismiss: () -> Void
@@ -14,11 +15,15 @@ struct HomeView: View {
     @StateObject private var viewModel = EventFeedViewModel()
     @StateObject private var recentActivityViewModel = HomeRecentActivityViewModel()
     @StateObject private var searchViewModel = HomeSearchDirectoryViewModel()
+    @StateObject private var homeEventSearchViewModel = HomeSearchDirectoryViewModel()
     @State private var selectedWeekStart = Self.startOfWeek(for: .now)
     @State private var isSearchPresented = false
     @State private var searchText = ""
+    @State private var homeEventSearchText = ""
+    @State private var isHomeEventSearchPresented = false
     @State private var selectedSearchFilter: SearchFilter = .all
     @FocusState private var isSearchFieldFocused: Bool
+    @FocusState private var isHomeEventSearchFocused: Bool
     @State private var isSearchKeyboardDismissEnabled = false
     @State private var selectedLocationFilter: HomeLocationFilter?
     @State private var selectedEventFilter: HomeEventFilter = .all
@@ -44,11 +49,13 @@ struct HomeView: View {
 
     init(
         showsNativeSearch: Bool = false,
+        searchesUsersOnly: Bool = false,
         resetToCurrentWeekTrigger: Int = 0,
         onShowActivity: @escaping () -> Void = {},
         onSearchDismiss: @escaping () -> Void = {}
     ) {
         self.showsNativeSearch = showsNativeSearch
+        self.searchesUsersOnly = searchesUsersOnly
         self.resetToCurrentWeekTrigger = resetToCurrentWeekTrigger
         self.onShowActivity = onShowActivity
         self.onSearchDismiss = onSearchDismiss
@@ -90,6 +97,19 @@ struct HomeView: View {
 
                     Task {
                         await loadHome(for: selectedWeekStart, using: apiClient, forceRefresh: true)
+                    }
+                }
+                .onReceive(NotificationCenter.default.publisher(for: .appDataDidChange)) { _ in
+                    Task {
+                        await loadHome(for: selectedWeekStart, using: apiClient, forceRefresh: true)
+
+                        if showsNativeSearch {
+                            await searchViewModel.load(
+                                query: normalizedSearchQuery,
+                                using: apiClient,
+                                forceRefresh: true
+                            )
+                        }
                     }
                 }
                 .onChange(of: selectedWeekStart) { _, weekStart in
@@ -136,12 +156,29 @@ struct HomeView: View {
                         using: apiClient
                     )
                 }
+                .task(id: homeEventSearchRequestKey) {
+                    guard !showsNativeSearch, isHomeEventSearchPresented else {
+                        return
+                    }
+
+                    await homeEventSearchViewModel.load(
+                        query: homeEventSearchQuery,
+                        using: apiClient
+                    )
+                }
                 .onChange(of: searchText) { _, value in
                     guard showsNativeSearch else {
                         return
                     }
 
                     searchViewModel.prepare(query: value)
+                }
+                .onChange(of: homeEventSearchText) { _, value in
+                    guard !showsNativeSearch, isHomeEventSearchPresented else {
+                        return
+                    }
+
+                    homeEventSearchViewModel.prepare(query: value)
                 }
                 .onChange(of: isSearchFieldFocused) { _, isFocused in
                     if isFocused {
@@ -229,6 +266,11 @@ struct HomeView: View {
             }
 
             homeTopControls
+
+            if isHomeEventSearchPresented {
+                homeEventSearchOverlay
+                    .zIndex(1)
+            }
         }
         .background(feedBackground)
     }
@@ -305,6 +347,7 @@ struct HomeView: View {
             .padding(.bottom, 48)
         }
         .scrollIndicators(.hidden)
+        .scrollDismissesKeyboard(.interactively)
     }
 
     private var weekSkeletonContent: some View {
@@ -322,9 +365,81 @@ struct HomeView: View {
             .padding(.bottom, 48)
         }
         .scrollIndicators(.hidden)
+        .scrollDismissesKeyboard(.interactively)
     }
 
+    @ViewBuilder
     private var searchResultsContent: some View {
+        if searchesUsersOnly {
+            usersOnlySearchResultsContent
+        } else {
+            directorySearchResultsContent
+        }
+    }
+
+    private var usersOnlySearchResultsContent: some View {
+        ScrollView {
+            LazyVStack(alignment: .leading, spacing: 12) {
+                searchInputBar
+                    .padding(.horizontal, 16)
+
+                if normalizedSearchQuery.isEmpty {
+                    if !emptyStateRecentUsers.isEmpty {
+                        SearchSectionHeader(title: "People")
+                            .padding(.horizontal, 16)
+                            .padding(.top, 24)
+
+                        SearchUsersList(users: emptyStateRecentUsers)
+                            .padding(.horizontal, 16)
+                    } else if !searchViewModel.isLoading {
+                        ContentUnavailableView {
+                            Label("Search Users", systemImage: "person.2")
+                        } description: {
+                            Text("Search by name or username.")
+                        }
+                        .foregroundStyle(.white)
+                        .frame(maxWidth: .infinity)
+                        .padding(.top, 48)
+                    }
+                } else if searchViewModel.isLoading && searchUserResults.isEmpty {
+                    ProgressView("Searching users...")
+                        .frame(maxWidth: .infinity)
+                        .tint(.white)
+                        .foregroundStyle(.white)
+                        .padding(.top, 48)
+                } else if searchUserResults.isEmpty {
+                    ContentUnavailableView {
+                        Label("No Users Found", systemImage: "person.2")
+                    } description: {
+                        Text("Try a different name or username.")
+                    }
+                    .foregroundStyle(.white)
+                    .frame(maxWidth: .infinity)
+                    .padding(.top, 48)
+                } else {
+                    SearchSectionHeader(title: "People")
+                        .padding(.horizontal, 16)
+                        .padding(.top, 24)
+
+                    SearchUsersList(users: searchUserResults)
+                        .padding(.horizontal, 16)
+                }
+
+                if searchViewModel.isLoading && normalizedSearchQuery.isEmpty {
+                    ProgressView()
+                        .tint(.white)
+                        .frame(maxWidth: .infinity)
+                        .padding(.top, 16)
+                }
+            }
+            .frame(maxWidth: .infinity)
+            .padding(.bottom, 48)
+        }
+        .scrollIndicators(.hidden)
+        .scrollDismissesKeyboard(.interactively)
+    }
+
+    private var directorySearchResultsContent: some View {
         ScrollView {
             LazyVStack(alignment: .leading, spacing: 12) {
                 if showsNativeSearch {
@@ -490,6 +605,123 @@ struct HomeView: View {
         )
     }
 
+    private var homeEventSearchBar: some View {
+        HStack(spacing: 10) {
+            Image(systemName: "magnifyingglass")
+                .font(.system(size: 18, weight: .medium))
+                .foregroundStyle(.white.opacity(0.62))
+
+            TextField(
+                "Search events...",
+                text: $homeEventSearchText
+            )
+            .font(.system(size: 17, weight: .medium))
+            .foregroundStyle(.white)
+            .textInputAutocapitalization(.never)
+            .autocorrectionDisabled()
+            .submitLabel(.search)
+            .focused($isHomeEventSearchFocused)
+
+            if !homeEventSearchText.isEmpty {
+                Button {
+                    homeEventSearchText = ""
+                } label: {
+                    Image(systemName: "xmark.circle.fill")
+                        .font(.system(size: 18, weight: .semibold))
+                        .foregroundStyle(.white.opacity(0.48))
+                }
+                .buttonStyle(.plain)
+            }
+        }
+        .padding(.horizontal, 16)
+        .frame(height: 46)
+        .frame(maxWidth: .infinity)
+        .contentShape(Capsule())
+        .homeLiquidGlass(in: Capsule())
+    }
+
+    private var homeEventSearchOverlay: some View {
+        ZStack(alignment: .top) {
+            feedBackground
+                .ignoresSafeArea()
+
+            ScrollView {
+                LazyVStack(alignment: .leading, spacing: 16) {
+                    Text(isSearchingHomeEvents ? "Search Results" : "Upcoming Events")
+                        .font(.system(size: 20, weight: .bold))
+                        .foregroundStyle(.white)
+                        .padding(.horizontal, 16)
+
+                    homeEventSearchGridContent
+                }
+                .padding(.top, 82)
+                .padding(.bottom, 48)
+            }
+            .scrollIndicators(.hidden)
+            .scrollDismissesKeyboard(.interactively)
+
+            HStack(spacing: 10) {
+                homeEventSearchBar
+
+                FloatingGlassIconButton(systemImage: "xmark") {
+                    dismissHomeEventSearch()
+                }
+            }
+            .padding(.horizontal, 16)
+            .padding(.top, 0)
+        }
+        .transition(.opacity)
+        .onAppear {
+            Task { @MainActor in
+                try? await Task.sleep(for: .milliseconds(150))
+
+                if isHomeEventSearchPresented {
+                    isHomeEventSearchFocused = true
+                }
+            }
+        }
+    }
+
+    @ViewBuilder
+    private var homeEventSearchGridContent: some View {
+        if (homeEventSearchViewModel.isLoading || !homeEventSearchViewModel.hasLoadedResults) && homeEventSearchResults.isEmpty {
+            ProgressView("Searching events...")
+                .frame(maxWidth: .infinity)
+                .tint(.white)
+                .foregroundStyle(.white)
+                .padding(.top, 28)
+        } else if homeEventSearchResults.isEmpty {
+            ContentUnavailableView {
+                Label("No Events Found", systemImage: "magnifyingglass")
+            } description: {
+                Text("Try a different event name.")
+            }
+            .foregroundStyle(.white)
+            .frame(maxWidth: .infinity)
+            .padding(.top, 28)
+        } else {
+            LazyVGrid(
+                columns: [
+                    GridItem(.flexible(), spacing: 12),
+                    GridItem(.flexible(), spacing: 12),
+                ],
+                spacing: 12
+            ) {
+                ForEach(homeEventSearchResults) { event in
+                    NavigationLink {
+                        EventDetailView(event: event)
+                    } label: {
+                        EventCardView(event: event, cardHeight: 258)
+                            .frame(maxWidth: .infinity)
+                            .contentShape(Rectangle())
+                    }
+                    .buttonStyle(.plain)
+                }
+            }
+            .padding(.horizontal, 16)
+        }
+    }
+
     private var searchInputBar: some View {
         HStack(spacing: 12) {
             HStack(spacing: 10) {
@@ -497,7 +729,7 @@ struct HomeView: View {
                     .font(.system(size: 20, weight: .medium))
                     .foregroundStyle(.white.opacity(0.92))
 
-                TextField("", text: $searchText, prompt: Text("People, places, events...").foregroundStyle(.white.opacity(0.42)))
+                TextField("", text: $searchText, prompt: Text(searchesUsersOnly ? "Search people..." : "People, places, events...").foregroundStyle(.white.opacity(0.42)))
                     .font(.system(size: 17, weight: .medium))
                     .foregroundStyle(.white)
                     .textInputAutocapitalization(.never)
@@ -527,27 +759,29 @@ struct HomeView: View {
                 isSearchPresented = true
             }
 
-            Menu {
-                ForEach(SearchFilter.allCases) { filter in
-                    Button {
-                        selectedSearchFilter = filter
-                    } label: {
-                        if selectedSearchFilter == filter {
-                            Label(filter.title, systemImage: "checkmark")
-                        } else {
-                            Text(filter.title)
+            if !searchesUsersOnly {
+                Menu {
+                    ForEach(SearchFilter.allCases) { filter in
+                        Button {
+                            selectedSearchFilter = filter
+                        } label: {
+                            if selectedSearchFilter == filter {
+                                Label(filter.title, systemImage: "checkmark")
+                            } else {
+                                Text(filter.title)
+                            }
                         }
                     }
+                } label: {
+                    Image(systemName: "line.3.horizontal.decrease")
+                        .font(.system(size: 17, weight: .semibold))
+                        .foregroundStyle(selectedSearchFilter == .all ? Color.primary : AppTheme.accentBlue)
+                        .frame(width: 46, height: 46)
+                        .contentShape(Circle())
+                        .modifier(HomeStandaloneControlStyle(isStandalone: true))
                 }
-            } label: {
-                Image(systemName: "line.3.horizontal.decrease")
-                    .font(.system(size: 17, weight: .semibold))
-                    .foregroundStyle(selectedSearchFilter == .all ? Color.primary : AppTheme.accentBlue)
-                    .frame(width: 46, height: 46)
-                    .contentShape(Circle())
-                    .modifier(HomeStandaloneControlStyle(isStandalone: true))
+                .buttonStyle(.plain)
             }
-            .buttonStyle(.plain)
         }
     }
 
@@ -556,18 +790,13 @@ struct HomeView: View {
             HStack(alignment: .center, spacing: 10) {
                 if !isSearchPresented {
                     HomeLeadingControls(
-                        locationSelection: Binding(
-                            get: { effectiveLocationFilter },
-                            set: { selectedLocationFilter = $0 }
-                        ),
-                        locations: availableLocationFilters,
-                        hasActiveLocationSelection: effectiveLocationFilter != defaultLocationFilter,
                         selectedEventFilter: $selectedEventFilter,
                         categories: availableCategoryFilters,
                         selectedCategoryID: effectiveCategoryFilterID,
                         onSelectCategory: { filterID in
                             selectedCategoryFilterID = filterID
-                        }
+                        },
+                        onSearch: presentHomeEventSearch
                     )
                 }
 
@@ -579,24 +808,38 @@ struct HomeView: View {
             }
 
             if !isSearchPresented {
-                VStack(spacing: 1) {
-                    Text(visibleWeekRelativeTitle)
-                        .font(.system(size: 11, weight: .semibold))
-                        .foregroundStyle(.white.opacity(0.56))
-                        .lineLimit(1)
+                Menu {
+                    ForEach(availableLocationFilters) { location in
+                        Button {
+                            selectedLocationFilter = location
+                        } label: {
+                            if location == effectiveLocationFilter {
+                                Label(location.title, systemImage: "checkmark")
+                            } else {
+                                Text(location.title)
+                            }
+                        }
+                    }
+                } label: {
+                    VStack(spacing: 1) {
+                        Text(visibleWeekRelativeTitle)
+                            .font(.system(size: 11, weight: .semibold))
+                            .foregroundStyle(.white.opacity(0.56))
+                            .lineLimit(1)
 
-                    Text(visibleWeekRangeTitle)
-                        .font(.system(size: 13, weight: .semibold))
-                        .foregroundStyle(.white.opacity(0.92))
-                        .lineLimit(1)
-                        .minimumScaleFactor(0.8)
+                        Text(visibleWeekRangeTitle)
+                            .font(.system(size: 13, weight: .semibold))
+                            .foregroundStyle(.white.opacity(0.92))
+                            .lineLimit(1)
+                            .minimumScaleFactor(0.8)
+                    }
+                    .padding(.horizontal, 20)
+                    .frame(width: 156, height: 46)
+                    .contentShape(Capsule())
+                    .homeLiquidGlass(in: Capsule())
                 }
-                .padding(.horizontal, 20)
-                .frame(width: 156, height: 46)
-                .contentShape(Capsule())
-                .homeLiquidGlass(in: Capsule())
+                .buttonStyle(.plain)
                 .frame(maxWidth: .infinity)
-                .allowsHitTesting(false)
             }
         }
         .padding(.horizontal, 16)
@@ -642,6 +885,16 @@ struct HomeView: View {
             .foregroundStyle(isEnabled ? Color.primary : Color.secondary.opacity(0.55))
             .frame(width: 46, height: 46)
             .contentShape(Rectangle())
+    }
+
+    private func presentHomeEventSearch() {
+        homeEventSearchText = ""
+        isHomeEventSearchPresented = true
+    }
+
+    private func dismissHomeEventSearch() {
+        isHomeEventSearchFocused = false
+        isHomeEventSearchPresented = false
     }
 
     private var groupedEvents: [EventSection] {
@@ -699,7 +952,8 @@ struct HomeView: View {
         case -1:
             return "Last Week"
         case 0:
-            return "This Week"
+            let weekday = Self.weekCalendar.component(.weekday, from: .now)
+            return [6, 7, 1].contains(weekday) ? "This Weekend" : "This Week"
         case 1:
             return "Next Week"
         default:
@@ -750,6 +1004,32 @@ struct HomeView: View {
             }
     }
 
+    private var homeEventSearchQuery: String {
+        homeEventSearchText.trimmingCharacters(in: .whitespacesAndNewlines)
+    }
+
+    private var isSearchingHomeEvents: Bool {
+        !homeEventSearchQuery.isEmpty
+    }
+
+    private var homeEventSearchResults: [EventFeedItem] {
+        guard isSearchingHomeEvents else {
+            return Array(homeEventSearchViewModel.upcomingEvents.prefix(6))
+        }
+
+        let localMatches = currentEvents
+            .filter { $0.startAt >= .now && $0.matchesSearch(homeEventSearchQuery) }
+            .sorted(by: { $0.startAt < $1.startAt })
+
+        var seenEventIDs = Set<UUID>()
+        return (homeEventSearchViewModel.events + localMatches)
+            .filter { seenEventIDs.insert($0.id).inserted }
+    }
+
+    private var homeEventSearchRequestKey: String {
+        "\(isHomeEventSearchPresented)-\(homeEventSearchQuery)"
+    }
+
     private var currentEvents: [EventFeedItem] {
         currentResponse?.events ?? []
     }
@@ -786,7 +1066,7 @@ struct HomeView: View {
             return []
         }
 
-        let count = selectedSearchFilter == .people ? 20 : 7
+        let count = searchesUsersOnly || selectedSearchFilter == .people ? 20 : 7
         let sourceUsers = searchViewModel.recentUsers.isEmpty
             ? searchViewModel.users
             : searchViewModel.recentUsers
@@ -835,6 +1115,10 @@ struct HomeView: View {
             return searchEvents
         }
 
+        if isHomeEventSearchPresented {
+            return homeEventSearchResults
+        }
+
         return eventsForSelectedWeek
     }
 
@@ -858,18 +1142,12 @@ struct HomeView: View {
             lhs.title.localizedCaseInsensitiveCompare(rhs.title) == .orderedAscending
         }
 
-        if let currentUserLocation {
-            let userFilter = HomeLocationFilter.city(
-                city: currentUserLocation.city,
-                state: currentUserLocation.state
-            )
-
-            if !cityFilters.contains(userFilter) {
-                cityFilters.insert(userFilter, at: 0)
-            }
+        let bostonFilter = HomeLocationFilter.city(city: "Boston", state: "MA")
+        if !cityFilters.contains(bostonFilter) {
+            cityFilters.append(bostonFilter)
         }
 
-        return [.all] + cityFilters
+        return cityFilters
     }
 
     private var availableCategoryFilters: [HomeCategoryFilter] {
@@ -926,7 +1204,7 @@ struct HomeView: View {
     }
 
     private var defaultLocationFilter: HomeLocationFilter {
-        let cityFilters = availableLocationFilters.filter { $0 != .all }
+        let cityFilters = availableLocationFilters
 
         if let currentUserLocation {
             let userFilter = HomeLocationFilter.city(
@@ -934,7 +1212,9 @@ struct HomeView: View {
                 state: currentUserLocation.state
             )
 
-            return userFilter
+            if cityFilters.contains(userFilter) {
+                return userFilter
+            }
         }
 
         return cityFilters.first { filter in
@@ -943,7 +1223,7 @@ struct HomeView: View {
             }
 
             return city.localizedCaseInsensitiveCompare("Boston") == .orderedSame
-        } ?? cityFilters.first ?? .all
+        } ?? .city(city: "Boston", state: "MA")
     }
 
     private var isViewingFutureWeek: Bool {
@@ -1231,59 +1511,15 @@ private struct HomeCategoryFilter: Identifiable, Hashable {
     let count: Int
 }
 
-private struct HomeLocationFilterDropdown: View {
-    @Binding var selection: HomeLocationFilter
-    let locations: [HomeLocationFilter]
-    let hasActiveSelection: Bool
-    var useCombinedStyle = false
-
-    var body: some View {
-        Menu {
-            ForEach(locations) { location in
-                Button {
-                    selection = location
-                } label: {
-                    if location == selection {
-                        Label(location.title, systemImage: "checkmark")
-                    } else {
-                        Text(location.title)
-                    }
-                }
-            }
-        } label: {
-            labelContent
-        }
-        .buttonStyle(.plain)
-    }
-
-    private var labelContent: some View {
-        Image(systemName: "map")
-            .font(.system(size: 18, weight: .semibold))
-            .foregroundStyle(hasActiveSelection ? AppTheme.accentBlue : .primary)
-            .frame(width: 46, height: 46)
-            .contentShape(Rectangle())
-            .modifier(HomeStandaloneControlStyle(isStandalone: !useCombinedStyle))
-    }
-}
-
 private struct HomeLeadingControls: View {
-    @Binding var locationSelection: HomeLocationFilter
-    let locations: [HomeLocationFilter]
-    let hasActiveLocationSelection: Bool
     @Binding var selectedEventFilter: HomeEventFilter
     let categories: [HomeCategoryFilter]
     let selectedCategoryID: String?
     let onSelectCategory: (String?) -> Void
+    let onSearch: () -> Void
 
     var body: some View {
         HStack(spacing: 0) {
-            HomeLocationFilterDropdown(
-                selection: $locationSelection,
-                locations: locations,
-                hasActiveSelection: hasActiveLocationSelection,
-                useCombinedStyle: true
-            )
-
             HomeFiltersMenuButton(
                 selectedEventFilter: $selectedEventFilter,
                 categories: categories,
@@ -1291,6 +1527,15 @@ private struct HomeLeadingControls: View {
                 onSelectCategory: onSelectCategory,
                 useCombinedStyle: true
             )
+
+            Button(action: onSearch) {
+                Image(systemName: "magnifyingglass")
+                    .font(.system(size: 18, weight: .semibold))
+                    .foregroundStyle(.primary)
+                    .frame(width: 46, height: 46)
+                    .contentShape(Rectangle())
+            }
+            .buttonStyle(.plain)
         }
         .frame(height: 46)
         .clipShape(Capsule())
@@ -1544,6 +1789,10 @@ private struct HomeRecentActivityRow: View {
                     .frame(width: 32, height: 32)
             }
             .buttonStyle(.plain)
+        }
+        .contentShape(Rectangle())
+        .onTapGesture {
+            isRequestsPagePresented = true
         }
     }
 }
@@ -1836,6 +2085,14 @@ final class HomeSearchDirectoryViewModel: ObservableObject {
         phase == .loading
     }
 
+    var hasLoadedResults: Bool {
+        if case .loaded = phase {
+            return true
+        }
+
+        return false
+    }
+
     private func apply(_ response: MobileSearchResponse) {
         users = response.users
         recentUsers = response.recentUsers
@@ -1861,7 +2118,11 @@ final class HomeSearchDirectoryViewModel: ObservableObject {
         }
     }
 
-    func load(query: String, using apiClient: APIClient) async {
+    func load(
+        query: String,
+        using apiClient: APIClient,
+        forceRefresh: Bool = false
+    ) async {
         let normalizedQuery = query.trimmingCharacters(in: .whitespacesAndNewlines)
 
         activeQuery = normalizedQuery
@@ -1870,9 +2131,9 @@ final class HomeSearchDirectoryViewModel: ObservableObject {
         do {
             let response: MobileSearchResponse
 
-            if normalizedQuery.isEmpty, let cachedResponse = Self.cachedResponse {
+            if !forceRefresh, normalizedQuery.isEmpty, let cachedResponse = Self.cachedResponse {
                 response = cachedResponse
-            } else if normalizedQuery.isEmpty, let inFlightLoad = Self.inFlightLoad {
+            } else if !forceRefresh, normalizedQuery.isEmpty, let inFlightLoad = Self.inFlightLoad {
                 response = try await inFlightLoad.value
             } else {
                 let loadTask = Task {

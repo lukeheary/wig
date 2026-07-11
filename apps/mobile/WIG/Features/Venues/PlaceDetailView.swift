@@ -219,6 +219,12 @@ struct PlaceDetailView: View {
                 await viewModel.load(slug: place.slug, using: apiClient, forceRefresh: true)
             }
         }
+        .onReceive(NotificationCenter.default.publisher(for: .appDataDidChange)) { _ in
+            Task {
+                PlaceDetailViewModel.invalidateCache(for: place.slug)
+                await viewModel.load(slug: place.slug, using: apiClient, forceRefresh: true)
+            }
+        }
     }
 
     private var leadingTopControls: some View {
@@ -955,6 +961,7 @@ private enum PlaceEventGrouper {
     private static func label(for event: EventFeedItem, mode: PlaceEventsTab) -> String {
         var calendar = Calendar(identifier: .gregorian)
         calendar.timeZone = event.displayTimeZone
+        calendar.firstWeekday = 2
         let now = Date()
         let currentWeekStart = calendar.dateInterval(of: .weekOfYear, for: now)?.start ?? now
         let eventWeekStart = calendar.dateInterval(of: .weekOfYear, for: event.startAt)?.start ?? event.startAt

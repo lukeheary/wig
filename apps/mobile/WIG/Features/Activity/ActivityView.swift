@@ -6,6 +6,7 @@ struct ActivityView: View {
 
     @Environment(\.apiClient) private var apiClient
     @EnvironmentObject private var appSession: AppSession
+    @EnvironmentObject private var requestStore: ActivityRequestStore
     @StateObject private var viewModel = ActivityViewModel()
     @State private var selectedFilter: ActivityFeedFilter = .upcoming
     @State private var selectedCityFilter: ActivityCityFilter?
@@ -40,10 +41,10 @@ struct ActivityView: View {
                         } else {
                             ActivityLeadingControls(
                                 citySelection: Binding(
-                                    get: { .all },
+                                    get: { .city(city: "Boston", state: "MA") },
                                     set: { selectedCityFilter = $0 }
                                 ),
-                                cities: [.all],
+                                cities: [.city(city: "Boston", state: "MA")],
                                 hasActiveCitySelection: false,
                                 selection: $selectedFilter
                             )
@@ -70,6 +71,17 @@ struct ActivityView: View {
                     resetFilters()
                 }
                 .onReceive(NotificationCenter.default.publisher(for: .friendRequestDidChange)) { _ in
+                    Task {
+                        await viewModel.load(using: apiClient, forceRefresh: true)
+
+                        // The settled activity can be written just after the request
+                        // response, so make one short follow-up refresh to surface it
+                        // in Past without requiring an app restart.
+                        try? await Task.sleep(for: .milliseconds(350))
+                        await viewModel.load(using: apiClient, forceRefresh: true)
+                    }
+                }
+                .onReceive(NotificationCenter.default.publisher(for: .appDataDidChange)) { _ in
                     Task {
                         await viewModel.load(using: apiClient, forceRefresh: true)
                     }
@@ -119,6 +131,14 @@ struct ActivityView: View {
         case .loaded(let response):
             let activities = effectiveCityFilter(for: response).filtered(
                 selectedFilter.filtered(response.activities)
+                    .filter { activity in
+                        // A locally resolved request is replaced by a settled server
+                        // activity item. Do not leave the original request in Upcoming
+                        // during that short transition.
+                        !(selectedFilter == .upcoming &&
+                            activity.type.isActionableRequest &&
+                            requestStore.response(for: activity.id) != nil)
+                    }
             )
             let visibleActivities = Array(activities.prefix(visibleActivityCount))
 
@@ -225,10 +245,10 @@ struct ActivityView: View {
 
     private var availableCityFilters: [ActivityCityFilter] {
         guard case .loaded(let response) = viewModel.state else {
-            return [.all]
+            return [.city(city: "Boston", state: "MA")]
         }
 
-        let cities = response.activities.reduce(into: [ActivityCityFilter]()) { filters, activity in
+        var cities = response.activities.reduce(into: [ActivityCityFilter]()) { filters, activity in
             guard let event = activity.event else {
                 return
             }
@@ -248,18 +268,12 @@ struct ActivityView: View {
             lhs.title.localizedCaseInsensitiveCompare(rhs.title) == .orderedAscending
         }
 
-        if let currentUserLocation = response.currentUserLocation {
-            let userFilter = ActivityCityFilter.city(
-                city: currentUserLocation.city,
-                state: currentUserLocation.state
-            )
-
-            if !cities.contains(userFilter) {
-                return [userFilter, .all] + cities
-            }
+        let bostonFilter = ActivityCityFilter.city(city: "Boston", state: "MA")
+        if !cities.contains(bostonFilter) {
+            cities.append(bostonFilter)
         }
 
-        return [.all] + cities
+        return cities
     }
 
     private func effectiveCityFilter(for response: ActivityFeedResponse) -> ActivityCityFilter {
@@ -282,11 +296,26 @@ struct ActivityView: View {
     }
 
     private func defaultCityFilter(for response: ActivityFeedResponse) -> ActivityCityFilter {
+        let cities = availableCityFilters
+
         if let currentUserLocation = response.currentUserLocation {
-            return .city(city: currentUserLocation.city, state: currentUserLocation.state)
+            let userFilter = ActivityCityFilter.city(
+                city: currentUserLocation.city,
+                state: currentUserLocation.state
+            )
+
+            if cities.contains(userFilter) {
+                return userFilter
+            }
         }
 
-        return availableCityFilters.first { $0 != .all } ?? .all
+        return cities.first { filter in
+            guard case .city(let city, _) = filter else {
+                return false
+            }
+
+            return city.localizedCaseInsensitiveCompare("Boston") == .orderedSame
+        } ?? .city(city: "Boston", state: "MA")
     }
 
     private func respondToRequest(
@@ -307,8 +336,10 @@ struct ActivityView: View {
                 return
             }
 
-            // Don't reload here — the store records the response and keeps the
-            // item visible with settled text. A pull-to-refresh will clean it up.
+            // The API replaces the actionable request with a settled activity item,
+            // which belongs in Past. Refresh immediately so it does not linger in
+            // Upcoming until the next app launch.
+            await viewModel.load(using: apiClient, forceRefresh: true)
         } catch {
             activityActionErrorMessage = error.localizedDescription
         }
@@ -438,15 +469,15 @@ private struct ActivityLeadingControls: View {
 
     var body: some View {
         HStack(spacing: 0) {
+            ActivityFilterDropdown(
+                selection: $selection,
+                useCombinedStyle: true
+            )
+
             ActivityCityFilterDropdown(
                 selection: $citySelection,
                 cities: cities,
                 hasActiveSelection: hasActiveCitySelection,
-                useCombinedStyle: true
-            )
-
-            ActivityFilterDropdown(
-                selection: $selection,
                 useCombinedStyle: true
             )
         }
@@ -730,9 +761,7 @@ private struct ActivityRowView: View {
                     .font(.system(size: 14))
                     .lineSpacing(3)
                     .onTapGesture {
-                        if requestStore.response(for: activity.id) == nil {
-                            selectedUserProfile = SelectedUserProfile(id: activity.actorUserID)
-                        }
+                        selectedUserProfile = SelectedUserProfile(id: activity.actorUserID)
                     }
 
                 Text(
@@ -764,12 +793,26 @@ private struct ActivityRowView: View {
         let requestType = activity.type == .partnerRequestReceived ? "partner" : "friend"
         if let settled = requestStore.response(for: activity.id) {
             let verb = settled == .accept ? "accepted" : "declined"
-            Text("You \(verb) a \(requestType) request from \(Text(activity.actorName).fontWeight(.medium)).")
-                .foregroundColor(.white.opacity(0.62))
+            (
+                Text("You \(verb) a \(requestType) request from ")
+                    .foregroundColor(.white.opacity(0.62))
+                + Text(activity.actorName)
+                    .fontWeight(.medium)
+                    .foregroundColor(.white)
+                + Text(".")
+                    .foregroundColor(.white.opacity(0.62))
+            )
         } else if activity.type == .friendRequestAccepted || activity.type == .partnerRequestAccepted {
             let acceptedType = activity.type == .partnerRequestAccepted ? "partner" : "friend"
-            Text("You accepted a \(acceptedType) request from \(Text(activity.actorName).fontWeight(.medium)).")
-                .foregroundColor(.white.opacity(0.62))
+            (
+                Text("You accepted a \(acceptedType) request from ")
+                    .foregroundColor(.white.opacity(0.62))
+                + Text(activity.actorName)
+                    .fontWeight(.medium)
+                    .foregroundColor(.white)
+                + Text(".")
+                    .foregroundColor(.white.opacity(0.62))
+            )
         } else {
             Text("\(Text(activity.actorName).fontWeight(.medium).foregroundColor(.white)) sent you a \(requestType) request.")
                 .foregroundColor(.white.opacity(0.62))
@@ -1155,7 +1198,7 @@ struct ActivityAvatarView: View {
     }
 }
 
-enum ActivityRequestResponse {
+enum ActivityRequestResponse: Equatable {
     case accept
     case decline
 }

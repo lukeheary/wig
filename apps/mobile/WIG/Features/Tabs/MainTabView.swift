@@ -1,5 +1,6 @@
 import ClerkKit
 import SwiftUI
+import UserNotifications
 
 struct MainTabView: View {
     @Environment(Clerk.self) private var clerk
@@ -13,6 +14,7 @@ struct MainTabView: View {
     @State private var venuesResetTrigger = 0
     @State private var activityResetTrigger = 0
     @State private var profileResetTrigger = 0
+    @State private var pendingFriendRequestCount = 0
     @State private var isEventCreationSheetPresented = false
     @State private var presentedPlaceCreationType: PlaceListItem.PlaceType?
 
@@ -36,7 +38,7 @@ struct MainTabView: View {
                 .ignoresSafeArea()
 
             TabView(selection: tabSelection) {
-                Tab("Home", systemImage: "house", value: AppTab.home) {
+                Tab("", systemImage: "house", value: AppTab.home) {
                     HomeView(
                         resetToCurrentWeekTrigger: homeResetTrigger,
                         onShowActivity: {
@@ -45,22 +47,27 @@ struct MainTabView: View {
                     )
                 }
 
-                Tab("Places", systemImage: "building.2", value: AppTab.venues) {
+                Tab("", systemImage: "building.2", value: AppTab.venues) {
                     VenuesView(resetFiltersTrigger: venuesResetTrigger)
                 }
 
                 if isAuthenticated {
-                    Tab("Activity", systemImage: "bolt", value: AppTab.activity) {
+                    Tab("", systemImage: "bolt", value: AppTab.activity) {
                         ActivityView(resetFiltersTrigger: activityResetTrigger)
                     }
 
-                    Tab("Profile", systemImage: "person.crop.circle", value: AppTab.profile) {
+                    Tab("", systemImage: "magnifyingglass", value: AppTab.search) {
+                        searchHomeView
+                    }
+
+                    Tab("", systemImage: "person.crop.circle", value: AppTab.profile) {
                         ProfileView(resetFiltersTrigger: profileResetTrigger)
                     }
-                }
-
-                Tab("Search", systemImage: "magnifyingglass", value: AppTab.search, role: .search) {
-                    searchHomeView
+                    .badge(friendRequestTabBadge)
+                } else {
+                    Tab("", systemImage: "magnifyingglass", value: AppTab.search) {
+                        searchHomeView
+                    }
                 }
             }
 
@@ -85,6 +92,8 @@ struct MainTabView: View {
         .onChange(of: isAuthenticated) { _, isAuthenticated in
             if !isAuthenticated {
                 appSession.updateAdminStatus(false)
+                pendingFriendRequestCount = 0
+                syncAppIconBadge()
             }
 
             guard !isAuthenticated, selectedTab.requiresAuthentication else {
@@ -96,10 +105,22 @@ struct MainTabView: View {
         }
         .task(id: preloadTaskID) {
             guard isAuthenticated else {
+                pendingFriendRequestCount = 0
+                syncAppIconBadge()
                 return
             }
 
             await preloadAuthenticatedTabs()
+        }
+        .onReceive(NotificationCenter.default.publisher(for: .friendRequestDidChange)) { _ in
+            Task {
+                await refreshFriendRequestBadge()
+            }
+        }
+        .onReceive(NotificationCenter.default.publisher(for: .appDataDidChange)) { _ in
+            Task {
+                await refreshFriendRequestBadge()
+            }
         }
         .sheet(isPresented: $isAuthSheetPresented) {
             WIGAuthSheetView(isDismissable: true)
@@ -131,35 +152,43 @@ struct MainTabView: View {
                     }
                 )
                     .tabItem {
-                        Label("Home", systemImage: "house")
+                        Image(systemName: "house")
                     }
                     .tag(AppTab.home)
 
                 VenuesView(resetFiltersTrigger: venuesResetTrigger)
                     .tabItem {
-                        Label("Places", systemImage: "building.2")
+                        Image(systemName: "building.2")
                     }
                     .tag(AppTab.venues)
 
                 if isAuthenticated {
                     ActivityView(resetFiltersTrigger: activityResetTrigger)
                         .tabItem {
-                            Label("Activity", systemImage: "bolt")
+                            Image(systemName: "bolt")
                         }
                         .tag(AppTab.activity)
 
+                    searchHomeView
+                        .tabItem {
+                            Image(systemName: "magnifyingglass")
+                        }
+                        .tag(AppTab.search)
+
                     ProfileView(resetFiltersTrigger: profileResetTrigger)
                         .tabItem {
-                            Label("Profile", systemImage: "person.crop.circle")
+                            Image(systemName: "person.crop.circle")
                         }
                         .tag(AppTab.profile)
+                        .badge(friendRequestLegacyBadge)
+                        .badgeProminence(.decreased)
+                } else {
+                    searchHomeView
+                        .tabItem {
+                            Image(systemName: "magnifyingglass")
+                        }
+                        .tag(AppTab.search)
                 }
-
-                searchHomeView
-                    .tabItem {
-                        Label("Search", systemImage: "magnifyingglass")
-                    }
-                    .tag(AppTab.search)
             }
 
             creationMenuButton
@@ -183,6 +212,8 @@ struct MainTabView: View {
         .onChange(of: isAuthenticated) { _, isAuthenticated in
             if !isAuthenticated {
                 appSession.updateAdminStatus(false)
+                pendingFriendRequestCount = 0
+                syncAppIconBadge()
             }
 
             guard !isAuthenticated, selectedTab.requiresAuthentication else {
@@ -194,10 +225,17 @@ struct MainTabView: View {
         }
         .task(id: preloadTaskID) {
             guard isAuthenticated else {
+                pendingFriendRequestCount = 0
+                syncAppIconBadge()
                 return
             }
 
             await preloadAuthenticatedTabs()
+        }
+        .onReceive(NotificationCenter.default.publisher(for: .friendRequestDidChange)) { _ in
+            Task {
+                await refreshFriendRequestBadge()
+            }
         }
         .sheet(isPresented: $isAuthSheetPresented) {
             WIGAuthSheetView(isDismissable: true)
@@ -219,6 +257,7 @@ struct MainTabView: View {
     private var searchHomeView: some View {
         HomeView(
             showsNativeSearch: true,
+            searchesUsersOnly: true,
             onShowActivity: {
                 showActivityOrAuth()
             },
@@ -306,6 +345,34 @@ struct MainTabView: View {
         async let categories: Void = MobileCategoryStore.preload(using: apiClient)
 
         _ = await (adminStatus, venues, activity, profile, search, categories)
+        pendingFriendRequestCount = ProfileViewModel.pendingFriendRequestCount
+        syncAppIconBadge()
+    }
+
+    private var friendRequestTabBadge: Text? {
+        pendingFriendRequestCount > 0 ? Text("\(pendingFriendRequestCount)") : nil
+    }
+
+    private var friendRequestLegacyBadge: String? {
+        pendingFriendRequestCount > 0 ? "\(pendingFriendRequestCount)" : nil
+    }
+
+    private func refreshFriendRequestBadge() async {
+        do {
+            let response = try await apiClient.send(APIClient.mobileFriends())
+            pendingFriendRequestCount = response.requestCount
+            syncAppIconBadge()
+        } catch {
+            // Keep the last known badge state if a refresh fails.
+        }
+    }
+
+    private func syncAppIconBadge() {
+        let count = pendingFriendRequestCount
+
+        Task {
+            try? await UNUserNotificationCenter.current().setBadgeCount(count)
+        }
     }
 
     private func loadAdminStatus() async {

@@ -347,7 +347,7 @@ struct APIClient: Sendable {
         )
     }
 
-    static func mobileSearch(query: String, limit: Int = 12) -> Endpoint<MobileSearchResponse> {
+    static func mobileSearch(query: String, limit: Int = 20) -> Endpoint<MobileSearchResponse> {
         Endpoint(
             path: "/api/mobile/search",
             queryItems: [
@@ -783,6 +783,21 @@ struct APIClient: Sendable {
         )
     }
 
+    static func sendMobileEventRSVPNotification(
+        eventID: UUID,
+        status: EventRSVPStatus
+    ) throws -> Endpoint<EmptyResponse> {
+        Endpoint(
+            path: "/api/mobile/events/\(eventID.uuidString)/rsvp",
+            method: .post,
+            body: try JSONEncoder().encode(
+                EventRSVPNotificationRequest(status: status)
+            ),
+            requiresAuthentication: false,
+            includesAuthenticationIfAvailable: true
+        )
+    }
+
     static func mobileMyPartner() -> Endpoint<MobilePartnerResponse> {
         Endpoint(
             path: "/api/mobile/partners/me",
@@ -851,7 +866,9 @@ struct APIClient: Sendable {
             throw APIError.requestFailed(statusCode: httpResponse.statusCode, payload: data)
         }
 
-        return try decoder.decode(Response.self, from: data)
+        let decodedResponse = try decoder.decode(Response.self, from: data)
+        notifyDataChange(after: endpoint)
+        return decodedResponse
     }
 
     func send(_ endpoint: Endpoint<EmptyResponse>) async throws {
@@ -865,6 +882,16 @@ struct APIClient: Sendable {
         guard 200 ..< 300 ~= httpResponse.statusCode else {
             throw APIError.requestFailed(statusCode: httpResponse.statusCode, payload: Data())
         }
+
+        notifyDataChange(after: endpoint)
+    }
+
+    private func notifyDataChange<Response>(after endpoint: Endpoint<Response>) {
+        guard endpoint.method != .get else {
+            return
+        }
+
+        NotificationCenter.default.post(name: .appDataDidChange, object: nil)
     }
 
     private func makeRequest<Response>(for endpoint: Endpoint<Response>) async throws -> URLRequest {
@@ -1152,6 +1179,11 @@ private struct EventRSVPUpdateRequest: Encodable {
     let notGoingReason: EventRSVPDeclineReason?
     let includePartner: Bool
     let notifyFriends: Bool
+}
+
+private struct EventRSVPNotificationRequest: Encodable {
+    let status: EventRSVPStatus
+    let notificationOnly = true
 }
 
 struct MobilePartnerResponse: Decodable, Hashable, Sendable {

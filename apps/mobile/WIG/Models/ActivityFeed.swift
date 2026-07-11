@@ -109,6 +109,7 @@ struct ActivityEventSummary: Decodable, Identifiable, Hashable, Sendable {
     let userRsvpNotGoingReason: EventRSVPDeclineReason?
     let friendsGoing: [EventSocialRSVP]
     let friendsInterested: [EventSocialRSVP]
+    let friendsNotGoing: [EventSocialRSVP]
     let venue: PlaceListItem?
 
     enum CodingKeys: String, CodingKey {
@@ -140,6 +141,7 @@ struct ActivityEventSummary: Decodable, Identifiable, Hashable, Sendable {
         case userRsvpNotGoingReason
         case friendsGoing
         case friendsInterested
+        case friendsNotGoing
         case venue
     }
 
@@ -182,7 +184,8 @@ struct ActivityEventSummary: Decodable, Identifiable, Hashable, Sendable {
             userRsvpStatus: userRsvpStatus,
             userRsvpNotGoingReason: userRsvpNotGoingReason,
             friendsGoing: friendsGoing,
-            friendsInterested: friendsInterested
+            friendsInterested: friendsInterested,
+            friendsNotGoing: friendsNotGoing
         )
     }
 }
@@ -242,6 +245,7 @@ extension ActivityEventSummary {
         )
         friendsGoing = try container.decodeIfPresent([EventSocialRSVP].self, forKey: .friendsGoing) ?? []
         friendsInterested = try container.decodeIfPresent([EventSocialRSVP].self, forKey: .friendsInterested) ?? []
+        friendsNotGoing = try container.decodeIfPresent([EventSocialRSVP].self, forKey: .friendsNotGoing) ?? []
         venue = try container.decodeIfPresent(PlaceListItem.self, forKey: .venue)
     }
 }

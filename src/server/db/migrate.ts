@@ -2,14 +2,17 @@ import { migrate } from "drizzle-orm/neon-serverless/migrator";
 import { drizzle } from "drizzle-orm/neon-serverless";
 import { Pool, neonConfig } from "@neondatabase/serverless";
 import * as dotenv from "dotenv";
-import ws from "ws";
+import { createRequire } from "node:module";
 import { readMigrationFiles } from "drizzle-orm/migrator";
+
+const require = createRequire(import.meta.url);
+const WebSocket = require("ws") as typeof import("ws");
 
 // Load environment variables
 dotenv.config({ path: ".env.local" });
 
 // Configure WebSocket for Node.js environment
-neonConfig.webSocketConstructor = ws;
+neonConfig.webSocketConstructor = WebSocket;
 
 if (!process.env.DATABASE_URL) {
   throw new Error("DATABASE_URL environment variable is not set");

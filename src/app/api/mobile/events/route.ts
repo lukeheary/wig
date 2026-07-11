@@ -286,7 +286,7 @@ export async function GET(request: Request) {
     Array<{
       eventId: string;
       userId: string;
-      status: "going" | "interested";
+      status: "going" | "interested" | "not_going";
       user: {
         id: string;
         firstName: string | null;
@@ -311,7 +311,7 @@ export async function GET(request: Request) {
     rsvp: {
       eventId: string;
       userId: string;
-      status: "going" | "interested";
+      status: "going" | "interested" | "not_going";
       user: {
         id: string;
         firstName: string | null;
@@ -363,7 +363,7 @@ export async function GET(request: Request) {
           where: and(
             inArray(eventRsvps.eventId, eventIds),
             eq(eventRsvps.partnerRsvpByUserId, userId),
-            inArray(eventRsvps.status, ["going", "interested"])
+            inArray(eventRsvps.status, ["going", "interested", "not_going"])
           ),
           with: {
             user: true,
@@ -390,7 +390,7 @@ export async function GET(request: Request) {
             where: and(
               inArray(eventRsvps.eventId, eventIds),
               inArray(eventRsvps.userId, friendIds),
-              inArray(eventRsvps.status, ["going", "interested"])
+              inArray(eventRsvps.status, ["going", "interested", "not_going"])
             ),
             with: {
               user: true,
@@ -410,7 +410,7 @@ export async function GET(request: Request) {
       ...mirroredPartnerRsvps,
       ...friendRsvps,
     ]) {
-      if (!rsvp.user || (rsvp.status !== "going" && rsvp.status !== "interested")) {
+      if (!rsvp.user || (rsvp.status !== "going" && rsvp.status !== "interested" && rsvp.status !== "not_going")) {
         continue;
       }
 
@@ -498,6 +498,7 @@ export async function GET(request: Request) {
       friendsInterested: socialRsvps.filter(
         (rsvp) => rsvp.status === "interested"
       ),
+      friendsNotGoing: socialRsvps.filter((rsvp) => rsvp.status === "not_going"),
     };
   });
 

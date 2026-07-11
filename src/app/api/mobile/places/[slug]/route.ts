@@ -105,7 +105,7 @@ function mapMobileEvent(
     notGoingReason: string | null;
   } | null,
   socialRsvps: Array<{
-    status: "going" | "interested";
+    status: "going" | "interested" | "not_going";
     user: {
       id: string;
       firstName: string | null;
@@ -153,6 +153,7 @@ function mapMobileEvent(
     userRsvpNotGoingReason: currentUserRsvp?.notGoingReason ?? null,
     friendsGoing: socialRsvps.filter((rsvp) => rsvp.status === "going"),
     friendsInterested: socialRsvps.filter((rsvp) => rsvp.status === "interested"),
+    friendsNotGoing: socialRsvps.filter((rsvp) => rsvp.status === "not_going"),
   };
 }
 
@@ -232,7 +233,7 @@ export async function GET(
     Array<{
       eventId: string;
       userId: string;
-      status: "going" | "interested";
+      status: "going" | "interested" | "not_going";
       user: {
         id: string;
         firstName: string | null;
@@ -274,7 +275,7 @@ export async function GET(
     rsvp: {
       eventId: string;
       userId: string;
-      status: "going" | "interested";
+      status: "going" | "interested" | "not_going";
       user: {
         id: string;
         firstName: string | null;
@@ -326,7 +327,7 @@ export async function GET(
           where: and(
             inArray(eventRsvps.eventId, eventIds),
             eq(eventRsvps.partnerRsvpByUserId, userId),
-            inArray(eventRsvps.status, ["going", "interested"])
+            inArray(eventRsvps.status, ["going", "interested", "not_going"])
           ),
           with: {
             user: true,
@@ -353,7 +354,7 @@ export async function GET(
             where: and(
               inArray(eventRsvps.eventId, eventIds),
               inArray(eventRsvps.userId, friendIds),
-              inArray(eventRsvps.status, ["going", "interested"])
+              inArray(eventRsvps.status, ["going", "interested", "not_going"])
             ),
             with: {
               user: true,
@@ -366,7 +367,7 @@ export async function GET(
       ...mirroredPartnerRsvps,
       ...friendRsvps,
     ]) {
-      if (!rsvp.user || (rsvp.status !== "going" && rsvp.status !== "interested")) {
+      if (!rsvp.user || (rsvp.status !== "going" && rsvp.status !== "interested" && rsvp.status !== "not_going")) {
         continue;
       }
 

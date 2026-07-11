@@ -27,6 +27,10 @@ struct EventDetailView: View {
     @State private var currentUserSocialUser: EventSocialUser?
     @State private var isAuthSheetPresented = false
     @State private var isTabBarHidden = true
+    @State private var rsvpConfirmation: RSVPConfirmation?
+    @State private var rsvpConfirmationToken = UUID()
+    @State private var isRSVPConfirmationVisible = false
+    @State private var pendingRSVPNotificationToken = UUID()
 
     init(event: EventFeedItem) {
         self.event = event
@@ -121,28 +125,53 @@ struct EventDetailView: View {
         .toolbar(isTabBarHidden ? .hidden : .visible, for: .tabBar)
         .overlay {
             if isAuthenticated {
-                ZStack(alignment: .bottom) {
-                    if isRSVPMenuExpanded {
-                        Color.clear
-                            .contentShape(Rectangle())
-                            .ignoresSafeArea()
-                            .onTapGesture {
-                                closeRSVPMenu()
-                            }
-                            .transition(.opacity)
-                    }
+                ZStack {
+                    ZStack(alignment: .bottom) {
+                        if isRSVPMenuExpanded {
+                            Color.clear
+                                .contentShape(Rectangle())
+                                .ignoresSafeArea()
+                                .onTapGesture {
+                                    closeRSVPMenu()
+                                }
+                                .transition(.opacity)
+                        }
 
-                    expandedRSVPMenu
-                        .frame(maxWidth: .infinity)
-                        .eventDetailLiquidGlass(in: RoundedRectangle(cornerRadius: 30, style: .continuous))
-                        .padding(.horizontal, 16)
-                        .padding(.bottom, 12)
-                        .opacity(isRSVPMenuExpanded ? 1 : 0)
-                        .offset(y: isRSVPMenuExpanded ? 0 : 360)
-                        .allowsHitTesting(isRSVPMenuHitTestingEnabled)
+                        expandedRSVPMenu
+                            .frame(maxWidth: .infinity)
+                            .eventDetailLiquidGlass(in: RoundedRectangle(cornerRadius: 30, style: .continuous))
+                            .padding(.horizontal, 16)
+                            .padding(.bottom, 12)
+                            .opacity(isRSVPMenuExpanded ? 1 : 0)
+                            .offset(y: isRSVPMenuExpanded ? 0 : 360)
+                            .allowsHitTesting(isRSVPMenuHitTestingEnabled)
+                    }
+                    .allowsHitTesting(isRSVPMenuHitTestingEnabled)
+
+                    if let rsvpConfirmation {
+                        VStack {
+                            HStack {
+                                Spacer(minLength: 0)
+
+                                RSVPConfirmationToast(
+                                    confirmation: rsvpConfirmation,
+                                    onUndo: rsvpConfirmation.allowsUndo ? undoPendingRSVP : nil
+                                )
+                                    .fixedSize(horizontal: true, vertical: false)
+
+                                Spacer(minLength: 0)
+                            }
+                            .padding(.top, 10)
+
+                            Spacer(minLength: 0)
+                        }
+                        .offset(y: isRSVPConfirmationVisible ? 0 : -110)
+                        .opacity(isRSVPConfirmationVisible ? 1 : 0)
+                        .scaleEffect(isRSVPConfirmationVisible ? 1 : 0.94)
+                    }
                 }
-                .allowsHitTesting(isRSVPMenuHitTestingEnabled)
                 .animation(.spring(response: 0.32, dampingFraction: 0.82), value: isRSVPMenuExpanded)
+                .animation(.spring(response: 0.35, dampingFraction: 0.60), value: rsvpConfirmation)
             }
         }
         .task(id: "\(currentEvent.id.uuidString)-\(isAuthenticated)") {
@@ -632,7 +661,9 @@ struct EventDetailView: View {
     private var primaryRSVPMenuContent: some View {
         VStack(alignment: .leading, spacing: 0) {
             VStack(spacing: 2) {
-                ForEach(RSVPMenuOption.allCases) { option in
+                ForEach(RSVPMenuOption.allCases.filter { option in
+                    option != .notGoing || hasFriendGoingOrInterested
+                }) { option in
                     RSVPMenuOptionButton(
                         option: option,
                         isSelected: rsvpViewModel.status == option.status,
@@ -780,13 +811,13 @@ struct EventDetailView: View {
 
                 NavigationLink {
                     EventRSVPListView(
-                        goingAttendees: friendGoingAttendees,
-                        interestedAttendees: friendInterestedAttendees,
-                        notGoingAttendees: []
+                        goingAttendees: goingAttendees,
+                        interestedAttendees: interestedAttendees,
+                        notGoingAttendees: notGoingAttendees
                     )
                 } label: {
                     EventRSVPFriendsRow(
-                        attendees: rsvpSummaryAttendees
+                        attendees: friendRSVPPreviewAttendees
                     )
                 }
                 .buttonStyle(.plain)
@@ -810,6 +841,7 @@ struct EventDetailView: View {
 
     private func selectRSVP(_ status: EventRSVPStatus) {
         UIImpactFeedbackGenerator(style: .light).impactOccurred()
+        cancelPendingRSVPNotification()
 
         if status == .notGoing {
             withAnimation(.spring(response: 0.28, dampingFraction: 0.86)) {
@@ -821,15 +853,21 @@ struct EventDetailView: View {
 
         closeRSVPMenu()
 
+        let shouldDelayFriendNotification = rsvpViewModel.notifyFriends
+
         Task {
             if await rsvpViewModel.toggle(
                 status,
                 eventID: currentEvent.id,
                 using: apiClient,
                 includePartner: partnerRelationship?.isAccepted == true && rsvpViewModel.includePartner,
-                notifyFriends: rsvpViewModel.notifyFriends
+                notifyFriends: rsvpViewModel.notifyFriends,
+                sendFriendNotifications: !shouldDelayFriendNotification
             ) {
-                handleSuccessfulRSVPChange()
+                handleSuccessfulRSVPChange(showConfirmation: true, allowsUndo: shouldDelayFriendNotification)
+                if shouldDelayFriendNotification {
+                    scheduleFriendNotification(for: status)
+                }
             }
         }
     }
@@ -839,6 +877,7 @@ struct EventDetailView: View {
             UISelectionFeedbackGenerator().selectionChanged()
         }
 
+        cancelPendingRSVPNotification()
         closeRSVPMenu()
 
         Task {
@@ -850,7 +889,7 @@ struct EventDetailView: View {
                 notifyFriends: rsvpViewModel.notifyFriends,
                 notGoingReason: reason
             ) {
-                handleSuccessfulRSVPChange()
+                handleSuccessfulRSVPChange(showConfirmation: true)
             }
         }
     }
@@ -908,10 +947,105 @@ struct EventDetailView: View {
         }
     }
 
-    private func handleSuccessfulRSVPChange() {
+    private func handleSuccessfulRSVPChange(
+        showConfirmation: Bool = false,
+        allowsUndo: Bool = false
+    ) {
         ProfileViewModel.invalidateCache()
         UserProfileViewModel.invalidateAllCaches()
         NotificationCenter.default.post(name: .eventRSVPDidChange, object: currentEvent.id)
+
+        if showConfirmation, let status = rsvpViewModel.status {
+            showRSVPConfirmation(for: status, allowsUndo: allowsUndo)
+        }
+    }
+
+    private func showRSVPConfirmation(
+        for status: EventRSVPStatus,
+        allowsUndo: Bool = false
+    ) {
+        let confirmation = RSVPConfirmation(status: status, allowsUndo: allowsUndo)
+        rsvpConfirmationToken = confirmation.id
+        isRSVPConfirmationVisible = false
+
+        UINotificationFeedbackGenerator().notificationOccurred(.success)
+
+        rsvpConfirmation = confirmation
+
+        Task { @MainActor in
+            await Task.yield()
+            guard rsvpConfirmationToken == confirmation.id else {
+                return
+            }
+
+            withAnimation(.spring(response: 0.35, dampingFraction: 0.60)) {
+                isRSVPConfirmationVisible = true
+            }
+        }
+
+        Task { @MainActor in
+            try? await Task.sleep(for: .seconds(allowsUndo ? 4 : 2))
+            guard rsvpConfirmationToken == confirmation.id else {
+                return
+            }
+
+            withAnimation(.spring(response: 0.28, dampingFraction: 0.82)) {
+                isRSVPConfirmationVisible = false
+            }
+
+            try? await Task.sleep(for: .milliseconds(300))
+            guard rsvpConfirmationToken == confirmation.id else {
+                return
+            }
+
+            rsvpConfirmation = nil
+        }
+    }
+
+    private func scheduleFriendNotification(for status: EventRSVPStatus) {
+        let token = UUID()
+        pendingRSVPNotificationToken = token
+
+        Task { @MainActor in
+            try? await Task.sleep(for: .seconds(4))
+            guard pendingRSVPNotificationToken == token,
+                  rsvpViewModel.status == status else {
+                return
+            }
+
+            _ = try? await apiClient.send(
+                APIClient.sendMobileEventRSVPNotification(
+                    eventID: currentEvent.id,
+                    status: status
+                )
+            )
+        }
+    }
+
+    private func cancelPendingRSVPNotification() {
+        pendingRSVPNotificationToken = UUID()
+    }
+
+    private func undoPendingRSVP() {
+        guard let status = rsvpViewModel.status else {
+            return
+        }
+
+        cancelPendingRSVPNotification()
+        rsvpConfirmation = nil
+        isRSVPConfirmationVisible = false
+
+        Task {
+            if await rsvpViewModel.toggle(
+                status,
+                eventID: currentEvent.id,
+                using: apiClient,
+                includePartner: false,
+                notifyFriends: rsvpViewModel.notifyFriends
+            ) {
+                handleSuccessfulRSVPChange()
+            }
+        }
     }
 
     private var rsvpButtonTitle: String {
@@ -979,6 +1113,18 @@ struct EventDetailView: View {
         ]
     }
 
+    private var goingAttendees: [EventSocialRSVP] {
+        displayedEvent.friendsGoing
+    }
+
+    private var interestedAttendees: [EventSocialRSVP] {
+        displayedEvent.friendsInterested
+    }
+
+    private var notGoingAttendees: [EventSocialRSVP] {
+        displayedEvent.friendsNotGoing + displayedNotGoingAttendees
+    }
+
     private var friendGoingAttendees: [EventSocialRSVP] {
         displayedEvent.friendsGoing.filter { !$0.user.isCurrentUser }
     }
@@ -987,11 +1133,19 @@ struct EventDetailView: View {
         displayedEvent.friendsInterested.filter { !$0.user.isCurrentUser }
     }
 
-    private var hasFriendRSVPs: Bool {
+    private var friendNotGoingAttendees: [EventSocialRSVP] {
+        displayedEvent.friendsNotGoing.filter { !$0.user.isCurrentUser }
+    }
+
+    private var hasFriendGoingOrInterested: Bool {
         !friendGoingAttendees.isEmpty || !friendInterestedAttendees.isEmpty
     }
 
-    private var rsvpSummaryAttendees: [EventSocialAttendee] {
+    private var hasFriendRSVPs: Bool {
+        !friendGoingAttendees.isEmpty || !friendInterestedAttendees.isEmpty || !friendNotGoingAttendees.isEmpty
+    }
+
+    private var friendRSVPPreviewAttendees: [EventSocialAttendee] {
         (friendGoingAttendees + friendInterestedAttendees).map { rsvp in
             EventSocialAttendee(
                 id: rsvp.user.id,
@@ -1006,20 +1160,15 @@ struct EventDetailView: View {
     private var friendSummaryText: String {
         let goingCount = friendGoingAttendees.count
         let interestedCount = friendInterestedAttendees.count
+        let notGoingCount = friendNotGoingAttendees.count
 
-        if goingCount > 0, interestedCount > 0 {
-            return "\(goingCount) Going • \(interestedCount) Interested"
-        }
+        let parts = [
+            goingCount > 0 ? "\(goingCount) Going" : nil,
+            interestedCount > 0 ? "\(interestedCount) Interested" : nil,
+            notGoingCount > 0 ? "\(notGoingCount) Can't Go" : nil,
+        ].compactMap { $0 }
 
-        if goingCount > 0 {
-            return "\(goingCount) Going"
-        }
-
-        if interestedCount > 0 {
-            return "\(interestedCount) Interested"
-        }
-
-        return ""
+        return parts.joined(separator: " • ")
     }
 
     // Captures the signed-in user's identity (once, before any RSVP invalidates the
@@ -1093,7 +1242,8 @@ struct EventDetailView: View {
             userRsvpStatus: currentEvent.userRsvpStatus,
             userRsvpNotGoingReason: currentEvent.userRsvpNotGoingReason,
             friendsGoing: currentEvent.friendsGoing,
-            friendsInterested: currentEvent.friendsInterested
+            friendsInterested: currentEvent.friendsInterested,
+            friendsNotGoing: currentEvent.friendsNotGoing
         )
     }
 }
@@ -1200,14 +1350,20 @@ private struct EventRSVPFriendsRow: View {
 
     var body: some View {
         HStack(alignment: .center, spacing: 14) {
-            ScrollView(.horizontal, showsIndicators: false) {
-                HStack(alignment: .top, spacing: 6) {
-                    ForEach(attendees) { attendee in
-                        EventFriendAvatarTile(attendee: attendee)
+            if attendees.isEmpty {
+                Text("View responses")
+                    .font(.system(size: 14, weight: .medium))
+                    .foregroundStyle(.white.opacity(0.56))
+            } else {
+                ScrollView(.horizontal, showsIndicators: false) {
+                    HStack(alignment: .top, spacing: 6) {
+                        ForEach(attendees) { attendee in
+                            EventFriendAvatarTile(attendee: attendee)
+                        }
                     }
                 }
+                .scrollDisabled(true)
             }
-            .scrollDisabled(true)
 
             Spacer(minLength: 12)
 
@@ -1747,12 +1903,74 @@ private enum RSVPMenuMode {
     case more
 }
 
+private struct RSVPConfirmation: Identifiable, Equatable {
+    let id = UUID()
+    let status: EventRSVPStatus
+    let allowsUndo: Bool
+
+    var title: String {
+        "RSVP’d \(status.title)"
+    }
+}
+
+private struct RSVPConfirmationToast: View {
+    let confirmation: RSVPConfirmation
+    let onUndo: (() -> Void)?
+
+    var body: some View {
+        HStack(spacing: 10) {
+            Image(systemName: confirmation.status.systemImage)
+                .font(.system(size: 17, weight: .bold))
+                .foregroundStyle(confirmation.status.rsvpTintColor)
+                .symbolEffect(.bounce, value: confirmation.id)
+
+            Text(confirmation.title)
+                .font(.system(size: 15, weight: .semibold))
+                .foregroundStyle(.white)
+
+            if let onUndo {
+                Button("Undo", action: onUndo)
+                    .font(.system(size: 14, weight: .bold))
+                    .foregroundStyle(AppTheme.accentBlue)
+                    .buttonStyle(.plain)
+            }
+        }
+        .padding(.horizontal, 16)
+        .frame(height: 52)
+        .eventDetailLiquidGlass(in: Capsule())
+        .accessibilityElement(children: .ignore)
+        .accessibilityLabel(confirmation.title)
+    }
+}
+
 private enum RSVPMenuNavigationDirection {
     case back
     case forward
 }
 
 private extension EventRSVPStatus {
+    var title: String {
+        switch self {
+        case .going:
+            return "Going"
+        case .interested:
+            return "Interested"
+        case .notGoing:
+            return "Can't Go"
+        }
+    }
+
+    var systemImage: String {
+        switch self {
+        case .going:
+            return "checkmark.circle.fill"
+        case .interested:
+            return "star.fill"
+        case .notGoing:
+            return "xmark.circle.fill"
+        }
+    }
+
     var rsvpTintColor: Color {
         switch self {
         case .going:
@@ -1983,6 +2201,7 @@ private final class EventRSVPViewModel: ObservableObject {
         using apiClient: APIClient,
         includePartner nextIncludePartner: Bool = false,
         notifyFriends nextNotifyFriends: Bool = true,
+        sendFriendNotifications: Bool? = nil,
         forceUpdate: Bool = false,
         notGoingReason nextNotGoingReason: EventRSVPDeclineReason? = nil
     ) async -> Bool {
@@ -2014,7 +2233,7 @@ private final class EventRSVPViewModel: ObservableObject {
                     status: nextStatus,
                     notGoingReason: nextStatus == .notGoing ? nextNotGoingReason : nil,
                     includePartner: nextIncludePartner,
-                    notifyFriends: nextNotifyFriends
+                    notifyFriends: sendFriendNotifications ?? nextNotifyFriends
                 )
                 state = try await apiClient.send(endpoint)
             }

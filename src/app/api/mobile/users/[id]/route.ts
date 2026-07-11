@@ -377,7 +377,7 @@ export async function GET(_request: Request, context: RouteContext) {
   };
 
   for (const rsvp of [...viewerRsvps, ...mirroredPartnerRsvps, ...friendRsvps]) {
-    if (!rsvp.user || (rsvp.status !== "going" && rsvp.status !== "interested")) {
+    if (!rsvp.user || (rsvp.status !== "going" && rsvp.status !== "interested" && rsvp.status !== "not_going")) {
       continue;
     }
 
@@ -445,6 +445,7 @@ export async function GET(_request: Request, context: RouteContext) {
       userRsvpNotGoingReason: viewerRsvp?.notGoingReason ?? null,
       friendsGoing: socialRsvps.filter((rsvp: any) => rsvp.status === "going"),
       friendsInterested: socialRsvps.filter((rsvp: any) => rsvp.status === "interested"),
+      friendsNotGoing: socialRsvps.filter((rsvp: any) => rsvp.status === "not_going"),
     };
   };
 
