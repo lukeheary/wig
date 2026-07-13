@@ -1,5 +1,6 @@
 import ClerkKit
 import SwiftUI
+import UIKit
 
 struct HomeView: View {
     let showsNativeSearch: Bool
@@ -28,6 +29,9 @@ struct HomeView: View {
     @State private var selectedLocationFilter: HomeLocationFilter?
     @State private var selectedEventFilter: HomeEventFilter = .all
     @State private var selectedCategoryFilterID: String?
+    @State private var postEventFeedbackEvent: MobileEventReviewPrompt?
+    @State private var postEventFeedbackPrompt: MobileEventReviewPrompt?
+    @State private var completedPostEventFeedbackIDs = Set<String>()
 
     private static let sectionTitleFormatter: DateFormatter = {
         let formatter = DateFormatter()
@@ -68,6 +72,8 @@ struct HomeView: View {
                 .topStatusBarScrim()
                 .toolbar(.hidden, for: .navigationBar)
                 .task {
+                    loadCompletedPostEventFeedbackIDs()
+
                     if case .idle = viewModel.state {
                         await loadHome(for: selectedWeekStart, using: apiClient)
                     }
@@ -202,6 +208,13 @@ struct HomeView: View {
 
                     await EventArtworkPrefetcher.prefetch(events: displayedEventsForPrefetch)
                 }
+                .sheet(item: $postEventFeedbackEvent) { event in
+                    PostEventFeedbackSheet(event: event) { response, comment in
+                        await recordPostEventFeedback(response, comment: comment, for: event)
+                    }
+                    .presentationDetents([.medium, .large])
+                    .presentationDragIndicator(.visible)
+                }
         }
         .nativeSearch(
             isEnabled: showsNativeSearch,
@@ -278,6 +291,15 @@ struct HomeView: View {
     private var weeklyContent: some View {
         ScrollView {
             LazyVStack(alignment: .leading, spacing: 24) {
+                if let postEventFeedbackPrompt {
+                    PostEventFeedbackBanner(event: postEventFeedbackPrompt) {
+                        postEventFeedbackEvent = postEventFeedbackPrompt
+                    }
+                    .padding(.horizontal, 16)
+                    .padding(.top, 6)
+                    .padding(.bottom, -12)
+                }
+
                 if shouldShowRecentActivity {
                     HomeRecentActivitySection(
                         activities: recentActivityViewModel.activities,
@@ -1282,6 +1304,7 @@ struct HomeView: View {
         forceRefresh: Bool = false
     ) async {
         await viewModel.load(weekStart: weekStart, using: apiClient, forceRefresh: forceRefresh)
+        await loadPostEventFeedbackPrompt(using: apiClient)
 
         guard isAuthenticated else {
             recentActivityViewModel.clear()
@@ -1289,6 +1312,62 @@ struct HomeView: View {
         }
 
         await recentActivityViewModel.load(using: apiClient)
+    }
+
+    private func loadPostEventFeedbackPrompt(using apiClient: APIClient) async {
+        do {
+            let response = try await apiClient.send(APIClient.mobileEventReviewPrompt())
+            postEventFeedbackPrompt = response.event.flatMap { event in
+                completedPostEventFeedbackIDs.contains(event.id.uuidString) ? nil : event
+            }
+        } catch {
+            postEventFeedbackPrompt = nil
+        }
+    }
+
+    private func loadCompletedPostEventFeedbackIDs() {
+        let savedIDs = UserDefaults.standard.stringArray(forKey: "completedPostEventFeedbackIDs") ?? []
+        completedPostEventFeedbackIDs = Set(savedIDs)
+    }
+
+    private func recordPostEventFeedback(
+        _ response: PostEventFeedbackResponse,
+        comment: String?,
+        for event: MobileEventReviewPrompt
+    ) async {
+        if response == .didNotAttend {
+            do {
+                let endpoint = try APIClient.updateMobileEventRSVP(
+                    eventID: event.id,
+                    status: .notGoing,
+                    notifyFriends: false
+                )
+                _ = try await apiClient.send(endpoint)
+                NotificationCenter.default.post(name: .eventRSVPDidChange, object: nil)
+            } catch {
+                return
+            }
+        } else if let rating = response.rating {
+            do {
+                let endpoint = try APIClient.createMobileEventReview(
+                    eventID: event.id,
+                    rating: rating,
+                    comment: comment
+                )
+                _ = try await apiClient.send(endpoint)
+            } catch {
+                return
+            }
+        }
+
+        UINotificationFeedbackGenerator().notificationOccurred(.success)
+        completedPostEventFeedbackIDs.insert(event.id.uuidString)
+        UserDefaults.standard.set(
+            Array(completedPostEventFeedbackIDs),
+            forKey: "completedPostEventFeedbackIDs"
+        )
+        postEventFeedbackEvent = nil
+        postEventFeedbackPrompt = nil
     }
 
     private var isAuthenticated: Bool {
@@ -1437,6 +1516,340 @@ private struct EventSection: Identifiable {
     let events: [EventFeedItem]
 
     var id: Date { day }
+}
+
+private enum PostEventFeedbackResponse: CaseIterable, Identifiable {
+    case lovedIt
+    case likedIt
+    case okay
+    case didNotLikeIt
+    case didNotAttend
+
+    var id: Self { self }
+
+    var title: String {
+        switch self {
+        case .lovedIt:
+            return "Loved it"
+        case .likedIt:
+            return "Liked it"
+        case .okay:
+            return "It was okay"
+        case .didNotLikeIt:
+            return "Didn't like it"
+        case .didNotAttend:
+            return "Didn't end up going"
+        }
+    }
+
+    var emoji: String {
+        switch self {
+        case .lovedIt:
+            return "🤩"
+        case .likedIt:
+            return "🙂"
+        case .okay:
+            return "😐"
+        case .didNotLikeIt:
+            return "🙁"
+        case .didNotAttend:
+            return "🫥"
+        }
+    }
+
+    var isAttendanceChange: Bool {
+        self == .didNotAttend
+    }
+
+    var rating: EventReviewRating? {
+        switch self {
+        case .lovedIt:
+            return .lovedIt
+        case .likedIt:
+            return .likedIt
+        case .okay:
+            return .okay
+        case .didNotLikeIt:
+            return .didNotLikeIt
+        case .didNotAttend:
+            return nil
+        }
+    }
+}
+
+private struct PostEventFeedbackBanner: View {
+    let event: MobileEventReviewPrompt
+    let action: () -> Void
+    @State private var artwork: UIImage?
+    @State private var blurredArtwork: UIImage?
+    @State private var tint: Color?
+
+    private let fallbackTint = Color(red: 0.11, green: 0.11, blue: 0.13)
+    private var tintColor: Color { tint ?? fallbackTint }
+
+    var body: some View {
+        Button(action: action) {
+            HStack(spacing: 12) {
+                Group {
+                    if let artwork {
+                        Image(uiImage: artwork)
+                            .resizable()
+                            .scaledToFill()
+                    } else {
+                    ZStack {
+                        Color.white.opacity(0.12)
+                        Image(systemName: "calendar")
+                            .foregroundStyle(.white.opacity(0.72))
+                    }
+                    }
+                }
+                .frame(width: 84, height: 84)
+                .clipShape(RoundedRectangle(cornerRadius: 15, style: .continuous))
+                .overlay {
+                    RoundedRectangle(cornerRadius: 15, style: .continuous)
+                        .strokeBorder(.white.opacity(0.14), lineWidth: 1)
+                }
+                .shadow(color: .black.opacity(0.28), radius: 8, x: 0, y: 4)
+
+                Text("How was \(event.title)?")
+                    .font(.system(size: 14, weight: .semibold))
+                    .foregroundStyle(.white)
+                    .lineLimit(2)
+                    .minimumScaleFactor(0.88)
+                    .multilineTextAlignment(.leading)
+
+                Spacer(minLength: 0)
+
+                Image(systemName: "chevron.right")
+                    .font(.system(size: 14, weight: .bold))
+                    .foregroundStyle(.white.opacity(0.60))
+            }
+            .padding(9)
+            .frame(height: 102)
+            .background { artworkBackdrop }
+            .clipShape(RoundedRectangle(cornerRadius: 18, style: .continuous))
+            .overlay {
+                RoundedRectangle(cornerRadius: 18, style: .continuous)
+                    .strokeBorder(.white.opacity(0.16), lineWidth: 1)
+            }
+        }
+        .buttonStyle(.plain)
+        .accessibilityLabel("How was \(event.title)?")
+        .task(id: event.coverImageURL) {
+            guard let coverImageURL = event.coverImageURL else {
+                artwork = nil
+                blurredArtwork = nil
+                tint = nil
+                return
+            }
+
+            guard let image = await RemoteImagePipeline.shared.image(for: coverImageURL) else {
+                return
+            }
+
+            let fallbackTint = fallbackTint
+            let renderedArtwork = await Task.detached(priority: .userInitiated) {
+                (
+                    image,
+                    image.placeCardBlurredBackdrop(),
+                    image.placeCardTintColor.map(Color.init(uiColor:)) ?? fallbackTint
+                )
+            }.value
+
+            artwork = renderedArtwork.0
+            blurredArtwork = renderedArtwork.1
+            tint = renderedArtwork.2
+        }
+    }
+
+    private var artworkBackdrop: some View {
+        ZStack {
+            tintColor
+
+            if let blurredArtwork {
+                Image(uiImage: blurredArtwork)
+                    .resizable()
+                    .scaledToFill()
+                    .overlay(Color.black.opacity(0.30))
+                    .overlay(tintColor.opacity(0.32))
+            }
+        }
+    }
+}
+
+private struct PostEventFeedbackSheet: View {
+    let event: MobileEventReviewPrompt
+    let onResponse: (PostEventFeedbackResponse, String?) async -> Void
+
+    @Environment(\.dismiss) private var dismiss
+    @State private var isSubmitting = false
+    @State private var comment = ""
+    @State private var selectedResponse: PostEventFeedbackResponse?
+
+    var body: some View {
+        ScrollView {
+            VStack(alignment: .leading, spacing: 24) {
+                HStack(alignment: .top, spacing: 14) {
+                    sheetArtwork
+
+                    VStack(alignment: .leading, spacing: 4) {
+                        Text(event.title)
+                            .font(.system(size: 19, weight: .bold))
+                            .foregroundStyle(.white)
+                            .lineLimit(3)
+
+                        VStack(alignment: .leading, spacing: 4) {
+                            Text(event.startAt.formatted(date: .abbreviated, time: .shortened))
+
+                            Label(event.venueName ?? "\(event.city), \(event.state)", systemImage: "mappin.and.ellipse")
+                        }
+                        .font(.system(size: 14, weight: .medium))
+                        .foregroundStyle(.white.opacity(0.60))
+                        .lineLimit(1)
+                    }
+                    .frame(maxWidth: .infinity, alignment: .leading)
+
+                    Button(action: dismiss.callAsFunction) {
+                        Image(systemName: "xmark")
+                            .font(.system(size: 16, weight: .semibold))
+                            .foregroundStyle(.white.opacity(0.80))
+                            .frame(width: 42, height: 42)
+                            .background(.white.opacity(0.08), in: Circle())
+                    }
+                    .buttonStyle(.plain)
+                    .accessibilityLabel("Close")
+                }
+
+                HStack(alignment: .top, spacing: 8) {
+                    ForEach(PostEventFeedbackResponse.allCases.filter { !$0.isAttendanceChange }) { response in
+                        reactionButton(response)
+                    }
+                }
+
+                VStack(alignment: .trailing, spacing: 6) {
+                    TextField("Add a comment (optional)", text: $comment, axis: .vertical)
+                        .font(.system(size: 16, weight: .medium))
+                        .foregroundStyle(.white)
+                        .lineLimit(2 ... 3)
+                        .tint(AppTheme.accentBlue)
+                        .onChange(of: comment) { _, value in
+                            if value.count > 250 {
+                                comment = String(value.prefix(250))
+                            }
+                        }
+
+                    Text("\(comment.count)/250")
+                        .font(.system(size: 12, weight: .medium))
+                        .foregroundStyle(.white.opacity(0.42))
+                }
+                .padding(12)
+                .background(.white.opacity(0.055), in: RoundedRectangle(cornerRadius: 18, style: .continuous))
+                .overlay {
+                    RoundedRectangle(cornerRadius: 18, style: .continuous)
+                        .strokeBorder(.white.opacity(0.10), lineWidth: 1)
+                }
+
+                Button {
+                    submit(.didNotAttend)
+                } label: {
+                    HStack(spacing: 14) {
+                        Image(systemName: "calendar.badge.exclamationmark")
+                            .font(.system(size: 19, weight: .medium))
+
+                        Text(PostEventFeedbackResponse.didNotAttend.title)
+                            .font(.system(size: 16, weight: .semibold))
+
+                        Spacer()
+
+                        Image(systemName: "chevron.right")
+                            .font(.system(size: 14, weight: .bold))
+                    }
+                    .foregroundStyle(.white.opacity(0.88))
+                    .padding(.horizontal, 18)
+                    .frame(maxWidth: .infinity, minHeight: 60)
+                    .background(.white.opacity(0.055), in: RoundedRectangle(cornerRadius: 18, style: .continuous))
+                    .overlay {
+                        RoundedRectangle(cornerRadius: 18, style: .continuous)
+                            .strokeBorder(.white.opacity(0.10), lineWidth: 1)
+                    }
+                }
+                .buttonStyle(.plain)
+                .disabled(isSubmitting)
+
+                Button {
+                    if let selectedResponse {
+                        submit(selectedResponse)
+                    }
+                } label: {
+                    Text("Submit feedback")
+                        .font(.system(size: 17, weight: .bold))
+                        .foregroundStyle(selectedResponse == nil ? .white.opacity(0.45) : .black.opacity(0.86))
+                        .frame(maxWidth: .infinity, minHeight: 58)
+                        .background(
+                            selectedResponse == nil ? Color.white.opacity(0.10) : AppTheme.accentBlue,
+                            in: RoundedRectangle(cornerRadius: 18, style: .continuous)
+                        )
+                }
+                .buttonStyle(.plain)
+                .disabled(selectedResponse == nil || isSubmitting)
+            }
+            .padding(20)
+            .padding(.top, 8)
+        }
+        .scrollIndicators(.hidden)
+        .presentationBackground(Color(red: 0.06, green: 0.06, blue: 0.07))
+    }
+
+    private var sheetArtwork: some View {
+        RemoteImageView(url: event.coverImageURL) { image in
+            image
+                .resizable()
+                .scaledToFill()
+        } placeholder: {
+            Color.white.opacity(0.08)
+        }
+        .frame(width: 88, height: 88)
+        .clipShape(RoundedRectangle(cornerRadius: 18, style: .continuous))
+        .overlay {
+            RoundedRectangle(cornerRadius: 18, style: .continuous)
+                .strokeBorder(.white.opacity(0.12), lineWidth: 1)
+        }
+    }
+
+    private func reactionButton(_ response: PostEventFeedbackResponse) -> some View {
+        Button {
+            UISelectionFeedbackGenerator().selectionChanged()
+            selectedResponse = response
+        } label: {
+            VStack(spacing: 9) {
+                Text(response.emoji)
+                    .font(.system(size: 46))
+                    .frame(height: 58)
+                    .scaleEffect(selectedResponse == response ? 1.08 : 1.0)
+
+                Text(response.title)
+                    .font(.system(size: 12, weight: .semibold))
+                    .foregroundStyle(selectedResponse == response ? AppTheme.accentBlue : .white.opacity(0.78))
+                    .multilineTextAlignment(.center)
+                    .lineLimit(2)
+                    .frame(maxWidth: .infinity)
+            }
+            .frame(maxWidth: .infinity, alignment: .top)
+        }
+        .buttonStyle(.plain)
+        .disabled(isSubmitting)
+    }
+
+    private func submit(_ response: PostEventFeedbackResponse) {
+        guard !isSubmitting else { return }
+        isSubmitting = true
+
+        Task {
+            let trimmedComment = comment.trimmingCharacters(in: .whitespacesAndNewlines)
+            await onResponse(response, trimmedComment.isEmpty ? nil : trimmedComment)
+            isSubmitting = false
+        }
+    }
 }
 
 private enum HomeLocationFilter: Hashable, Identifiable {

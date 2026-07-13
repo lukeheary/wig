@@ -280,6 +280,7 @@ export async function GET(request: Request) {
     },
   });
 
+
   const eventIds = eventList.map((event) => event.id);
   const socialRsvpsMap = new Map<
     string,

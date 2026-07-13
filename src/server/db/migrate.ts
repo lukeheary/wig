@@ -23,6 +23,27 @@ type MigrationRow = {
   folderMillis: number;
 };
 
+async function withTimeout<T>(
+  operation: Promise<T>,
+  stage: string,
+  timeoutMs = 15_000
+): Promise<T> {
+  let timeout: NodeJS.Timeout | undefined;
+
+  try {
+    return await Promise.race([
+      operation,
+      new Promise<never>((_, reject) => {
+        timeout = setTimeout(() => {
+          reject(new Error(`${stage} timed out after ${timeoutMs / 1_000} seconds`));
+        }, timeoutMs);
+      }),
+    ]);
+  } finally {
+    if (timeout) clearTimeout(timeout);
+  }
+}
+
 function buildMonotonicMigrationTimeline(migrations: MigrationRow[]) {
   let lastAppliedAt = 0;
 
@@ -136,14 +157,27 @@ async function bootstrapLegacyMigrationHistory(pool: Pool) {
 async function runMigrations() {
   console.log("⏳ Running migrations...");
 
-  const pool = new Pool({ connectionString: process.env.DATABASE_URL! });
+  const pool = new Pool({
+    connectionString: process.env.DATABASE_URL!,
+    connectionTimeoutMillis: 10_000,
+  });
   const db = drizzle(pool);
 
-  await bootstrapLegacyMigrationHistory(pool);
-  await migrate(db, {
-    migrationsFolder: "./src/server/db/migrations",
-    migrationsSchema: "drizzle",
-  });
+  console.log("🔌 Connecting to the database...");
+  await withTimeout(pool.query("select 1"), "Database connection");
+
+  console.log("📋 Checking migration history...");
+  await withTimeout(bootstrapLegacyMigrationHistory(pool), "Migration history check");
+
+  console.log("🚀 Applying pending migrations...");
+  await withTimeout(
+    migrate(db, {
+      migrationsFolder: "./src/server/db/migrations",
+      migrationsSchema: "drizzle",
+    }),
+    "Migration application",
+    60_000
+  );
 
   console.log("✅ Migrations complete!");
   await pool.end();

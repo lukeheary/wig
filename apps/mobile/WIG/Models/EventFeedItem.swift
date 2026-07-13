@@ -6,6 +6,26 @@ struct MobileEventsResponse: Codable, Hashable, Sendable {
     let currentUserLocation: EventCity?
 }
 
+struct MobileEventReviewPromptResponse: Decodable, Hashable, Sendable {
+    let event: MobileEventReviewPrompt?
+}
+
+struct MobileEventReviewPrompt: Decodable, Hashable, Identifiable, Sendable {
+    let id: UUID
+    let title: String
+    let coverImageURL: URL?
+    let startAt: Date
+    let endAt: Date?
+    let venueName: String?
+    let city: String
+    let state: String
+
+    enum CodingKeys: String, CodingKey {
+        case id, title, startAt, endAt, venueName, city, state
+        case coverImageURL = "coverImageUrl"
+    }
+}
+
 struct EventCity: Codable, Hashable, Identifiable, Sendable {
     let city: String
     let state: String

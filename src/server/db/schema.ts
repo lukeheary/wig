@@ -40,6 +40,13 @@ export const rsvpStatusEnum = pgEnum("rsvp_status", [
   "not_going",
 ]);
 
+export const eventReviewRatingEnum = pgEnum("event_review_rating", [
+  "loved_it",
+  "liked_it",
+  "okay",
+  "did_not_like_it",
+]);
+
 export const friendStatusEnum = pgEnum("friend_status", [
   "pending",
   "accepted",
@@ -870,6 +877,47 @@ export const eventRsvpsRelations = relations(eventRsvps, ({ one }) => ({
   }),
   event: one(events, {
     fields: [eventRsvps.eventId],
+    references: [events.id],
+  }),
+}));
+
+// ============================================================================
+// EVENT REVIEWS TABLE
+// ============================================================================
+export const eventReviews = pgTable(
+  "event_reviews",
+  {
+    id: uuid("id").defaultRandom().primaryKey(),
+    userId: text("user_id")
+      .notNull()
+      .references(() => users.id, { onDelete: "cascade" }),
+    eventId: uuid("event_id")
+      .notNull()
+      .references(() => events.id, { onDelete: "cascade" }),
+    rating: eventReviewRatingEnum("rating").notNull(),
+    comment: text("comment"),
+    createdAt: timestamp("created_at").defaultNow().notNull(),
+    updatedAt: timestamp("updated_at").defaultNow().notNull(),
+  },
+  (table) => ({
+    userEventIdx: uniqueIndex("event_reviews_user_event_idx").on(
+      table.userId,
+      table.eventId
+    ),
+    eventRatingIdx: index("event_reviews_event_rating_idx").on(
+      table.eventId,
+      table.rating
+    ),
+  })
+);
+
+export const eventReviewsRelations = relations(eventReviews, ({ one }) => ({
+  user: one(users, {
+    fields: [eventReviews.userId],
+    references: [users.id],
+  }),
+  event: one(events, {
+    fields: [eventReviews.eventId],
     references: [events.id],
   }),
 }));

@@ -107,6 +107,14 @@ struct APIClient: Sendable {
         )
     }
 
+    static func mobileEventReviewPrompt() -> Endpoint<MobileEventReviewPromptResponse> {
+        Endpoint(
+            path: "/api/mobile/event-review-prompt",
+            requiresAuthentication: false,
+            includesAuthenticationIfAvailable: true
+        )
+    }
+
     static func mobilePlaces(limit: Int = 100) -> Endpoint<MobilePlacesResponse> {
         Endpoint(
             path: "/api/mobile/places",
@@ -798,6 +806,22 @@ struct APIClient: Sendable {
         )
     }
 
+    static func createMobileEventReview(
+        eventID: UUID,
+        rating: EventReviewRating,
+        comment: String?
+    ) throws -> Endpoint<MobileEventReview> {
+        Endpoint(
+            path: "/api/mobile/events/\(eventID.uuidString)/reviews",
+            method: .post,
+            body: try JSONEncoder().encode(
+                MobileEventReviewRequest(rating: rating, comment: comment)
+            ),
+            requiresAuthentication: false,
+            includesAuthenticationIfAvailable: true
+        )
+    }
+
     static func mobileMyPartner() -> Endpoint<MobilePartnerResponse> {
         Endpoint(
             path: "/api/mobile/partners/me",
@@ -1174,11 +1198,32 @@ struct EventRSVPState: Decodable, Hashable, Sendable {
     let updatedAt: Date?
 }
 
+enum EventReviewRating: String, Codable, Hashable, Sendable {
+    case lovedIt = "loved_it"
+    case likedIt = "liked_it"
+    case okay
+    case didNotLikeIt = "did_not_like_it"
+}
+
+struct MobileEventReview: Decodable, Hashable, Sendable {
+    let id: UUID
+    let eventId: UUID
+    let rating: EventReviewRating
+    let comment: String?
+    let createdAt: Date
+    let updatedAt: Date
+}
+
 private struct EventRSVPUpdateRequest: Encodable {
     let status: EventRSVPStatus
     let notGoingReason: EventRSVPDeclineReason?
     let includePartner: Bool
     let notifyFriends: Bool
+}
+
+private struct MobileEventReviewRequest: Encodable {
+    let rating: EventReviewRating
+    let comment: String?
 }
 
 private struct EventRSVPNotificationRequest: Encodable {
