@@ -1111,10 +1111,38 @@ struct EventDetailView: View {
     }
 
     private var displayedEvent: EventFeedItem {
-        currentEvent.updatingCurrentUserRSVP(
+        var displayedEvent = currentEvent.updatingCurrentUserRSVP(
             status: rsvpViewModel.status,
             notGoingReason: rsvpViewModel.notGoingReason,
             currentUser: currentUserSocialUser
+        )
+
+        if rsvpViewModel.includePartner,
+           let partnerSocialUser,
+           let status = rsvpViewModel.status
+        {
+            displayedEvent = displayedEvent.updatingSocialRSVP(
+                for: partnerSocialUser,
+                status: status
+            )
+        }
+
+        return displayedEvent
+    }
+
+    private var partnerSocialUser: EventSocialUser? {
+        guard let partnerRelationship, partnerRelationship.isAccepted else {
+            return nil
+        }
+
+        let partner = partnerRelationship.partner
+        return EventSocialUser(
+            id: partner.id,
+            firstName: partner.firstName,
+            lastName: partner.lastName,
+            avatarImageURL: partner.avatarImageURL,
+            isCurrentUser: false,
+            isFriend: true
         )
     }
 

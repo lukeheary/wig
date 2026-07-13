@@ -492,6 +492,37 @@ struct EventSocialAttendee: Identifiable, Hashable, Sendable {
 }
 
 extension EventFeedItem {
+    func updatingSocialRSVP(
+        for user: EventSocialUser,
+        status: EventRSVPStatus?
+    ) -> EventFeedItem {
+        var updated = self
+        let otherGoing = friendsGoing.filter { $0.user.id != user.id }
+        let otherInterested = friendsInterested.filter { $0.user.id != user.id }
+        let otherNotGoing = friendsNotGoing.filter { $0.user.id != user.id }
+
+        switch status {
+        case .going:
+            updated.friendsGoing = [EventSocialRSVP(status: .going, user: user)] + otherGoing
+            updated.friendsInterested = otherInterested
+            updated.friendsNotGoing = otherNotGoing
+        case .interested:
+            updated.friendsGoing = otherGoing
+            updated.friendsInterested = [EventSocialRSVP(status: .interested, user: user)] + otherInterested
+            updated.friendsNotGoing = otherNotGoing
+        case .notGoing:
+            updated.friendsGoing = otherGoing
+            updated.friendsInterested = otherInterested
+            updated.friendsNotGoing = [EventSocialRSVP(status: .notGoing, user: user)] + otherNotGoing
+        case .none:
+            updated.friendsGoing = otherGoing
+            updated.friendsInterested = otherInterested
+            updated.friendsNotGoing = otherNotGoing
+        }
+
+        return updated
+    }
+
     func updatingCurrentUserRSVP(
         status: EventRSVPStatus?,
         notGoingReason: EventRSVPDeclineReason?,
