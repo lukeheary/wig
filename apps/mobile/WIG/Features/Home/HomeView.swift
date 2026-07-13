@@ -297,7 +297,7 @@ struct HomeView: View {
                     }
                     .padding(.horizontal, 16)
                     .padding(.top, 6)
-                    .padding(.bottom, -12)
+                    .padding(.bottom, -16)
                 }
 
                 if shouldShowRecentActivity {
@@ -1545,7 +1545,7 @@ private enum PostEventFeedbackResponse: CaseIterable, Identifiable {
     var emoji: String {
         switch self {
         case .lovedIt:
-            return "🤩"
+            return "😍"
         case .likedIt:
             return "🙂"
         case .okay:
@@ -1603,7 +1603,7 @@ private struct PostEventFeedbackBanner: View {
                     }
                     }
                 }
-                .frame(width: 84, height: 84)
+                .frame(width: 72, height: 72)
                 .clipShape(RoundedRectangle(cornerRadius: 15, style: .continuous))
                 .overlay {
                     RoundedRectangle(cornerRadius: 15, style: .continuous)
@@ -1625,7 +1625,7 @@ private struct PostEventFeedbackBanner: View {
                     .foregroundStyle(.white.opacity(0.60))
             }
             .padding(9)
-            .frame(height: 102)
+            .frame(height: 90)
             .background { artworkBackdrop }
             .clipShape(RoundedRectangle(cornerRadius: 18, style: .continuous))
             .overlay {
@@ -1685,40 +1685,34 @@ private struct PostEventFeedbackSheet: View {
     @State private var isSubmitting = false
     @State private var comment = ""
     @State private var selectedResponse: PostEventFeedbackResponse?
+    @State private var isConfirmingDidNotAttend = false
 
     var body: some View {
         ScrollView {
             VStack(alignment: .leading, spacing: 24) {
-                HStack(alignment: .top, spacing: 14) {
+                HStack(alignment: .center, spacing: 14) {
                     sheetArtwork
 
                     VStack(alignment: .leading, spacing: 4) {
                         Text(event.title)
-                            .font(.system(size: 19, weight: .bold))
+                            .font(.system(size: 14, weight: .semibold))
                             .foregroundStyle(.white)
-                            .lineLimit(3)
+                            .lineLimit(2)
 
                         VStack(alignment: .leading, spacing: 4) {
                             Text(event.startAt.formatted(date: .abbreviated, time: .shortened))
+                                .foregroundStyle(AppTheme.accentBlue)
 
-                            Label(event.venueName ?? "\(event.city), \(event.state)", systemImage: "mappin.and.ellipse")
+                            Text(event.venueName ?? "\(event.city), \(event.state)")
+                                .foregroundStyle(.white.opacity(0.70))
                         }
                         .font(.system(size: 14, weight: .medium))
-                        .foregroundStyle(.white.opacity(0.60))
                         .lineLimit(1)
                     }
                     .frame(maxWidth: .infinity, alignment: .leading)
 
-                    Button(action: dismiss.callAsFunction) {
-                        Image(systemName: "xmark")
-                            .font(.system(size: 16, weight: .semibold))
-                            .foregroundStyle(.white.opacity(0.80))
-                            .frame(width: 42, height: 42)
-                            .background(.white.opacity(0.08), in: Circle())
-                    }
-                    .buttonStyle(.plain)
-                    .accessibilityLabel("Close")
                 }
+                .padding(.bottom, -4)
 
                 HStack(alignment: .top, spacing: 8) {
                     ForEach(PostEventFeedbackResponse.allCases.filter { !$0.isAttendanceChange }) { response in
@@ -1728,7 +1722,7 @@ private struct PostEventFeedbackSheet: View {
 
                 VStack(alignment: .trailing, spacing: 6) {
                     TextField("Add a comment (optional)", text: $comment, axis: .vertical)
-                        .font(.system(size: 16, weight: .medium))
+                        .font(.system(size: 15, weight: .medium))
                         .foregroundStyle(.white)
                         .lineLimit(2 ... 3)
                         .tint(AppTheme.accentBlue)
@@ -1750,38 +1744,11 @@ private struct PostEventFeedbackSheet: View {
                 }
 
                 Button {
-                    submit(.didNotAttend)
-                } label: {
-                    HStack(spacing: 14) {
-                        Image(systemName: "calendar.badge.exclamationmark")
-                            .font(.system(size: 19, weight: .medium))
-
-                        Text(PostEventFeedbackResponse.didNotAttend.title)
-                            .font(.system(size: 16, weight: .semibold))
-
-                        Spacer()
-
-                        Image(systemName: "chevron.right")
-                            .font(.system(size: 14, weight: .bold))
-                    }
-                    .foregroundStyle(.white.opacity(0.88))
-                    .padding(.horizontal, 18)
-                    .frame(maxWidth: .infinity, minHeight: 60)
-                    .background(.white.opacity(0.055), in: RoundedRectangle(cornerRadius: 18, style: .continuous))
-                    .overlay {
-                        RoundedRectangle(cornerRadius: 18, style: .continuous)
-                            .strokeBorder(.white.opacity(0.10), lineWidth: 1)
-                    }
-                }
-                .buttonStyle(.plain)
-                .disabled(isSubmitting)
-
-                Button {
                     if let selectedResponse {
                         submit(selectedResponse)
                     }
                 } label: {
-                    Text("Submit feedback")
+                    Text("Done")
                         .font(.system(size: 17, weight: .bold))
                         .foregroundStyle(selectedResponse == nil ? .white.opacity(0.45) : .black.opacity(0.86))
                         .frame(maxWidth: .infinity, minHeight: 58)
@@ -1792,12 +1759,47 @@ private struct PostEventFeedbackSheet: View {
                 }
                 .buttonStyle(.plain)
                 .disabled(selectedResponse == nil || isSubmitting)
+                .padding(.vertical, -8)
+
+                Button {
+                    isConfirmingDidNotAttend = true
+                } label: {
+                    Text(PostEventFeedbackResponse.didNotAttend.title)
+                        .font(.system(size: 14, weight: .semibold))
+                        .foregroundStyle(.white.opacity(0.62))
+                        .frame(maxWidth: .infinity)
+                }
+                .buttonStyle(.plain)
+                .disabled(isSubmitting)
             }
             .padding(20)
             .padding(.top, 8)
+            .overlay(alignment: .topTrailing) {
+                Button(action: dismiss.callAsFunction) {
+                    Image(systemName: "xmark")
+                        .font(.system(size: 16, weight: .semibold))
+                        .foregroundStyle(.white.opacity(0.80))
+                        .frame(width: 42, height: 42)
+                        .background(.white.opacity(0.08), in: Circle())
+                }
+                .buttonStyle(.plain)
+                .accessibilityLabel("Close")
+                .padding(.top, 20)
+                .padding(.trailing, 20)
+            }
         }
         .scrollIndicators(.hidden)
-        .presentationBackground(Color(red: 0.06, green: 0.06, blue: 0.07))
+        .alert(
+            "Didn't end up going?",
+            isPresented: $isConfirmingDidNotAttend,
+        ) {
+            Button("Didn't go", role: .destructive) {
+                submit(.didNotAttend)
+            }
+            Button("Cancel", role: .cancel) {}
+        } message: {
+            Text("We'll update your RSVP.")
+        }
     }
 
     private var sheetArtwork: some View {
@@ -1823,13 +1825,15 @@ private struct PostEventFeedbackSheet: View {
         } label: {
             VStack(spacing: 9) {
                 Text(response.emoji)
-                    .font(.system(size: 46))
-                    .frame(height: 58)
+                    .font(.system(size: 52))
+                    .frame(height: 64)
                     .scaleEffect(selectedResponse == response ? 1.08 : 1.0)
+                    .opacity(selectedResponse == nil || selectedResponse == response ? 1 : 0.38)
 
                 Text(response.title)
                     .font(.system(size: 12, weight: .semibold))
                     .foregroundStyle(selectedResponse == response ? AppTheme.accentBlue : .white.opacity(0.78))
+                    .opacity(selectedResponse == nil || selectedResponse == response ? 1 : 0.38)
                     .multilineTextAlignment(.center)
                     .lineLimit(2)
                     .frame(maxWidth: .infinity)
