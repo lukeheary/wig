@@ -325,20 +325,33 @@ struct EventDetailView: View {
 
     private var guestRSVPButton: some View {
         Button {
+            guard !currentEvent.hasEnded else {
+                return
+            }
+
             UIImpactFeedbackGenerator(style: .light).impactOccurred()
             isAuthSheetPresented = true
         } label: {
-            Text("RSVP")
-                .font(.system(size: 17, weight: .bold))
-                .foregroundStyle(.white)
-                .lineLimit(1)
-                .padding(.horizontal, 22)
-                .frame(maxWidth: .infinity)
-                .frame(height: 56)
-                .contentShape(Capsule())
-                .eventDetailLiquidGlass(in: Capsule())
+            HStack(spacing: 10) {
+                if currentEvent.hasEnded {
+                    Image(systemName: "clock")
+                        .font(.system(size: 14, weight: .bold))
+                }
+
+                Text(currentEvent.hasEnded ? "Event Passed" : "RSVP")
+                    .font(.system(size: 17, weight: .bold))
+                    .lineLimit(1)
+            }
+            .foregroundStyle(.white)
+            .padding(.horizontal, 22)
+            .frame(maxWidth: .infinity)
+            .frame(height: 56)
+            .contentShape(Capsule())
+            .eventDetailLiquidGlass(in: Capsule())
         }
         .buttonStyle(.plain)
+        .disabled(currentEvent.hasEnded)
+        .opacity(currentEvent.hasEnded ? 0.62 : 1)
     }
 
     private var details: some View {
@@ -598,7 +611,7 @@ struct EventDetailView: View {
 
     private var rsvpTriggerButton: some View {
         Button {
-            guard !rsvpViewModel.isSaving else {
+            guard !isRSVPInteractionDisabled else {
                 return
             }
 
@@ -628,9 +641,11 @@ struct EventDetailView: View {
                     .font(.system(size: 17, weight: .bold))
                     .lineLimit(1)
 
-                Image(systemName: isRSVPMenuExpanded ? "chevron.down" : "chevron.up")
-                    .font(.system(size: 12, weight: .bold))
-                    .opacity(0.72)
+                if !currentEvent.hasEnded {
+                    Image(systemName: isRSVPMenuExpanded ? "chevron.down" : "chevron.up")
+                        .font(.system(size: 12, weight: .bold))
+                        .opacity(0.72)
+                }
             }
             .foregroundStyle(rsvpButtonColor)
             .padding(.horizontal, 22)
@@ -640,7 +655,8 @@ struct EventDetailView: View {
             .eventDetailLiquidGlass(in: Capsule())
         }
         .buttonStyle(.plain)
-        .disabled(rsvpViewModel.isSaving)
+        .disabled(isRSVPInteractionDisabled)
+        .opacity(currentEvent.hasEnded ? 0.62 : 1)
     }
 
     private var expandedRSVPMenu: some View {
@@ -1061,7 +1077,7 @@ struct EventDetailView: View {
 
             return "Can't Go"
         case nil:
-            return "RSVP"
+            return currentEvent.hasEnded ? "Event Passed" : "RSVP"
         }
     }
 
@@ -1074,12 +1090,16 @@ struct EventDetailView: View {
         case .notGoing:
             return "xmark"
         case nil:
-            return nil
+            return currentEvent.hasEnded ? "clock" : nil
         }
     }
 
     private var rsvpButtonColor: Color {
         rsvpViewModel.status?.rsvpTintColor ?? .white
+    }
+
+    private var isRSVPInteractionDisabled: Bool {
+        rsvpViewModel.isSaving || currentEvent.hasEnded
     }
 
     private var isAuthenticated: Bool {

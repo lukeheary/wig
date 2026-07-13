@@ -1177,6 +1177,9 @@ private struct ProfileEventsFilterButton: View {
                     Button {
                         withAnimation(.snappy(duration: 0.22)) {
                             selection = tab
+                            if tab == .past {
+                                rsvpFilter = .going
+                            }
                         }
                     } label: {
                         if tab == selection {

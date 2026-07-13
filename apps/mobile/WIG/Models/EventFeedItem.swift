@@ -176,6 +176,10 @@ struct EventFeedItem: Codable, Identifiable, Hashable, Sendable {
         EventFeedItem.calendar(timeZone: displayTimeZone).startOfDay(for: startAt)
     }
 
+    var hasEnded: Bool {
+        Date() >= (endAt ?? startAt)
+    }
+
     var relativeStartDayText: String {
         let calendar = EventFeedItem.calendar(timeZone: displayTimeZone)
         let startOfToday = calendar.startOfDay(for: Date())
