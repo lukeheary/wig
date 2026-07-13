@@ -234,9 +234,13 @@ export async function POST(request: Request, context: RouteContext) {
         ),
       });
 
+      // A partner may have RSVP'd independently before the current user enables
+      // the shared RSVP toggle. When both responses already match, adopt that
+      // RSVP so future status changes can update the pair together.
       const canWriteMirroredRsvp =
         !existingPartnerRsvp ||
-        existingPartnerRsvp.partnerRsvpByUserId === userId;
+        existingPartnerRsvp.partnerRsvpByUserId === userId ||
+        existingPartnerRsvp.status === body.status;
 
       if (canWriteMirroredRsvp) {
         includedPartnerInRsvp = true;
