@@ -894,8 +894,9 @@ export const eventReviews = pgTable(
     eventId: uuid("event_id")
       .notNull()
       .references(() => events.id, { onDelete: "cascade" }),
-    rating: eventReviewRatingEnum("rating").notNull(),
+    rating: eventReviewRatingEnum("rating"),
     comment: text("comment"),
+    skippedAt: timestamp("skipped_at"),
     createdAt: timestamp("created_at").defaultNow().notNull(),
     updatedAt: timestamp("updated_at").defaultNow().notNull(),
   },

@@ -71,6 +71,8 @@ struct EventFeedItem: Codable, Identifiable, Hashable, Sendable {
     var isCreatedByCurrentUser = false
     var userRsvpStatus: EventRSVPStatus? = nil
     var userRsvpNotGoingReason: EventRSVPDeclineReason? = nil
+    var currentUserReview: MobileEventReview? = nil
+    var hasLoadedCurrentUserReview = false
     var friendsGoing: [EventSocialRSVP] = []
     var friendsInterested: [EventSocialRSVP] = []
     var friendsNotGoing: [EventSocialRSVP] = []
@@ -107,6 +109,7 @@ struct EventFeedItem: Codable, Identifiable, Hashable, Sendable {
         case isCreatedByCurrentUser
         case userRsvpStatus
         case userRsvpNotGoingReason
+        case currentUserReview
         case friendsGoing
         case friendsInterested
         case friendsNotGoing
@@ -186,6 +189,16 @@ struct EventFeedItem: Codable, Identifiable, Hashable, Sendable {
             .string(from: startAt)
     }
 
+    var formattedCardStart: String {
+        var calendar = Calendar(identifier: .gregorian)
+        calendar.timeZone = displayTimeZone
+        let format = calendar.component(.minute, from: startAt) == 0
+            ? "EEE, MMM d 'at' h a"
+            : "EEE, MMM d 'at' h:mm a"
+
+        return formattedStart(format: format)
+    }
+
     func formattedEnd(format: String) -> String? {
         guard let endAt else { return nil }
         return EventFeedItem.formatter(format: format, timeZone: displayTimeZone)
@@ -197,7 +210,12 @@ struct EventFeedItem: Codable, Identifiable, Hashable, Sendable {
     }
 
     var hasEnded: Bool {
-        Date() >= (endAt ?? startAt)
+        if let endAt {
+            return Date() >= endAt
+        }
+
+        let calendar = EventFeedItem.calendar(timeZone: displayTimeZone)
+        return calendar.startOfDay(for: startAt) < calendar.startOfDay(for: Date())
     }
 
     var relativeStartDayText: String {
@@ -403,6 +421,11 @@ extension EventFeedItem {
             EventRSVPDeclineReason.self,
             forKey: .userRsvpNotGoingReason
         )
+        currentUserReview = try container.decodeIfPresent(
+            MobileEventReview.self,
+            forKey: .currentUserReview
+        )
+        hasLoadedCurrentUserReview = container.contains(.currentUserReview)
         friendsGoing = try container.decodeIfPresent([EventSocialRSVP].self, forKey: .friendsGoing) ?? []
         friendsInterested = try container.decodeIfPresent([EventSocialRSVP].self, forKey: .friendsInterested) ?? []
         friendsNotGoing = try container.decodeIfPresent([EventSocialRSVP].self, forKey: .friendsNotGoing) ?? []

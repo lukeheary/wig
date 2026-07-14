@@ -209,7 +209,12 @@ struct HomeView: View {
                     await EventArtworkPrefetcher.prefetch(events: displayedEventsForPrefetch)
                 }
                 .sheet(item: $postEventFeedbackEvent) { event in
-                    PostEventFeedbackSheet(event: event) { response, comment in
+                    PostEventFeedbackSheet(
+                        event: event,
+                        onSkip: {
+                            await skipPostEventFeedback(for: event)
+                        }
+                    ) { response, comment in
                         await recordPostEventFeedback(response, comment: comment, for: event)
                     }
                     .presentationDetents([.medium, .large])
@@ -291,13 +296,13 @@ struct HomeView: View {
     private var weeklyContent: some View {
         ScrollView {
             LazyVStack(alignment: .leading, spacing: 24) {
-                if let postEventFeedbackPrompt {
+                if isViewingCurrentWeek, let postEventFeedbackPrompt {
                     PostEventFeedbackBanner(event: postEventFeedbackPrompt) {
                         postEventFeedbackEvent = postEventFeedbackPrompt
                     }
                     .padding(.horizontal, 16)
-                    .padding(.top, 6)
-                    .padding(.bottom, -16)
+                    .padding(.top, -2)
+                    .padding(.bottom, -24)
                 }
 
                 if shouldShowRecentActivity {
@@ -1303,8 +1308,15 @@ struct HomeView: View {
         using apiClient: APIClient,
         forceRefresh: Bool = false
     ) async {
-        await viewModel.load(weekStart: weekStart, using: apiClient, forceRefresh: forceRefresh)
-        await loadPostEventFeedbackPrompt(using: apiClient)
+        async let eventLoad: Void = viewModel.load(
+            weekStart: weekStart,
+            using: apiClient,
+            forceRefresh: forceRefresh
+        )
+        async let reviewPromptLoad: Void = loadPostEventFeedbackPrompt(using: apiClient)
+
+        await eventLoad
+        await reviewPromptLoad
 
         guard isAuthenticated else {
             recentActivityViewModel.clear()
@@ -1334,7 +1346,7 @@ struct HomeView: View {
         _ response: PostEventFeedbackResponse,
         comment: String?,
         for event: MobileEventReviewPrompt
-    ) async {
+    ) async -> Bool {
         if response == .didNotAttend {
             do {
                 let endpoint = try APIClient.updateMobileEventRSVP(
@@ -1345,7 +1357,7 @@ struct HomeView: View {
                 _ = try await apiClient.send(endpoint)
                 NotificationCenter.default.post(name: .eventRSVPDidChange, object: nil)
             } catch {
-                return
+                return false
             }
         } else if let rating = response.rating {
             do {
@@ -1356,10 +1368,26 @@ struct HomeView: View {
                 )
                 _ = try await apiClient.send(endpoint)
             } catch {
-                return
+                return false
             }
         }
 
+        completePostEventFeedback(for: event)
+        return true
+    }
+
+    private func skipPostEventFeedback(for event: MobileEventReviewPrompt) async -> Bool {
+        do {
+            try await apiClient.send(APIClient.skipMobileEventReview(eventID: event.id))
+        } catch {
+            return false
+        }
+
+        completePostEventFeedback(for: event)
+        return true
+    }
+
+    private func completePostEventFeedback(for event: MobileEventReviewPrompt) {
         UINotificationFeedbackGenerator().notificationOccurred(.success)
         completedPostEventFeedbackIDs.insert(event.id.uuidString)
         UserDefaults.standard.set(
@@ -1518,7 +1546,7 @@ private struct EventSection: Identifiable {
     var id: Date { day }
 }
 
-private enum PostEventFeedbackResponse: CaseIterable, Identifiable {
+enum PostEventFeedbackResponse: CaseIterable, Identifiable {
     case lovedIt
     case likedIt
     case okay
@@ -1581,11 +1609,6 @@ private struct PostEventFeedbackBanner: View {
     let event: MobileEventReviewPrompt
     let action: () -> Void
     @State private var artwork: UIImage?
-    @State private var blurredArtwork: UIImage?
-    @State private var tint: Color?
-
-    private let fallbackTint = Color(red: 0.11, green: 0.11, blue: 0.13)
-    private var tintColor: Color { tint ?? fallbackTint }
 
     var body: some View {
         Button(action: action) {
@@ -1603,16 +1626,16 @@ private struct PostEventFeedbackBanner: View {
                     }
                     }
                 }
-                .frame(width: 72, height: 72)
-                .clipShape(RoundedRectangle(cornerRadius: 15, style: .continuous))
+                .frame(width: 48, height: 48)
+                .clipShape(RoundedRectangle(cornerRadius: 14, style: .continuous))
                 .overlay {
-                    RoundedRectangle(cornerRadius: 15, style: .continuous)
+                    RoundedRectangle(cornerRadius: 14, style: .continuous)
                         .strokeBorder(.white.opacity(0.14), lineWidth: 1)
                 }
                 .shadow(color: .black.opacity(0.28), radius: 8, x: 0, y: 4)
 
                 Text("How was \(event.title)?")
-                    .font(.system(size: 14, weight: .semibold))
+                    .font(.system(size: 14, weight: .medium))
                     .foregroundStyle(.white)
                     .lineLimit(2)
                     .minimumScaleFactor(0.88)
@@ -1623,23 +1646,17 @@ private struct PostEventFeedbackBanner: View {
                 Image(systemName: "chevron.right")
                     .font(.system(size: 14, weight: .bold))
                     .foregroundStyle(.white.opacity(0.60))
+                    .padding(.trailing, 14)
             }
-            .padding(9)
-            .frame(height: 90)
-            .background { artworkBackdrop }
-            .clipShape(RoundedRectangle(cornerRadius: 18, style: .continuous))
-            .overlay {
-                RoundedRectangle(cornerRadius: 18, style: .continuous)
-                    .strokeBorder(.white.opacity(0.16), lineWidth: 1)
-            }
+            .padding(7)
+            .frame(height: 62)
+            .homeLiquidGlass(in: RoundedRectangle(cornerRadius: 18, style: .continuous))
         }
         .buttonStyle(.plain)
         .accessibilityLabel("How was \(event.title)?")
         .task(id: event.coverImageURL) {
             guard let coverImageURL = event.coverImageURL else {
                 artwork = nil
-                blurredArtwork = nil
-                tint = nil
                 return
             }
 
@@ -1647,45 +1664,37 @@ private struct PostEventFeedbackBanner: View {
                 return
             }
 
-            let fallbackTint = fallbackTint
-            let renderedArtwork = await Task.detached(priority: .userInitiated) {
-                (
-                    image,
-                    image.placeCardBlurredBackdrop(),
-                    image.placeCardTintColor.map(Color.init(uiColor:)) ?? fallbackTint
-                )
-            }.value
-
-            artwork = renderedArtwork.0
-            blurredArtwork = renderedArtwork.1
-            tint = renderedArtwork.2
-        }
-    }
-
-    private var artworkBackdrop: some View {
-        ZStack {
-            tintColor
-
-            if let blurredArtwork {
-                Image(uiImage: blurredArtwork)
-                    .resizable()
-                    .scaledToFill()
-                    .overlay(Color.black.opacity(0.30))
-                    .overlay(tintColor.opacity(0.32))
-            }
+            artwork = image
         }
     }
 }
 
-private struct PostEventFeedbackSheet: View {
+struct PostEventFeedbackSheet: View {
     let event: MobileEventReviewPrompt
-    let onResponse: (PostEventFeedbackResponse, String?) async -> Void
+    let onResponse: (PostEventFeedbackResponse, String?) async -> Bool
+    let onSkip: (() async -> Bool)?
 
     @Environment(\.dismiss) private var dismiss
     @State private var isSubmitting = false
-    @State private var comment = ""
+    @State private var comment: String
     @State private var selectedResponse: PostEventFeedbackResponse?
     @State private var isConfirmingDidNotAttend = false
+    @State private var isConfirmingSkip = false
+    @State private var submissionError: String?
+
+    init(
+        event: MobileEventReviewPrompt,
+        initialResponse: PostEventFeedbackResponse? = nil,
+        initialComment: String? = nil,
+        onSkip: (() async -> Bool)? = nil,
+        onResponse: @escaping (PostEventFeedbackResponse, String?) async -> Bool
+    ) {
+        self.event = event
+        self.onResponse = onResponse
+        self.onSkip = onSkip
+        _comment = State(initialValue: initialComment ?? "")
+        _selectedResponse = State(initialValue: initialResponse)
+    }
 
     var body: some View {
         ScrollView {
@@ -1761,14 +1770,26 @@ private struct PostEventFeedbackSheet: View {
                 .disabled(selectedResponse == nil || isSubmitting)
                 .padding(.vertical, -8)
 
-                Button {
-                    isConfirmingDidNotAttend = true
-                } label: {
-                    Text(PostEventFeedbackResponse.didNotAttend.title)
-                        .font(.system(size: 14, weight: .semibold))
-                        .foregroundStyle(.white.opacity(0.62))
-                        .frame(maxWidth: .infinity)
+                HStack(spacing: 0) {
+                    Button {
+                        isConfirmingDidNotAttend = true
+                    } label: {
+                        Text(PostEventFeedbackResponse.didNotAttend.title)
+                            .frame(maxWidth: .infinity)
+                    }
+
+                    if onSkip != nil {
+                        Button {
+                            isConfirmingSkip = true
+                        } label: {
+                            Text("Skip review")
+                                .frame(maxWidth: .infinity)
+                        }
+                        .accessibilityHint("You can add a review later from this event")
+                    }
                 }
+                .font(.system(size: 14, weight: .semibold))
+                .foregroundStyle(.white.opacity(0.62))
                 .buttonStyle(.plain)
                 .disabled(isSubmitting)
             }
@@ -1799,6 +1820,25 @@ private struct PostEventFeedbackSheet: View {
             Button("Cancel", role: .cancel) {}
         } message: {
             Text("We'll update your RSVP.")
+        }
+        .alert(
+            "Skip review?",
+            isPresented: $isConfirmingSkip,
+        ) {
+            Button("Skip review") {
+                skipReview()
+            }
+            Button("Cancel", role: .cancel) {}
+        } message: {
+            Text("You can add a review later from this event in your past events.")
+        }
+        .alert("Couldn't save your feedback", isPresented: Binding(
+            get: { submissionError != nil },
+            set: { if !$0 { submissionError = nil } }
+        )) {
+            Button("OK", role: .cancel) {}
+        } message: {
+            Text(submissionError ?? "Please try again.")
         }
     }
 
@@ -1850,7 +1890,23 @@ private struct PostEventFeedbackSheet: View {
 
         Task {
             let trimmedComment = comment.trimmingCharacters(in: .whitespacesAndNewlines)
-            await onResponse(response, trimmedComment.isEmpty ? nil : trimmedComment)
+            let didSubmit = await onResponse(response, trimmedComment.isEmpty ? nil : trimmedComment)
+            if !didSubmit {
+                submissionError = "Your feedback wasn't saved. Please try again."
+            }
+            isSubmitting = false
+        }
+    }
+
+    private func skipReview() {
+        guard !isSubmitting, let onSkip else { return }
+        isSubmitting = true
+
+        Task {
+            let didSkip = await onSkip()
+            if !didSkip {
+                submissionError = "Your review wasn't skipped. Please try again."
+            }
             isSubmitting = false
         }
     }
@@ -2242,7 +2298,7 @@ private struct EventSearchRow: View {
                     .lineSpacing(1)
                     .frame(maxWidth: .infinity, alignment: .leading)
 
-                Text(event.formattedStart(format: "EEE, MMM d 'at' h:mm a"))
+                Text(event.formattedCardStart)
                     .font(.system(size: 13, weight: .medium))
                     .foregroundStyle(AppTheme.accentBlue)
                     .lineLimit(1)

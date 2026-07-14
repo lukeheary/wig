@@ -307,6 +307,12 @@
       "when": 1783785600000,
       "tag": "0049_add_event_reviews",
       "breakpoints": true
+    },
+    {
+      "idx": 51,
+      "when": 1784041200000,
+      "tag": "0050_store_review_skips_on_event_reviews",
+      "breakpoints": true
     }
   ]
 }

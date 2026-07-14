@@ -168,7 +168,7 @@ private struct EventCardContent: View {
                         .lineSpacing(1)
                         .frame(maxWidth: .infinity, alignment: .leading)
 
-                    Text(event.formattedStart(format: "EEE, MMM d 'at' h:mm a"))
+                    Text(event.formattedCardStart)
                         .font(.system(size: 13, weight: .medium))
                         .foregroundStyle(AppTheme.accentBlue)
                         .lineLimit(1)
@@ -400,7 +400,7 @@ private extension UIImage {
     }
 
     func blurredCardBackdrop() -> UIImage? {
-        guard let cgImage else { return nil }
+        guard cgImage != nil else { return nil }
 
         let maxDimension: CGFloat = 180
         let scale = min(maxDimension / max(size.width, size.height), 1)

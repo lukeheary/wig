@@ -822,6 +822,33 @@ struct APIClient: Sendable {
         )
     }
 
+    static func mobileEventReview(eventID: UUID) -> Endpoint<MobileEventReviewResponse> {
+        Endpoint(
+            path: "/api/mobile/events/\(eventID.uuidString)/reviews",
+            requiresAuthentication: false,
+            includesAuthenticationIfAvailable: true
+        )
+    }
+
+    static func mobileEventAttendeeReviews(
+        eventID: UUID
+    ) -> Endpoint<MobileEventAttendeeReviewsResponse> {
+        Endpoint(
+            path: "/api/mobile/events/\(eventID.uuidString)/reviews/attendees",
+            requiresAuthentication: false,
+            includesAuthenticationIfAvailable: true
+        )
+    }
+
+    static func skipMobileEventReview(eventID: UUID) -> Endpoint<EmptyResponse> {
+        Endpoint(
+            path: "/api/mobile/events/\(eventID.uuidString)/reviews/skip",
+            method: .post,
+            requiresAuthentication: false,
+            includesAuthenticationIfAvailable: true
+        )
+    }
+
     static func mobileMyPartner() -> Endpoint<MobilePartnerResponse> {
         Endpoint(
             path: "/api/mobile/partners/me",
@@ -1205,13 +1232,31 @@ enum EventReviewRating: String, Codable, Hashable, Sendable {
     case didNotLikeIt = "did_not_like_it"
 }
 
-struct MobileEventReview: Decodable, Hashable, Sendable {
+struct MobileEventReview: Codable, Hashable, Sendable {
     let id: UUID
     let eventId: UUID
     let rating: EventReviewRating
     let comment: String?
     let createdAt: Date
     let updatedAt: Date
+}
+
+struct MobileEventReviewResponse: Decodable, Hashable, Sendable {
+    let review: MobileEventReview?
+}
+
+struct MobileEventAttendeeReview: Decodable, Hashable, Sendable {
+    let userID: String
+    let rating: EventReviewRating
+
+    enum CodingKeys: String, CodingKey {
+        case userID = "userId"
+        case rating
+    }
+}
+
+struct MobileEventAttendeeReviewsResponse: Decodable, Hashable, Sendable {
+    let reviews: [MobileEventAttendeeReview]
 }
 
 private struct EventRSVPUpdateRequest: Encodable {

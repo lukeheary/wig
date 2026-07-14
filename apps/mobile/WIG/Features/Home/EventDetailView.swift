@@ -31,14 +31,23 @@ struct EventDetailView: View {
     @State private var rsvpConfirmationToken = UUID()
     @State private var isRSVPConfirmationVisible = false
     @State private var pendingRSVPNotificationToken = UUID()
+    @State private var currentUserReview: MobileEventReview?
+    @State private var attendeeReviewRatings = [String: EventReviewRating]()
+    @State private var hasLoadedCurrentUserReview = false
+    @State private var isReviewSheetPresented = false
 
     init(event: EventFeedItem) {
         self.event = event
+
         _rsvpViewModel = StateObject(
             wrappedValue: EventRSVPViewModel(
                 status: event.userRsvpStatus,
                 notGoingReason: event.userRsvpNotGoingReason
             )
+        )
+        _currentUserReview = State(initialValue: event.currentUserReview)
+        _hasLoadedCurrentUserReview = State(
+            initialValue: !event.hasEnded || event.hasLoadedCurrentUserReview
         )
     }
 
@@ -58,8 +67,10 @@ struct EventDetailView: View {
                                 details
 
                                 if isAuthenticated {
-                                    inlineRSVPSection
-                                        .padding(.top, 20)
+                                    if !shouldHideCompletedRSVP {
+                                        inlineRSVPSection
+                                            .padding(.top, 20)
+                                    }
                                 } else {
                                     guestRSVPButton
                                         .padding(.top, 20)
@@ -91,6 +102,7 @@ struct EventDetailView: View {
                     )
 
                     VStack(alignment: .leading, spacing: 20) {
+                        eventReviewSection
                         rsvpdSection
                         about
                     }
@@ -182,7 +194,9 @@ struct EventDetailView: View {
             async let rsvpLoad: Void = rsvpViewModel.load(eventID: currentEvent.id, using: apiClient)
             async let partnerLoad: Void = loadPartner(using: apiClient)
             async let currentUserLoad: Void = loadCurrentUserSocialUser()
-            _ = await (rsvpLoad, partnerLoad, currentUserLoad)
+            async let reviewLoad: Void = loadCurrentUserReview(using: apiClient)
+            async let attendeeReviewLoad: Void = loadAttendeeReviewRatings(using: apiClient)
+            _ = await (rsvpLoad, partnerLoad, currentUserLoad, reviewLoad, attendeeReviewLoad)
 
             if partnerRelationship?.isAccepted == true, rsvpViewModel.status == nil {
                 rsvpViewModel.setIncludePartner(true)
@@ -190,6 +204,9 @@ struct EventDetailView: View {
         }
         .onChange(of: isAuthenticated) { _, isAuthenticated in
             guard !isAuthenticated else {
+                if currentEvent.hasEnded, currentUserReview == nil {
+                    hasLoadedCurrentUserReview = false
+                }
                 return
             }
 
@@ -231,6 +248,17 @@ struct EventDetailView: View {
             ShareSheet(activityItems: [shareURL])
                 .presentationDetents([.medium, .large])
         }
+        .sheet(isPresented: $isReviewSheetPresented) {
+            PostEventFeedbackSheet(
+                event: reviewSheetEvent,
+                initialResponse: currentUserReview.flatMap { PostEventFeedbackResponse(reviewRating: $0.rating) },
+                initialComment: currentUserReview?.comment
+            ) { response, comment in
+                await submitReviewFeedback(response, comment: comment)
+            }
+            .presentationDetents([.medium, .large])
+            .presentationDragIndicator(.visible)
+        }
         .sheet(isPresented: $isEditEventPresented) {
             MobileEventCreationView(mode: .edit(currentEvent)) { updatedEvent in
                 editedEvent = mergeUpdatedEvent(updatedEvent)
@@ -250,6 +278,97 @@ struct EventDetailView: View {
     private func closeEventDetail() {
         isTabBarHidden = false
         dismiss()
+    }
+
+    private var reviewSheetEvent: MobileEventReviewPrompt {
+        MobileEventReviewPrompt(
+            id: currentEvent.id,
+            title: currentEvent.title,
+            coverImageURL: currentEvent.coverImageURL,
+            startAt: currentEvent.startAt,
+            endAt: currentEvent.endAt,
+            venueName: currentEvent.venueName,
+            city: currentEvent.city,
+            state: currentEvent.state
+        )
+    }
+
+    private func loadCurrentUserReview(using apiClient: APIClient) async {
+        guard !hasLoadedCurrentUserReview else {
+            return
+        }
+
+        guard currentEvent.hasEnded else {
+            currentUserReview = nil
+            hasLoadedCurrentUserReview = true
+            return
+        }
+
+        do {
+            currentUserReview = try await apiClient.send(
+                APIClient.mobileEventReview(eventID: currentEvent.id)
+            ).review
+        } catch {
+            currentUserReview = nil
+        }
+
+        hasLoadedCurrentUserReview = true
+    }
+
+    private func submitReviewFeedback(
+        _ response: PostEventFeedbackResponse,
+        comment: String?
+    ) async -> Bool {
+        if response == .didNotAttend {
+            do {
+                let endpoint = try APIClient.updateMobileEventRSVP(
+                    eventID: currentEvent.id,
+                    status: .notGoing,
+                    notifyFriends: false
+                )
+                _ = try await apiClient.send(endpoint)
+                await rsvpViewModel.load(eventID: currentEvent.id, using: apiClient)
+                isReviewSheetPresented = false
+                NotificationCenter.default.post(name: .eventRSVPDidChange, object: nil)
+            } catch {
+                return false
+            }
+            return true
+        }
+
+        guard let rating = response.rating else { return false }
+
+        do {
+            let endpoint = try APIClient.createMobileEventReview(
+                eventID: currentEvent.id,
+                rating: rating,
+                comment: comment
+            )
+            currentUserReview = try await apiClient.send(endpoint)
+            await loadAttendeeReviewRatings(using: apiClient)
+            isReviewSheetPresented = false
+            return true
+        } catch {
+            return false
+        }
+    }
+
+    private func loadAttendeeReviewRatings(using apiClient: APIClient) async {
+        guard currentEvent.hasEnded else {
+            attendeeReviewRatings = [:]
+            return
+        }
+
+        do {
+            let response = try await apiClient.send(
+                APIClient.mobileEventAttendeeReviews(eventID: currentEvent.id)
+            )
+            attendeeReviewRatings = Dictionary(
+                uniqueKeysWithValues: response.reviews.map { ($0.userID, $0.rating) }
+            )
+        } catch {
+            attendeeReviewRatings = [:]
+        }
     }
 
     private var topTrailingControls: some View {
@@ -617,6 +736,13 @@ struct EventDetailView: View {
 
             UIImpactFeedbackGenerator(style: .light).impactOccurred()
 
+            if shouldOfferReview {
+                withAnimation(.spring(response: 0.32, dampingFraction: 0.82)) {
+                    isReviewSheetPresented = true
+                }
+                return
+            }
+
             withAnimation(.spring(response: 0.32, dampingFraction: 0.82)) {
                 if isRSVPMenuExpanded {
                     closeRSVPMenu()
@@ -641,8 +767,8 @@ struct EventDetailView: View {
                     .font(.system(size: 17, weight: .bold))
                     .lineLimit(1)
 
-                if !currentEvent.hasEnded {
-                    Image(systemName: isRSVPMenuExpanded ? "chevron.down" : "chevron.up")
+                if shouldOfferReview || !currentEvent.hasEnded {
+                    Image(systemName: isRSVPChevronExpanded ? "chevron.down" : "chevron.up")
                         .font(.system(size: 12, weight: .bold))
                         .opacity(0.72)
                 }
@@ -656,7 +782,7 @@ struct EventDetailView: View {
         }
         .buttonStyle(.plain)
         .disabled(isRSVPInteractionDisabled)
-        .opacity(currentEvent.hasEnded ? 0.62 : 1)
+        .opacity(currentEvent.hasEnded && !shouldOfferReview ? 0.62 : 1)
     }
 
     private var expandedRSVPMenu: some View {
@@ -791,6 +917,51 @@ struct EventDetailView: View {
     }
 
     @ViewBuilder
+    private var eventReviewSection: some View {
+        if isAuthenticated,
+           currentEvent.hasEnded,
+           rsvpViewModel.status == .going,
+           let review = currentUserReview
+        {
+            VStack(alignment: .leading, spacing: 10) {
+                HStack(spacing: 10) {
+                    Text(review.rating.reviewEmoji)
+                        .font(.system(size: 32))
+
+                    Text(review.rating.reviewTitle)
+                        .font(.system(size: 17, weight: .semibold))
+                        .foregroundStyle(.white)
+
+                    Spacer(minLength: 0)
+
+                    Button("Edit") {
+                        isReviewSheetPresented = true
+                    }
+                    .font(.system(size: 14, weight: .semibold))
+                    .foregroundStyle(AppTheme.accentBlue)
+                    .buttonStyle(.plain)
+                }
+
+                if let comment = review.comment?.trimmingCharacters(in: .whitespacesAndNewlines),
+                   !comment.isEmpty
+                {
+                    Text(comment)
+                        .font(.system(size: 14, weight: .medium))
+                        .foregroundStyle(.white.opacity(0.70))
+                        .lineSpacing(3)
+                }
+            }
+            .padding(16)
+            .frame(maxWidth: .infinity, alignment: .leading)
+            .background(.white.opacity(0.055), in: RoundedRectangle(cornerRadius: 18, style: .continuous))
+            .overlay {
+                RoundedRectangle(cornerRadius: 18, style: .continuous)
+                    .strokeBorder(.white.opacity(0.10), lineWidth: 1)
+            }
+        }
+    }
+
+    @ViewBuilder
     private var about: some View {
         if let description = currentEvent.description?.trimmingCharacters(in: .whitespacesAndNewlines),
            !description.isEmpty
@@ -829,7 +1000,10 @@ struct EventDetailView: View {
                     EventRSVPListView(
                         goingAttendees: goingAttendees,
                         interestedAttendees: interestedAttendees,
-                        notGoingAttendees: notGoingAttendees
+                        notGoingAttendees: notGoingAttendees,
+                        isPastEvent: currentEvent.hasEnded,
+                        eventID: currentEvent.id,
+                        attendeeReviewRatings: attendeeReviewRatings
                     )
                 } label: {
                     EventRSVPFriendsRow(
@@ -1065,9 +1239,13 @@ struct EventDetailView: View {
     }
 
     private var rsvpButtonTitle: String {
+        if shouldOfferReview {
+            return "How was it?"
+        }
+
         switch rsvpViewModel.status {
         case .going:
-            return "Going"
+            return currentEvent.hasEnded ? "Went" : "Going"
         case .interested:
             return "Interested"
         case .notGoing:
@@ -1082,6 +1260,10 @@ struct EventDetailView: View {
     }
 
     private var rsvpButtonSystemImage: String? {
+        if shouldOfferReview {
+            return "bubble.left"
+        }
+
         switch rsvpViewModel.status {
         case .going:
             return "checkmark"
@@ -1095,11 +1277,32 @@ struct EventDetailView: View {
     }
 
     private var rsvpButtonColor: Color {
-        rsvpViewModel.status?.rsvpTintColor ?? .white
+        if shouldOfferReview {
+            return AppTheme.accentBlue
+        }
+
+        return rsvpViewModel.status?.rsvpTintColor ?? .white
     }
 
     private var isRSVPInteractionDisabled: Bool {
-        rsvpViewModel.isSaving || currentEvent.hasEnded
+        rsvpViewModel.isSaving || (currentEvent.hasEnded && !shouldOfferReview)
+    }
+
+    private var shouldOfferReview: Bool {
+        isAuthenticated &&
+            currentEvent.hasEnded &&
+            rsvpViewModel.status == .going &&
+            hasLoadedCurrentUserReview &&
+            currentUserReview == nil
+    }
+
+    private var isRSVPChevronExpanded: Bool {
+        shouldOfferReview ? isReviewSheetPresented : isRSVPMenuExpanded
+    }
+
+    private var shouldHideCompletedRSVP: Bool {
+        currentEvent.hasEnded &&
+            (!hasLoadedCurrentUserReview || currentUserReview != nil)
     }
 
     private var isAuthenticated: Bool {
@@ -1211,12 +1414,16 @@ struct EventDetailView: View {
         let notGoingCount = friendNotGoingAttendees.count
 
         let parts = [
-            goingCount > 0 ? "\(goingCount) Going" : nil,
+            goingCount > 0 ? "\(goingCount) \(goingRSVPLabel)" : nil,
             interestedCount > 0 ? "\(interestedCount) Interested" : nil,
             notGoingCount > 0 ? "\(notGoingCount) Can't Go" : nil,
         ].compactMap { $0 }
 
         return parts.joined(separator: " • ")
+    }
+
+    private var goingRSVPLabel: String {
+        currentEvent.hasEnded ? "Went" : "Going"
     }
 
     // Captures the signed-in user's identity (once, before any RSVP invalidates the
@@ -1350,6 +1557,7 @@ private struct AppleCalendarComposerView: UIViewControllerRepresentable {
 private struct EventAttendeeSection: View {
     let title: String
     let attendees: [EventSocialRSVP]
+    let attendeeReviewRatings: [String: EventReviewRating]
 
     var body: some View {
         VStack(alignment: .leading, spacing: 12) {
@@ -1366,7 +1574,10 @@ private struct EventAttendeeSection: View {
                             UserProfileView(userID: attendee.user.id)
                         }
                     } label: {
-                        EventAttendeeRow(attendee: attendee)
+                        EventAttendeeRow(
+                            attendee: attendee,
+                            reviewRating: attendeeReviewRatings[attendee.user.id]
+                        )
                             .contentShape(Rectangle())
                     }
                     .buttonStyle(.plain)
@@ -1482,28 +1693,40 @@ private struct EventRSVPListView: View {
     let goingAttendees: [EventSocialRSVP]
     let interestedAttendees: [EventSocialRSVP]
     let notGoingAttendees: [EventSocialRSVP]
+    let isPastEvent: Bool
+    let eventID: UUID
+    let attendeeReviewRatings: [String: EventReviewRating]
+    @Environment(\.apiClient) private var apiClient
+    @State private var loadedAttendeeReviewRatings = [String: EventReviewRating]()
+
+    private var reviewRatings: [String: EventReviewRating] {
+        attendeeReviewRatings.merging(loadedAttendeeReviewRatings) { _, loaded in loaded }
+    }
 
     var body: some View {
         ScrollView {
             VStack(alignment: .leading, spacing: 18) {
                 if !goingAttendees.isEmpty {
                     EventAttendeeSection(
-                        title: "Going",
-                        attendees: goingAttendees
+                        title: isPastEvent ? "Went" : "Going",
+                        attendees: goingAttendees,
+                        attendeeReviewRatings: reviewRatings
                     )
                 }
 
                 if !interestedAttendees.isEmpty {
                     EventAttendeeSection(
                         title: "Interested",
-                        attendees: interestedAttendees
+                        attendees: interestedAttendees,
+                        attendeeReviewRatings: reviewRatings
                     )
                 }
 
                 if !notGoingAttendees.isEmpty {
                     EventAttendeeSection(
                         title: "Can't Go",
-                        attendees: notGoingAttendees
+                        attendees: notGoingAttendees,
+                        attendeeReviewRatings: reviewRatings
                     )
                 }
 
@@ -1523,11 +1746,26 @@ private struct EventRSVPListView: View {
         .navigationTitle("RSVP'd")
         .navigationBarTitleDisplayMode(.inline)
         .toolbar(.visible, for: .navigationBar)
+        .task(id: eventID) {
+            guard isPastEvent else { return }
+
+            do {
+                let response = try await apiClient.send(
+                    APIClient.mobileEventAttendeeReviews(eventID: eventID)
+                )
+                loadedAttendeeReviewRatings = Dictionary(
+                    uniqueKeysWithValues: response.reviews.map { ($0.userID, $0.rating) }
+                )
+            } catch {
+                loadedAttendeeReviewRatings = [:]
+            }
+        }
     }
 }
 
 private struct EventAttendeeRow: View {
     let attendee: EventSocialRSVP
+    let reviewRating: EventReviewRating?
 
     var body: some View {
         UserListRowView(
@@ -1536,7 +1774,12 @@ private struct EventAttendeeRow: View {
             avatarName: actualName,
             identityKey: attendee.user.id,
             ringWidth: 0
-        )
+        ) {
+            if let reviewRating {
+                Text(reviewRating.reviewEmoji)
+                    .font(.system(size: 24))
+            }
+        }
     }
 
     private var displayName: String {
@@ -2027,6 +2270,49 @@ private extension EventRSVPStatus {
             return .yellow
         case .notGoing:
             return .red
+        }
+    }
+}
+
+private extension EventReviewRating {
+    var reviewTitle: String {
+        switch self {
+        case .lovedIt:
+            return "Loved it"
+        case .likedIt:
+            return "Liked it"
+        case .okay:
+            return "It was okay"
+        case .didNotLikeIt:
+            return "Didn't like it"
+        }
+    }
+
+    var reviewEmoji: String {
+        switch self {
+        case .lovedIt:
+            return "😍"
+        case .likedIt:
+            return "🙂"
+        case .okay:
+            return "😐"
+        case .didNotLikeIt:
+            return "🙁"
+        }
+    }
+}
+
+private extension PostEventFeedbackResponse {
+    init?(reviewRating: EventReviewRating) {
+        switch reviewRating {
+        case .lovedIt:
+            self = .lovedIt
+        case .likedIt:
+            self = .likedIt
+        case .okay:
+            self = .okay
+        case .didNotLikeIt:
+            self = .didNotLikeIt
         }
     }
 }
