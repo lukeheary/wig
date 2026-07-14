@@ -1651,6 +1651,7 @@ private struct PostEventFeedbackBanner: View {
             .padding(7)
             .frame(height: 62)
             .homeLiquidGlass(in: RoundedRectangle(cornerRadius: 18, style: .continuous))
+            .contentShape(RoundedRectangle(cornerRadius: 18, style: .continuous))
         }
         .buttonStyle(.plain)
         .accessibilityLabel("How was \(event.title)?")
