@@ -1,0 +1,123 @@
+import { migrate } from "drizzle-orm/neon-serverless/migrator";
+import { drizzle } from "drizzle-orm/neon-serverless";
+import { Pool, neonConfig } from "@neondatabase/serverless";
+import dotenv from "dotenv";
+import { createRequire } from "node:module";
+import { readMigrationFiles } from "drizzle-orm/migrator";
+
+const require = createRequire(import.meta.url);
+const WebSocket = require("ws");
+
+dotenv.config({ path: ".env.local" });
+neonConfig.webSocketConstructor = WebSocket;
+
+if (!process.env.DATABASE_URL) {
+  throw new Error("DATABASE_URL environment variable is not set");
+}
+
+async function withTimeout(operation, stage, timeoutMs = 15_000) {
+  let timeout;
+
+  try {
+    return await Promise.race([
+      operation,
+      new Promise((_, reject) => {
+        timeout = setTimeout(() => {
+          reject(new Error(`${stage} timed out after ${timeoutMs / 1_000} seconds`));
+        }, timeoutMs);
+      }),
+    ]);
+  } finally {
+    if (timeout) clearTimeout(timeout);
+  }
+}
+
+function buildMonotonicMigrationTimeline(migrations) {
+  let lastAppliedAt = 0;
+
+  return migrations.map((migration) => {
+    lastAppliedAt = Math.max(migration.folderMillis, lastAppliedAt + 1);
+    return { ...migration, appliedAt: lastAppliedAt };
+  });
+}
+
+async function bootstrapLegacyMigrationHistory(pool) {
+  const migrations = buildMonotonicMigrationTimeline(
+    readMigrationFiles({ migrationsFolder: "./src/server/db/migrations" })
+  );
+
+  const migrationTableExists = await pool.query(`select exists (
+    select 1 from information_schema.tables
+    where table_schema = 'drizzle' and table_name = '__drizzle_migrations'
+  )`);
+
+  if (migrationTableExists.rows[0]?.exists) {
+    for (const migration of migrations) {
+      await pool.query(
+        `update "drizzle"."__drizzle_migrations"
+         set "created_at" = $2 where "hash" = $1`,
+        [migration.hash, migration.appliedAt]
+      );
+    }
+    return;
+  }
+
+  const schemaMarkers = await pool.query(`select
+    exists (select 1 from pg_type where typname = 'event_visibility') as "hasEventVisibilityType",
+    exists (select 1 from information_schema.columns where table_name = 'event_series' and column_name = 'time_zone') as "hasSeriesTimeZone",
+    exists (select 1 from information_schema.columns where table_name = 'events' and column_name = 'time_zone') as "hasEventTimeZone",
+    exists (select 1 from pg_extension where extname = 'unaccent') as "hasUnaccent"`);
+
+  const markers = schemaMarkers.rows[0];
+  if (!markers?.hasEventVisibilityType || !markers.hasSeriesTimeZone || !markers.hasEventTimeZone) {
+    return;
+  }
+
+  let baselineCount = migrations.length;
+  if (!markers.hasUnaccent) {
+    baselineCount = migrations.findIndex(
+      (migration) => migration.hash === "3e0d6ef85217a64f0e9445f924c684a9b2aa5ebeea629e2827394b9d5c82ab24"
+    );
+    if (baselineCount === -1) throw new Error("Could not locate the unaccent migration in local history");
+  }
+
+  console.log(`ℹ️  Bootstrapping Drizzle migration history with ${baselineCount} existing migrations...`);
+  await pool.query('create schema if not exists "drizzle"');
+  await pool.query(`create table if not exists "drizzle"."__drizzle_migrations" (
+    id serial primary key, hash text not null, created_at numeric
+  )`);
+
+  for (const migration of migrations.slice(0, baselineCount)) {
+    await pool.query(
+      `insert into "drizzle"."__drizzle_migrations" ("hash", "created_at") values ($1, $2)`,
+      [migration.hash, migration.appliedAt]
+    );
+  }
+}
+
+async function runMigrations() {
+  console.log("⏳ Running migrations...");
+  const pool = new Pool({ connectionString: process.env.DATABASE_URL, connectionTimeoutMillis: 10_000 });
+  const db = drizzle(pool);
+
+  console.log("🔌 Connecting to the database...");
+  await withTimeout(pool.query("select 1"), "Database connection");
+  console.log("📋 Checking migration history...");
+  await withTimeout(bootstrapLegacyMigrationHistory(pool), "Migration history check");
+  console.log("🚀 Applying pending migrations...");
+  await withTimeout(
+    migrate(db, { migrationsFolder: "./src/server/db/migrations", migrationsSchema: "drizzle" }),
+    "Migration application",
+    60_000
+  );
+
+  console.log("✅ Migrations complete!");
+  await pool.end();
+}
+
+runMigrations()
+  .then(() => process.exit(0))
+  .catch((error) => {
+    console.error("❌ Migration failed:", error);
+    process.exit(1);
+  });

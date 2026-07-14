@@ -986,11 +986,11 @@ private final class PlaceLogoCache {
     }
 }
 
-private enum PlaceCardImageProcessing {
+enum PlaceCardImageProcessing {
     static let context = CIContext(options: [.workingColorSpace: NSNull()])
 }
 
-private extension UIImage {
+extension UIImage {
     // Average color of the whole logo, adjusted into a dark, readable tint that
     // still reads as the logo's dominant color.
     var placeCardTintColor: UIColor? {
@@ -1057,7 +1057,7 @@ private extension UIImage {
     }
 }
 
-private extension UIColor {
+extension UIColor {
     // Keep the sampled hue but cap brightness so white text stays readable and dark
     // logos still fade into a color that matches their background.
     func placeCardAdjusted() -> UIColor {

@@ -6,6 +6,26 @@ struct MobileEventsResponse: Codable, Hashable, Sendable {
     let currentUserLocation: EventCity?
 }
 
+struct MobileEventReviewPromptResponse: Decodable, Hashable, Sendable {
+    let event: MobileEventReviewPrompt?
+}
+
+struct MobileEventReviewPrompt: Decodable, Hashable, Identifiable, Sendable {
+    let id: UUID
+    let title: String
+    let coverImageURL: URL?
+    let startAt: Date
+    let endAt: Date?
+    let venueName: String?
+    let city: String
+    let state: String
+
+    enum CodingKeys: String, CodingKey {
+        case id, title, startAt, endAt, venueName, city, state
+        case coverImageURL = "coverImageUrl"
+    }
+}
+
 struct EventCity: Codable, Hashable, Identifiable, Sendable {
     let city: String
     let state: String
@@ -51,6 +71,8 @@ struct EventFeedItem: Codable, Identifiable, Hashable, Sendable {
     var isCreatedByCurrentUser = false
     var userRsvpStatus: EventRSVPStatus? = nil
     var userRsvpNotGoingReason: EventRSVPDeclineReason? = nil
+    var currentUserReview: MobileEventReview? = nil
+    var hasLoadedCurrentUserReview = false
     var friendsGoing: [EventSocialRSVP] = []
     var friendsInterested: [EventSocialRSVP] = []
     var friendsNotGoing: [EventSocialRSVP] = []
@@ -87,6 +109,7 @@ struct EventFeedItem: Codable, Identifiable, Hashable, Sendable {
         case isCreatedByCurrentUser
         case userRsvpStatus
         case userRsvpNotGoingReason
+        case currentUserReview
         case friendsGoing
         case friendsInterested
         case friendsNotGoing
@@ -166,6 +189,16 @@ struct EventFeedItem: Codable, Identifiable, Hashable, Sendable {
             .string(from: startAt)
     }
 
+    var formattedCardStart: String {
+        var calendar = Calendar(identifier: .gregorian)
+        calendar.timeZone = displayTimeZone
+        let format = calendar.component(.minute, from: startAt) == 0
+            ? "EEE, MMM d 'at' h a"
+            : "EEE, MMM d 'at' h:mm a"
+
+        return formattedStart(format: format)
+    }
+
     func formattedEnd(format: String) -> String? {
         guard let endAt else { return nil }
         return EventFeedItem.formatter(format: format, timeZone: displayTimeZone)
@@ -177,7 +210,12 @@ struct EventFeedItem: Codable, Identifiable, Hashable, Sendable {
     }
 
     var hasEnded: Bool {
-        Date() >= (endAt ?? startAt)
+        if let endAt {
+            return Date() >= endAt
+        }
+
+        let calendar = EventFeedItem.calendar(timeZone: displayTimeZone)
+        return calendar.startOfDay(for: startAt) < calendar.startOfDay(for: Date())
     }
 
     var relativeStartDayText: String {
@@ -383,6 +421,11 @@ extension EventFeedItem {
             EventRSVPDeclineReason.self,
             forKey: .userRsvpNotGoingReason
         )
+        currentUserReview = try container.decodeIfPresent(
+            MobileEventReview.self,
+            forKey: .currentUserReview
+        )
+        hasLoadedCurrentUserReview = container.contains(.currentUserReview)
         friendsGoing = try container.decodeIfPresent([EventSocialRSVP].self, forKey: .friendsGoing) ?? []
         friendsInterested = try container.decodeIfPresent([EventSocialRSVP].self, forKey: .friendsInterested) ?? []
         friendsNotGoing = try container.decodeIfPresent([EventSocialRSVP].self, forKey: .friendsNotGoing) ?? []

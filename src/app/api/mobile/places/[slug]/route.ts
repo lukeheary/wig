@@ -1,9 +1,10 @@
 import { auth } from "@clerk/nextjs/server";
 import { NextResponse } from "next/server";
-import { and, asc, desc, eq, gte, inArray, lt, or } from "drizzle-orm";
+import { and, asc, desc, eq, gte, inArray, isNotNull, lt, or } from "drizzle-orm";
 import { z } from "zod";
 import { db } from "@/server/db";
 import {
+  eventReviews,
   eventRsvps,
   events,
   placeFollows,
@@ -104,6 +105,7 @@ function mapMobileEvent(
     status: "going" | "interested" | "not_going";
     notGoingReason: string | null;
   } | null,
+  currentUserReview?: typeof eventReviews.$inferSelect | null,
   socialRsvps: Array<{
     status: "going" | "interested" | "not_going";
     user: {
@@ -151,6 +153,7 @@ function mapMobileEvent(
     }),
     userRsvpStatus: currentUserRsvp?.status ?? null,
     userRsvpNotGoingReason: currentUserRsvp?.notGoingReason ?? null,
+    currentUserReview: currentUserReview ?? null,
     friendsGoing: socialRsvps.filter((rsvp) => rsvp.status === "going"),
     friendsInterested: socialRsvps.filter((rsvp) => rsvp.status === "interested"),
     friendsNotGoing: socialRsvps.filter((rsvp) => rsvp.status === "not_going"),
@@ -268,6 +271,20 @@ export async function GET(
               notGoingReason: rsvp.notGoingReason,
             },
           ])
+        )
+      : new Map();
+  const currentUserReviewMap =
+    userId && eventIds.length > 0
+      ? new Map(
+          (
+            await db.query.eventReviews.findMany({
+              where: and(
+                inArray(eventReviews.eventId, eventIds),
+                eq(eventReviews.userId, userId),
+                isNotNull(eventReviews.rating)
+              ),
+            })
+          ).map((review) => [review.eventId, review])
         )
       : new Map();
 
@@ -426,6 +443,7 @@ export async function GET(
         event,
         editPermissions,
         currentUserRsvpMap.get(event.id),
+        currentUserReviewMap.get(event.id),
         socialRsvpsMap.get(event.id) ?? []
       )
     ),
@@ -434,6 +452,7 @@ export async function GET(
         event,
         editPermissions,
         currentUserRsvpMap.get(event.id),
+        currentUserReviewMap.get(event.id),
         socialRsvpsMap.get(event.id) ?? []
       )
     ),

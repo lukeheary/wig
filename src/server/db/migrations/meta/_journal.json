@@ -301,6 +301,18 @@
       "when": 1781616313000,
       "tag": "0048_enable_unaccent_search",
       "breakpoints": false
+    },
+    {
+      "idx": 50,
+      "when": 1783785600000,
+      "tag": "0049_add_event_reviews",
+      "breakpoints": true
+    },
+    {
+      "idx": 51,
+      "when": 1784041200000,
+      "tag": "0050_store_review_skips_on_event_reviews",
+      "breakpoints": true
     }
   ]
 }

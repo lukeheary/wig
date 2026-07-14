@@ -107,6 +107,14 @@ struct APIClient: Sendable {
         )
     }
 
+    static func mobileEventReviewPrompt() -> Endpoint<MobileEventReviewPromptResponse> {
+        Endpoint(
+            path: "/api/mobile/event-review-prompt",
+            requiresAuthentication: false,
+            includesAuthenticationIfAvailable: true
+        )
+    }
+
     static func mobilePlaces(limit: Int = 100) -> Endpoint<MobilePlacesResponse> {
         Endpoint(
             path: "/api/mobile/places",
@@ -798,6 +806,49 @@ struct APIClient: Sendable {
         )
     }
 
+    static func createMobileEventReview(
+        eventID: UUID,
+        rating: EventReviewRating,
+        comment: String?
+    ) throws -> Endpoint<MobileEventReview> {
+        Endpoint(
+            path: "/api/mobile/events/\(eventID.uuidString)/reviews",
+            method: .post,
+            body: try JSONEncoder().encode(
+                MobileEventReviewRequest(rating: rating, comment: comment)
+            ),
+            requiresAuthentication: false,
+            includesAuthenticationIfAvailable: true
+        )
+    }
+
+    static func mobileEventReview(eventID: UUID) -> Endpoint<MobileEventReviewResponse> {
+        Endpoint(
+            path: "/api/mobile/events/\(eventID.uuidString)/reviews",
+            requiresAuthentication: false,
+            includesAuthenticationIfAvailable: true
+        )
+    }
+
+    static func mobileEventAttendeeReviews(
+        eventID: UUID
+    ) -> Endpoint<MobileEventAttendeeReviewsResponse> {
+        Endpoint(
+            path: "/api/mobile/events/\(eventID.uuidString)/reviews/attendees",
+            requiresAuthentication: false,
+            includesAuthenticationIfAvailable: true
+        )
+    }
+
+    static func skipMobileEventReview(eventID: UUID) -> Endpoint<EmptyResponse> {
+        Endpoint(
+            path: "/api/mobile/events/\(eventID.uuidString)/reviews/skip",
+            method: .post,
+            requiresAuthentication: false,
+            includesAuthenticationIfAvailable: true
+        )
+    }
+
     static func mobileMyPartner() -> Endpoint<MobilePartnerResponse> {
         Endpoint(
             path: "/api/mobile/partners/me",
@@ -1174,11 +1225,50 @@ struct EventRSVPState: Decodable, Hashable, Sendable {
     let updatedAt: Date?
 }
 
+enum EventReviewRating: String, Codable, Hashable, Sendable {
+    case lovedIt = "loved_it"
+    case likedIt = "liked_it"
+    case okay
+    case didNotLikeIt = "did_not_like_it"
+}
+
+struct MobileEventReview: Codable, Hashable, Sendable {
+    let id: UUID
+    let eventId: UUID
+    let rating: EventReviewRating
+    let comment: String?
+    let createdAt: Date
+    let updatedAt: Date
+}
+
+struct MobileEventReviewResponse: Decodable, Hashable, Sendable {
+    let review: MobileEventReview?
+}
+
+struct MobileEventAttendeeReview: Decodable, Hashable, Sendable {
+    let userID: String
+    let rating: EventReviewRating
+
+    enum CodingKeys: String, CodingKey {
+        case userID = "userId"
+        case rating
+    }
+}
+
+struct MobileEventAttendeeReviewsResponse: Decodable, Hashable, Sendable {
+    let reviews: [MobileEventAttendeeReview]
+}
+
 private struct EventRSVPUpdateRequest: Encodable {
     let status: EventRSVPStatus
     let notGoingReason: EventRSVPDeclineReason?
     let includePartner: Bool
     let notifyFriends: Bool
+}
+
+private struct MobileEventReviewRequest: Encodable {
+    let rating: EventReviewRating
+    let comment: String?
 }
 
 private struct EventRSVPNotificationRequest: Encodable {

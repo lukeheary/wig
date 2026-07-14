@@ -1,9 +1,10 @@
 import { auth } from "@clerk/nextjs/server";
 import { NextResponse } from "next/server";
-import { and, asc, desc, eq, inArray, or } from "drizzle-orm";
+import { and, asc, desc, eq, inArray, isNotNull, or } from "drizzle-orm";
 import { db } from "@/server/db";
 import {
   cities,
+  eventReviews,
   eventRsvps,
   metroAreas,
   placeFollows,
@@ -206,7 +207,6 @@ export async function GET(_request: Request, context: RouteContext) {
     eventTimeZone(undefined, targetMetroArea?.state) ??
     DEFAULT_MOBILE_FEED_TIME_ZONE;
   const today = startOfDayInTimeZone(now, feedTimeZone);
-  const nextDay = new Date(today.getTime() + 24 * 60 * 60 * 1000);
 
   const friendships = await db.query.userFriends.findMany({
     where: and(
@@ -296,7 +296,7 @@ export async function GET(_request: Request, context: RouteContext) {
   const pastEventsRaw = pastRsvps
     .map((rsvp) => rsvp.event)
     .filter((event): event is NonNullable<typeof event> => Boolean(event))
-    .filter((event) => event.startAt < nextDay);
+    .filter((event) => event.startAt < today);
 
   const followedPlaceIdSet = new Set(followedPlaceIds.map((follow) => follow.placeId));
   const viewerFriendIds = new Set(
@@ -311,6 +311,20 @@ export async function GET(_request: Request, context: RouteContext) {
       ...pastEventsRaw.map((event) => event.id),
     ]),
   ];
+
+  const viewerReviews =
+    viewerUserId && allEventIds.length > 0
+      ? await db.query.eventReviews.findMany({
+          where: and(
+            inArray(eventReviews.eventId, allEventIds),
+            eq(eventReviews.userId, viewerUserId),
+            isNotNull(eventReviews.rating)
+          ),
+        })
+      : [];
+  const viewerReviewMap = new Map(
+    viewerReviews.map((review) => [review.eventId, review])
+  );
 
   const [viewerRsvps, mirroredPartnerRsvps, friendRsvps] =
     viewerUserId && allEventIds.length > 0
@@ -443,6 +457,7 @@ export async function GET(_request: Request, context: RouteContext) {
       isCreatedByCurrentUser: Boolean(viewerUserId) && mapped.createdByUserId === viewerUserId,
       userRsvpStatus: viewerRsvp?.status ?? null,
       userRsvpNotGoingReason: viewerRsvp?.notGoingReason ?? null,
+      currentUserReview: viewerReviewMap.get(mapped.id) ?? null,
       friendsGoing: socialRsvps.filter((rsvp: any) => rsvp.status === "going"),
       friendsInterested: socialRsvps.filter((rsvp: any) => rsvp.status === "interested"),
       friendsNotGoing: socialRsvps.filter((rsvp: any) => rsvp.status === "not_going"),

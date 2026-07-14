@@ -1,10 +1,11 @@
 import { auth } from "@clerk/nextjs/server";
 import { NextResponse } from "next/server";
-import { and, asc, eq, gte, inArray, lt, or } from "drizzle-orm";
+import { and, asc, eq, gte, inArray, isNotNull, lt, or } from "drizzle-orm";
 import { z } from "zod";
 import { db } from "@/server/db";
 import {
   cities,
+  eventReviews,
   eventRsvps,
   events,
   metroAreas,
@@ -280,6 +281,7 @@ export async function GET(request: Request) {
     },
   });
 
+
   const eventIds = eventList.map((event) => event.id);
   const socialRsvpsMap = new Map<
     string,
@@ -306,6 +308,7 @@ export async function GET(request: Request) {
       notGoingReason: string | null;
     }
   >();
+  const currentUserReviewMap = new Map<string, (typeof eventReviews.$inferSelect)>();
 
   const addSocialRsvp = (
     rsvp: {
@@ -348,7 +351,12 @@ export async function GET(request: Request) {
   };
 
   if (userId && eventIds.length > 0) {
-    const [currentUserRsvps, mirroredPartnerRsvps, friendConnections] =
+    const [
+      currentUserRsvps,
+      currentUserReviews,
+      mirroredPartnerRsvps,
+      friendConnections,
+    ] =
       await Promise.all([
         db.query.eventRsvps.findMany({
           where: and(
@@ -358,6 +366,13 @@ export async function GET(request: Request) {
           with: {
             user: true,
           },
+        }),
+        db.query.eventReviews.findMany({
+          where: and(
+            inArray(eventReviews.eventId, eventIds),
+            eq(eventReviews.userId, userId),
+            isNotNull(eventReviews.rating)
+          ),
         }),
         db.query.eventRsvps.findMany({
           where: and(
@@ -403,6 +418,10 @@ export async function GET(request: Request) {
         status: rsvp.status,
         notGoingReason: rsvp.notGoingReason,
       });
+    }
+
+    for (const review of currentUserReviews) {
+      currentUserReviewMap.set(review.eventId, review);
     }
 
     for (const rsvp of [
@@ -494,6 +513,7 @@ export async function GET(request: Request) {
         Boolean(userId) && mapped.createdByUserId === userId,
       userRsvpStatus: currentUserRsvp?.status ?? null,
       userRsvpNotGoingReason: currentUserRsvp?.notGoingReason ?? null,
+      currentUserReview: currentUserReviewMap.get(mapped.id) ?? null,
       friendsGoing: socialRsvps.filter((rsvp) => rsvp.status === "going"),
       friendsInterested: socialRsvps.filter(
         (rsvp) => rsvp.status === "interested"
