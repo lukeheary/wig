@@ -611,7 +611,8 @@ struct APIClient: Sendable {
         website: URL? = nil,
         instagram: String? = nil,
         hours: VenueHours? = nil,
-        categories: [String] = []
+        categories: [String] = [],
+        isEnabled: Bool? = nil
     ) throws -> Endpoint<MobilePlaceCreateResponse> {
         let request = MobilePlaceUpdateRequest(
             type: type.rawValue,
@@ -625,7 +626,8 @@ struct APIClient: Sendable {
             website: website?.absoluteString,
             instagram: instagram,
             hours: hours,
-            categories: categories
+            categories: categories,
+            isEnabled: isEnabled
         )
 
         return Endpoint(
@@ -1448,6 +1450,7 @@ private struct MobilePlaceUpdateRequest: Encodable {
     let instagram: String?
     let hours: VenueHours?
     let categories: [String]
+    let isEnabled: Bool?
 }
 
 private struct MobileEventUpdateRequest: Encodable {

@@ -82,10 +82,7 @@ export function AdminPlacesPage({ placeType }: AdminPlacesPageProps) {
 
   const handleCreateSubmit = async (formData: PlaceFormData) => {
     try {
-      const {
-        scrapers,
-        ...placeData
-      } = formData;
+      const { scrapers, isEnabled: _isEnabled, ...placeData } = formData;
 
       const createdPlace = await createPlaceMutation.mutateAsync({
         ...placeData,
@@ -252,6 +249,11 @@ export function AdminPlacesPage({ placeType }: AdminPlacesPageProps) {
                     <div className="text-sm text-muted-foreground">
                       {place.city || "No City"}, {place.state || "No State"}
                     </div>
+                    {!place.isEnabled && (
+                      <div className="mt-1 text-xs font-medium text-muted-foreground">
+                        Disabled
+                      </div>
+                    )}
                   </div>
                 </div>
 

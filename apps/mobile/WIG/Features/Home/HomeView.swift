@@ -1567,7 +1567,7 @@ enum PostEventFeedbackResponse: CaseIterable, Identifiable {
         case .okay:
             return "😐"
         case .didNotLikeIt:
-            return "🙁"
+            return "😞"
         case .didNotAttend:
             return "🫥"
         }
@@ -1638,7 +1638,14 @@ private struct PostEventFeedbackBanner: View {
             }
             .padding(7)
             .frame(height: 62)
-            .homeLiquidGlass(in: RoundedRectangle(cornerRadius: 18, style: .continuous))
+            .background(
+                Color(red: 0.14, green: 0.14, blue: 0.16),
+                in: RoundedRectangle(cornerRadius: 18, style: .continuous)
+            )
+            .overlay {
+                RoundedRectangle(cornerRadius: 18, style: .continuous)
+                    .strokeBorder(Color.white.opacity(0.08), lineWidth: 1)
+            }
             .contentShape(RoundedRectangle(cornerRadius: 18, style: .continuous))
         }
         .buttonStyle(.plain)
@@ -1695,10 +1702,10 @@ struct PostEventFeedbackSheet: View {
                         Text(event.title)
                             .font(.system(size: 14, weight: .semibold))
                             .foregroundStyle(.white)
-                            .lineLimit(2)
+                            .lineLimit(3)
 
                         VStack(alignment: .leading, spacing: 4) {
-                            Text(event.startAt.formatted(date: .abbreviated, time: .shortened))
+                            Text(eventStartDateAndTime)
                                 .foregroundStyle(AppTheme.accentBlue)
 
                             Text(event.venueName ?? "\(event.city), \(event.state)")
@@ -1710,6 +1717,8 @@ struct PostEventFeedbackSheet: View {
                     .frame(maxWidth: .infinity, alignment: .leading)
 
                 }
+                // Keep the title and metadata clear of the close control.
+                .padding(.trailing, 58)
                 .padding(.bottom, -4)
 
                 HStack(alignment: .top, spacing: 8) {
@@ -1845,6 +1854,22 @@ struct PostEventFeedbackSheet: View {
             RoundedRectangle(cornerRadius: 18, style: .continuous)
                 .strokeBorder(.white.opacity(0.12), lineWidth: 1)
         }
+    }
+
+    private var eventStartDateAndTime: String {
+        let date = event.startAt.formatted(date: .abbreviated, time: .omitted)
+        let calendar = Calendar.autoupdatingCurrent
+
+        let time: String
+        if calendar.component(.minute, from: event.startAt) == 0 {
+            time = event.startAt.formatted(
+                .dateTime.hour(.defaultDigits(amPM: .abbreviated))
+            )
+        } else {
+            time = event.startAt.formatted(date: .omitted, time: .shortened)
+        }
+
+        return "\(date) at \(time)"
     }
 
     private func reactionButton(_ response: PostEventFeedbackResponse) -> some View {
