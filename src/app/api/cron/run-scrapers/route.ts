@@ -1,7 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import { db } from "@/server/db";
 import { scrapers, scraperLogs, events, users } from "@/server/db/schema";
-import { and, eq, isNull, or } from "drizzle-orm";
+import { and, eq, isNull, ne, or } from "drizzle-orm";
 import {
   filterExistingCategoryKeys,
   setEventCategoryKeys,
@@ -206,6 +206,61 @@ async function runScraper(
     };
   }
 
+  // A scraper can discover a corrected location for an event we already have.
+  // Keep the existing-event path out of `upserted` so it does not count as a
+  // newly added event, but refresh its location and image together.
+  const locationUpdatedImages = (
+    await Promise.all(
+      insertValues
+        .filter((value) => value.source && value.externalId)
+        .map(async (value) => {
+          const updates: Partial<{
+            city: string;
+            state: string;
+            venueId: string | null;
+            coverImageUrl: string | null;
+            updatedAt: Date;
+          }> = {
+            city: value.city,
+            state: value.state,
+            updatedAt: new Date(),
+          };
+          const locationMismatchConditions = [
+            ne(events.city, value.city),
+            ne(events.state, value.state),
+          ];
+
+          if (venueId) {
+            updates.venueId = venueId;
+            locationMismatchConditions.push(
+              isNull(events.venueId),
+              ne(events.venueId, venueId)
+            );
+          }
+
+          if (value.coverImageUrl) {
+            updates.coverImageUrl = value.coverImageUrl;
+          }
+
+          const [updatedEvent] = await db
+            .update(events)
+            .set(updates)
+            .where(
+              and(
+                eq(events.source, value.source!),
+                eq(events.externalId, value.externalId!),
+                or(...locationMismatchConditions)
+              )
+            )
+            .returning({ id: events.id });
+
+          return updatedEvent && value.coverImageUrl
+            ? [{ id: updatedEvent.id, coverImageUrl: value.coverImageUrl }]
+            : [];
+        })
+    )
+  ).flat();
+
   // If an event already existed, still enrich it with a venue/organizer link
   // when the scraper now knows that relationship and the stored row does not.
   if (venueId || organizerId) {
@@ -274,36 +329,40 @@ async function runScraper(
         }
       })
     );
-
-    await Promise.allSettled(
-      upserted.map(async (row) => {
-        const scrapedEvent = scrapedEvents.find(
-          (event) =>
-            event.source === row.source && event.externalId === row.externalId
-        );
-        const originalCoverImageUrl = scrapedEvent?.coverImageUrl;
-
-        if (!originalCoverImageUrl) {
-          return;
-        }
-
-        try {
-          const s3Url = await uploadImageFromUrl(
-            originalCoverImageUrl,
-            `events/${row.id}`,
-            "cover-image.png"
-          );
-
-          await db
-            .update(events)
-            .set({ coverImageUrl: s3Url })
-            .where(eq(events.id, row.id));
-        } catch {
-          // Keep the original external URL if re-hosting fails.
-        }
-      })
-    );
   }
+
+  const imageUpdates = [
+    ...upserted.flatMap((row) => {
+      const scrapedEvent = scrapedEvents.find(
+        (event) =>
+          event.source === row.source && event.externalId === row.externalId
+      );
+
+      return scrapedEvent?.coverImageUrl
+        ? [{ id: row.id, coverImageUrl: scrapedEvent.coverImageUrl }]
+        : [];
+    }),
+    ...locationUpdatedImages,
+  ];
+
+  await Promise.allSettled(
+    imageUpdates.map(async ({ id, coverImageUrl }) => {
+      try {
+        const s3Url = await uploadImageFromUrl(
+          coverImageUrl,
+          `events/${id}`,
+          "cover-image.png"
+        );
+
+        await db
+          .update(events)
+          .set({ coverImageUrl: s3Url })
+          .where(eq(events.id, id));
+      } catch {
+        // Keep the original external URL if re-hosting fails.
+      }
+    })
+  );
 
   const eventsAddedData = upserted.map((r) => ({
     id: r.id,
