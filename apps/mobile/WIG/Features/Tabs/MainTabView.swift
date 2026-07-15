@@ -17,18 +17,42 @@ struct MainTabView: View {
     @State private var pendingFriendRequestCount = 0
     @State private var isEventCreationSheetPresented = false
     @State private var presentedPlaceCreationType: PlaceListItem.PlaceType?
+    @Namespace private var eventDetailTransitionNamespace
 
     private let floatingCreationButtonSize: CGFloat = 52
     private let floatingCreationButtonBottomPadding: CGFloat = 60
 
     var body: some View {
-        if #available(iOS 26.0, *) {
-            liquidGlassTabView
-                .environmentObject(activityRequestStore)
-        } else {
-            legacyTabView
-                .environmentObject(activityRequestStore)
+        Group {
+            if #available(iOS 26.0, *) {
+                liquidGlassTabView
+            } else {
+                legacyTabView
+            }
         }
+        .environmentObject(activityRequestStore)
+        .environment(\.eventDetailTransitionNamespace, eventDetailTransitionNamespace)
+        .fullScreenCover(item: $appSession.presentedEventDetail) { presentation in
+            eventDetailOverlay(for: presentation)
+        }
+    }
+
+    @ViewBuilder
+    private func eventDetailOverlay(for presentation: EventDetailPresentation) -> some View {
+        Group {
+            if #available(iOS 18.0, *), let sourceID = presentation.transitionSourceID {
+                EventDetailView(event: presentation.event)
+                    .navigationTransition(
+                        .zoom(sourceID: sourceID, in: eventDetailTransitionNamespace)
+                    )
+            } else {
+                EventDetailView(event: presentation.event)
+            }
+        }
+        // The event content itself is opaque at full size. Keeping only the
+        // presentation host clear lets Home and its live tab bar show around the
+        // shrinking event page on the very first reverse-transition frame.
+        .presentationBackground(.clear)
     }
 
     @available(iOS 26.0, *)
@@ -70,6 +94,7 @@ struct MainTabView: View {
                     }
                 }
             }
+            .tabBarMinimizeBehavior(.never)
 
             creationMenuButton
             guestAuthButton

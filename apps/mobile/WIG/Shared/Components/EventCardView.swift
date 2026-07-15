@@ -4,6 +4,55 @@ import CoreImage.CIFilterBuiltins
 import SwiftUI
 import UIKit
 
+private struct EventDetailTransitionNamespaceKey: EnvironmentKey {
+    static let defaultValue: Namespace.ID? = nil
+}
+
+extension EnvironmentValues {
+    var eventDetailTransitionNamespace: Namespace.ID? {
+        get { self[EventDetailTransitionNamespaceKey.self] }
+        set { self[EventDetailTransitionNamespaceKey.self] = newValue }
+    }
+}
+
+// Event details are presented by MainTabView above the entire tab hierarchy. The
+// card remains mounted below that overlay, so the native tab bar is already present
+// when the reverse zoom begins instead of being rebuilt after a navigation pop.
+struct EventDetailNavigationLink<Label: View>: View {
+    let event: EventFeedItem
+    private let label: Label
+
+    @Environment(\.eventDetailTransitionNamespace) private var transitionNamespace
+    @EnvironmentObject private var appSession: AppSession
+    @State private var transitionSourceID = UUID()
+
+    init(event: EventFeedItem, @ViewBuilder label: () -> Label) {
+        self.event = event
+        self.label = label()
+    }
+
+    var body: some View {
+        Button {
+            appSession.presentEventDetail(
+                event,
+                transitionSourceID: transitionNamespace == nil ? nil : transitionSourceID
+            )
+        } label: {
+            source
+        }
+        .buttonStyle(.plain)
+    }
+
+    @ViewBuilder
+    private var source: some View {
+        if #available(iOS 18.0, *), let transitionNamespace {
+            label.matchedTransitionSource(id: transitionSourceID, in: transitionNamespace)
+        } else {
+            label
+        }
+    }
+}
+
 struct EventCardView: View {
     let event: EventFeedItem
     var obscuresDetails = false

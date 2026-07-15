@@ -26,7 +26,6 @@ struct EventDetailView: View {
     @State private var editedEvent: EventFeedItem?
     @State private var currentUserSocialUser: EventSocialUser?
     @State private var isAuthSheetPresented = false
-    @State private var isTabBarHidden = true
     @State private var rsvpConfirmation: RSVPConfirmation?
     @State private var rsvpConfirmationToken = UUID()
     @State private var isRSVPConfirmationVisible = false
@@ -35,6 +34,7 @@ struct EventDetailView: View {
     @State private var attendeeReviewRatings = [String: EventReviewRating]()
     @State private var hasLoadedCurrentUserReview = false
     @State private var isReviewSheetPresented = false
+    @State private var hasRegisteredEventDetailPresentation = false
 
     init(event: EventFeedItem) {
         self.event = event
@@ -118,23 +118,8 @@ struct EventDetailView: View {
             // scroll content underlaps the status bar while the nav bar is hidden, iOS
             // injects an automatic status-bar scrim (the "black fade" at the top).
             .background(AppTheme.background.ignoresSafeArea())
-        .background(
-            SwipeBackEnabler { gestureState, isStillOnEventDetail in
-                switch gestureState {
-                case .began, .changed:
-                    isTabBarHidden = false
-                case .cancelled, .failed:
-                    isTabBarHidden = true
-                case .ended:
-                    isTabBarHidden = isStillOnEventDetail
-                default:
-                    break
-                }
-            }
-        )
         .navigationBarBackButtonHidden()
         .toolbar(.hidden, for: .navigationBar)
-        .toolbar(isTabBarHidden ? .hidden : .visible, for: .tabBar)
         .overlay {
             if isAuthenticated {
                 ZStack {
@@ -223,8 +208,10 @@ struct EventDetailView: View {
             closeEventDetail()
         }
         .onAppear {
-            isTabBarHidden = true
-            appSession.beginEventDetailPresentation()
+            if !hasRegisteredEventDetailPresentation {
+                hasRegisteredEventDetailPresentation = true
+                appSession.beginEventDetailPresentation()
+            }
 
             let appearance = UINavigationBarAppearance()
             appearance.configureWithTransparentBackground()
@@ -232,7 +219,10 @@ struct EventDetailView: View {
             UINavigationBar.appearance().scrollEdgeAppearance = appearance
         }
         .onDisappear {
-            appSession.endEventDetailPresentation()
+            if hasRegisteredEventDetailPresentation {
+                hasRegisteredEventDetailPresentation = false
+                appSession.endEventDetailPresentation()
+            }
 
             let appearance = UINavigationBarAppearance()
             appearance.configureWithDefaultBackground()
@@ -276,7 +266,6 @@ struct EventDetailView: View {
     }
 
     private func closeEventDetail() {
-        isTabBarHidden = false
         dismiss()
     }
 

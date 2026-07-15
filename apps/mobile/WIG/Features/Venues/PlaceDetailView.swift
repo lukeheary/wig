@@ -392,14 +392,11 @@ struct PlaceDetailView: View {
                         ScrollView(.horizontal) {
                             LazyHStack(alignment: .top, spacing: 12) {
                                 ForEach(group.events) { event in
-                                    NavigationLink {
-                                        EventDetailView(event: event)
-                                    } label: {
+                                    EventDetailNavigationLink(event: event) {
                                         EventCardView(event: event)
                                             .frame(width: eventCardWidth)
                                             .contentShape(Rectangle())
                                     }
-                                    .buttonStyle(.plain)
                                 }
                             }
                             .scrollTargetLayout()

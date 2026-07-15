@@ -9,11 +9,18 @@ enum SelectedCityContext: Hashable, Sendable {
     case city(city: String, state: String)
 }
 
+struct EventDetailPresentation: Identifiable {
+    let id = UUID()
+    let event: EventFeedItem
+    let transitionSourceID: UUID?
+}
+
 @MainActor
 final class AppSession: ObservableObject {
     @Published var isAuthBypassed = false
     @Published var isAdmin = false
     @Published private(set) var eventDetailPresentationCount = 0
+    @Published var presentedEventDetail: EventDetailPresentation?
     @Published var selectedCityContext: SelectedCityContext?
 
     var shouldShowFloatingCreationButton: Bool {
@@ -34,6 +41,8 @@ final class AppSession: ObservableObject {
     func reset() {
         isAuthBypassed = false
         isAdmin = false
+        eventDetailPresentationCount = 0
+        presentedEventDetail = nil
         selectedCityContext = nil
     }
 
@@ -47,5 +56,12 @@ final class AppSession: ObservableObject {
 
     func endEventDetailPresentation() {
         eventDetailPresentationCount = max(0, eventDetailPresentationCount - 1)
+    }
+
+    func presentEventDetail(_ event: EventFeedItem, transitionSourceID: UUID? = nil) {
+        presentedEventDetail = EventDetailPresentation(
+            event: event,
+            transitionSourceID: transitionSourceID
+        )
     }
 }

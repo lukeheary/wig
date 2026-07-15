@@ -692,8 +692,8 @@ private struct ActivitySectionView: View {
 private struct ActivityRowView: View {
     let activity: ActivityFeedItem
     let onRespondToRequest: (ActivityFeedItem, ActivityRequestResponse) async -> Void
+    @EnvironmentObject private var appSession: AppSession
     @EnvironmentObject private var requestStore: ActivityRequestStore
-    @State private var selectedEvent: EventFeedItem?
     @State private var selectedVenue: PlaceListItem?
     @State private var selectedUserProfile: SelectedUserProfile?
     @State private var isRequestsPagePresented = false
@@ -717,7 +717,7 @@ private struct ActivityRowView: View {
                         activity: activity,
                         onTapEvent: {
                             if let event = activity.event?.eventFeedItem {
-                                selectedEvent = event
+                                appSession.presentEventDetail(event)
                             }
                         },
                         onTapVenue: { venue in
@@ -739,9 +739,6 @@ private struct ActivityRowView: View {
                 }
                 .frame(maxWidth: .infinity, alignment: .leading)
             }
-        }
-        .navigationDestination(item: $selectedEvent) { event in
-            EventDetailView(event: event)
         }
         .navigationDestination(item: $selectedVenue) { venue in
             PlaceDetailView(place: venue)

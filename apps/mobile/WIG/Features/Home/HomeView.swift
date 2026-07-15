@@ -347,14 +347,11 @@ struct HomeView: View {
                             ScrollView(.horizontal) {
                                 LazyHStack(alignment: .top, spacing: 12) {
                                     ForEach(section.events) { event in
-                                        NavigationLink {
-                                            EventDetailView(event: event)
-                                        } label: {
+                                        EventDetailNavigationLink(event: event) {
                                             EventCardView(event: event)
                                                 .frame(width: eventCardWidth)
                                                 .contentShape(Rectangle())
                                         }
-                                        .buttonStyle(.plain)
                                     }
                                 }
                                 .scrollTargetLayout()
@@ -507,13 +504,10 @@ struct HomeView: View {
                                 .padding(.top, emptyStateRecentUsers.isEmpty && emptyStateSuggestedPlaces.isEmpty ? 8 : 4)
 
                             ForEach(emptyStateUpcomingEvents) { event in
-                                NavigationLink {
-                                    EventDetailView(event: event)
-                                } label: {
+                                EventDetailNavigationLink(event: event) {
                                     EventSearchRow(event: event)
                                         .padding(.horizontal, 16)
                                 }
-                                .buttonStyle(.plain)
                             }
                         }
 
@@ -593,13 +587,10 @@ struct HomeView: View {
                                 .padding(.top, 8)
 
                             ForEach(searchEvents) { event in
-                                NavigationLink {
-                                    EventDetailView(event: event)
-                                } label: {
+                                EventDetailNavigationLink(event: event) {
                                     EventSearchRow(event: event)
                                         .padding(.horizontal, 16)
                                 }
-                                .buttonStyle(.plain)
                             }
                         }
 
@@ -735,14 +726,11 @@ struct HomeView: View {
                 spacing: 12
             ) {
                 ForEach(homeEventSearchResults) { event in
-                    NavigationLink {
-                        EventDetailView(event: event)
-                    } label: {
+                    EventDetailNavigationLink(event: event) {
                         EventCardView(event: event, cardHeight: 258)
                             .frame(maxWidth: .infinity)
                             .contentShape(Rectangle())
                     }
-                    .buttonStyle(.plain)
                 }
             }
             .padding(.horizontal, 16)
@@ -2166,8 +2154,8 @@ private struct HomeRecentActivitySection: View {
 private struct HomeRecentActivityRow: View {
     let activity: ActivityFeedItem
     let onRespondToRequest: (ActivityFeedItem, ActivityRequestResponse) async -> Void
+    @EnvironmentObject private var appSession: AppSession
     @EnvironmentObject private var requestStore: ActivityRequestStore
-    @State private var selectedEvent: EventFeedItem?
     @State private var selectedVenue: PlaceListItem?
     @State private var selectedUserProfile: RecentActivitySelectedUserProfile?
     @State private var isRequestsPagePresented = false
@@ -2190,7 +2178,9 @@ private struct HomeRecentActivityRow: View {
                     InlineLinkedActivityText(
                         activity: activity,
                         onTapEvent: {
-                            selectedEvent = activity.event?.eventFeedItem
+                            if let event = activity.event?.eventFeedItem {
+                                appSession.presentEventDetail(event)
+                            }
                         },
                         onTapVenue: { venue in
                             selectedVenue = venue
@@ -2211,9 +2201,6 @@ private struct HomeRecentActivityRow: View {
                 }
                 .frame(maxWidth: .infinity, alignment: .leading)
             }
-        }
-        .navigationDestination(item: $selectedEvent) { event in
-            EventDetailView(event: event)
         }
         .navigationDestination(item: $selectedVenue) { venue in
             PlaceDetailView(place: venue)

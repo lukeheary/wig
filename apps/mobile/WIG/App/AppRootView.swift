@@ -35,9 +35,9 @@ struct AppRootView: View {
 
 // A soft black gradient behind the iOS status bar so the time / signal / battery stay
 // legible over light content. This is applied per-screen (on each tab's root content,
-// inside its NavigationStack) rather than globally, so that pushed detail pages that
-// paint their own artwork background to the very top — the event and place pages — do
-// not get an unwanted black fade over their hero. See `topStatusBarScrim()`.
+// inside its NavigationStack) rather than globally, so detail views that paint their
+// own artwork background to the very top do not get an unwanted black fade over their
+// hero. See `topStatusBarScrim()`.
 struct StatusBarScrim: View {
     @EnvironmentObject private var appSession: AppSession
 
@@ -67,8 +67,8 @@ struct StatusBarScrim: View {
 
 extension View {
     // Overlays the status-bar scrim at the top of this view. Apply to a tab's root
-    // content INSIDE its NavigationStack so pushed pages (event / place detail) cover
-    // it and are never darkened at the top.
+    // content INSIDE its NavigationStack so pushed or presented detail views cover it
+    // and are never darkened at the top.
     func topStatusBarScrim() -> some View {
         overlay(alignment: .top) {
             StatusBarScrim()
