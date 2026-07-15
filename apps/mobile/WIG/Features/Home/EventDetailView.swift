@@ -43,15 +43,17 @@ struct EventDetailView: View {
     init(event: EventFeedItem) {
         self.event = event
 
+        let cachedReview = EventReviewCache.review(for: event.id)
+
         _rsvpViewModel = StateObject(
             wrappedValue: EventRSVPViewModel(
                 status: event.userRsvpStatus,
                 notGoingReason: event.userRsvpNotGoingReason
             )
         )
-        _currentUserReview = State(initialValue: event.currentUserReview)
+        _currentUserReview = State(initialValue: cachedReview ?? event.currentUserReview)
         _hasLoadedCurrentUserReview = State(
-            initialValue: !event.hasEnded || event.hasLoadedCurrentUserReview
+            initialValue: !event.hasEnded || cachedReview != nil || event.hasLoadedCurrentUserReview
         )
     }
 
@@ -347,6 +349,9 @@ struct EventDetailView: View {
             currentUserReview = try await apiClient.send(
                 APIClient.mobileEventReview(eventID: currentEvent.id)
             ).review
+            if let currentUserReview {
+                EventReviewCache.store(currentUserReview)
+            }
         } catch {
             currentUserReview = nil
         }
@@ -383,7 +388,9 @@ struct EventDetailView: View {
                 rating: rating,
                 comment: comment
             )
-            currentUserReview = try await apiClient.send(endpoint)
+            let review = try await apiClient.send(endpoint)
+            EventReviewCache.store(review)
+            currentUserReview = review
             await loadAttendeeReviewRatings(using: apiClient)
             isReviewSheetPresented = false
             return true

@@ -26,6 +26,18 @@ struct MobileEventReviewPrompt: Decodable, Hashable, Identifiable, Sendable {
     }
 }
 
+enum EventReviewCache {
+    private static var reviews = [UUID: MobileEventReview]()
+
+    static func review(for eventID: UUID) -> MobileEventReview? {
+        reviews[eventID]
+    }
+
+    static func store(_ review: MobileEventReview) {
+        reviews[review.eventId] = review
+    }
+}
+
 struct EventCity: Codable, Hashable, Identifiable, Sendable {
     let city: String
     let state: String

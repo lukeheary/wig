@@ -1354,7 +1354,8 @@ struct HomeView: View {
                     rating: rating,
                     comment: comment
                 )
-                _ = try await apiClient.send(endpoint)
+                let review = try await apiClient.send(endpoint)
+                EventReviewCache.store(review)
             } catch {
                 return false
             }
