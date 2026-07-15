@@ -35,6 +35,10 @@ struct EventDetailView: View {
     @State private var hasLoadedCurrentUserReview = false
     @State private var isReviewSheetPresented = false
     @State private var hasRegisteredEventDetailPresentation = false
+    @State private var presentedPlace: PlaceListItem?
+    @State private var presentedRoute: EventDetailRoute?
+
+    private let placeNavigationAnimation = Animation.easeInOut(duration: 0.30)
 
     init(event: EventFeedItem) {
         self.event = event
@@ -262,11 +266,57 @@ struct EventDetailView: View {
                 EventArtworkViewer(imageURL: posterImageURL)
             }
         }
+        .fullScreenCover(item: $presentedRoute) { route in
+            switch route {
+            case .rsvpList:
+                NavigationStack {
+                    EventRSVPListView(
+                        goingAttendees: goingAttendees,
+                        interestedAttendees: interestedAttendees,
+                        notGoingAttendees: notGoingAttendees,
+                        isPastEvent: currentEvent.hasEnded,
+                        eventID: currentEvent.id,
+                        attendeeReviewRatings: attendeeReviewRatings
+                    )
+                    .toolbar {
+                        ToolbarItem(placement: .topBarLeading) {
+                            Button {
+                                presentedRoute = nil
+                            } label: {
+                                Image(systemName: "chevron.left")
+                            }
+                        }
+                    }
+                }
+            }
+        }
+        .overlay {
+            if let presentedPlace {
+                EventPlaceDetailRouteView(
+                    place: presentedPlace,
+                    onDismiss: dismissPresentedPlace
+                )
+                .transition(.move(edge: .trailing))
+                .zIndex(1)
+            }
+        }
         }
     }
 
     private func closeEventDetail() {
         dismiss()
+    }
+
+    private func presentPlace(_ place: PlaceListItem) {
+        withAnimation(placeNavigationAnimation) {
+            presentedPlace = place
+        }
+    }
+
+    private func dismissPresentedPlace() {
+        withAnimation(placeNavigationAnimation) {
+            presentedPlace = nil
+        }
     }
 
     private var reviewSheetEvent: MobileEventReviewPrompt {
@@ -514,8 +564,8 @@ struct EventDetailView: View {
     @ViewBuilder
     private var venueLabel: some View {
         if let linkedPlace {
-            NavigationLink {
-                PlaceDetailView(place: linkedPlace)
+            Button {
+                presentPlace(linkedPlace)
             } label: {
                 Text(linkedPlace.name)
                     .font(.system(size: 15, weight: .medium))
@@ -550,8 +600,8 @@ struct EventDetailView: View {
                 .font(.system(size: 14, weight: .medium))
                 .foregroundStyle(.white.opacity(0.56))
 
-            NavigationLink {
-                PlaceDetailView(place: place)
+            Button {
+                presentPlace(place)
             } label: {
                 Text(place.name)
                     .font(.system(size: 14, weight: .medium))
@@ -985,15 +1035,8 @@ struct EventDetailView: View {
                         .multilineTextAlignment(.trailing)
                 }
 
-                NavigationLink {
-                    EventRSVPListView(
-                        goingAttendees: goingAttendees,
-                        interestedAttendees: interestedAttendees,
-                        notGoingAttendees: notGoingAttendees,
-                        isPastEvent: currentEvent.hasEnded,
-                        eventID: currentEvent.id,
-                        attendeeReviewRatings: attendeeReviewRatings
-                    )
+                Button {
+                    presentedRoute = .rsvpList
                 } label: {
                     EventRSVPFriendsRow(
                         attendees: friendRSVPPreviewAttendees
@@ -1675,6 +1718,69 @@ private struct EventFriendAvatarTile: View {
 
     private var strokeColor: Color {
         attendee.status.rsvpTintColor
+    }
+}
+
+private enum EventDetailRoute: Identifiable {
+    case rsvpList
+
+    var id: String {
+        switch self {
+        case .rsvpList:
+            "rsvp-list"
+        }
+    }
+}
+
+// The place page owns event cards opened from its own list. A navigation push is
+// the supported zoom destination inside an existing presentation; another
+// full-screen cover falls back to the default upward modal transition.
+private struct EventPlaceDetailRouteView: View {
+    let place: PlaceListItem
+    let onDismiss: () -> Void
+
+    @Environment(\.eventDetailTransitionNamespace) private var transitionNamespace
+    @State private var presentedEventDetail: EventDetailPresentation?
+
+    var body: some View {
+        NavigationStack {
+            PlaceDetailView(place: place, onDismiss: onDismiss)
+                .environment(\.eventDetailTransitionNamespace, transitionNamespace)
+                .environment(\.eventDetailPresentationAction) { event, transitionSourceID in
+                    presentedEventDetail = EventDetailPresentation(
+                        event: event,
+                        transitionSourceID: transitionSourceID
+                    )
+                }
+                .navigationDestination(item: $presentedEventDetail, destination: { presentation in
+                    NestedEventDetailPresentationView(
+                        presentation: presentation,
+                        transitionNamespace: transitionNamespace
+                    )
+                })
+            }
+    }
+}
+
+private struct NestedEventDetailPresentationView: View {
+    let presentation: EventDetailPresentation
+    let transitionNamespace: Namespace.ID?
+
+    var body: some View {
+        Group {
+            if #available(iOS 18.0, *),
+               let transitionNamespace,
+               let sourceID = presentation.transitionSourceID
+            {
+                EventDetailView(event: presentation.event)
+                    .navigationTransition(
+                        .zoom(sourceID: sourceID, in: transitionNamespace)
+                    )
+            } else {
+                EventDetailView(event: presentation.event)
+            }
+        }
+        .presentationBackground(.clear)
     }
 }
 

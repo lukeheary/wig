@@ -8,10 +8,19 @@ private struct EventDetailTransitionNamespaceKey: EnvironmentKey {
     static let defaultValue: Namespace.ID? = nil
 }
 
+private struct EventDetailPresentationActionKey: EnvironmentKey {
+    static let defaultValue: ((EventFeedItem, UUID?) -> Void)? = nil
+}
+
 extension EnvironmentValues {
     var eventDetailTransitionNamespace: Namespace.ID? {
         get { self[EventDetailTransitionNamespaceKey.self] }
         set { self[EventDetailTransitionNamespaceKey.self] = newValue }
+    }
+
+    var eventDetailPresentationAction: ((EventFeedItem, UUID?) -> Void)? {
+        get { self[EventDetailPresentationActionKey.self] }
+        set { self[EventDetailPresentationActionKey.self] = newValue }
     }
 }
 
@@ -23,6 +32,7 @@ struct EventDetailNavigationLink<Label: View>: View {
     private let label: Label
 
     @Environment(\.eventDetailTransitionNamespace) private var transitionNamespace
+    @Environment(\.eventDetailPresentationAction) private var presentationAction
     @EnvironmentObject private var appSession: AppSession
     @State private var transitionSourceID = UUID()
 
@@ -33,10 +43,13 @@ struct EventDetailNavigationLink<Label: View>: View {
 
     var body: some View {
         Button {
-            appSession.presentEventDetail(
-                event,
-                transitionSourceID: transitionNamespace == nil ? nil : transitionSourceID
-            )
+            let sourceID = transitionNamespace == nil ? nil : transitionSourceID
+
+            if let presentationAction {
+                presentationAction(event, sourceID)
+            } else {
+                appSession.presentEventDetail(event, transitionSourceID: sourceID)
+            }
         } label: {
             source
         }

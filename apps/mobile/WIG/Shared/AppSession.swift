@@ -9,7 +9,7 @@ enum SelectedCityContext: Hashable, Sendable {
     case city(city: String, state: String)
 }
 
-struct EventDetailPresentation: Identifiable {
+struct EventDetailPresentation: Identifiable, Hashable {
     let id = UUID()
     let event: EventFeedItem
     let transitionSourceID: UUID?

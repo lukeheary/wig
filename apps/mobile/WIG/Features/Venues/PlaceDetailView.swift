@@ -6,6 +6,7 @@ import UIKit
 
 struct PlaceDetailView: View {
     let place: PlaceListItem
+    var onDismiss: (() -> Void)? = nil
 
     @Environment(\.apiClient) private var apiClient
     @Environment(\.dismiss) private var dismiss
@@ -230,7 +231,7 @@ struct PlaceDetailView: View {
     private var leadingTopControls: some View {
         HStack(spacing: 10) {
             FloatingGlassIconButton(systemImage: "chevron.left") {
-                dismiss()
+                closePlaceDetail()
             }
 
             if canShowEventFilter {
@@ -239,6 +240,14 @@ struct PlaceDetailView: View {
         }
         .padding(.leading, 16)
         .padding(.top, 0)
+    }
+
+    private func closePlaceDetail() {
+        if let onDismiss {
+            onDismiss()
+        } else {
+            dismiss()
+        }
     }
 
     private var seededDetailState: PlaceDetail {
