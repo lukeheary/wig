@@ -4,6 +4,68 @@ import CoreImage.CIFilterBuiltins
 import SwiftUI
 import UIKit
 
+private struct EventDetailTransitionNamespaceKey: EnvironmentKey {
+    static let defaultValue: Namespace.ID? = nil
+}
+
+private struct EventDetailPresentationActionKey: EnvironmentKey {
+    static let defaultValue: ((EventFeedItem, UUID?) -> Void)? = nil
+}
+
+extension EnvironmentValues {
+    var eventDetailTransitionNamespace: Namespace.ID? {
+        get { self[EventDetailTransitionNamespaceKey.self] }
+        set { self[EventDetailTransitionNamespaceKey.self] = newValue }
+    }
+
+    var eventDetailPresentationAction: ((EventFeedItem, UUID?) -> Void)? {
+        get { self[EventDetailPresentationActionKey.self] }
+        set { self[EventDetailPresentationActionKey.self] = newValue }
+    }
+}
+
+// Event details are presented by MainTabView above the entire tab hierarchy. The
+// card remains mounted below that overlay, so the native tab bar is already present
+// when the reverse zoom begins instead of being rebuilt after a navigation pop.
+struct EventDetailNavigationLink<Label: View>: View {
+    let event: EventFeedItem
+    private let label: Label
+
+    @Environment(\.eventDetailTransitionNamespace) private var transitionNamespace
+    @Environment(\.eventDetailPresentationAction) private var presentationAction
+    @EnvironmentObject private var appSession: AppSession
+    @State private var transitionSourceID = UUID()
+
+    init(event: EventFeedItem, @ViewBuilder label: () -> Label) {
+        self.event = event
+        self.label = label()
+    }
+
+    var body: some View {
+        Button {
+            let sourceID = transitionNamespace == nil ? nil : transitionSourceID
+
+            if let presentationAction {
+                presentationAction(event, sourceID)
+            } else {
+                appSession.presentEventDetail(event, transitionSourceID: sourceID)
+            }
+        } label: {
+            source
+        }
+        .buttonStyle(.plain)
+    }
+
+    @ViewBuilder
+    private var source: some View {
+        if #available(iOS 18.0, *), let transitionNamespace {
+            label.matchedTransitionSource(id: transitionSourceID, in: transitionNamespace)
+        } else {
+            label
+        }
+    }
+}
+
 struct EventCardView: View {
     let event: EventFeedItem
     var obscuresDetails = false

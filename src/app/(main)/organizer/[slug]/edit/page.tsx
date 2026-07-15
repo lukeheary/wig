@@ -89,6 +89,7 @@ export default function EditPlacePage() {
         longitude: formData.longitude ?? undefined,
         hours: formData.hours ?? undefined,
         categories: formData.categories,
+        isEnabled: formData.isEnabled,
       });
 
       if (isAdmin) {
@@ -165,6 +166,7 @@ export default function EditPlacePage() {
     latitude: place.latitude || null,
     longitude: place.longitude || null,
     hours: (place as any).hours || null,
+    isEnabled: place.isEnabled,
     categories: place.categories || [],
     scrapers: scraperConfigs.map((scraperConfig) => ({
       id: scraperConfig.id,
@@ -185,8 +187,11 @@ export default function EditPlacePage() {
         mode="edit"
         onSubmit={handleSubmit}
         onCancel={() => router.push(backHref)}
-        isSubmitting={updateMutation.isPending || replaceScrapersMutation.isPending}
+        isSubmitting={
+          updateMutation.isPending || replaceScrapersMutation.isPending
+        }
         showScraperFields={isAdmin}
+        showEnabledToggle={canEdit}
       />
     </PageContainer>
   );

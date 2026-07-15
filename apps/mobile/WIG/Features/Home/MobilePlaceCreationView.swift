@@ -32,6 +32,7 @@ struct MobilePlaceCreationView: View {
     @State private var isSubmitting = false
     @State private var isDeleteConfirmationPresented = false
     @State private var isDeleting = false
+    @State private var isEnabled = true
     @State private var alertMessage: String?
     @State private var isGooglePlacePickerPresented = false
     @State private var venueScraperRows: [EditablePlaceScraperRow] = []
@@ -56,6 +57,7 @@ struct MobilePlaceCreationView: View {
             _hours = State(initialValue: place.hours)
             _selectedCategoryKeys = State(initialValue: Set(place.categories))
             _selectedGooglePlaceName = State(initialValue: place.name)
+            _isEnabled = State(initialValue: place.isEnabled)
         }
     }
 
@@ -93,7 +95,7 @@ struct MobilePlaceCreationView: View {
                     placeScrapersSection
                 }
                 if case .edit = mode {
-                    deleteSection
+                    placeActionsSection
                 }
             }
             .scrollContentBackground(.hidden)
@@ -442,19 +444,37 @@ struct MobilePlaceCreationView: View {
     }
 
     @ViewBuilder
-    private var deleteSection: some View {
+    private var placeActionsSection: some View {
         Section {
-            Button(role: .destructive) {
-                isDeleteConfirmationPresented = true
-            } label: {
-                HStack(spacing: 10) {
-                    if isDeleting {
-                        ProgressView()
-                            .tint(.red)
+            HStack(spacing: 14) {
+                Toggle(isOn: Binding(
+                    get: { !isEnabled },
+                    set: { isEnabled = !$0 }
+                )) {
+                    VStack(alignment: .leading, spacing: 2) {
+                        Text("Disable Place")
+                        Text("Hide without deleting past events")
+                            .font(.caption)
+                            .foregroundStyle(.secondary)
                     }
-
-                    Text(isDeleting ? "Deleting..." : "Delete \(type.displayName)")
                 }
+                .tint(AppTheme.accentBlue)
+
+                Divider()
+
+                Button(role: .destructive) {
+                    isDeleteConfirmationPresented = true
+                } label: {
+                    HStack(spacing: 6) {
+                        if isDeleting {
+                            ProgressView()
+                                .tint(.red)
+                        }
+
+                        Text(isDeleting ? "Deleting..." : "Delete")
+                    }
+                }
+                .disabled(isSubmitting || isDeleting)
             }
             .disabled(isSubmitting || isDeleting)
         }
@@ -643,7 +663,8 @@ struct MobilePlaceCreationView: View {
                         website: websiteURL,
                         instagram: trimmedInstagram.isEmpty ? nil : trimmedInstagram,
                         hours: isVenue ? hours : nil,
-                        categories: orderedSelectedCategories
+                        categories: orderedSelectedCategories,
+                        isEnabled: isEnabled
                     )
                 )
             }

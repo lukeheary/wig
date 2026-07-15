@@ -137,45 +137,46 @@ export async function GET(request: Request) {
 
   const [currentUser, availableMetroAreas, cityCoordinates, placesList] =
     await Promise.all([
-    userId
-      ? db.query.users.findFirst({
-          where: eq(users.id, userId),
-          columns: {
-            city: true,
-            state: true,
-          },
+      userId
+        ? db.query.users.findFirst({
+            where: eq(users.id, userId),
+            columns: {
+              city: true,
+              state: true,
+            },
+          })
+        : null,
+      db
+        .select({
+          name: metroAreas.name,
+          state: metroAreas.state,
+          latitude: metroAreas.latitude,
+          longitude: metroAreas.longitude,
+          radiusMiles: metroAreas.radiusMiles,
         })
-      : null,
-    db
-      .select({
-        name: metroAreas.name,
-        state: metroAreas.state,
-        latitude: metroAreas.latitude,
-        longitude: metroAreas.longitude,
-        radiusMiles: metroAreas.radiusMiles,
-      })
-      .from(metroAreas)
-      .orderBy(asc(metroAreas.name), asc(metroAreas.state)),
-    db
-      .select({
-        name: cities.name,
-        state: cities.state,
-        latitude: cities.latitude,
-        longitude: cities.longitude,
-      })
-      .from(cities),
-    db.query.places.findMany({
-      orderBy: [sql`lower(${places.name})`, asc(places.name)],
-      limit,
-      with: {
-        categoryLinks: {
-          with: {
-            category: true,
+        .from(metroAreas)
+        .orderBy(asc(metroAreas.name), asc(metroAreas.state)),
+      db
+        .select({
+          name: cities.name,
+          state: cities.state,
+          latitude: cities.latitude,
+          longitude: cities.longitude,
+        })
+        .from(cities),
+      db.query.places.findMany({
+        where: eq(places.isEnabled, true),
+        orderBy: [sql`lower(${places.name})`, asc(places.name)],
+        limit,
+        with: {
+          categoryLinks: {
+            with: {
+              category: true,
+            },
           },
         },
-      },
-    }),
-  ]);
+      }),
+    ]);
 
   const resolveMetroArea = createMobileMetroResolver(
     availableMetroAreas,
@@ -340,9 +341,13 @@ export async function POST(request: Request) {
       slug = `${slug}-${Math.random().toString(36).slice(2, 7)}`;
     }
 
-    const validCategories = await filterExistingCategoryKeys(db, body.categories, {
-      activeOnly: true,
-    });
+    const validCategories = await filterExistingCategoryKeys(
+      db,
+      body.categories,
+      {
+        activeOnly: true,
+      }
+    );
 
     const [place] = await db
       .insert(places)
@@ -357,7 +362,7 @@ export async function POST(request: Request) {
         state: cleanedState,
         website: cleanedWebsite,
         instagram: cleanedInstagram,
-        hours: body.type === "venue" ? body.hours ?? null : null,
+        hours: body.type === "venue" ? (body.hours ?? null) : null,
       })
       .returning({ id: places.id, slug: places.slug });
 

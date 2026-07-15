@@ -342,14 +342,11 @@ struct ProfileView: View {
                         ScrollView(.horizontal) {
                             LazyHStack(alignment: .top, spacing: 12) {
                                 ForEach(group.events) { event in
-                                    NavigationLink {
-                                        EventDetailView(event: event)
-                                    } label: {
+                                    EventDetailNavigationLink(event: event) {
                                         EventCardView(event: event)
                                             .frame(width: 220)
                                             .contentShape(Rectangle())
                                     }
-                                    .buttonStyle(.plain)
                                 }
                             }
                             .scrollTargetLayout()
@@ -1293,13 +1290,10 @@ private struct UserProfileEventsSection: View {
                             LazyHStack(alignment: .top, spacing: 12) {
                                 ForEach(group.events) { event in
                                     if canViewEventDetails {
-                                        NavigationLink {
-                                            EventDetailView(event: event)
-                                        } label: {
+                                        EventDetailNavigationLink(event: event) {
                                             EventCardView(event: event)
                                                 .frame(width: 220)
                                         }
-                                        .buttonStyle(.plain)
                                     } else {
                                         EventCardView(event: event, obscuresDetails: true)
                                             .frame(width: 220)

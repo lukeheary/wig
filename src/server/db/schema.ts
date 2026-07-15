@@ -186,7 +186,9 @@ export const usersRelations = relations(users, ({ many }) => ({
   rsvps: many(eventRsvps),
   eventSeries: many(eventSeries),
   sentFriendRequests: many(userFriends, { relationName: "sentRequests" }),
-  receivedFriendRequests: many(userFriends, { relationName: "receivedRequests" }),
+  receivedFriendRequests: many(userFriends, {
+    relationName: "receivedRequests",
+  }),
   sentPartnerRequests: many(userPartners, { relationName: "partnerRequests" }),
   receivedPartnerRequests: many(userPartners, {
     relationName: "partnerReceipts",
@@ -194,7 +196,9 @@ export const usersRelations = relations(users, ({ many }) => ({
   activities: many(userActivity),
   eventActivities: many(eventActivity),
   notifications: many(notifications, { relationName: "notificationRecipient" }),
-  notificationActors: many(notifications, { relationName: "notificationActor" }),
+  notificationActors: many(notifications, {
+    relationName: "notificationActor",
+  }),
   pushTokens: many(userPushTokens),
   notificationPreferences: many(userNotificationPreferences),
   surfaceStates: many(userSurfaceState),
@@ -209,14 +213,16 @@ export const userNotificationPreferences = pgTable(
       .primaryKey()
       .notNull()
       .references(() => users.id, { onDelete: "cascade" }),
-    friendRsvpPushEnabled: boolean("friend_rsvp_push_enabled").notNull().default(true),
+    friendRsvpPushEnabled: boolean("friend_rsvp_push_enabled")
+      .notNull()
+      .default(true),
     createdAt: timestamp("created_at").defaultNow().notNull(),
     updatedAt: timestamp("updated_at").defaultNow().notNull(),
   },
   (table) => ({
-    friendRsvpPushIdx: index("user_notification_preferences_friend_rsvp_idx").on(
-      table.friendRsvpPushEnabled
-    ),
+    friendRsvpPushIdx: index(
+      "user_notification_preferences_friend_rsvp_idx"
+    ).on(table.friendRsvpPushEnabled),
   })
 );
 
@@ -396,12 +402,14 @@ export const places = pgTable(
     website: text("website"),
     instagram: varchar("instagram", { length: 100 }),
     hours: jsonb("hours"), // Store hours as: { monday: { open: "09:00", close: "17:00", closed: false }, ... }
+    isEnabled: boolean("is_enabled").notNull().default(true),
     createdAt: timestamp("created_at").defaultNow().notNull(),
     updatedAt: timestamp("updated_at").defaultNow().notNull(),
   },
   (table) => ({
     slugIdx: uniqueIndex("places_slug_idx").on(table.slug),
     typeIdx: index("places_type_idx").on(table.type),
+    enabledIdx: index("places_enabled_idx").on(table.isEnabled),
     locationIdx: index("places_location_idx").on(table.city, table.state),
   })
 );
@@ -1168,10 +1176,9 @@ export const supportTicketActivity = pgTable(
     createdAt: timestamp("created_at").defaultNow().notNull(),
   },
   (table) => ({
-    ticketCreatedAtIdx: index("support_ticket_activity_ticket_created_at_idx").on(
-      table.ticketId,
-      table.createdAt
-    ),
+    ticketCreatedAtIdx: index(
+      "support_ticket_activity_ticket_created_at_idx"
+    ).on(table.ticketId, table.createdAt),
     actorCreatedAtIdx: index("support_ticket_activity_actor_created_at_idx").on(
       table.actorUserId,
       table.createdAt

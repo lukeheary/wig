@@ -51,6 +51,7 @@ const mobileUpdatePlaceSchema = z
       .optional(),
     hours: z.any().nullable().optional(),
     categories: z.array(z.string()).optional().default([]),
+    isEnabled: z.boolean().optional(),
   })
   .superRefine((value, context) => {
     if (value.type === "venue" && !value.city?.trim()) {
@@ -436,6 +437,7 @@ export async function GET(
     categories: mappedPlace.categories,
     categoryLabels: mappedPlace.categoryLabels,
     updatedAt: mappedPlace.updatedAt,
+    isEnabled: place.isEnabled,
     isFollowed: Boolean(follow),
     canManage: canManagePlace,
     events: upcomingEvents.map((event) =>
@@ -505,6 +507,7 @@ export async function PATCH(
         website: body.website?.trim() || null,
         instagram: body.instagram?.trim() || null,
         hours: body.type === "venue" ? body.hours ?? null : null,
+        ...(body.isEnabled !== undefined ? { isEnabled: body.isEnabled } : {}),
         updatedAt: new Date(),
       })
       .where(eq(places.id, place.id));

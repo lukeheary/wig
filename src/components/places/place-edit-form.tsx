@@ -6,6 +6,7 @@ import { Input } from "@/components/ui/input";
 import { Textarea } from "@/components/ui/textarea";
 import { Label } from "@/components/ui/label";
 import { Card, CardContent } from "@/components/ui/card";
+import { Switch } from "@/components/ui/switch";
 import {
   Select,
   SelectContent,
@@ -55,6 +56,7 @@ export interface PlaceFormData {
   latitude: number | null;
   longitude: number | null;
   hours: VenueHours | null;
+  isEnabled: boolean;
   categories: string[];
   scrapers: PlaceScraperFormData[];
 }
@@ -70,6 +72,7 @@ interface PlaceEditFormProps {
   isSubmitting: boolean;
   showCard?: boolean;
   showScraperFields?: boolean;
+  showEnabledToggle?: boolean;
 }
 
 const emptyFormData: PlaceFormData = {
@@ -87,6 +90,7 @@ const emptyFormData: PlaceFormData = {
   latitude: null,
   longitude: null,
   hours: null,
+  isEnabled: true,
   categories: [],
   scrapers: [],
 };
@@ -102,9 +106,7 @@ type ScraperRowSeed = {
   classificationName?: string | null;
 };
 
-function createScraperRow(
-  data?: ScraperRowSeed | null
-): ScraperRow {
+function createScraperRow(data?: ScraperRowSeed | null): ScraperRow {
   return {
     localId: crypto.randomUUID(),
     id: data?.id,
@@ -125,6 +127,7 @@ export function PlaceEditForm({
   isSubmitting,
   showCard = true,
   showScraperFields = false,
+  showEnabledToggle = false,
 }: PlaceEditFormProps) {
   const initialDataVersion = useMemo(
     () =>
@@ -143,6 +146,7 @@ export function PlaceEditForm({
         latitude: initialData?.latitude ?? null,
         longitude: initialData?.longitude ?? null,
         hours: initialData?.hours ?? null,
+        isEnabled: initialData?.isEnabled ?? true,
         categories: initialData?.categories ?? [],
         scrapers: initialData?.scrapers ?? [],
       }),
@@ -320,9 +324,7 @@ export function PlaceEditForm({
       ...formData,
       scrapers: scraperRows
         .filter(
-          (
-            scraperRow
-          ): scraperRow is ScraperRow & { scraper: ScraperType } =>
+          (scraperRow): scraperRow is ScraperRow & { scraper: ScraperType } =>
             scraperRow.scraper !== null && scraperRow.searchString.length > 0
         )
         .map((scraperRow) => ({
@@ -583,6 +585,25 @@ export function PlaceEditForm({
         />
       </div>
 
+      {showEnabledToggle && (
+        <div className="flex items-center justify-between gap-4 rounded-md border p-4">
+          <div>
+            <Label htmlFor="place-enabled">Disable Place</Label>
+            <p className="mt-1 text-sm text-muted-foreground">
+              Disabled places stay attached to past events but are hidden from
+              public place browsing.
+            </p>
+          </div>
+          <Switch
+            id="place-enabled"
+            checked={!formData.isEnabled}
+            onCheckedChange={(isDisabled) =>
+              setFormData((prev) => ({ ...prev, isEnabled: !isDisabled }))
+            }
+          />
+        </div>
+      )}
+
       {showScraperFields && (
         <div id="scraper-settings" className="space-y-3 rounded-md border p-3">
           <div className="flex items-start justify-between gap-3">
@@ -592,7 +613,12 @@ export function PlaceEditForm({
                 Add one or more scrapers for this {typeLabel.toLowerCase()}.
               </p>
             </div>
-            <Button type="button" variant="outline" size="sm" onClick={addScraperRow}>
+            <Button
+              type="button"
+              variant="outline"
+              size="sm"
+              onClick={addScraperRow}
+            >
               <Plus className="mr-2 h-4 w-4" />
               Add Additional Scraper
             </Button>
@@ -625,7 +651,8 @@ export function PlaceEditForm({
                     value={scraperRow.scraper ?? "none"}
                     onValueChange={(value) =>
                       updateScraperRow(scraperRow.localId, {
-                        scraper: value === "none" ? null : (value as ScraperType),
+                        scraper:
+                          value === "none" ? null : (value as ScraperType),
                         classificationName:
                           value === "ticketmaster"
                             ? scraperRow.classificationName
@@ -645,7 +672,9 @@ export function PlaceEditForm({
                   </Select>
                 </div>
                 <div>
-                  <Label htmlFor={`place-scraper-search-string-${scraperRow.localId}`}>
+                  <Label
+                    htmlFor={`place-scraper-search-string-${scraperRow.localId}`}
+                  >
                     Search String
                   </Label>
                   <Input

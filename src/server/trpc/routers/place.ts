@@ -49,7 +49,7 @@ export const placeRouter = router({
       })
     )
     .query(async ({ ctx, input }) => {
-      const conditions = [];
+      const conditions = [eq(places.isEnabled, true)];
       if (input.query) {
         conditions.push(accentInsensitiveLike(places.name, input.query));
       }
@@ -234,7 +234,7 @@ export const placeRouter = router({
       })
     )
     .query(async ({ ctx, input }) => {
-      const conditions = [];
+      const conditions = [eq(places.isEnabled, true)];
 
       if (input.type) conditions.push(eq(places.type, input.type));
       if (input.city) {
@@ -837,6 +837,7 @@ export const placeRouter = router({
         longitude: z.number().optional(),
         hours: z.any().optional(),
         categories: z.array(z.string()).optional(),
+        isEnabled: z.boolean().optional(),
       })
     )
     .mutation(async ({ ctx, input }) => {
