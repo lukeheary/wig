@@ -183,12 +183,16 @@ struct PlaceDetailView: View {
                         }
                     )
                 case .createEvent:
-                    MobileEventCreationView(mode: .create, preselectedPlace: detail) { _ in
-                        Task {
-                            PlaceDetailViewModel.invalidateCache(for: detail.slug)
-                            await viewModel.load(slug: detail.slug, using: apiClient, forceRefresh: true)
+                    MobileEventCreationView(
+                        mode: .create,
+                        preselectedPlace: detail,
+                        onCompleted: { _ in
+                            Task {
+                                PlaceDetailViewModel.invalidateCache(for: detail.slug)
+                                await viewModel.load(slug: detail.slug, using: apiClient, forceRefresh: true)
+                            }
                         }
-                    }
+                    )
                 case .createEventSeries:
                     MobileEventCreationView(
                         mode: .create,
@@ -546,7 +550,7 @@ private extension UIImage {
 
     // Small, heavily blurred copy of the logo used as the top backdrop bloom.
     func placeDetailBlurredBackdrop() -> UIImage? {
-        guard let cgImage else { return nil }
+        guard cgImage != nil else { return nil }
 
         let maxDimension: CGFloat = 160
         let scale = min(maxDimension / max(size.width, size.height), 1)

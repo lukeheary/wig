@@ -264,9 +264,12 @@ struct EventDetailView: View {
             .presentationDragIndicator(.visible)
         }
         .sheet(isPresented: $isEditEventPresented) {
-            MobileEventCreationView(mode: .edit(currentEvent)) { updatedEvent in
-                editedEvent = mergeUpdatedEvent(updatedEvent)
-            }
+            MobileEventCreationView(
+                mode: .edit(currentEvent),
+                onCompleted: { updatedEvent in
+                    editedEvent = mergeUpdatedEvent(updatedEvent)
+                }
+            )
         }
         .sheet(item: $editingSeriesRoute) { route in
             EventSeriesEditSheet(seriesID: route.id)
@@ -2673,7 +2676,7 @@ private final class EventRSVPViewModel: ObservableObject {
     func load(
         eventID: UUID,
         using apiClient: APIClient,
-        shouldApply: () -> Bool = { true }
+        shouldApply: @MainActor () -> Bool = { true }
     ) async {
         guard shouldApply(), loadedEventID != eventID else {
             return

@@ -3695,7 +3695,7 @@ private struct MetroAreaCreationView: View {
         }
 
         do {
-            try await apiClient.send(
+            _ = try await apiClient.send(
                 APIClient.mobileCreateMetroArea(
                     name: cityName,
                     state: state,

@@ -1028,7 +1028,7 @@ extension UIImage {
 
     // Small, heavily blurred copy of the logo used as the card's colored backdrop.
     func placeCardBlurredBackdrop() -> UIImage? {
-        guard let cgImage else { return nil }
+        guard cgImage != nil else { return nil }
 
         let maxDimension: CGFloat = 120
         let scale = min(maxDimension / max(size.width, size.height), 1)

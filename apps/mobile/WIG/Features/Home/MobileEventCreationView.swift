@@ -1580,7 +1580,7 @@ struct MobileEventCreationView: View {
         }
 
         do {
-            try await apiClient.send(APIClient.deleteMobileEventSeries(seriesID: series.id))
+            _ = try await apiClient.send(APIClient.deleteMobileEventSeries(seriesID: series.id))
             NotificationCenter.default.post(name: .mobileEventDidChange, object: series.id)
             onSeriesCompleted?()
             dismiss()

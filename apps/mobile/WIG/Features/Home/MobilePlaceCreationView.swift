@@ -693,7 +693,7 @@ struct MobilePlaceCreationView: View {
         }
 
         do {
-            try await apiClient.send(APIClient.mobileDeletePlace(slug: place.slug))
+            _ = try await apiClient.send(APIClient.mobileDeletePlace(slug: place.slug))
             NotificationCenter.default.post(name: .mobilePlaceDidChange, object: place.id)
             onDeleted?()
             dismiss()
@@ -747,7 +747,7 @@ struct MobilePlaceCreationView: View {
             return
         }
 
-        try await apiClient.send(
+        _ = try await apiClient.send(
             APIClient.replaceMobilePlaceScrapers(
                 slug: slug,
                 scrapers: venueScraperRows.compactMap(\.apiValue)
