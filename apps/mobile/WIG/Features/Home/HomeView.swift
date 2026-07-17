@@ -1760,8 +1760,8 @@ private struct HomeActivationCard: View {
     private var subtitle: String {
         switch task.key {
         case .addFriends: "Add friends to see which events they’re going to."
-        case .followPlaces: "Follow your favorite places to see more of their events in your feed."
-        case .addProfilePhoto: "Help friends recognize you."
+        case .followPlaces: "Follow your favorite places to see their events first in your feed."
+        case .addProfilePhoto: "Make it easier for friends to recognize you."
         }
     }
 
