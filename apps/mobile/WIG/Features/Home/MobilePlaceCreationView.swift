@@ -958,6 +958,7 @@ struct GooglePlaceSearchSheet: View {
     @State private var query = ""
     @State private var selectedPlaceID: String?
     @State private var selectionErrorMessage: String?
+    @FocusState private var isSearchFocused: Bool
 
     var body: some View {
         NavigationStack {
@@ -975,8 +976,10 @@ struct GooglePlaceSearchSheet: View {
                             TextField(placeholder, text: $query)
                                 .font(.system(size: 16, weight: .medium))
                                 .foregroundStyle(.white)
+                                .tint(AppTheme.accentBlue)
                                 .textInputAutocapitalization(.words)
                                 .autocorrectionDisabled()
+                                .focused($isSearchFocused)
 
                             if !query.isEmpty {
                                 Button {
@@ -999,6 +1002,10 @@ struct GooglePlaceSearchSheet: View {
                             RoundedRectangle(cornerRadius: 18, style: .continuous)
                                 .strokeBorder(Color.white.opacity(0.08), lineWidth: 1)
                         )
+                        .contentShape(Rectangle())
+                        .onTapGesture {
+                            isSearchFocused = true
+                        }
                         .padding(.horizontal, 16)
                         .padding(.top, 12)
 
@@ -1140,6 +1147,14 @@ struct GooglePlaceSearchSheet: View {
                     searchType: searchType
                 )
             )
+            isSearchFocused = false
+            UIApplication.shared.sendAction(
+                #selector(UIResponder.resignFirstResponder),
+                to: nil,
+                from: nil,
+                for: nil
+            )
+            try? await Task.sleep(for: .milliseconds(120))
             onSelect(detail)
             dismiss()
         } catch {

@@ -4,6 +4,8 @@ struct FriendsFeedResponse: Decodable, Sendable {
     let profile: FriendUserSummary?
     let friendCount: Int
     let requestCount: Int
+    let followingCount: Int
+    let followedPlaces: [PlaceListItem]
     let friends: [FriendUserSummary]
     let receivedRequests: [FriendUserSummary]
     let sentRequests: [FriendUserSummary]
@@ -14,6 +16,8 @@ struct FriendsFeedResponse: Decodable, Sendable {
         profile: FriendUserSummary?,
         friendCount: Int,
         requestCount: Int,
+        followingCount: Int = 0,
+        followedPlaces: [PlaceListItem] = [],
         friends: [FriendUserSummary],
         receivedRequests: [FriendUserSummary],
         sentRequests: [FriendUserSummary],
@@ -23,6 +27,8 @@ struct FriendsFeedResponse: Decodable, Sendable {
         self.profile = profile
         self.friendCount = friendCount
         self.requestCount = requestCount
+        self.followingCount = followingCount
+        self.followedPlaces = followedPlaces
         self.friends = friends
         self.receivedRequests = receivedRequests
         self.sentRequests = sentRequests
@@ -116,6 +122,8 @@ extension FriendsFeedResponse {
             profile: profile?.updatingAvatarImageURL(avatarImageURL),
             friendCount: friendCount,
             requestCount: requestCount,
+            followingCount: followingCount,
+            followedPlaces: followedPlaces,
             friends: friends,
             receivedRequests: receivedRequests,
             sentRequests: sentRequests,

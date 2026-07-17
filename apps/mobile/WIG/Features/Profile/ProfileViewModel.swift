@@ -79,6 +79,7 @@ final class ProfileViewModel: ObservableObject {
                     friendsResponse.updatingProfileAvatarImageURL(response.avatarImageURL)
                 )
             }
+            NotificationCenter.default.post(name: .activationDidChange, object: nil)
         } catch {
             avatarUploadError = error.localizedDescription
         }
@@ -104,6 +105,8 @@ final class ProfileViewModel: ObservableObject {
                 profile: response.profile,
                 friendCount: max(response.friendCount - 1, 0),
                 requestCount: response.requestCount,
+                followingCount: response.followingCount,
+                followedPlaces: response.followedPlaces,
                 friends: response.friends.filter { $0.id != userID },
                 receivedRequests: response.receivedRequests,
                 sentRequests: response.sentRequests,

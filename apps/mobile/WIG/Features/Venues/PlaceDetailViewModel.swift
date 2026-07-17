@@ -89,6 +89,9 @@ final class PlaceDetailViewModel: ObservableObject {
             detail.isFollowed = followState.isFollowed
             Self.seedCache(with: detail)
             state = .loaded(detail)
+            if isFollowed {
+                NotificationCenter.default.post(name: .activationDidChange, object: nil)
+            }
         } catch {
             state = .loaded(previousDetail)
         }

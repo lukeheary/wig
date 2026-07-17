@@ -202,6 +202,8 @@ export const usersRelations = relations(users, ({ many }) => ({
   pushTokens: many(userPushTokens),
   notificationPreferences: many(userNotificationPreferences),
   surfaceStates: many(userSurfaceState),
+  activationTasks: many(userActivationTasks),
+  activationTaskActions: many(userActivationTaskActions),
   supportTickets: many(supportTickets),
   supportTicketActivities: many(supportTicketActivity),
 }));
@@ -303,6 +305,54 @@ export const userSurfaceStateRelations = relations(
       fields: [userSurfaceState.userId],
       references: [users.id],
     }),
+  })
+);
+
+// Durable, extensible "getting started" milestones. Task definitions (copy,
+// ordering, and targets) remain in application code; these tables only store
+// what each user has accomplished.
+export const userActivationTasks = pgTable(
+  "user_activation_tasks",
+  {
+    id: uuid("id").defaultRandom().primaryKey(),
+    userId: text("user_id")
+      .notNull()
+      .references(() => users.id, { onDelete: "cascade" }),
+    taskKey: varchar("task_key", { length: 100 }).notNull(),
+    progress: integer("progress").notNull().default(0),
+    firstSeenAt: timestamp("first_seen_at").defaultNow().notNull(),
+    completedAt: timestamp("completed_at"),
+    createdAt: timestamp("created_at").defaultNow().notNull(),
+    updatedAt: timestamp("updated_at").defaultNow().notNull(),
+  },
+  (table) => ({
+    userTaskIdx: uniqueIndex("user_activation_tasks_user_task_idx").on(
+      table.userId,
+      table.taskKey
+    ),
+    userIdx: index("user_activation_tasks_user_idx").on(table.userId),
+  })
+);
+
+export const userActivationTaskActions = pgTable(
+  "user_activation_task_actions",
+  {
+    id: uuid("id").defaultRandom().primaryKey(),
+    userId: text("user_id")
+      .notNull()
+      .references(() => users.id, { onDelete: "cascade" }),
+    taskKey: varchar("task_key", { length: 100 }).notNull(),
+    subjectId: text("subject_id").notNull(),
+    createdAt: timestamp("created_at").defaultNow().notNull(),
+  },
+  (table) => ({
+    userTaskSubjectIdx: uniqueIndex(
+      "user_activation_task_actions_user_task_subject_idx"
+    ).on(table.userId, table.taskKey, table.subjectId),
+    userTaskIdx: index("user_activation_task_actions_user_task_idx").on(
+      table.userId,
+      table.taskKey
+    ),
   })
 );
 

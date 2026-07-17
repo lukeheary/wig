@@ -5,6 +5,7 @@ import UIKit
 
 struct ProfileView: View {
     let resetFiltersTrigger: Int
+    let addPhotoTrigger: Int
 
     @Environment(Clerk.self) private var clerk
     @Environment(\.apiClient) private var apiClient
@@ -24,9 +25,11 @@ struct ProfileView: View {
     @State private var friendRequestActionErrorMessage: String?
     @State private var isAdminSettingsPresented = false
     @State private var profileShareURL: URL?
+    @State private var handledAddPhotoTrigger = 0
 
-    init(resetFiltersTrigger: Int = 0) {
+    init(resetFiltersTrigger: Int = 0, addPhotoTrigger: Int = 0) {
         self.resetFiltersTrigger = resetFiltersTrigger
+        self.addPhotoTrigger = addPhotoTrigger
     }
 
     var body: some View {
@@ -39,6 +42,12 @@ struct ProfileView: View {
                     if case .idle = viewModel.state {
                         await loadProfileScreen()
                     }
+                }
+                .onAppear {
+                    presentActivationPhotoPickerIfNeeded()
+                }
+                .onChange(of: addPhotoTrigger) { _, _ in
+                    presentActivationPhotoPickerIfNeeded()
                 }
                 .onChange(of: resetFiltersTrigger) { _, _ in
                     resetProfileFilters()
@@ -187,6 +196,12 @@ struct ProfileView: View {
                     }
                 }
         }
+    }
+
+    private func presentActivationPhotoPickerIfNeeded() {
+        guard addPhotoTrigger > handledAddPhotoTrigger else { return }
+        handledAddPhotoTrigger = addPhotoTrigger
+        isAvatarSourceDialogPresented = true
     }
 
     @ViewBuilder
@@ -576,6 +591,8 @@ struct ProfileView: View {
                     profile: current.profile,
                     friendCount: current.friendCount + 1,
                     requestCount: max(current.requestCount - 1, 0),
+                    followingCount: current.followingCount,
+                    followedPlaces: current.followedPlaces,
                     friends: current.friends + [
                         FriendUserSummary(
                             id: resolvedRequest.id,
@@ -600,6 +617,8 @@ struct ProfileView: View {
                     profile: current.profile,
                     friendCount: current.friendCount,
                     requestCount: max(current.requestCount - 1, 0),
+                    followingCount: current.followingCount,
+                    followedPlaces: current.followedPlaces,
                     friends: current.friends,
                     receivedRequests: current.receivedRequests.filter { $0.id != resolvedRequest.id },
                     sentRequests: current.sentRequests,
@@ -732,6 +751,13 @@ struct UserProfileView: View {
                 }
             }
             .onReceive(NotificationCenter.default.publisher(for: .appDataDidChange)) { _ in
+                // Friend actions update this profile optimistically below. Ignore the
+                // mutation's global refresh notification so the screen does not fall
+                // back to its loading state just to redraw the action button.
+                guard !isSendingFriendRequest, !isRespondingToFriendRequest else {
+                    return
+                }
+
                 Task {
                     await viewModel.load(userID: userID, using: apiClient, forceRefresh: true)
                 }
@@ -917,6 +943,7 @@ struct UserProfileView: View {
             return
         }
 
+        UIImpactFeedbackGenerator(style: .light).impactOccurred()
         isSendingFriendRequest = true
 
         Task {
@@ -1637,6 +1664,13 @@ private struct RelationshipSummaryRow: View {
             .buttonStyle(.plain)
 
             NavigationLink {
+                FollowingPlacesView(places: response.followedPlaces)
+            } label: {
+                RelationshipSummaryLink(count: response.followingCount, label: "Following")
+            }
+            .buttonStyle(.plain)
+
+            NavigationLink {
                 FriendRequestsView(
                     receivedRequests: response.receivedRequests,
                     sentRequests: response.sentRequests,
@@ -2017,6 +2051,32 @@ private struct FriendsListView: View {
     var body: some View {
         RelationshipListScreen(title: title) {
             FriendsListViewContent(friends: friends)
+        }
+    }
+}
+
+private struct FollowingPlacesView: View {
+    let places: [PlaceListItem]
+
+    var body: some View {
+        RelationshipListScreen(title: "Following") {
+            if places.isEmpty {
+                EmptyRelationshipCard(
+                    systemImage: "building.2",
+                    message: "No followed places yet"
+                )
+            } else {
+                VStack(spacing: 12) {
+                    ForEach(places, id: \.listRowID) { place in
+                        NavigationLink {
+                            PlaceDetailView(place: place)
+                        } label: {
+                            PlaceRowView(place: place)
+                        }
+                        .buttonStyle(.plain)
+                    }
+                }
+            }
         }
     }
 }
@@ -2571,6 +2631,8 @@ struct RequestsPageView: View {
                     profile: current.profile,
                     friendCount: current.friendCount + 1,
                     requestCount: max(current.requestCount - 1, 0),
+                    followingCount: current.followingCount,
+                    followedPlaces: current.followedPlaces,
                     friends: current.friends + [
                         FriendUserSummary(
                             id: resolvedRequest.id,
@@ -2595,6 +2657,8 @@ struct RequestsPageView: View {
                     profile: current.profile,
                     friendCount: current.friendCount,
                     requestCount: max(current.requestCount - 1, 0),
+                    followingCount: current.followingCount,
+                    followedPlaces: current.followedPlaces,
                     friends: current.friends,
                     receivedRequests: current.receivedRequests.filter { $0.id != resolvedRequest.id },
                     sentRequests: current.sentRequests,
