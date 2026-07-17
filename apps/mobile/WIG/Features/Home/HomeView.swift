@@ -2,6 +2,76 @@ import ClerkKit
 import SwiftUI
 import UIKit
 
+@MainActor
+private final class HomeForegroundRefreshCoordinator: ObservableObject {
+    private var needsRefresh = false
+    private var refreshTask: Task<Void, Never>?
+
+    func scenePhaseChanged(
+        to phase: ScenePhase,
+        eventDetailPresented: Bool,
+        refresh: @escaping @MainActor () async -> Void
+    ) {
+        refreshTask?.cancel()
+        refreshTask = nil
+
+        guard phase == .active else {
+            needsRefresh = false
+            return
+        }
+
+        needsRefresh = true
+
+        guard !eventDetailPresented else {
+            return
+        }
+
+        schedule(refresh)
+    }
+
+    func eventDetailPresentationChanged(
+        isPresented: Bool,
+        scenePhase: ScenePhase,
+        refresh: @escaping @MainActor () async -> Void
+    ) {
+        guard needsRefresh else {
+            return
+        }
+
+        if isPresented {
+            refreshTask?.cancel()
+            refreshTask = nil
+            return
+        }
+
+        guard scenePhase == .active else {
+            return
+        }
+
+        schedule(refresh)
+    }
+
+    private func schedule(_ refresh: @escaping @MainActor () async -> Void) {
+        refreshTask?.cancel()
+        refreshTask = Task { @MainActor [weak self] in
+            try? await Task.sleep(for: .milliseconds(500))
+
+            guard !Task.isCancelled, let self else {
+                return
+            }
+
+            await refresh()
+
+            guard !Task.isCancelled else {
+                return
+            }
+
+            self.needsRefresh = false
+            self.refreshTask = nil
+        }
+    }
+}
+
 struct HomeView: View {
     let showsNativeSearch: Bool
     let searchesUsersOnly: Bool
@@ -13,6 +83,7 @@ struct HomeView: View {
     @Environment(\.apiClient) private var apiClient
     @Environment(\.scenePhase) private var scenePhase
     @EnvironmentObject private var appSession: AppSession
+    @StateObject private var foregroundRefreshCoordinator = HomeForegroundRefreshCoordinator()
     @StateObject private var viewModel = EventFeedViewModel()
     @StateObject private var recentActivityViewModel = HomeRecentActivityViewModel()
     @StateObject private var searchViewModel = HomeSearchDirectoryViewModel()
@@ -31,6 +102,7 @@ struct HomeView: View {
     @State private var selectedCategoryFilterID: String?
     @State private var postEventFeedbackEvent: MobileEventReviewPrompt?
     @State private var postEventFeedbackPrompt: MobileEventReviewPrompt?
+    @State private var pendingPostEventDetail: EventFeedItem?
     @State private var completedPostEventFeedbackIDs = Set<String>()
 
     private static let sectionTitleFormatter: DateFormatter = {
@@ -124,11 +196,30 @@ struct HomeView: View {
                     }
                 }
                 .onChange(of: scenePhase) { _, phase in
-                    guard phase == .active else {
+                    guard !showsNativeSearch else {
                         return
                     }
 
-                    Task {
+                    foregroundRefreshCoordinator.scenePhaseChanged(
+                        to: phase,
+                        eventDetailPresented: appSession.isEventDetailPresented
+                    ) {
+                        await loadHome(
+                            for: selectedWeekStart,
+                            using: apiClient,
+                            forceRefresh: true
+                        )
+                    }
+                }
+                .onChange(of: appSession.presentedEventDetail?.id) { _, presentationID in
+                    guard !showsNativeSearch else {
+                        return
+                    }
+
+                    foregroundRefreshCoordinator.eventDetailPresentationChanged(
+                        isPresented: presentationID != nil,
+                        scenePhase: scenePhase
+                    ) {
                         await loadHome(
                             for: selectedWeekStart,
                             using: apiClient,
@@ -208,18 +299,11 @@ struct HomeView: View {
 
                     await EventArtworkPrefetcher.prefetch(events: displayedEventsForPrefetch)
                 }
-                .sheet(item: $postEventFeedbackEvent) { event in
-                    PostEventFeedbackSheet(
-                        event: event,
-                        onSkip: {
-                            await skipPostEventFeedback(for: event)
-                        }
-                    ) { response, comment in
-                        await recordPostEventFeedback(response, comment: comment, for: event)
-                    }
-                    .presentationDetents([.medium, .large])
-                    .presentationDragIndicator(.visible)
-                }
+                .sheet(
+                    item: $postEventFeedbackEvent,
+                    onDismiss: presentPendingPostEventDetail,
+                    content: postEventFeedbackSheet
+                )
         }
         .nativeSearch(
             isEnabled: showsNativeSearch,
@@ -333,41 +417,22 @@ struct HomeView: View {
                 }
 
                 ForEach(Array(groupedEvents.enumerated()), id: \.element.day) { index, section in
-                    VStack(alignment: .leading, spacing: 12) {
+                    HomeEventDaySection(
+                        section: section,
+                        eventCardWidth: eventCardWidth
+                    ) {
                         sectionHeader(
                             section.title,
                             showsLocation: index == 0 && isViewingCurrentWeek
                         )
-                            .padding(.horizontal, 16)
-
-                        if section.events.isEmpty {
-                            EmptyEventDayPlaceholder()
-                                .padding(.horizontal, 16)
-                        } else {
-                            ScrollView(.horizontal) {
-                                LazyHStack(alignment: .top, spacing: 12) {
-                                    ForEach(section.events) { event in
-                                        EventDetailNavigationLink(event: event) {
-                                            EventCardView(event: event)
-                                                .frame(width: eventCardWidth)
-                                                .contentShape(Rectangle())
-                                        }
-                                    }
-                                }
-                                .scrollTargetLayout()
-                            }
-                            .scrollIndicators(.hidden)
-                            .contentMargins(.horizontal, 16, for: .scrollContent)
-                            .scrollTargetBehavior(.viewAligned)
-                        }
                     }
-                    // Match the 82pt top offset used above the first header on the
-                    // Places and Activity tabs (64 base + 18) so switching tabs doesn't
+                    // Match the 74pt top offset used above the first header on the
+                    // Places and Activity tabs (56 base + 18) so switching tabs doesn't
                     // shift the header. The recent-activity block above already adds 18.
                     .padding(.top, index == 0 && !shouldShowRecentActivity ? 18 : 0)
                 }
             }
-            .padding(.top, 64)
+            .padding(.top, 56)
             .padding(.bottom, 48)
         }
         .scrollIndicators(.hidden)
@@ -385,7 +450,7 @@ struct HomeView: View {
                     .padding(.top, index == 0 ? 16 : 0)
                 }
             }
-            .padding(.top, 64)
+            .padding(.top, 56)
             .padding(.bottom, 48)
         }
         .scrollIndicators(.hidden)
@@ -607,7 +672,7 @@ struct HomeView: View {
                 }
             }
             .frame(maxWidth: .infinity)
-            .padding(.top, showsNativeSearch ? 0 : 74)
+            .padding(.top, showsNativeSearch ? 0 : 66)
             .padding(.bottom, 48)
         }
         .scrollIndicators(.hidden)
@@ -672,7 +737,7 @@ struct HomeView: View {
 
                     homeEventSearchGridContent
                 }
-                .padding(.top, 82)
+                .padding(.top, 74)
                 .padding(.bottom, 48)
             }
             .scrollIndicators(.hidden)
@@ -1330,6 +1395,35 @@ struct HomeView: View {
         completedPostEventFeedbackIDs = Set(savedIDs)
     }
 
+    private func presentPendingPostEventDetail() {
+        guard let pendingPostEventDetail else { return }
+        self.pendingPostEventDetail = nil
+        appSession.presentEventDetail(pendingPostEventDetail)
+    }
+
+    private func postEventFeedbackSheet(for event: MobileEventReviewPrompt) -> some View {
+        PostEventFeedbackSheet(
+                        event: event,
+                        onOpenEvent: {
+                            do {
+                                pendingPostEventDetail = try await apiClient.send(
+                                    APIClient.mobileEventDetail(eventID: event.id)
+                                )
+                            } catch {
+                                return
+                            }
+                            postEventFeedbackEvent = nil
+                        },
+            onSkip: {
+                await skipPostEventFeedback(for: event)
+            }
+        ) { response, comment in
+            await recordPostEventFeedback(response, comment: comment, for: event)
+        }
+        .presentationDetents([.medium, .large])
+        .presentationDragIndicator(.visible)
+    }
+
     private func recordPostEventFeedback(
         _ response: PostEventFeedbackResponse,
         comment: String?,
@@ -1535,6 +1629,46 @@ private struct EventSection: Identifiable {
     var id: Date { day }
 }
 
+private struct HomeEventDaySection<Header: View>: View {
+    let section: EventSection
+    let eventCardWidth: CGFloat
+    private let header: Header
+
+    init(
+        section: EventSection,
+        eventCardWidth: CGFloat,
+        @ViewBuilder header: () -> Header
+    ) {
+        self.section = section
+        self.eventCardWidth = eventCardWidth
+        self.header = header()
+    }
+
+    @ViewBuilder
+    var body: some View {
+        if section.events.isEmpty {
+            VStack(alignment: .leading, spacing: 12) {
+                header
+                    .padding(.horizontal, 16)
+
+                EmptyEventDayPlaceholder()
+                    .padding(.horizontal, 16)
+            }
+        } else {
+            EventCardCarousel(
+                events: section.events,
+                cardWidth: eventCardWidth
+            ) {
+                header
+            } card: { event in
+                EventDetailNavigationLink(event: event) {
+                    EventCardView(event: event)
+                }
+            }
+        }
+    }
+}
+
 enum PostEventFeedbackResponse: CaseIterable, Identifiable {
     case lovedIt
     case likedIt
@@ -1669,6 +1803,7 @@ private struct PostEventFeedbackBanner: View {
 struct PostEventFeedbackSheet: View {
     let event: MobileEventReviewPrompt
     let onResponse: (PostEventFeedbackResponse, String?) async -> Bool
+    let onOpenEvent: (() async -> Void)?
     let onSkip: (() async -> Bool)?
 
     @Environment(\.dismiss) private var dismiss
@@ -1683,11 +1818,13 @@ struct PostEventFeedbackSheet: View {
         event: MobileEventReviewPrompt,
         initialResponse: PostEventFeedbackResponse? = nil,
         initialComment: String? = nil,
+        onOpenEvent: (() async -> Void)? = nil,
         onSkip: (() async -> Bool)? = nil,
         onResponse: @escaping (PostEventFeedbackResponse, String?) async -> Bool
     ) {
         self.event = event
         self.onResponse = onResponse
+        self.onOpenEvent = onOpenEvent
         self.onSkip = onSkip
         _comment = State(initialValue: initialComment ?? "")
         _selectedResponse = State(initialValue: initialResponse)
@@ -1696,28 +1833,7 @@ struct PostEventFeedbackSheet: View {
     var body: some View {
         ScrollView {
             VStack(alignment: .leading, spacing: 24) {
-                HStack(alignment: .center, spacing: 14) {
-                    sheetArtwork
-
-                    VStack(alignment: .leading, spacing: 4) {
-                        Text(event.title)
-                            .font(.system(size: 14, weight: .semibold))
-                            .foregroundStyle(.white)
-                            .lineLimit(3)
-
-                        VStack(alignment: .leading, spacing: 4) {
-                            Text(eventStartDateAndTime)
-                                .foregroundStyle(AppTheme.accentBlue)
-
-                            Text(event.venueName ?? "\(event.city), \(event.state)")
-                                .foregroundStyle(.white.opacity(0.70))
-                        }
-                        .font(.system(size: 14, weight: .medium))
-                        .lineLimit(1)
-                    }
-                    .frame(maxWidth: .infinity, alignment: .leading)
-
-                }
+                eventHeader
                 // Keep the title and metadata clear of the close control.
                 .padding(.trailing, 58)
                 .padding(.bottom, -4)
@@ -1854,6 +1970,48 @@ struct PostEventFeedbackSheet: View {
         .overlay {
             RoundedRectangle(cornerRadius: 18, style: .continuous)
                 .strokeBorder(.white.opacity(0.12), lineWidth: 1)
+        }
+    }
+
+    @ViewBuilder
+    private var eventHeader: some View {
+        if let onOpenEvent {
+            Button {
+                Task {
+                    await onOpenEvent()
+                }
+            } label: {
+                eventHeaderContent
+                    .contentShape(Rectangle())
+            }
+            .buttonStyle(.plain)
+            .accessibilityLabel("View \(event.title)")
+        } else {
+            eventHeaderContent
+        }
+    }
+
+    private var eventHeaderContent: some View {
+        HStack(alignment: .center, spacing: 14) {
+            sheetArtwork
+
+            VStack(alignment: .leading, spacing: 4) {
+                Text(event.title)
+                    .font(.system(size: 14, weight: .semibold))
+                    .foregroundStyle(.white)
+                    .lineLimit(3)
+
+                VStack(alignment: .leading, spacing: 4) {
+                    Text(eventStartDateAndTime)
+                        .foregroundStyle(AppTheme.accentBlue)
+
+                    Text(event.venueName ?? "\(event.city), \(event.state)")
+                        .foregroundStyle(.white.opacity(0.70))
+                }
+                .font(.system(size: 14, weight: .medium))
+                .lineLimit(1)
+            }
+            .frame(maxWidth: .infinity, alignment: .leading)
         }
     }
 
@@ -2148,7 +2306,7 @@ private struct HomeRecentActivitySection: View {
     var body: some View {
         let visible = visibleActivities
         if !visible.isEmpty {
-            VStack(alignment: .leading, spacing: 10) {
+            VStack(alignment: .leading, spacing: 6) {
                 Button(action: onShowActivity) {
                     HStack(spacing: 6) {
                         Text("Recent Activity")

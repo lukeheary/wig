@@ -66,6 +66,188 @@ struct EventDetailNavigationLink<Label: View>: View {
     }
 }
 
+struct EventCardCarousel<Header: View, Card: View>: View {
+    let events: [EventFeedItem]
+    let cardWidth: CGFloat
+    let verticalSpacing: CGFloat
+    private let header: Header
+    private let card: (EventFeedItem) -> Card
+
+    @State private var currentEventID: UUID?
+    @State private var isCountVisible = false
+    @State private var isNativeScrollActive = false
+    @State private var isLastEventVisible = false
+    @State private var hideCountTask: Task<Void, Never>?
+
+    init(
+        events: [EventFeedItem],
+        cardWidth: CGFloat,
+        verticalSpacing: CGFloat = 12,
+        @ViewBuilder header: () -> Header,
+        @ViewBuilder card: @escaping (EventFeedItem) -> Card
+    ) {
+        self.events = events
+        self.cardWidth = cardWidth
+        self.verticalSpacing = verticalSpacing
+        self.header = header()
+        self.card = card
+        _currentEventID = State(initialValue: events.first?.id)
+    }
+
+    var body: some View {
+        VStack(alignment: .leading, spacing: verticalSpacing) {
+            HStack(alignment: .firstTextBaseline, spacing: 12) {
+                Button(action: scrollToStart) {
+                    header
+                        .contentShape(Rectangle())
+                }
+                .buttonStyle(.plain)
+                .accessibilityHint("Scrolls this event row to the first event")
+
+                Spacer(minLength: 8)
+
+                Text("\(currentEventNumber) / \(events.count)")
+                    .font(.system(size: 13, weight: .medium))
+                    .monospacedDigit()
+                    .foregroundStyle(.white.opacity(0.52))
+                    .opacity(isCountVisible && events.count > 1 ? 1 : 0)
+                    .accessibilityHidden(!isCountVisible || events.count <= 1)
+            }
+            .padding(.horizontal, 16)
+
+            eventScrollView
+        }
+        .onChange(of: events.map(\.id)) { _, eventIDs in
+            if let currentEventID, eventIDs.contains(currentEventID) {
+                return
+            }
+
+            self.currentEventID = eventIDs.first
+        }
+        .onDisappear {
+            hideCountTask?.cancel()
+        }
+    }
+
+    @ViewBuilder
+    private var eventScrollView: some View {
+        if #available(iOS 18.0, *) {
+            scrollView
+                .onScrollTargetVisibilityChange(
+                    idType: UUID.self,
+                    threshold: 0.8
+                ) { visibleEventIDs in
+                    guard let lastEventID = events.last?.id else {
+                        isLastEventVisible = false
+                        return
+                    }
+
+                    isLastEventVisible = visibleEventIDs.contains(lastEventID)
+                }
+                .onScrollPhaseChange { _, phase in
+                    if phase == .idle {
+                        isNativeScrollActive = false
+                        scheduleCountFadeOut()
+                    } else {
+                        isNativeScrollActive = true
+                        showCount()
+                    }
+                }
+        } else {
+            scrollView
+                .simultaneousGesture(
+                    DragGesture(minimumDistance: 3)
+                        .onChanged { _ in
+                            showCount()
+                        }
+                        .onEnded { _ in
+                            scheduleCountFadeOut()
+                        }
+                )
+        }
+    }
+
+    private var scrollView: some View {
+        ScrollView(.horizontal) {
+            LazyHStack(alignment: .top, spacing: 12) {
+                ForEach(events) { event in
+                    card(event)
+                        .frame(width: cardWidth)
+                        .contentShape(Rectangle())
+                        .id(event.id)
+                }
+            }
+            .scrollTargetLayout()
+        }
+        .scrollIndicators(.hidden)
+        .contentMargins(.horizontal, 16, for: .scrollContent)
+        .scrollTargetBehavior(.viewAligned)
+        .scrollPosition(id: $currentEventID, anchor: .leading)
+        .onChange(of: currentEventID) { _, _ in
+            guard isCountVisible, !isNativeScrollActive else {
+                return
+            }
+
+            scheduleCountFadeOut()
+        }
+    }
+
+    private var currentEventNumber: Int {
+        if isLastEventVisible {
+            return events.count
+        }
+
+        guard let currentEventID,
+              let index = events.firstIndex(where: { $0.id == currentEventID })
+        else {
+            return events.isEmpty ? 0 : 1
+        }
+
+        return index + 1
+    }
+
+    private func scrollToStart() {
+        guard let firstEventID = events.first?.id,
+              currentEventID != firstEventID
+        else {
+            return
+        }
+
+        showCount()
+
+        withAnimation(.easeInOut(duration: 0.34)) {
+            currentEventID = firstEventID
+        }
+    }
+
+    private func showCount() {
+        guard events.count > 1 else {
+            return
+        }
+
+        hideCountTask?.cancel()
+
+        withAnimation(.easeOut(duration: 0.12)) {
+            isCountVisible = true
+        }
+    }
+
+    private func scheduleCountFadeOut() {
+        hideCountTask?.cancel()
+        hideCountTask = Task { @MainActor in
+            try? await Task.sleep(for: .milliseconds(450))
+
+            guard !Task.isCancelled else {
+                return
+            }
+
+            withAnimation(.easeOut(duration: 0.22)) {
+                isCountVisible = false
+            }
+        }
+    }
+}
+
 struct EventCardView: View {
     let event: EventFeedItem
     var obscuresDetails = false
@@ -278,11 +460,10 @@ private struct EventCardBackground: View {
             bottomSolid
         }
         .frame(width: cardWidth, height: cardHeight)
-        // The composed background never animates once the artwork/palette load, so
-        // flatten the image + blur + gradients into a single cached texture. This
-        // avoids re-compositing several offscreen layers (and re-sampling the
-        // full-resolution poster) on every frame while the card scrolls.
-        .drawingGroup()
+        // Do not rasterize this into a Metal-backed drawingGroup. iOS can discard
+        // those textures while the app is suspended, which makes the source card
+        // re-rasterize on the first reverse-zoom frame after unlocking the phone.
+        // EventCardView's outer compositingGroup still keeps clipping predictable.
     }
 
     @ViewBuilder

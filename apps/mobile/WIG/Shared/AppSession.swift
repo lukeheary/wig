@@ -19,19 +19,18 @@ struct EventDetailPresentation: Identifiable, Hashable {
 final class AppSession: ObservableObject {
     @Published var isAuthBypassed = false
     @Published var isAdmin = false
-    @Published private(set) var eventDetailPresentationCount = 0
     @Published var presentedEventDetail: EventDetailPresentation?
     @Published var selectedCityContext: SelectedCityContext?
 
     var shouldShowFloatingCreationButton: Bool {
-        isAdmin && eventDetailPresentationCount == 0
+        isAdmin && presentedEventDetail == nil
     }
 
     // True while an individual event detail page is on screen. The event page shows
     // its own artwork-tinted background to the top, so the global status-bar scrim is
     // hidden there.
     var isEventDetailPresented: Bool {
-        eventDetailPresentationCount > 0
+        presentedEventDetail != nil
     }
 
     func skipAuth() {
@@ -41,21 +40,12 @@ final class AppSession: ObservableObject {
     func reset() {
         isAuthBypassed = false
         isAdmin = false
-        eventDetailPresentationCount = 0
         presentedEventDetail = nil
         selectedCityContext = nil
     }
 
     func updateAdminStatus(_ isAdmin: Bool) {
         self.isAdmin = isAdmin
-    }
-
-    func beginEventDetailPresentation() {
-        eventDetailPresentationCount += 1
-    }
-
-    func endEventDetailPresentation() {
-        eventDetailPresentationCount = max(0, eventDetailPresentationCount - 1)
     }
 
     func presentEventDetail(_ event: EventFeedItem, transitionSourceID: UUID? = nil) {

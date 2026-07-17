@@ -196,7 +196,7 @@ struct ProfileView: View {
             ScrollView {
                 ProfilePageSkeletonContent(showsTopActions: false)
                     .padding(.horizontal, 16)
-                    .padding(.top, 82)
+                    .padding(.top, 74)
                     .padding(.bottom, 48)
             }
             .scrollIndicators(.hidden)
@@ -287,7 +287,7 @@ struct ProfileView: View {
                     }
                 }
                 .padding(.horizontal, 16)
-                .padding(.top, 82)
+                .padding(.top, 74)
                 .padding(.bottom, 48)
             }
             .scrollIndicators(.hidden)
@@ -333,27 +333,18 @@ struct ProfileView: View {
                 )
             } else {
                 ForEach(groups) { group in
-                    VStack(alignment: .leading, spacing: 14) {
+                    EventCardCarousel(
+                        events: group.events,
+                        cardWidth: 220,
+                        verticalSpacing: 14
+                    ) {
                         Text(group.label)
                             .font(.system(size: 20, weight: .bold))
                             .foregroundStyle(.white)
-                            .padding(.horizontal, 16)
-
-                        ScrollView(.horizontal) {
-                            LazyHStack(alignment: .top, spacing: 12) {
-                                ForEach(group.events) { event in
-                                    EventDetailNavigationLink(event: event) {
-                                        EventCardView(event: event)
-                                            .frame(width: 220)
-                                            .contentShape(Rectangle())
-                                    }
-                                }
-                            }
-                            .scrollTargetLayout()
+                    } card: { event in
+                        EventDetailNavigationLink(event: event) {
+                            EventCardView(event: event)
                         }
-                        .scrollIndicators(.hidden)
-                        .contentMargins(.horizontal, 16, for: .scrollContent)
-                        .scrollTargetBehavior(.viewAligned)
                     }
                     .padding(.horizontal, -16)
                 }
@@ -787,7 +778,7 @@ struct UserProfileView: View {
             ScrollView {
                 ProfilePageSkeletonContent(showsTopActions: false)
                     .padding(.horizontal, 16)
-                    .padding(.top, 82)
+                    .padding(.top, 74)
                     .padding(.bottom, 48)
             }
             .scrollIndicators(.hidden)
@@ -828,7 +819,7 @@ struct UserProfileView: View {
                     )
                 }
                 .padding(.horizontal, 16)
-                .padding(.top, 82)
+                .padding(.top, 74)
                 .padding(.bottom, 48)
             }
             .scrollIndicators(.hidden)
@@ -1280,31 +1271,22 @@ private struct UserProfileEventsSection: View {
                 )
             } else {
                 ForEach(groups) { group in
-                    VStack(alignment: .leading, spacing: 14) {
+                    EventCardCarousel(
+                        events: group.events,
+                        cardWidth: 220,
+                        verticalSpacing: 14
+                    ) {
                         Text(group.label)
                             .font(.system(size: 20, weight: .bold))
                             .foregroundStyle(.white)
-                            .padding(.horizontal, 16)
-
-                        ScrollView(.horizontal) {
-                            LazyHStack(alignment: .top, spacing: 12) {
-                                ForEach(group.events) { event in
-                                    if canViewEventDetails {
-                                        EventDetailNavigationLink(event: event) {
-                                            EventCardView(event: event)
-                                                .frame(width: 220)
-                                        }
-                                    } else {
-                                        EventCardView(event: event, obscuresDetails: true)
-                                            .frame(width: 220)
-                                    }
-                                }
+                    } card: { event in
+                        if canViewEventDetails {
+                            EventDetailNavigationLink(event: event) {
+                                EventCardView(event: event)
                             }
-                            .scrollTargetLayout()
+                        } else {
+                            EventCardView(event: event, obscuresDetails: true)
                         }
-                        .scrollIndicators(.hidden)
-                        .contentMargins(.horizontal, 16, for: .scrollContent)
-                        .scrollTargetBehavior(.viewAligned)
                     }
                     .padding(.horizontal, -16)
                 }
@@ -2666,7 +2648,7 @@ private struct RelationshipListScreen<Content: View>: View {
                 content
             }
             .padding(.horizontal, 16)
-            .padding(.top, 82)
+            .padding(.top, 74)
             .padding(.bottom, 48)
         }
         .background(ProfileTheme.background.ignoresSafeArea())
@@ -2993,7 +2975,7 @@ private struct AdminSettingsView: View {
                 }
             }
             .padding(.horizontal, 16)
-            .padding(.top, 82)
+            .padding(.top, 74)
             .padding(.bottom, 48)
         }
         .scrollIndicators(.hidden)
@@ -3203,7 +3185,7 @@ private struct AdminScrapersView: View {
                 }
             }
             .padding(.horizontal, 16)
-            .padding(.top, 82)
+            .padding(.top, 74)
             .padding(.bottom, 48)
         }
         .scrollIndicators(.hidden)

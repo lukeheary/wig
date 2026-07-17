@@ -66,7 +66,7 @@ struct VenuesView: View {
                     }
                 }
                 .padding(.horizontal, 16)
-                .padding(.top, 82)
+                .padding(.top, 74)
                 .padding(.bottom, 48)
             }
             .overlay(alignment: .topLeading) {
@@ -123,7 +123,7 @@ struct VenuesView: View {
                         // actually drew, which offset each NavigationLink's tap target
                         // onto the adjacent row. Eager layout keeps hit-testing aligned.
                         VStack(alignment: .leading, spacing: 12) {
-                            ForEach(sections) { section in
+                            ForEach(Array(sections.enumerated()), id: \.element.id) { index, section in
                                 VStack(alignment: .leading, spacing: 12) {
                                     Text(section.title)
                                         .font(.system(size: 16, weight: .medium))
@@ -137,12 +137,15 @@ struct VenuesView: View {
                                         .buttonStyle(.plain)
                                     }
                                 }
-                                .padding(.top, 6)
+                                // The page header already has the shared 12pt stack gap
+                                // before its first section. Keep the extra breathing room
+                                // only between later alphabetical sections.
+                                .padding(.top, index == 0 ? 0 : 6)
                             }
                         }
                     }
                     .padding(.horizontal, 16)
-                    .padding(.top, 82)
+                    .padding(.top, 74)
                     .padding(.bottom, 48)
                 }
                 .overlay(alignment: .topLeading) {

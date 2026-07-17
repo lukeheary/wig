@@ -4,6 +4,23 @@ import EventKitUI
 import SwiftUI
 import UIKit
 
+// Dismissal state is deliberately non-published. Changing SwiftUI @State on this
+// large view as the reverse zoom starts forces a full body update on the animation's
+// first frame. This token lets async work stop publishing without invalidating UI.
+private final class EventDetailPresentationLifecycle: ObservableObject {
+    private(set) var isClosing = false
+
+    @discardableResult
+    func beginClosing() -> Bool {
+        guard !isClosing else {
+            return false
+        }
+
+        isClosing = true
+        return true
+    }
+}
+
 struct EventDetailView: View {
     let event: EventFeedItem
 
@@ -34,7 +51,7 @@ struct EventDetailView: View {
     @State private var attendeeReviewRatings = [String: EventReviewRating]()
     @State private var hasLoadedCurrentUserReview = false
     @State private var isReviewSheetPresented = false
-    @State private var hasRegisteredEventDetailPresentation = false
+    @StateObject private var presentationLifecycle = EventDetailPresentationLifecycle()
     @State private var presentedPlace: PlaceListItem?
     @State private var presentedRoute: EventDetailRoute?
 
@@ -182,14 +199,22 @@ struct EventDetailView: View {
                 return
             }
 
-            async let rsvpLoad: Void = rsvpViewModel.load(eventID: currentEvent.id, using: apiClient)
+            async let rsvpLoad: Void = rsvpViewModel.load(
+                eventID: currentEvent.id,
+                using: apiClient,
+                shouldApply: { !presentationLifecycle.isClosing }
+            )
             async let partnerLoad: Void = loadPartner(using: apiClient)
             async let currentUserLoad: Void = loadCurrentUserSocialUser()
             async let reviewLoad: Void = loadCurrentUserReview(using: apiClient)
             async let attendeeReviewLoad: Void = loadAttendeeReviewRatings(using: apiClient)
             _ = await (rsvpLoad, partnerLoad, currentUserLoad, reviewLoad, attendeeReviewLoad)
 
-            if partnerRelationship?.isAccepted == true, rsvpViewModel.status == nil {
+            if !Task.isCancelled,
+               !presentationLifecycle.isClosing,
+               partnerRelationship?.isAccepted == true,
+               rsvpViewModel.status == nil
+            {
                 rsvpViewModel.setIncludePartner(true)
             }
         }
@@ -213,27 +238,10 @@ struct EventDetailView: View {
 
             closeEventDetail()
         }
-        .onAppear {
-            if !hasRegisteredEventDetailPresentation {
-                hasRegisteredEventDetailPresentation = true
-                appSession.beginEventDetailPresentation()
+        .onChange(of: appSession.presentedEventDetail?.id) { _, presentationID in
+            if presentationID == nil {
+                presentationLifecycle.beginClosing()
             }
-
-            let appearance = UINavigationBarAppearance()
-            appearance.configureWithTransparentBackground()
-            UINavigationBar.appearance().standardAppearance = appearance
-            UINavigationBar.appearance().scrollEdgeAppearance = appearance
-        }
-        .onDisappear {
-            if hasRegisteredEventDetailPresentation {
-                hasRegisteredEventDetailPresentation = false
-                appSession.endEventDetailPresentation()
-            }
-
-            let appearance = UINavigationBarAppearance()
-            appearance.configureWithDefaultBackground()
-            UINavigationBar.appearance().standardAppearance = appearance
-            UINavigationBar.appearance().scrollEdgeAppearance = appearance
         }
         .sheet(isPresented: $isAuthSheetPresented) {
             WIGAuthSheetView(isDismissable: true)
@@ -306,6 +314,10 @@ struct EventDetailView: View {
     }
 
     private func closeEventDetail() {
+        guard presentationLifecycle.beginClosing() else {
+            return
+        }
+
         dismiss()
     }
 
@@ -346,14 +358,28 @@ struct EventDetailView: View {
         }
 
         do {
-            currentUserReview = try await apiClient.send(
+            let review = try await apiClient.send(
                 APIClient.mobileEventReview(eventID: currentEvent.id)
             ).review
-            if let currentUserReview {
-                EventReviewCache.store(currentUserReview)
+
+            guard !Task.isCancelled, !presentationLifecycle.isClosing else {
+                return
+            }
+
+            currentUserReview = review
+            if let review {
+                EventReviewCache.store(review)
             }
         } catch {
+            guard !Task.isCancelled, !presentationLifecycle.isClosing else {
+                return
+            }
+
             currentUserReview = nil
+        }
+
+        guard !Task.isCancelled, !presentationLifecycle.isClosing else {
+            return
         }
 
         hasLoadedCurrentUserReview = true
@@ -409,10 +435,19 @@ struct EventDetailView: View {
             let response = try await apiClient.send(
                 APIClient.mobileEventAttendeeReviews(eventID: currentEvent.id)
             )
+
+            guard !Task.isCancelled, !presentationLifecycle.isClosing else {
+                return
+            }
+
             attendeeReviewRatings = Dictionary(
                 uniqueKeysWithValues: response.reviews.map { ($0.userID, $0.rating) }
             )
         } catch {
+            guard !Task.isCancelled, !presentationLifecycle.isClosing else {
+                return
+            }
+
             attendeeReviewRatings = [:]
         }
     }
@@ -1135,6 +1170,11 @@ struct EventDetailView: View {
     private func loadPartner(using apiClient: APIClient) async {
         do {
             let response = try await apiClient.send(APIClient.mobileMyPartner())
+
+            guard !Task.isCancelled, !presentationLifecycle.isClosing else {
+                return
+            }
+
             partnerRelationship = response.relationship
 
             if response.relationship?.isAccepted == true, rsvpViewModel.status == nil {
@@ -1143,6 +1183,10 @@ struct EventDetailView: View {
                 rsvpViewModel.setIncludePartner(false)
             }
         } catch {
+            guard !Task.isCancelled, !presentationLifecycle.isClosing else {
+                return
+            }
+
             partnerRelationship = nil
             rsvpViewModel.setIncludePartner(false)
         }
@@ -1477,6 +1521,10 @@ struct EventDetailView: View {
             await ProfileViewModel().load(using: apiClient)
         }
 
+        guard !Task.isCancelled, !presentationLifecycle.isClosing else {
+            return
+        }
+
         guard let summary = ProfileViewModel.currentUserSummary else {
             return
         }
@@ -1766,6 +1814,23 @@ private struct EventPlaceDetailRouteView: View {
                     )
                 })
             }
+            .simultaneousGesture(
+                DragGesture(minimumDistance: 12)
+                    .onEnded { value in
+                        let isLeadingEdgeSwipe = value.startLocation.x < 32
+                        let isPrimarilyHorizontal = abs(value.predictedEndTranslation.width)
+                            > abs(value.predictedEndTranslation.height)
+
+                        guard isLeadingEdgeSwipe,
+                              isPrimarilyHorizontal,
+                              value.predictedEndTranslation.width > 110
+                        else {
+                            return
+                        }
+
+                        onDismiss()
+                    }
+            )
     }
 }
 
@@ -2605,8 +2670,12 @@ private final class EventRSVPViewModel: ObservableObject {
         self.notGoingReason = notGoingReason
     }
 
-    func load(eventID: UUID, using apiClient: APIClient) async {
-        guard loadedEventID != eventID else {
+    func load(
+        eventID: UUID,
+        using apiClient: APIClient,
+        shouldApply: () -> Bool = { true }
+    ) async {
+        guard shouldApply(), loadedEventID != eventID else {
             return
         }
 
@@ -2615,10 +2684,19 @@ private final class EventRSVPViewModel: ObservableObject {
 
         do {
             let state = try await apiClient.send(APIClient.mobileEventRSVP(eventID: eventID))
+
+            guard !Task.isCancelled, shouldApply() else {
+                return
+            }
+
             status = state.status
             notGoingReason = state.notGoingReason
             includePartner = state.includePartner
         } catch {
+            guard !Task.isCancelled, shouldApply() else {
+                return
+            }
+
             errorMessage = error.localizedDescription
         }
     }

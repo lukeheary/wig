@@ -163,7 +163,7 @@ struct ActivityView: View {
                     LazyVStack(alignment: .leading, spacing: 22) {
                         activityHeader(response: response)
                             .padding(.horizontal, 16)
-                            .padding(.bottom, -12)
+                            .padding(.bottom, -16)
 
                         ForEach(groupedActivities(visibleActivities)) { section in
                             ActivitySectionView(
@@ -182,7 +182,7 @@ struct ActivityView: View {
                                 }
                         }
                     }
-                    .padding(.top, 82)
+                    .padding(.top, 74)
                     .padding(.bottom, 48)
                 }
                 .scrollIndicators(.hidden)

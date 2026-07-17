@@ -98,7 +98,14 @@ struct PlaceDetailView: View {
             }
             .background(AppTheme.background.ignoresSafeArea())
         }
-        .background(SwipeBackEnabler())
+        .background {
+            // When embedded over an event, UIKit's native pop gesture targets the
+            // event presentation underneath this page. The host supplies a local
+            // edge swipe instead.
+            if onDismiss == nil {
+                SwipeBackEnabler()
+            }
+        }
         .navigationBarBackButtonHidden()
         .toolbar(.hidden, for: .navigationBar)
         .overlay(alignment: .topLeading) {
@@ -392,27 +399,18 @@ struct PlaceDetailView: View {
         } else {
             VStack(alignment: .leading, spacing: 18) {
                 ForEach(groups) { group in
-                    VStack(alignment: .leading, spacing: 14) {
+                    EventCardCarousel(
+                        events: group.events,
+                        cardWidth: eventCardWidth,
+                        verticalSpacing: 14
+                    ) {
                         Text(group.label)
                             .font(.system(size: 20, weight: .bold))
                             .foregroundStyle(.white)
-                            .padding(.horizontal, 16)
-
-                        ScrollView(.horizontal) {
-                            LazyHStack(alignment: .top, spacing: 12) {
-                                ForEach(group.events) { event in
-                                    EventDetailNavigationLink(event: event) {
-                                        EventCardView(event: event)
-                                            .frame(width: eventCardWidth)
-                                            .contentShape(Rectangle())
-                                    }
-                                }
-                            }
-                            .scrollTargetLayout()
+                    } card: { event in
+                        EventDetailNavigationLink(event: event) {
+                            EventCardView(event: event)
                         }
-                        .scrollIndicators(.hidden)
-                        .contentMargins(.horizontal, 16, for: .scrollContent)
-                        .scrollTargetBehavior(.viewAligned)
                     }
                     .padding(.horizontal, -16)
                 }

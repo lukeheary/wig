@@ -1,9 +1,16 @@
 import { auth } from "@clerk/nextjs/server";
 import { NextResponse } from "next/server";
-import { asc, eq } from "drizzle-orm";
+import { and, asc, eq, inArray, isNotNull, or } from "drizzle-orm";
 import { z } from "zod";
 import { db } from "@/server/db";
-import { events, users } from "@/server/db/schema";
+import {
+  eventReviews,
+  eventRsvps,
+  events,
+  placeFollows,
+  userFriends,
+  users,
+} from "@/server/db/schema";
 import {
   canEditMobileEvent,
   resolveMobileEventEditPermissions,
@@ -81,6 +88,125 @@ async function currentMobileUserContext() {
     userId: previewUser?.id ?? null,
     isPreview: true,
   };
+}
+
+export async function GET(
+  _request: Request,
+  context: { params: Promise<{ id: string }> }
+) {
+  const { id } = await context.params;
+  const eventID = z.string().uuid().parse(id);
+  const { userId } = await currentMobileUserContext();
+
+  const event = await db.query.events.findFirst({
+    where: eq(events.id, eventID),
+    with: {
+      venue: true,
+      organizer: true,
+      categoryLinks: { with: { category: true } },
+    },
+  });
+  if (!event) return NextResponse.json({ error: "Event not found" }, { status: 404 });
+
+  const mapped = mapEventCategoryData(event);
+  const [currentRsvp, currentReview, friendships, follows, permissions] = await Promise.all([
+    userId
+      ? db.query.eventRsvps.findFirst({
+          where: and(eq(eventRsvps.eventId, eventID), eq(eventRsvps.userId, userId)),
+        })
+      : null,
+    userId
+      ? db.query.eventReviews.findFirst({
+          where: and(
+            eq(eventReviews.eventId, eventID),
+            eq(eventReviews.userId, userId),
+            isNotNull(eventReviews.rating)
+          ),
+        })
+      : null,
+    userId
+      ? db.query.userFriends.findMany({
+          where: and(
+            or(eq(userFriends.userId, userId), eq(userFriends.friendUserId, userId)),
+            eq(userFriends.status, "accepted")
+          ),
+        })
+      : [],
+    userId
+      ? db.query.placeFollows.findMany({
+          where: eq(placeFollows.userId, userId),
+          columns: { placeId: true },
+        })
+      : [],
+    resolveMobileEventEditPermissions(userId),
+  ]);
+
+  const friendIDs = friendships.map((friendship) =>
+    friendship.userId === userId ? friendship.friendUserId : friendship.userId
+  );
+  const visibleRSVPs = await db.query.eventRsvps.findMany({
+    where: and(
+      eq(eventRsvps.eventId, eventID),
+      userId
+        ? or(eq(eventRsvps.userId, userId), inArray(eventRsvps.userId, friendIDs))
+        : undefined
+    ),
+    with: { user: true },
+  });
+  const friendIDSet = new Set(friendIDs);
+  const socialRSVPs = visibleRSVPs.flatMap((rsvp) => {
+    if (!rsvp.user) return [];
+    return [{
+      status: rsvp.status,
+      user: {
+        id: rsvp.user.id,
+        firstName: rsvp.user.firstName,
+        lastName: rsvp.user.lastName,
+        avatarImageUrl: rsvp.user.avatarImageUrl,
+        isCurrentUser: rsvp.userId === userId,
+        isFriend: friendIDSet.has(rsvp.userId),
+      },
+    }];
+  });
+  const followedPlaceIDs = new Set(follows.map((follow) => follow.placeId));
+
+  return NextResponse.json({
+    id: mapped.id,
+    title: mapped.title,
+    description: mapped.description,
+    coverImageUrl: mapped.coverImageUrl,
+    eventUrl: mapped.eventUrl,
+    seriesId: mapped.seriesId,
+    startAt: mapped.startAt,
+    endAt: mapped.endAt,
+    address: mapped.address,
+    city: mapped.city,
+    state: mapped.state,
+    timeZone: mapped.timeZone,
+    venueId: mapped.venueId,
+    venueName: mapped.venue?.name ?? null,
+    venueSlug: mapped.venue?.slug ?? null,
+    organizerId: mapped.organizerId,
+    organizerName: mapped.organizer?.name ?? null,
+    organizerSlug: mapped.organizer?.slug ?? null,
+    venueLogoImageUrl: mapped.venue?.logoImageUrl ?? null,
+    organizerLogoImageUrl: mapped.organizer?.logoImageUrl ?? null,
+    categories: mapped.categories,
+    categoryLabels: mapped.categoryLabels,
+    status: mapped.status,
+    updatedAt: mapped.updatedAt,
+    canEdit: canEditMobileEvent(permissions, { venueId: mapped.venueId, organizerId: mapped.organizerId }),
+    isFollowed:
+      (mapped.venueId ? followedPlaceIDs.has(mapped.venueId) : false) ||
+      (mapped.organizerId ? followedPlaceIDs.has(mapped.organizerId) : false),
+    isCreatedByCurrentUser: Boolean(userId) && mapped.createdByUserId === userId,
+    userRsvpStatus: currentRsvp?.status ?? null,
+    userRsvpNotGoingReason: currentRsvp?.notGoingReason ?? null,
+    currentUserReview: currentReview ?? null,
+    friendsGoing: socialRSVPs.filter((rsvp) => rsvp.status === "going"),
+    friendsInterested: socialRSVPs.filter((rsvp) => rsvp.status === "interested"),
+    friendsNotGoing: socialRSVPs.filter((rsvp) => rsvp.status === "not_going"),
+  });
 }
 
 export async function PATCH(

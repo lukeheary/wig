@@ -832,6 +832,14 @@ struct APIClient: Sendable {
         )
     }
 
+    static func mobileEventDetail(eventID: UUID) -> Endpoint<EventFeedItem> {
+        Endpoint(
+            path: "/api/mobile/events/\(eventID.uuidString)",
+            requiresAuthentication: false,
+            includesAuthenticationIfAvailable: true
+        )
+    }
+
     static func mobileEventAttendeeReviews(
         eventID: UUID
     ) -> Endpoint<MobileEventAttendeeReviewsResponse> {
