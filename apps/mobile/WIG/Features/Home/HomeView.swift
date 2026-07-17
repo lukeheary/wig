@@ -424,9 +424,9 @@ struct HomeView: View {
             if isShowingSearchResults {
                 searchResultsContent
             } else {
-                if shouldShowWeekSkeletons {
-                    weekSkeletonContent
-                        .id("skeleton-\(selectedWeekStart.timeIntervalSinceReferenceDate)")
+                if shouldShowWeekLoadingIndicator {
+                    weekLoadingContent
+                        .id("loading-\(selectedWeekStart.timeIntervalSinceReferenceDate)")
                 } else {
                     weeklyContent
                         .id("events-\(selectedWeekStart.timeIntervalSinceReferenceDate)")
@@ -517,22 +517,9 @@ struct HomeView: View {
         .scrollDismissesKeyboard(.interactively)
     }
 
-    private var weekSkeletonContent: some View {
-        ScrollView {
-            VStack(alignment: .leading, spacing: 24) {
-                ForEach(Array(skeletonSectionDays.enumerated()), id: \.element) { index, day in
-                    EventSkeletonSectionView(
-                        title: sectionTitle(for: day),
-                        cardWidth: eventCardWidth
-                    )
-                    .padding(.top, index == 0 ? 16 : 0)
-                }
-            }
+    private var weekLoadingContent: some View {
+        NativeLoadingView(title: "Loading events…")
             .padding(.top, 56)
-            .padding(.bottom, 48)
-        }
-        .scrollIndicators(.hidden)
-        .scrollDismissesKeyboard(.interactively)
     }
 
     @ViewBuilder
@@ -1119,10 +1106,6 @@ struct HomeView: View {
         }
     }
 
-    private var skeletonSectionDays: [Date] {
-        Array(visibleWeekDays.prefix(3))
-    }
-
     private var eventsForSelectedWeek: [EventFeedItem] {
         let startDate = EventFeedViewModel.displayRangeStartDate(for: selectedWeekStart)
         let weekEnd = EventFeedViewModel.weekEndDate(for: selectedWeekStart)
@@ -1200,7 +1183,7 @@ struct HomeView: View {
         viewModel.response(for: selectedWeekStart)
     }
 
-    private var shouldShowWeekSkeletons: Bool {
+    private var shouldShowWeekLoadingIndicator: Bool {
         currentResponse == nil && viewModel.isLoading(weekStart: selectedWeekStart)
     }
 
@@ -3209,34 +3192,6 @@ private extension String {
     }
 }
 
-private struct EventSkeletonSectionView: View {
-    let title: String
-    let cardWidth: CGFloat
-
-    var body: some View {
-        VStack(alignment: .leading, spacing: 12) {
-            Text(title)
-                .font(.system(size: 20, weight: .bold))
-                .foregroundStyle(.white)
-                .padding(.horizontal, 16)
-
-            ScrollView(.horizontal) {
-                HStack(alignment: .top, spacing: 12) {
-                    ForEach(0 ..< 3, id: \.self) { index in
-                        EventCardSkeletonView(seed: index)
-                            .frame(width: cardWidth)
-                    }
-                }
-                .scrollTargetLayout()
-            }
-            .scrollIndicators(.hidden)
-            .contentMargins(.horizontal, 16, for: .scrollContent)
-            .scrollTargetBehavior(.viewAligned)
-            .allowsHitTesting(false)
-        }
-    }
-}
-
 private struct EmptyEventDayPlaceholder: View {
     var body: some View {
         RoundedRectangle(cornerRadius: 20, style: .continuous)
@@ -3264,45 +3219,6 @@ private struct EmptyEventDayPlaceholder: View {
                 RoundedRectangle(cornerRadius: 20, style: .continuous)
                     .fill(Color.white.opacity(0.015))
             )
-    }
-}
-
-struct EventCardSkeletonView: View {
-    let seed: Int
-    @State private var isHighlighted = false
-
-    private let cardHeight: CGFloat = 284
-    private let cardCornerRadius: CGFloat = 18
-
-    var body: some View {
-        RoundedRectangle(cornerRadius: cardCornerRadius, style: .continuous)
-            .fill(Color(red: 0.11, green: 0.11, blue: 0.13))
-            .overlay {
-                RoundedRectangle(cornerRadius: cardCornerRadius, style: .continuous)
-                    .fill(skeletonFill)
-            }
-            .frame(maxWidth: .infinity, minHeight: cardHeight, maxHeight: cardHeight, alignment: .topLeading)
-        .onAppear {
-            withAnimation(
-                .easeInOut(duration: 0.92)
-                    .repeatForever(autoreverses: true)
-                    .delay(Double(seed) * 0.08)
-            ) {
-                isHighlighted = true
-            }
-        }
-    }
-
-    private var skeletonFill: LinearGradient {
-        LinearGradient(
-            colors: [
-                Color.white.opacity(isHighlighted ? 0.11 : 0.055),
-                Color.white.opacity(isHighlighted ? 0.17 : 0.085),
-                Color.white.opacity(isHighlighted ? 0.10 : 0.05),
-            ],
-            startPoint: .topLeading,
-            endPoint: .bottomTrailing
-        )
     }
 }
 

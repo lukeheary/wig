@@ -7,6 +7,25 @@ private enum OnboardingInputField: Hashable {
     case username
 }
 
+enum MobileProfileFormMode {
+    case onboarding
+    case editing
+
+    var title: String {
+        switch self {
+        case .onboarding: "Complete your profile"
+        case .editing: "Edit Profile"
+        }
+    }
+
+    var subtitle: String? {
+        switch self {
+        case .onboarding: "Tell us a little about yourself to finish setting up your account."
+        case .editing: nil
+        }
+    }
+}
+
 struct AuthGate: View {
     @Environment(Clerk.self) private var clerk
     @Environment(\.apiClient) private var apiClient
@@ -160,12 +179,14 @@ private struct MobileOnboardingGateErrorView: View {
     }
 }
 
-private struct MobileOnboardingView: View {
+struct MobileOnboardingView: View {
     let initialState: MobileOnboardingState
+    let mode: MobileProfileFormMode
     let onComplete: () -> Void
 
     @Environment(\.apiClient) private var apiClient
     @Environment(Clerk.self) private var clerk
+    @Environment(\.dismiss) private var dismiss
     @StateObject private var viewModel: MobileOnboardingViewModel
     @State private var firstName: String
     @State private var lastName: String
@@ -196,8 +217,13 @@ private struct MobileOnboardingView: View {
             !viewModel.isSubmitting
     }
 
-    init(initialState: MobileOnboardingState, onComplete: @escaping () -> Void) {
+    init(
+        initialState: MobileOnboardingState,
+        mode: MobileProfileFormMode = .onboarding,
+        onComplete: @escaping () -> Void
+    ) {
         self.initialState = initialState
+        self.mode = mode
         self.onComplete = onComplete
 
         let initialDate = Self.date(from: initialState.dateOfBirth)
@@ -214,32 +240,40 @@ private struct MobileOnboardingView: View {
     }
 
     var body: some View {
-        NavigationStack {
-            ScrollView {
-                VStack(alignment: .leading, spacing: 24) {
-                    header
-                    nameSection
-                    usernameSection
-                    citySection
-                    genderSection
-                    birthdaySection
+        ScrollView {
+            VStack(alignment: .leading, spacing: 24) {
+                header
+                nameSection
+                usernameSection
+                citySection
+                genderSection
+                birthdaySection
+
+                if mode == .onboarding {
                     submitButton
+                }
 
-                    if let errorMessage {
-                        Text(errorMessage)
-                            .font(.system(size: 13, weight: .medium))
-                            .foregroundStyle(.red.opacity(0.92))
-                    }
+                if let errorMessage {
+                    Text(errorMessage)
+                        .font(.system(size: 13, weight: .medium))
+                        .foregroundStyle(.red.opacity(0.92))
+                }
 
+                if mode == .onboarding {
                     signOutButton
                 }
-                .padding(.horizontal, 18)
-                .padding(.top, 20)
-                .padding(.bottom, 20)
             }
-            .scrollIndicators(.hidden)
-            .background(onboardingBackground)
-            .toolbar(.hidden, for: .navigationBar)
+            .padding(.horizontal, mode == .editing ? 16 : 18)
+            .padding(.top, mode == .editing ? 74 : 20)
+            .padding(.bottom, 20)
+        }
+        .scrollIndicators(.hidden)
+        .background(onboardingBackground)
+        .toolbar(.hidden, for: .navigationBar)
+        .overlay(alignment: .top) {
+            if mode == .editing {
+                editNavigationBar
+            }
         }
         .sheet(isPresented: $isCitySearchPresented) {
             GooglePlaceSearchSheet(
@@ -273,17 +307,69 @@ private struct MobileOnboardingView: View {
 
     private var header: some View {
         VStack(alignment: .leading, spacing: 7) {
-            Text("Complete your profile")
-                .font(.system(size: 28, weight: .semibold))
+            Text(mode.title)
+                .font(
+                    mode == .editing
+                        ? .system(size: 20, weight: .bold)
+                        : .system(size: 28, weight: .semibold)
+                )
                 .foregroundStyle(.white)
 
-            Text("Tell us a little about yourself to finish setting up your account.")
-                .font(.system(size: 15, weight: .medium))
-                .foregroundStyle(.white.opacity(0.56))
-                .lineSpacing(2)
+            if let subtitle = mode.subtitle {
+                Text(subtitle)
+                    .font(.system(size: 15, weight: .medium))
+                    .foregroundStyle(.white.opacity(0.56))
+                    .lineSpacing(2)
+            }
         }
         .frame(maxWidth: .infinity, alignment: .leading)
         .padding(.bottom, 4)
+    }
+
+    private var editNavigationBar: some View {
+        HStack {
+            Button {
+                dismiss()
+            } label: {
+                Image(systemName: "chevron.left")
+                    .font(.system(size: 17, weight: .bold))
+                    .foregroundStyle(.white)
+                    .frame(width: 46, height: 46)
+                    .contentShape(Circle())
+                    .profileFormLiquidGlass(in: Circle())
+            }
+            .buttonStyle(.plain)
+
+            Spacer()
+
+            Button {
+                focusedInput = nil
+                submit()
+            } label: {
+                HStack(spacing: 8) {
+                    if viewModel.isSubmitting {
+                        ProgressView()
+                            .tint(.black)
+                    }
+
+                    Text("Save")
+                        .font(.system(size: 15, weight: .bold))
+                }
+                .foregroundStyle(.black)
+                .padding(.horizontal, 18)
+                .frame(height: 46)
+                .background(
+                    Capsule()
+                        .fill(.white)
+                )
+                .contentShape(Capsule())
+            }
+            .buttonStyle(.plain)
+            .disabled(!canSubmit)
+            .opacity(canSubmit ? 1 : 0.36)
+        }
+        .padding(.horizontal, 16)
+        .padding(.top, 0)
     }
 
     private var nameSection: some View {
@@ -764,5 +850,19 @@ private struct OnboardingTextInput: View {
                     text = lowered
                 }
             }
+    }
+}
+
+private extension View {
+    @ViewBuilder
+    func profileFormLiquidGlass<S: InsettableShape>(in shape: S) -> some View {
+        if #available(iOS 26.1, *) {
+            glassEffect(.regular.interactive(), in: shape)
+        } else if #available(iOS 26.0, *) {
+            glassEffect(.regular, in: shape)
+        } else {
+            background(.white.opacity(0.08), in: shape)
+                .background(.ultraThinMaterial, in: shape)
+        }
     }
 }

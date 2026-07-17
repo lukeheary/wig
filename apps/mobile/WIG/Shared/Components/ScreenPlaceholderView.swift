@@ -19,6 +19,19 @@ struct ScreenPlaceholderView: View {
     }
 }
 
+struct NativeLoadingView: View {
+    let title: String
+
+    var body: some View {
+        ProgressView(title)
+            .controlSize(.regular)
+            .tint(.primary)
+            .foregroundStyle(.secondary)
+            .frame(maxWidth: .infinity, maxHeight: .infinity)
+            .accessibilityAddTraits(.updatesFrequently)
+    }
+}
+
 #Preview {
     NavigationStack {
         ScreenPlaceholderView(

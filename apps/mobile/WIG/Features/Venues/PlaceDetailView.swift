@@ -44,7 +44,7 @@ struct PlaceDetailView: View {
                             instagramHandle: seededDetail.instagram
                         )
 
-                        PlaceDetailEventSkeletonSection(cardWidth: eventCardWidth)
+                        PlaceDetailEventLoadingSection()
 
                     case .failed(let message):
                         let seededDetail = seededDetailState
@@ -599,68 +599,10 @@ private extension UIColor {
     }
 }
 
-private struct PlaceDetailEventSkeletonSection: View {
-    let cardWidth: CGFloat
-
+private struct PlaceDetailEventLoadingSection: View {
     var body: some View {
-        VStack(alignment: .leading, spacing: 12) {
-            RoundedRectangle(cornerRadius: 8, style: .continuous)
-                .fill(Color.white.opacity(0.10))
-                .frame(width: 148, height: 26)
-
-            ScrollView(.horizontal) {
-                HStack(alignment: .top, spacing: 12) {
-                    ForEach(0 ..< 3, id: \.self) { index in
-                        PlaceDetailEventSkeletonCard(seed: index)
-                            .frame(width: cardWidth)
-                    }
-                }
-                .scrollTargetLayout()
-            }
-            .scrollIndicators(.hidden)
-            .contentMargins(.horizontal, 16, for: .scrollContent)
-            .scrollTargetBehavior(.viewAligned)
-            .allowsHitTesting(false)
-            .padding(.horizontal, -16)
-        }
-    }
-}
-
-private struct PlaceDetailEventSkeletonCard: View {
-    let seed: Int
-    @State private var isHighlighted = false
-    private let cardHeight: CGFloat = 286
-    private let cardCornerRadius: CGFloat = 18
-
-    var body: some View {
-        RoundedRectangle(cornerRadius: cardCornerRadius, style: .continuous)
-            .fill(Color.white.opacity(0.04))
-            .overlay {
-                RoundedRectangle(cornerRadius: cardCornerRadius, style: .continuous)
-                    .fill(shimmerFill)
-            }
-            .frame(maxWidth: .infinity, minHeight: cardHeight, maxHeight: cardHeight, alignment: .topLeading)
-        .onAppear {
-            withAnimation(
-                .easeInOut(duration: 1.15)
-                .repeatForever(autoreverses: true)
-                .delay(Double(seed) * 0.08)
-            ) {
-                isHighlighted = true
-            }
-        }
-    }
-
-    private var shimmerFill: LinearGradient {
-        LinearGradient(
-            colors: [
-                Color.white.opacity(isHighlighted ? 0.10 : 0.05),
-                Color.white.opacity(isHighlighted ? 0.18 : 0.09),
-                Color.white.opacity(isHighlighted ? 0.10 : 0.05),
-            ],
-            startPoint: .topLeading,
-            endPoint: .bottomTrailing
-        )
+        NativeLoadingView(title: "Loading events…")
+            .frame(minHeight: 286)
     }
 }
 
@@ -865,7 +807,11 @@ private struct PlaceDetailActionCircleButton<Content: View>: View {
             content
                 .frame(width: 46, height: 46)
                 .contentShape(Circle())
-                .placeDetailLiquidGlass(in: Circle())
+                .background(Color.white.opacity(0.07), in: Circle())
+                .overlay {
+                    Circle()
+                        .stroke(Color.white.opacity(0.10), lineWidth: 1)
+                }
         }
         .buttonStyle(.plain)
     }
