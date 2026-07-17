@@ -61,9 +61,8 @@ struct VenuesView: View {
                 LazyVStack(alignment: .leading, spacing: 12) {
                     placesHeader(locationName: selectedLocationName)
 
-                    ForEach(0..<6, id: \.self) { index in
-                        PlaceRowSkeletonView(seed: index)
-                    }
+                    NativeLoadingView(title: "Loading venues…")
+                        .frame(minHeight: 360)
                 }
                 .padding(.horizontal, 16)
                 .padding(.top, 74)
@@ -1029,7 +1028,7 @@ extension UIImage {
 
     // Small, heavily blurred copy of the logo used as the card's colored backdrop.
     func placeCardBlurredBackdrop() -> UIImage? {
-        guard let cgImage else { return nil }
+        guard cgImage != nil else { return nil }
 
         let maxDimension: CGFloat = 120
         let scale = min(maxDimension / max(size.width, size.height), 1)
@@ -1078,71 +1077,6 @@ extension UIColor {
             saturation: min(max(saturation * 0.9, 0), 0.9),
             brightness: min(max(brightness, 0), 0.34),
             alpha: 1
-        )
-    }
-}
-
-private struct PlaceRowSkeletonView: View {
-    let seed: Int
-
-    var body: some View {
-        ZStack(alignment: .bottomTrailing) {
-            HStack(alignment: .center, spacing: 12) {
-                RoundedRectangle(cornerRadius: 15, style: .continuous)
-                    .fill(shimmerFill)
-                    .frame(width: 84, height: 84)
-
-                VStack(alignment: .leading, spacing: 9) {
-                    RoundedRectangle(cornerRadius: 7, style: .continuous)
-                        .fill(shimmerFill)
-                        .frame(width: titleWidth, height: 16)
-
-                    RoundedRectangle(cornerRadius: 7, style: .continuous)
-                        .fill(shimmerFill)
-                        .frame(width: subtitleWidth, height: 14)
-
-                    RoundedRectangle(cornerRadius: 7, style: .continuous)
-                        .fill(shimmerFill)
-                        .frame(width: metaWidth, height: 14)
-                }
-                .frame(maxWidth: .infinity, alignment: .leading)
-            }
-            .padding(9)
-            .frame(minHeight: 102, alignment: .topLeading)
-
-            RoundedRectangle(cornerRadius: 6, style: .continuous)
-                .fill(shimmerFill)
-                .frame(width: 58, height: 12)
-                .padding(.trailing, 9)
-                .padding(.bottom, 9)
-        }
-        .background(
-            RoundedRectangle(cornerRadius: 18, style: .continuous)
-                .fill(Color(red: 0.11, green: 0.11, blue: 0.13))
-        )
-    }
-
-    private var titleWidth: CGFloat {
-        [156, 184, 142, 172][seed % 4]
-    }
-
-    private var subtitleWidth: CGFloat {
-        [96, 112, 88, 120][seed % 4]
-    }
-
-    private var metaWidth: CGFloat {
-        [128, 148, 118, 138][seed % 4]
-    }
-
-    private var shimmerFill: LinearGradient {
-        LinearGradient(
-            colors: [
-                .white.opacity(0.08),
-                .white.opacity(0.16),
-                .white.opacity(0.08),
-            ],
-            startPoint: .topLeading,
-            endPoint: .bottomTrailing
         )
     }
 }

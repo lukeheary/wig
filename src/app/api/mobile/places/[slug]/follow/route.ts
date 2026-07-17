@@ -5,6 +5,7 @@ import { z } from "zod";
 import { db } from "@/server/db";
 import { placeFollows, places } from "@/server/db/schema";
 import { logActivity } from "@/server/utils/activity-logger";
+import { recordActivationActionBestEffort } from "@/server/utils/user-activation";
 
 const paramsSchema = z.object({
   slug: z.string().min(1),
@@ -59,6 +60,7 @@ export async function POST(_request: Request, context: RouteContext) {
     });
 
   if (follow) {
+    await recordActivationActionBestEffort(userId, "follow_places", place.id);
     void logActivity({
       actorUserId: userId,
       type: "follow_place",

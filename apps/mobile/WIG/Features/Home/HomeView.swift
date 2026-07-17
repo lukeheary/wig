@@ -3,6 +3,26 @@ import SwiftUI
 import UIKit
 
 @MainActor
+private final class HomeActivationViewModel: ObservableObject {
+    @Published private(set) var state: MobileActivationState?
+    @Published private(set) var hasResolvedInitialLoad = false
+
+    var incompleteTasks: [MobileActivationTask] {
+        (state?.tasks ?? []).filter { !$0.isComplete }
+    }
+
+    func load(using apiClient: APIClient) async {
+        defer { hasResolvedInitialLoad = true }
+
+        do {
+            state = try await apiClient.send(APIClient.mobileActivationState())
+        } catch {
+            // Activation is supplemental; Home should remain usable if it fails.
+        }
+    }
+}
+
+@MainActor
 private final class HomeForegroundRefreshCoordinator: ObservableObject {
     private var needsRefresh = false
     private var refreshTask: Task<Void, Never>?
@@ -78,6 +98,9 @@ struct HomeView: View {
     let resetToCurrentWeekTrigger: Int
     let onShowActivity: () -> Void
     let onSearchDismiss: () -> Void
+    let onFindFriends: () -> Void
+    let onExplorePlaces: () -> Void
+    let onAddProfilePhoto: () -> Void
 
     @Environment(Clerk.self) private var clerk
     @Environment(\.apiClient) private var apiClient
@@ -88,6 +111,7 @@ struct HomeView: View {
     @StateObject private var recentActivityViewModel = HomeRecentActivityViewModel()
     @StateObject private var searchViewModel = HomeSearchDirectoryViewModel()
     @StateObject private var homeEventSearchViewModel = HomeSearchDirectoryViewModel()
+    @StateObject private var activationViewModel = HomeActivationViewModel()
     @State private var selectedWeekStart = Self.startOfWeek(for: .now)
     @State private var isSearchPresented = false
     @State private var searchText = ""
@@ -128,13 +152,19 @@ struct HomeView: View {
         searchesUsersOnly: Bool = false,
         resetToCurrentWeekTrigger: Int = 0,
         onShowActivity: @escaping () -> Void = {},
-        onSearchDismiss: @escaping () -> Void = {}
+        onSearchDismiss: @escaping () -> Void = {},
+        onFindFriends: @escaping () -> Void = {},
+        onExplorePlaces: @escaping () -> Void = {},
+        onAddProfilePhoto: @escaping () -> Void = {}
     ) {
         self.showsNativeSearch = showsNativeSearch
         self.searchesUsersOnly = searchesUsersOnly
         self.resetToCurrentWeekTrigger = resetToCurrentWeekTrigger
         self.onShowActivity = onShowActivity
         self.onSearchDismiss = onSearchDismiss
+        self.onFindFriends = onFindFriends
+        self.onExplorePlaces = onExplorePlaces
+        self.onAddProfilePhoto = onAddProfilePhoto
     }
 
     var body: some View {
@@ -146,9 +176,21 @@ struct HomeView: View {
                 .task {
                     loadCompletedPostEventFeedbackIDs()
 
+                    let activationTask = Task { @MainActor in
+                        if shouldLoadActivation {
+                            await activationViewModel.load(using: apiClient)
+                        }
+                    }
+
                     if case .idle = viewModel.state {
                         await loadHome(for: selectedWeekStart, using: apiClient)
                     }
+
+                    await activationTask.value
+                }
+                .onReceive(NotificationCenter.default.publisher(for: .activationDidChange)) { _ in
+                    guard shouldLoadActivation else { return }
+                    Task { await activationViewModel.load(using: apiClient) }
                 }
                 .onAppear {
                     if showsNativeSearch {
@@ -175,6 +217,9 @@ struct HomeView: View {
 
                     Task {
                         await loadHome(for: selectedWeekStart, using: apiClient, forceRefresh: true)
+                        if shouldLoadActivation {
+                            await activationViewModel.load(using: apiClient)
+                        }
                     }
                 }
                 .onReceive(NotificationCenter.default.publisher(for: .appDataDidChange)) { _ in
@@ -314,6 +359,19 @@ struct HomeView: View {
 
     @ViewBuilder
     private var content: some View {
+        if isWaitingForInitialActivation {
+            ProgressView("Loading events...")
+                .frame(maxWidth: .infinity, maxHeight: .infinity)
+                .tint(.white)
+                .foregroundStyle(.white)
+                .background(feedBackground)
+        } else {
+            contentForEventFeedState
+        }
+    }
+
+    @ViewBuilder
+    private var contentForEventFeedState: some View {
         switch viewModel.state {
         case .idle, .loading:
             if currentResponse != nil || viewModel.isLoading(weekStart: selectedWeekStart) {
@@ -353,14 +411,22 @@ struct HomeView: View {
         }
     }
 
+    private var isWaitingForInitialActivation: Bool {
+        shouldLoadActivation && !activationViewModel.hasResolvedInitialLoad
+    }
+
+    private var shouldLoadActivation: Bool {
+        isAuthenticated && !showsNativeSearch
+    }
+
     private var homeContentShell: some View {
         ZStack(alignment: .top) {
             if isShowingSearchResults {
                 searchResultsContent
             } else {
-                if shouldShowWeekSkeletons {
-                    weekSkeletonContent
-                        .id("skeleton-\(selectedWeekStart.timeIntervalSinceReferenceDate)")
+                if shouldShowWeekLoadingIndicator {
+                    weekLoadingContent
+                        .id("loading-\(selectedWeekStart.timeIntervalSinceReferenceDate)")
                 } else {
                     weeklyContent
                         .id("events-\(selectedWeekStart.timeIntervalSinceReferenceDate)")
@@ -385,8 +451,18 @@ struct HomeView: View {
                         postEventFeedbackEvent = postEventFeedbackPrompt
                     }
                     .padding(.horizontal, 16)
-                    .padding(.top, -2)
-                    .padding(.bottom, -24)
+                    .padding(.top, 10)
+                }
+
+                if isViewingCurrentWeek, isAuthenticated, !activationViewModel.incompleteTasks.isEmpty {
+                    HomeActivationSection(
+                        tasks: activationViewModel.incompleteTasks,
+                        onFindFriends: onFindFriends,
+                        onExplorePlaces: onExplorePlaces,
+                        onAddProfilePhoto: onAddProfilePhoto
+                    )
+                    .transition(.opacity.combined(with: .move(edge: .top)))
+                    .padding(.top, postEventFeedbackPrompt == nil ? 18 : 0)
                 }
 
                 if shouldShowRecentActivity {
@@ -413,7 +489,10 @@ struct HomeView: View {
                             }
                         }
                     )
-                    .padding(.top, 18)
+                    .padding(
+                        .top,
+                        activationViewModel.incompleteTasks.isEmpty ? 18 : 0
+                    )
                 }
 
                 ForEach(Array(groupedEvents.enumerated()), id: \.element.day) { index, section in
@@ -426,10 +505,9 @@ struct HomeView: View {
                             showsLocation: index == 0 && isViewingCurrentWeek
                         )
                     }
-                    // Match the 74pt top offset used above the first header on the
-                    // Places and Activity tabs (56 base + 18) so switching tabs doesn't
-                    // shift the header. The recent-activity block above already adds 18.
-                    .padding(.top, index == 0 && !shouldShowRecentActivity ? 18 : 0)
+                    // Add the standalone first-section offset only when no optional
+                    // Home section is already providing content above the event rows.
+                    .padding(.top, index == 0 && !hasPreEventSection ? 18 : 0)
                 }
             }
             .padding(.top, 56)
@@ -439,22 +517,9 @@ struct HomeView: View {
         .scrollDismissesKeyboard(.interactively)
     }
 
-    private var weekSkeletonContent: some View {
-        ScrollView {
-            VStack(alignment: .leading, spacing: 24) {
-                ForEach(Array(skeletonSectionDays.enumerated()), id: \.element) { index, day in
-                    EventSkeletonSectionView(
-                        title: sectionTitle(for: day),
-                        cardWidth: eventCardWidth
-                    )
-                    .padding(.top, index == 0 ? 16 : 0)
-                }
-            }
+    private var weekLoadingContent: some View {
+        NativeLoadingView(title: "Loading events…")
             .padding(.top, 56)
-            .padding(.bottom, 48)
-        }
-        .scrollIndicators(.hidden)
-        .scrollDismissesKeyboard(.interactively)
     }
 
     @ViewBuilder
@@ -1041,10 +1106,6 @@ struct HomeView: View {
         }
     }
 
-    private var skeletonSectionDays: [Date] {
-        Array(visibleWeekDays.prefix(3))
-    }
-
     private var eventsForSelectedWeek: [EventFeedItem] {
         let startDate = EventFeedViewModel.displayRangeStartDate(for: selectedWeekStart)
         let weekEnd = EventFeedViewModel.weekEndDate(for: selectedWeekStart)
@@ -1122,7 +1183,7 @@ struct HomeView: View {
         viewModel.response(for: selectedWeekStart)
     }
 
-    private var shouldShowWeekSkeletons: Bool {
+    private var shouldShowWeekLoadingIndicator: Bool {
         currentResponse == nil && viewModel.isLoading(weekStart: selectedWeekStart)
     }
 
@@ -1323,6 +1384,16 @@ struct HomeView: View {
             effectiveCategoryFilterID == nil &&
             !isViewingFutureWeek &&
             !recentActivityViewModel.activities.isEmpty
+    }
+
+    private var hasPreEventSection: Bool {
+        shouldShowRecentActivity ||
+            (isViewingCurrentWeek && postEventFeedbackPrompt != nil) ||
+            (
+                isViewingCurrentWeek &&
+                    isAuthenticated &&
+                    !activationViewModel.incompleteTasks.isEmpty
+            )
     }
 
     private var isShowingSearchResults: Bool {
@@ -1585,6 +1656,115 @@ struct HomeView: View {
         AppTheme.background
             .ignoresSafeArea()
     }
+}
+
+private struct HomeActivationSection: View {
+    let tasks: [MobileActivationTask]
+    let onFindFriends: () -> Void
+    let onExplorePlaces: () -> Void
+    let onAddProfilePhoto: () -> Void
+
+    var body: some View {
+        VStack(alignment: .leading, spacing: 12) {
+            HStack {
+                Text("Get Started")
+                    .font(.system(size: 20, weight: .bold))
+                    .foregroundStyle(.white)
+            }
+            .padding(.horizontal, 16)
+
+            ScrollView(.horizontal) {
+                LazyHStack(spacing: 12) {
+                    ForEach(tasks) { task in
+                        HomeActivationCard(task: task, action: action(for: task.key))
+                            .containerRelativeFrame(.horizontal) { length, _ in
+                                tasks.count == 1 ? length : length - 36
+                            }
+                    }
+                }
+                .scrollTargetLayout()
+            }
+            .contentMargins(.horizontal, 16, for: .scrollContent)
+            .scrollTargetBehavior(.viewAligned)
+            .scrollIndicators(.hidden)
+        }
+        .animation(.spring(response: 0.4, dampingFraction: 0.86), value: tasks)
+    }
+
+    private func action(for key: MobileActivationTask.Key) -> () -> Void {
+        switch key {
+        case .addFriends: onFindFriends
+        case .followPlaces: onExplorePlaces
+        case .addProfilePhoto: onAddProfilePhoto
+        }
+    }
+}
+
+private struct HomeActivationCard: View {
+    let task: MobileActivationTask
+    let action: () -> Void
+
+    var body: some View {
+        Button(action: action) {
+            HStack(spacing: 14) {
+                VStack(alignment: .leading, spacing: 4) {
+                    Text(title)
+                        .font(.system(size: 17, weight: .bold))
+                        .foregroundStyle(.white)
+                    Text(subtitle)
+                        .font(.system(size: 13))
+                        .foregroundStyle(.white.opacity(0.68))
+                        .fixedSize(horizontal: false, vertical: true)
+
+                    HStack(spacing: 4) {
+                        ForEach(0..<task.target, id: \.self) { index in
+                            Capsule()
+                                .fill(
+                                    index < task.progress
+                                        ? AppTheme.accentBlue
+                                        : Color.white.opacity(0.2)
+                                )
+                                .frame(height: 3)
+                        }
+                    }
+                    .frame(width: CGFloat(task.target * 42))
+                    .padding(.top, 8)
+                }
+
+                Spacer(minLength: 8)
+
+                Image(systemName: "chevron.right")
+                    .font(.system(size: 16, weight: .bold))
+                    .foregroundStyle(.white.opacity(0.55))
+            }
+            .padding(16)
+            .frame(maxWidth: .infinity, minHeight: 104, alignment: .leading)
+            .contentShape(RoundedRectangle(cornerRadius: 20))
+        }
+        .buttonStyle(.plain)
+        .background(Color.white.opacity(0.07), in: RoundedRectangle(cornerRadius: 20))
+        .overlay {
+            RoundedRectangle(cornerRadius: 20)
+                .stroke(Color.white.opacity(0.1), lineWidth: 1)
+        }
+    }
+
+    private var title: String {
+        switch task.key {
+        case .addFriends: "Add 3 friends"
+        case .followPlaces: "Follow 2 places"
+        case .addProfilePhoto: "Add a profile photo"
+        }
+    }
+
+    private var subtitle: String {
+        switch task.key {
+        case .addFriends: "Add friends to see which events they’re going to."
+        case .followPlaces: "Follow your favorite places to see their events first in your feed."
+        case .addProfilePhoto: "Make it easier for friends to recognize you."
+        }
+    }
+
 }
 
 private extension HomeLocationFilter {
@@ -3012,34 +3192,6 @@ private extension String {
     }
 }
 
-private struct EventSkeletonSectionView: View {
-    let title: String
-    let cardWidth: CGFloat
-
-    var body: some View {
-        VStack(alignment: .leading, spacing: 12) {
-            Text(title)
-                .font(.system(size: 20, weight: .bold))
-                .foregroundStyle(.white)
-                .padding(.horizontal, 16)
-
-            ScrollView(.horizontal) {
-                HStack(alignment: .top, spacing: 12) {
-                    ForEach(0 ..< 3, id: \.self) { index in
-                        EventCardSkeletonView(seed: index)
-                            .frame(width: cardWidth)
-                    }
-                }
-                .scrollTargetLayout()
-            }
-            .scrollIndicators(.hidden)
-            .contentMargins(.horizontal, 16, for: .scrollContent)
-            .scrollTargetBehavior(.viewAligned)
-            .allowsHitTesting(false)
-        }
-    }
-}
-
 private struct EmptyEventDayPlaceholder: View {
     var body: some View {
         RoundedRectangle(cornerRadius: 20, style: .continuous)
@@ -3067,45 +3219,6 @@ private struct EmptyEventDayPlaceholder: View {
                 RoundedRectangle(cornerRadius: 20, style: .continuous)
                     .fill(Color.white.opacity(0.015))
             )
-    }
-}
-
-struct EventCardSkeletonView: View {
-    let seed: Int
-    @State private var isHighlighted = false
-
-    private let cardHeight: CGFloat = 284
-    private let cardCornerRadius: CGFloat = 18
-
-    var body: some View {
-        RoundedRectangle(cornerRadius: cardCornerRadius, style: .continuous)
-            .fill(Color(red: 0.11, green: 0.11, blue: 0.13))
-            .overlay {
-                RoundedRectangle(cornerRadius: cardCornerRadius, style: .continuous)
-                    .fill(skeletonFill)
-            }
-            .frame(maxWidth: .infinity, minHeight: cardHeight, maxHeight: cardHeight, alignment: .topLeading)
-        .onAppear {
-            withAnimation(
-                .easeInOut(duration: 0.92)
-                    .repeatForever(autoreverses: true)
-                    .delay(Double(seed) * 0.08)
-            ) {
-                isHighlighted = true
-            }
-        }
-    }
-
-    private var skeletonFill: LinearGradient {
-        LinearGradient(
-            colors: [
-                Color.white.opacity(isHighlighted ? 0.11 : 0.055),
-                Color.white.opacity(isHighlighted ? 0.17 : 0.085),
-                Color.white.opacity(isHighlighted ? 0.10 : 0.05),
-            ],
-            startPoint: .topLeading,
-            endPoint: .bottomTrailing
-        )
     }
 }
 

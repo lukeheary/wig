@@ -5,6 +5,7 @@ import UIKit
 
 struct ProfileView: View {
     let resetFiltersTrigger: Int
+    let addPhotoTrigger: Int
 
     @Environment(Clerk.self) private var clerk
     @Environment(\.apiClient) private var apiClient
@@ -23,10 +24,14 @@ struct ProfileView: View {
     @State private var partnerErrorMessage: String?
     @State private var friendRequestActionErrorMessage: String?
     @State private var isAdminSettingsPresented = false
+    @State private var isEditProfilePresented = false
+    @State private var isSignOutConfirmationPresented = false
     @State private var profileShareURL: URL?
+    @State private var handledAddPhotoTrigger = 0
 
-    init(resetFiltersTrigger: Int = 0) {
+    init(resetFiltersTrigger: Int = 0, addPhotoTrigger: Int = 0) {
         self.resetFiltersTrigger = resetFiltersTrigger
+        self.addPhotoTrigger = addPhotoTrigger
     }
 
     var body: some View {
@@ -39,6 +44,12 @@ struct ProfileView: View {
                     if case .idle = viewModel.state {
                         await loadProfileScreen()
                     }
+                }
+                .onAppear {
+                    presentActivationPhotoPickerIfNeeded()
+                }
+                .onChange(of: addPhotoTrigger) { _, _ in
+                    presentActivationPhotoPickerIfNeeded()
                 }
                 .onChange(of: resetFiltersTrigger) { _, _ in
                     resetProfileFilters()
@@ -155,6 +166,17 @@ struct ProfileView: View {
                 } message: {
                     Text(friendRequestActionErrorMessage ?? "Please try again.")
                 }
+                .alert("Sign Out?", isPresented: $isSignOutConfirmationPresented) {
+                    Button("Cancel", role: .cancel) {}
+
+                    Button("Sign Out", role: .destructive) {
+                        Task {
+                            try? await clerk.auth.signOut(sessionId: clerk.session?.id)
+                        }
+                    }
+                } message: {
+                    Text("Are you sure you want to sign out?")
+                }
                 .sheet(isPresented: $isPartnerPickerPresented) {
                     if case .loaded(let response) = viewModel.state {
                         PartnerPickerSheet(
@@ -171,6 +193,15 @@ struct ProfileView: View {
                 }
                 .navigationDestination(isPresented: $isAdminSettingsPresented) {
                     AdminSettingsView()
+                }
+                .navigationDestination(isPresented: $isEditProfilePresented) {
+                    MobileEditProfileView {
+                        ProfileViewModel.invalidateCache()
+                        UserProfileViewModel.invalidateAllCaches()
+                        NotificationCenter.default.post(name: .appDataDidChange, object: nil)
+                        NotificationCenter.default.post(name: .activationDidChange, object: nil)
+                        isEditProfilePresented = false
+                    }
                 }
                 .sheet(
                     isPresented: Binding(
@@ -189,17 +220,17 @@ struct ProfileView: View {
         }
     }
 
+    private func presentActivationPhotoPickerIfNeeded() {
+        guard addPhotoTrigger > handledAddPhotoTrigger else { return }
+        handledAddPhotoTrigger = addPhotoTrigger
+        isAvatarSourceDialogPresented = true
+    }
+
     @ViewBuilder
     private var content: some View {
         switch viewModel.state {
         case .idle, .loading:
-            ScrollView {
-                ProfilePageSkeletonContent(showsTopActions: false)
-                    .padding(.horizontal, 16)
-                    .padding(.top, 74)
-                    .padding(.bottom, 48)
-            }
-            .scrollIndicators(.hidden)
+            NativeLoadingView(title: "Loading profile…")
             .background(ProfileTheme.background)
 
         case .failed(let message):
@@ -576,6 +607,8 @@ struct ProfileView: View {
                     profile: current.profile,
                     friendCount: current.friendCount + 1,
                     requestCount: max(current.requestCount - 1, 0),
+                    followingCount: current.followingCount,
+                    followedPlaces: current.followedPlaces,
                     friends: current.friends + [
                         FriendUserSummary(
                             id: resolvedRequest.id,
@@ -600,6 +633,8 @@ struct ProfileView: View {
                     profile: current.profile,
                     friendCount: current.friendCount,
                     requestCount: max(current.requestCount - 1, 0),
+                    followingCount: current.followingCount,
+                    followedPlaces: current.followedPlaces,
                     friends: current.friends,
                     receivedRequests: current.receivedRequests.filter { $0.id != resolvedRequest.id },
                     sentRequests: current.sentRequests,
@@ -649,16 +684,18 @@ struct ProfileView: View {
 
     private var signOutButton: some View {
         Menu {
+            Button("Edit Profile") {
+                isEditProfilePresented = true
+            }
+
             if appSession.isAdmin {
                 Button("Admin Settings") {
                     isAdminSettingsPresented = true
                 }
             }
 
-            Button("Sign Out") {
-                Task {
-                    try? await clerk.auth.signOut(sessionId: clerk.session?.id)
-                }
+            Button("Sign Out", role: .destructive) {
+                isSignOutConfirmationPresented = true
             }
         } label: {
             Image(systemName: "ellipsis")
@@ -683,6 +720,105 @@ struct ProfileView: View {
 
         return error.localizedDescription.trimmingCharacters(in: .whitespacesAndNewlines)
             .localizedCaseInsensitiveCompare("cancelled") == .orderedSame
+    }
+}
+
+private struct MobileEditProfileView: View {
+    let onComplete: () -> Void
+
+    @Environment(\.apiClient) private var apiClient
+    @Environment(\.dismiss) private var dismiss
+    @StateObject private var viewModel = MobileEditProfileViewModel()
+
+    var body: some View {
+        Group {
+            switch viewModel.state {
+            case .idle, .loading:
+                NativeLoadingView(title: "Loading profile…")
+                    .background(ProfileTheme.background)
+
+            case .failed(let message):
+                ContentUnavailableView {
+                    Label("Couldn't Load Profile", systemImage: "wifi.exclamationmark")
+                } description: {
+                    Text(message)
+                } actions: {
+                    Button("Try Again") {
+                        Task {
+                            await viewModel.load(using: apiClient)
+                        }
+                    }
+                }
+                .foregroundStyle(.white)
+                .background(ProfileTheme.background)
+
+            case .loaded(let profile):
+                MobileOnboardingView(
+                    initialState: profile,
+                    mode: .editing,
+                    onComplete: onComplete
+                )
+            }
+        }
+        .toolbar(.hidden, for: .navigationBar)
+        .background(SwipeBackEnabler())
+        .navigationBarBackButtonHidden()
+        .overlay(alignment: .topLeading) {
+            if !isFormLoaded {
+                Button {
+                    dismiss()
+                } label: {
+                    Image(systemName: "chevron.left")
+                        .font(.system(size: 17, weight: .bold))
+                        .foregroundStyle(.white)
+                        .frame(width: 46, height: 46)
+                        .contentShape(Circle())
+                        .profileLiquidGlass(in: Circle())
+                }
+                .buttonStyle(.plain)
+                .padding(.leading, 16)
+            }
+        }
+        .task {
+            if case .idle = viewModel.state {
+                await viewModel.load(using: apiClient)
+            }
+        }
+    }
+
+    private var isFormLoaded: Bool {
+        if case .loaded = viewModel.state {
+            return true
+        }
+
+        return false
+    }
+}
+
+@MainActor
+private final class MobileEditProfileViewModel: ObservableObject {
+    enum State {
+        case idle
+        case loading
+        case loaded(MobileOnboardingState)
+        case failed(String)
+    }
+
+    @Published private(set) var state: State = .idle
+
+    func load(using apiClient: APIClient) async {
+        if case .loading = state {
+            return
+        }
+
+        state = .loading
+
+        do {
+            let profile = try await apiClient.send(APIClient.mobileOnboardingState())
+            state = .loaded(profile)
+        } catch {
+            state = .failed(error.localizedDescription)
+        }
     }
 }
 
@@ -732,6 +868,13 @@ struct UserProfileView: View {
                 }
             }
             .onReceive(NotificationCenter.default.publisher(for: .appDataDidChange)) { _ in
+                // Friend actions update this profile optimistically below. Ignore the
+                // mutation's global refresh notification so the screen does not fall
+                // back to its loading state just to redraw the action button.
+                guard !isSendingFriendRequest, !isRespondingToFriendRequest else {
+                    return
+                }
+
                 Task {
                     await viewModel.load(userID: userID, using: apiClient, forceRefresh: true)
                 }
@@ -775,13 +918,7 @@ struct UserProfileView: View {
     private var content: some View {
         switch viewModel.state {
         case .idle, .loading:
-            ScrollView {
-                ProfilePageSkeletonContent(showsTopActions: false)
-                    .padding(.horizontal, 16)
-                    .padding(.top, 74)
-                    .padding(.bottom, 48)
-            }
-            .scrollIndicators(.hidden)
+            NativeLoadingView(title: "Loading profile…")
             .background(ProfileTheme.background)
 
         case .failed(let message):
@@ -917,6 +1054,7 @@ struct UserProfileView: View {
             return
         }
 
+        UIImpactFeedbackGenerator(style: .light).impactOccurred()
         isSendingFriendRequest = true
 
         Task {
@@ -1460,94 +1598,6 @@ private struct ProfileHeader: View {
     }
 }
 
-private struct ProfilePageSkeletonContent: View {
-    let showsTopActions: Bool
-
-    var body: some View {
-        VStack(spacing: 22) {
-            if showsTopActions {
-                HStack {
-                    Circle()
-                        .fill(shimmerFill)
-                        .frame(width: 46, height: 46)
-
-                    Spacer()
-
-                    Capsule()
-                        .fill(shimmerFill)
-                        .frame(width: 104, height: 40)
-                }
-            }
-
-            VStack(spacing: 12) {
-                Circle()
-                    .fill(shimmerFill)
-                    .frame(width: 104, height: 104)
-
-                VStack(spacing: 6) {
-                    RoundedRectangle(cornerRadius: 8, style: .continuous)
-                        .fill(shimmerFill)
-                        .frame(width: 170, height: 24)
-
-                    RoundedRectangle(cornerRadius: 8, style: .continuous)
-                        .fill(shimmerFill)
-                        .frame(width: 118, height: 16)
-                }
-            }
-            .frame(maxWidth: .infinity)
-
-            HStack(spacing: 16) {
-                RoundedRectangle(cornerRadius: 7, style: .continuous)
-                    .fill(shimmerFill)
-                    .frame(width: 110, height: 14)
-
-                RoundedRectangle(cornerRadius: 7, style: .continuous)
-                    .fill(shimmerFill)
-                    .frame(width: 88, height: 14)
-
-                RoundedRectangle(cornerRadius: 7, style: .continuous)
-                    .fill(shimmerFill)
-                    .frame(width: 94, height: 14)
-            }
-            .frame(maxWidth: .infinity)
-
-            VStack(alignment: .leading, spacing: 18) {
-                RoundedRectangle(cornerRadius: 8, style: .continuous)
-                    .fill(shimmerFill)
-                    .frame(width: 106, height: 26)
-
-                ScrollView(.horizontal) {
-                    LazyHStack(alignment: .top, spacing: 12) {
-                        ForEach(0..<3, id: \.self) { index in
-                            EventCardSkeletonView(seed: index)
-                                .frame(width: 220)
-                        }
-                    }
-                    .scrollTargetLayout()
-                }
-                .scrollIndicators(.hidden)
-                .contentMargins(.horizontal, 16, for: .scrollContent)
-                .scrollTargetBehavior(.viewAligned)
-                // Match Home's full-width carousel while keeping the section header inset.
-                .padding(.horizontal, -16)
-            }
-            .frame(maxWidth: .infinity, alignment: .leading)
-        }
-    }
-
-    private var shimmerFill: LinearGradient {
-        LinearGradient(
-            colors: [
-                .white.opacity(0.08),
-                .white.opacity(0.16),
-                .white.opacity(0.08),
-            ],
-            startPoint: .topLeading,
-            endPoint: .bottomTrailing
-        )
-    }
-}
-
 private struct ProfileAvatarActionPopover: View {
     let canShowCamera: Bool
     let onChoosePhoto: () -> Void
@@ -1633,6 +1683,13 @@ private struct RelationshipSummaryRow: View {
                 )
             } label: {
                 RelationshipSummaryLink(count: response.friendCount, label: "Friends")
+            }
+            .buttonStyle(.plain)
+
+            NavigationLink {
+                FollowingPlacesView(places: response.followedPlaces)
+            } label: {
+                RelationshipSummaryLink(count: response.followingCount, label: "Following")
             }
             .buttonStyle(.plain)
 
@@ -2021,6 +2078,32 @@ private struct FriendsListView: View {
     }
 }
 
+private struct FollowingPlacesView: View {
+    let places: [PlaceListItem]
+
+    var body: some View {
+        RelationshipListScreen(title: "Following") {
+            if places.isEmpty {
+                EmptyRelationshipCard(
+                    systemImage: "building.2",
+                    message: "No followed places yet"
+                )
+            } else {
+                VStack(spacing: 12) {
+                    ForEach(places, id: \.listRowID) { place in
+                        NavigationLink {
+                            PlaceDetailView(place: place)
+                        } label: {
+                            PlaceRowView(place: place)
+                        }
+                        .buttonStyle(.plain)
+                    }
+                }
+            }
+        }
+    }
+}
+
 private struct FriendsListViewContent: View {
     let friends: [FriendUserSummary]
     var onRemoveFriend: ((FriendUserSummary) -> Void)? = nil
@@ -2390,80 +2473,12 @@ private struct PendingRequestBadge: View {
     }
 }
 
-private struct RequestsPageSkeletonContent: View {
-    @State private var isHighlighted = false
-
+private struct RequestsPageLoadingContent: View {
     var body: some View {
         RelationshipListScreen(title: "Received Requests") {
-            VStack(alignment: .leading, spacing: 12) {
-                RelationshipCard {
-                    ForEach(0 ..< 2, id: \.self) { index in
-                        requestRow
-
-                        if index == 0 {
-                            Divider()
-                                .overlay(.white.opacity(0.08))
-                                .padding(.leading, 56)
-                        }
-                    }
-                }
-
-                Text("Sent Requests")
-                    .font(.system(size: 20, weight: .bold))
-                    .foregroundStyle(.white)
-                    .padding(.top, 16)
-
-                RelationshipCard {
-                    requestRow
-                }
-            }
+            NativeLoadingView(title: "Loading requests…")
+                .frame(minHeight: 320)
         }
-        .onAppear {
-            withAnimation(.easeInOut(duration: 0.9).repeatForever(autoreverses: true)) {
-                isHighlighted = true
-            }
-        }
-    }
-
-    private var requestRow: some View {
-        HStack(spacing: 12) {
-            Circle()
-                .fill(shimmerFill)
-                .frame(width: 44, height: 44)
-
-            VStack(alignment: .leading, spacing: 7) {
-                RoundedRectangle(cornerRadius: 5, style: .continuous)
-                    .fill(shimmerFill)
-                    .frame(width: 126, height: 14)
-
-                RoundedRectangle(cornerRadius: 5, style: .continuous)
-                    .fill(shimmerFill)
-                    .frame(width: 88, height: 11)
-            }
-
-            Spacer()
-
-            Circle()
-                .fill(shimmerFill)
-                .frame(width: 36, height: 36)
-
-            Circle()
-                .fill(shimmerFill)
-                .frame(width: 42, height: 42)
-        }
-        .padding(.vertical, 8)
-    }
-
-    private var shimmerFill: LinearGradient {
-        LinearGradient(
-            colors: [
-                .white.opacity(isHighlighted ? 0.14 : 0.07),
-                .white.opacity(isHighlighted ? 0.22 : 0.12),
-                .white.opacity(isHighlighted ? 0.14 : 0.07),
-            ],
-            startPoint: .topLeading,
-            endPoint: .bottomTrailing
-        )
     }
 }
 
@@ -2476,7 +2491,7 @@ struct RequestsPageView: View {
         Group {
             switch viewModel.state {
             case .idle, .loading:
-                RequestsPageSkeletonContent()
+                RequestsPageLoadingContent()
 
             case .failed(let message):
                 ContentUnavailableView {
@@ -2571,6 +2586,8 @@ struct RequestsPageView: View {
                     profile: current.profile,
                     friendCount: current.friendCount + 1,
                     requestCount: max(current.requestCount - 1, 0),
+                    followingCount: current.followingCount,
+                    followedPlaces: current.followedPlaces,
                     friends: current.friends + [
                         FriendUserSummary(
                             id: resolvedRequest.id,
@@ -2595,6 +2612,8 @@ struct RequestsPageView: View {
                     profile: current.profile,
                     friendCount: current.friendCount,
                     requestCount: max(current.requestCount - 1, 0),
+                    followingCount: current.followingCount,
+                    followedPlaces: current.followedPlaces,
                     friends: current.friends,
                     receivedRequests: current.receivedRequests.filter { $0.id != resolvedRequest.id },
                     sentRequests: current.sentRequests,
@@ -3676,7 +3695,7 @@ private struct MetroAreaCreationView: View {
         }
 
         do {
-            try await apiClient.send(
+            _ = try await apiClient.send(
                 APIClient.mobileCreateMetroArea(
                     name: cityName,
                     state: state,

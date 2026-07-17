@@ -14,6 +14,7 @@ struct MainTabView: View {
     @State private var venuesResetTrigger = 0
     @State private var activityResetTrigger = 0
     @State private var profileResetTrigger = 0
+    @State private var profileAddPhotoTrigger = 0
     @State private var pendingFriendRequestCount = 0
     @State private var isEventCreationSheetPresented = false
     @State private var presentedPlaceCreationType: PlaceListItem.PlaceType?
@@ -67,6 +68,12 @@ struct MainTabView: View {
                         resetToCurrentWeekTrigger: homeResetTrigger,
                         onShowActivity: {
                             showActivityOrAuth()
+                        },
+                        onFindFriends: { selectedTab = .search },
+                        onExplorePlaces: { selectedTab = .venues },
+                        onAddProfilePhoto: {
+                            profileAddPhotoTrigger += 1
+                            selectedTab = .profile
                         }
                     )
                 }
@@ -85,7 +92,10 @@ struct MainTabView: View {
                     }
 
                     Tab("", systemImage: "person.crop.circle", value: AppTab.profile) {
-                        ProfileView(resetFiltersTrigger: profileResetTrigger)
+                        ProfileView(
+                            resetFiltersTrigger: profileResetTrigger,
+                            addPhotoTrigger: profileAddPhotoTrigger
+                        )
                     }
                     .badge(friendRequestTabBadge)
                 } else {
@@ -174,6 +184,12 @@ struct MainTabView: View {
                     resetToCurrentWeekTrigger: homeResetTrigger,
                     onShowActivity: {
                         showActivityOrAuth()
+                    },
+                    onFindFriends: { selectedTab = .search },
+                    onExplorePlaces: { selectedTab = .venues },
+                    onAddProfilePhoto: {
+                        profileAddPhotoTrigger += 1
+                        selectedTab = .profile
                     }
                 )
                     .tabItem {
@@ -200,7 +216,10 @@ struct MainTabView: View {
                         }
                         .tag(AppTab.search)
 
-                    ProfileView(resetFiltersTrigger: profileResetTrigger)
+                    ProfileView(
+                        resetFiltersTrigger: profileResetTrigger,
+                        addPhotoTrigger: profileAddPhotoTrigger
+                    )
                         .tabItem {
                             Image(systemName: "person.crop.circle")
                         }

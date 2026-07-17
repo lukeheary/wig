@@ -4,6 +4,7 @@ import { NextRequest, NextResponse } from "next/server";
 import { uploadToS3 } from "@/lib/s3";
 import { db } from "@/server/db";
 import { users } from "@/server/db/schema";
+import { recordActivationActionBestEffort } from "@/server/utils/user-activation";
 
 export async function POST(request: NextRequest) {
   try {
@@ -55,6 +56,12 @@ export async function POST(request: NextRequest) {
     if (!updatedUser) {
       return NextResponse.json({ error: "User not found" }, { status: 404 });
     }
+
+    await recordActivationActionBestEffort(
+      userId,
+      "add_profile_photo",
+      "profile_photo"
+    );
 
     return NextResponse.json({
       avatarImageUrl: updatedUser.avatarImageUrl,

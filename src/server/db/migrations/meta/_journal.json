@@ -319,6 +319,12 @@
       "when": 1784134800000,
       "tag": "0051_add_place_is_enabled",
       "breakpoints": true
+    },
+    {
+      "idx": 53,
+      "when": 1784246400000,
+      "tag": "0052_add_user_activation_tasks",
+      "breakpoints": true
     }
   ]
 }

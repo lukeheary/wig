@@ -74,7 +74,7 @@ enum ActivityType: String, Decodable, Hashable, Sendable {
     }
 }
 
-enum UserGender: String, Decodable, Hashable, Sendable {
+enum UserGender: String, Codable, CaseIterable, Hashable, Sendable {
     case male
     case female
     case other

@@ -22,6 +22,10 @@ function isValidDateOfBirth(value: string): boolean {
     return false;
   }
 
+  if (year < 1900 || year > new Date().getUTCFullYear()) {
+    return false;
+  }
+
   const candidate = new Date(Date.UTC(year, month - 1, day));
 
   return (
@@ -40,12 +44,22 @@ function preferredOnboardingUsername(username: string | null | undefined): strin
 }
 
 function hasCompletedMobileProfile(user: {
+  firstName: string | null;
+  lastName: string | null;
   username: string | null;
+  city: string | null;
+  state: string | null;
+  gender: "male" | "female" | "other" | null;
   dateOfBirth: string | Date | null;
 }): boolean {
   return Boolean(
-    user.username &&
+    user.firstName &&
+      user.lastName &&
+      user.username &&
       !user.username.startsWith("user_") &&
+      user.city &&
+      user.state &&
+      user.gender &&
       user.dateOfBirth
   );
 }
@@ -92,9 +106,14 @@ export async function GET() {
 
       return NextResponse.json({
         isOnboarding,
+        firstName: existingUser.firstName ?? "",
+        lastName: existingUser.lastName ?? "",
         username: isOnboarding
           ? preferredOnboardingUsername(existingUser.username)
           : existingUser.username,
+        city: existingUser.city ?? "",
+        state: existingUser.state ?? "",
+        gender: existingUser.gender,
         dateOfBirth: existingUser.dateOfBirth,
         avatarImageUrl: existingUser.avatarImageUrl,
         debug: onboardingDebugPayload({
@@ -122,8 +141,13 @@ export async function GET() {
 
     return NextResponse.json({
       isOnboarding: true,
+      firstName: clerkUser.firstName ?? existingUserByEmail?.firstName ?? "",
+      lastName: clerkUser.lastName ?? existingUserByEmail?.lastName ?? "",
       username: preferredOnboardingUsername(clerkUser.username),
-      dateOfBirth: null,
+      city: existingUserByEmail?.city ?? "",
+      state: existingUserByEmail?.state ?? "",
+      gender: existingUserByEmail?.gender ?? null,
+      dateOfBirth: existingUserByEmail?.dateOfBirth ?? null,
       avatarImageUrl: clerkUser.hasImage ? clerkUser.imageUrl : null,
       debug: onboardingDebugPayload({
         reason: existingUserByEmail
@@ -152,12 +176,34 @@ export async function POST(request: NextRequest) {
     }
 
     const body = (await request.json()) as {
+      firstName?: string;
+      lastName?: string;
       username?: string;
+      city?: string;
+      state?: string;
+      gender?: "male" | "female" | "other";
       dateOfBirth?: string;
     };
 
+    const firstName = body.firstName?.trim() ?? "";
+    const lastName = body.lastName?.trim() ?? "";
     const normalizedUsername = body.username?.trim().toLowerCase() ?? "";
+    const city = body.city?.trim() ?? "";
+    const state = body.state?.trim().toUpperCase() ?? "";
+    const gender = body.gender;
     const dateOfBirth = body.dateOfBirth?.trim() ?? "";
+
+    if (
+      !firstName ||
+      !lastName ||
+      firstName.length > 100 ||
+      lastName.length > 100
+    ) {
+      return NextResponse.json(
+        { error: "Please enter your first and last name" },
+        { status: 400 }
+      );
+    }
 
     if (!USERNAME_PATTERN.test(normalizedUsername)) {
       return NextResponse.json(
@@ -171,6 +217,20 @@ export async function POST(request: NextRequest) {
 
     if (isReservedUsername(normalizedUsername)) {
       return NextResponse.json({ error: "Username is already taken" }, { status: 400 });
+    }
+
+    if (!city || city.length > 100 || state.length !== 2) {
+      return NextResponse.json(
+        { error: "Please select your city" },
+        { status: 400 }
+      );
+    }
+
+    if (!gender || !["male", "female", "other"].includes(gender)) {
+      return NextResponse.json(
+        { error: "Please select your gender" },
+        { status: 400 }
+      );
     }
 
     if (!isValidDateOfBirth(dateOfBirth)) {
@@ -204,27 +264,50 @@ export async function POST(request: NextRequest) {
       where: eq(users.id, userId),
     });
 
-    if (!existingUser) {
-      await db.insert(users).values({
-        id: userId,
-        email: normalizedEmail,
-        username: normalizedUsername,
-        firstName: clerkUser.firstName,
-        lastName: clerkUser.lastName,
-        avatarImageUrl: clerkUser.hasImage ? clerkUser.imageUrl : null,
-        dateOfBirth,
-        isOnboarding: false,
+    const savedUsers = !existingUser
+      ? await db
+          .insert(users)
+          .values({
+            id: userId,
+            email: normalizedEmail,
+            username: normalizedUsername,
+            firstName,
+            lastName,
+            city,
+            state,
+            gender,
+            avatarImageUrl: clerkUser.hasImage ? clerkUser.imageUrl : null,
+            dateOfBirth,
+            isOnboarding: false,
+          })
+          .returning()
+      : await db
+          .update(users)
+          .set({
+            firstName,
+            lastName,
+            username: normalizedUsername,
+            city,
+            state,
+            gender,
+            dateOfBirth,
+            updatedAt: new Date(),
+            isOnboarding: false,
+          })
+          .where(eq(users.id, userId))
+          .returning();
+
+    const savedUser = savedUsers[0];
+
+    if (!savedUser || !hasCompletedMobileProfile(savedUser)) {
+      console.error("Mobile onboarding persistence verification failed", {
+        userId,
+        savedUserId: savedUser?.id ?? null,
       });
-    } else {
-      await db
-        .update(users)
-        .set({
-          username: normalizedUsername,
-          dateOfBirth,
-          updatedAt: new Date(),
-          isOnboarding: false,
-        })
-        .where(eq(users.id, userId));
+      return NextResponse.json(
+        { error: "Unable to save your profile. Please try again." },
+        { status: 500 }
+      );
     }
 
     await clerk.users.updateUserMetadata(userId, {
@@ -233,10 +316,20 @@ export async function POST(request: NextRequest) {
       },
     });
 
+    if (clerkUser.firstName !== firstName || clerkUser.lastName !== lastName) {
+      await clerk.users.updateUser(userId, { firstName, lastName });
+    }
+
     return NextResponse.json({
-      isOnboarding: false,
-      username: normalizedUsername,
-      dateOfBirth,
+      isOnboarding: savedUser.isOnboarding,
+      firstName: savedUser.firstName ?? "",
+      lastName: savedUser.lastName ?? "",
+      username: savedUser.username,
+      city: savedUser.city ?? "",
+      state: savedUser.state ?? "",
+      gender: savedUser.gender,
+      dateOfBirth: savedUser.dateOfBirth,
+      avatarImageUrl: savedUser.avatarImageUrl,
     });
   } catch (error) {
     console.error("Mobile onboarding submit error:", error);

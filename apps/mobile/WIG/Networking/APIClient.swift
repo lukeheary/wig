@@ -124,6 +124,10 @@ struct APIClient: Sendable {
         )
     }
 
+    static func mobileActivationState() -> Endpoint<MobileActivationState> {
+        Endpoint(path: "/api/mobile/activation")
+    }
+
     static func mobileCategories() -> Endpoint<MobileCategoriesResponse> {
         Endpoint(
             path: "/api/mobile/categories",
@@ -745,7 +749,12 @@ struct APIClient: Sendable {
     }
 
     static func completeMobileOnboarding(
+        firstName: String,
+        lastName: String,
         username: String,
+        city: String,
+        state: String,
+        gender: UserGender,
         dateOfBirth: String
     ) throws -> Endpoint<MobileOnboardingState> {
         Endpoint(
@@ -753,7 +762,12 @@ struct APIClient: Sendable {
             method: .post,
             body: try JSONEncoder().encode(
                 MobileOnboardingUpdateRequest(
+                    firstName: firstName,
+                    lastName: lastName,
                     username: username,
+                    city: city,
+                    state: state,
+                    gender: gender,
                     dateOfBirth: dateOfBirth
                 )
             ),
@@ -1035,6 +1049,26 @@ struct PlaceFollowState: Decodable, Hashable, Sendable {
     let isFollowed: Bool
 }
 
+struct MobileActivationState: Decodable, Hashable, Sendable {
+    let tasks: [MobileActivationTask]
+    let isComplete: Bool
+}
+
+struct MobileActivationTask: Decodable, Hashable, Identifiable, Sendable {
+    enum Key: String, Decodable, Hashable, Sendable {
+        case addFriends = "add_friends"
+        case followPlaces = "follow_places"
+        case addProfilePhoto = "add_profile_photo"
+    }
+
+    let key: Key
+    let progress: Int
+    let target: Int
+    let isComplete: Bool
+
+    var id: Key { key }
+}
+
 struct ProfileAvatarUpdateResponse: Decodable, Hashable, Sendable {
     let avatarImageURL: URL?
 
@@ -1059,14 +1093,24 @@ struct MobileOnboardingState: Decodable, Hashable, Sendable {
     }
 
     let isOnboarding: Bool
+    let firstName: String
+    let lastName: String
     let username: String
+    let city: String
+    let state: String
+    let gender: UserGender?
     let dateOfBirth: String?
     let avatarImageURL: URL?
     let debug: DebugInfo?
 
     enum CodingKeys: String, CodingKey {
         case isOnboarding
+        case firstName
+        case lastName
         case username
+        case city
+        case state
+        case gender
         case dateOfBirth
         case avatarImageURL = "avatarImageUrl"
         case debug
@@ -1318,7 +1362,12 @@ struct MobilePartnerUser: Decodable, Hashable, Sendable {
 }
 
 private struct MobileOnboardingUpdateRequest: Encodable {
+    let firstName: String
+    let lastName: String
     let username: String
+    let city: String
+    let state: String
+    let gender: UserGender
     let dateOfBirth: String
 }
 

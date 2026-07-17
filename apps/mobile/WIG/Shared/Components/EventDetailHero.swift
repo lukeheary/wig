@@ -361,7 +361,7 @@ private extension UIImage {
 
     // Small, heavily blurred duplicate of the artwork used as the hero backdrop.
     func blurredHeroBackdrop() -> UIImage? {
-        guard let cgImage else { return nil }
+        guard cgImage != nil else { return nil }
 
         let maxDimension: CGFloat = 200
         let scale = min(maxDimension / max(size.width, size.height), 1)

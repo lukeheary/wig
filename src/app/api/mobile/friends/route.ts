@@ -19,7 +19,7 @@ import {
   resolveMobileEventEditPermissions,
 } from "@/app/api/mobile/event-edit-permissions";
 import { eventTimeZone } from "@/lib/utils";
-import { mapEventCategoryData } from "@/server/utils/categories";
+import { mapEventCategoryData, mapPlaceCategoryData } from "@/server/utils/categories";
 
 type UserSummary = {
   id: string;
@@ -168,6 +168,8 @@ export async function GET() {
       profile: null,
       friendCount: 0,
       requestCount: 0,
+      followingCount: 0,
+      followedPlaces: [],
       friends: [],
       receivedRequests: [],
       sentRequests: [],
@@ -272,7 +274,7 @@ export async function GET() {
   }
 
   const acceptedFriendIds = [...acceptedByUserId.keys()];
-  const [upcomingRsvps, pastRsvps, followedPlaceIds, editPermissions] = await Promise.all([
+  const [upcomingRsvps, pastRsvps, followedPlaces, editPermissions] = await Promise.all([
     db.query.eventRsvps.findMany({
       where: and(eq(eventRsvps.userId, userId), inArray(eventRsvps.status, ["going", "interested"])),
       with: {
@@ -309,9 +311,18 @@ export async function GET() {
     }),
     db.query.placeFollows.findMany({
       where: eq(placeFollows.userId, userId),
-      columns: {
-        placeId: true,
+      with: {
+        place: {
+          with: {
+            categoryLinks: {
+              with: {
+                category: true,
+              },
+            },
+          },
+        },
       },
+      orderBy: [desc(placeFollows.createdAt)],
     }),
     resolveMobileEventEditPermissions(userId),
   ]);
@@ -325,7 +336,7 @@ export async function GET() {
     .filter((event): event is NonNullable<typeof event> => Boolean(event))
     .filter((event) => event.startAt < today);
 
-  const followedPlaceIdSet = new Set(followedPlaceIds.map((follow) => follow.placeId));
+  const followedPlaceIdSet = new Set(followedPlaces.map((follow) => follow.placeId));
   const upcomingEventIds = upcomingEventsRaw.map((event) => event.id);
   const pastEventIds = pastEventsRaw.map((event) => event.id);
   const allEventIds = [...new Set([...upcomingEventIds, ...pastEventIds])];
@@ -485,6 +496,31 @@ export async function GET() {
     profile,
     friendCount: acceptedByUserId.size,
     requestCount: receivedRequests.length,
+    followingCount: followedPlaces.length,
+    followedPlaces: followedPlaces.map(({ place }) => {
+      const mappedPlace = mapPlaceCategoryData(place);
+      const metroArea = resolveMetroArea({ city: place.city, state: place.state });
+
+      return {
+        id: mappedPlace.id,
+        type: mappedPlace.type,
+        slug: mappedPlace.slug,
+        name: mappedPlace.name,
+        logoImageUrl: mappedPlace.logoImageUrl,
+        address: mappedPlace.address,
+        city: mappedPlace.city,
+        state: mappedPlace.state,
+        website: mappedPlace.website,
+        instagram: mappedPlace.instagram,
+        metroAreaCity: metroArea?.city ?? null,
+        metroAreaState: metroArea?.state ?? null,
+        upcomingEventCount: 0,
+        updatedAt: mappedPlace.updatedAt,
+        isFollowed: true,
+        categories: mappedPlace.categories,
+        categoryLabels: mappedPlace.categoryLabels,
+      };
+    }),
     friends: [...acceptedByUserId.values()],
     receivedRequests,
     sentRequests,

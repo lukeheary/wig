@@ -6,6 +6,7 @@ import { db } from "@/server/db";
 import { userFriends, users } from "@/server/db/schema";
 import { createNotification } from "@/server/utils/notifications";
 import { sendPushNotificationToUsers } from "@/server/utils/push-notifications";
+import { recordActivationActionBestEffort } from "@/server/utils/user-activation";
 
 const requestSchema = z.object({
   friendUserId: z.string().min(1),
@@ -110,6 +111,12 @@ export async function POST(request: Request) {
         actionUrl: "/activity?view=requests",
       },
     });
+
+    await recordActivationActionBestEffort(
+      userId,
+      "add_friends",
+      body.friendUserId
+    );
 
     return NextResponse.json({
       success: true,
