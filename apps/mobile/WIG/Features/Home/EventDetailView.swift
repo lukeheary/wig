@@ -56,6 +56,7 @@ struct EventDetailView: View {
     @State private var presentedRoute: EventDetailRoute?
 
     private let placeNavigationAnimation = Animation.easeInOut(duration: 0.30)
+    private let routeNavigationAnimation = Animation.easeInOut(duration: 0.24)
 
     init(event: EventFeedItem) {
         self.event = event
@@ -279,38 +280,30 @@ struct EventDetailView: View {
                 EventArtworkViewer(imageURL: posterImageURL)
             }
         }
-        .fullScreenCover(item: $presentedRoute) { route in
-            switch route {
-            case .rsvpList:
-                NavigationStack {
-                    EventRSVPListView(
-                        goingAttendees: goingAttendees,
-                        interestedAttendees: interestedAttendees,
-                        notGoingAttendees: notGoingAttendees,
+        .overlay {
+            ZStack {
+                if let presentedPlace {
+                    EventPlaceDetailRouteView(
+                        place: presentedPlace,
+                        onDismiss: dismissPresentedPlace
+                    )
+                    .transition(.move(edge: .trailing))
+                    .zIndex(1)
+                }
+
+                if presentedRoute != nil {
+                    EventRSVPListRouteView(
+                        goingAttendees: friendGoingAttendees,
+                        interestedAttendees: friendInterestedAttendees,
+                        notGoingAttendees: friendNotGoingAttendees,
                         isPastEvent: currentEvent.hasEnded,
                         eventID: currentEvent.id,
-                        attendeeReviewRatings: attendeeReviewRatings
+                        attendeeReviewRatings: attendeeReviewRatings,
+                        onDismiss: dismissPresentedRoute
                     )
-                    .toolbar {
-                        ToolbarItem(placement: .topBarLeading) {
-                            Button {
-                                presentedRoute = nil
-                            } label: {
-                                Image(systemName: "chevron.left")
-                            }
-                        }
-                    }
+                    .transition(.move(edge: .trailing))
+                    .zIndex(2)
                 }
-            }
-        }
-        .overlay {
-            if let presentedPlace {
-                EventPlaceDetailRouteView(
-                    place: presentedPlace,
-                    onDismiss: dismissPresentedPlace
-                )
-                .transition(.move(edge: .trailing))
-                .zIndex(1)
             }
         }
         }
@@ -333,6 +326,18 @@ struct EventDetailView: View {
     private func dismissPresentedPlace() {
         withAnimation(placeNavigationAnimation) {
             presentedPlace = nil
+        }
+    }
+
+    private func presentRSVPList() {
+        withAnimation(routeNavigationAnimation) {
+            presentedRoute = .rsvpList
+        }
+    }
+
+    private func dismissPresentedRoute() {
+        withAnimation(routeNavigationAnimation) {
+            presentedRoute = nil
         }
     }
 
@@ -1081,7 +1086,7 @@ struct EventDetailView: View {
                 }
 
                 Button {
-                    presentedRoute = .rsvpList
+                    presentRSVPList()
                 } label: {
                     EventRSVPFriendsRow(
                         attendees: friendRSVPPreviewAttendees
@@ -1483,7 +1488,7 @@ struct EventDetailView: View {
     }
 
     private var friendRSVPPreviewAttendees: [EventSocialAttendee] {
-        (friendGoingAttendees + friendInterestedAttendees).map { rsvp in
+        friendGoingAttendees.map { rsvp in
             EventSocialAttendee(
                 id: rsvp.user.id,
                 firstName: rsvp.user.firstName,
@@ -1655,15 +1660,14 @@ private struct EventAttendeeSection: View {
                 .font(.system(size: 20, weight: .bold))
                 .foregroundStyle(.white)
 
-            VStack(spacing: 0) {
-                ForEach(Array(attendees.enumerated()), id: \.element.user.id) { index, attendee in
-                    NavigationLink {
-                        if attendee.user.isCurrentUser {
-                            UserProfileView(userID: attendee.user.id, showsFriendAction: false)
-                        } else {
-                            UserProfileView(userID: attendee.user.id)
-                        }
-                    } label: {
+            VStack(spacing: 2) {
+                ForEach(attendees, id: \.user.id) { attendee in
+                    NavigationLink(
+                        value: EventRSVPAttendeeRoute(
+                            userID: attendee.user.id,
+                            isCurrentUser: attendee.user.isCurrentUser
+                        )
+                    ) {
                         EventAttendeeRow(
                             attendee: attendee,
                             reviewRating: attendeeReviewRatings[attendee.user.id]
@@ -1671,25 +1675,9 @@ private struct EventAttendeeSection: View {
                             .contentShape(Rectangle())
                     }
                     .buttonStyle(.plain)
-
-                    if index != attendees.count - 1 {
-                        Divider()
-                            .overlay(.white.opacity(0.08))
-                            .padding(.leading, 62)
-                    }
                 }
             }
-            .padding(.horizontal, 16)
-            .padding(.vertical, 8)
             .frame(maxWidth: .infinity, alignment: .leading)
-            .background(
-                RoundedRectangle(cornerRadius: 18, style: .continuous)
-                    .fill(Color.white.opacity(0.06))
-            )
-            .overlay(
-                RoundedRectangle(cornerRadius: 18, style: .continuous)
-                    .stroke(.white.opacity(0.08), lineWidth: 1)
-            )
         }
     }
 }
@@ -1731,18 +1719,12 @@ private struct EventFriendAvatarTile: View {
 
     var body: some View {
         VStack(spacing: 8) {
-            ZStack {
-                Circle()
-                    .fill(strokeColor)
-
-                UserAvatarView(
-                    imageURL: attendee.avatarImageURL,
-                    name: displayName,
-                    size: 50,
-                    identityKey: attendee.id
-                )
-            }
-            .frame(width: 54, height: 54)
+            UserAvatarView(
+                imageURL: attendee.avatarImageURL,
+                name: displayName,
+                size: 54,
+                identityKey: attendee.id
+            )
 
             Text(firstName)
                 .font(.system(size: 11, weight: .medium))
@@ -1772,10 +1754,6 @@ private struct EventFriendAvatarTile: View {
             .joined(separator: " ")
 
         return name.isEmpty ? "Friend" : name
-    }
-
-    private var strokeColor: Color {
-        attendee.status.rsvpTintColor
     }
 }
 
@@ -1859,6 +1837,67 @@ private struct NestedEventDetailPresentationView: View {
     }
 }
 
+private struct EventRSVPListRouteView: View {
+    let goingAttendees: [EventSocialRSVP]
+    let interestedAttendees: [EventSocialRSVP]
+    let notGoingAttendees: [EventSocialRSVP]
+    let isPastEvent: Bool
+    let eventID: UUID
+    let attendeeReviewRatings: [String: EventReviewRating]
+    let onDismiss: () -> Void
+    @State private var navigationPath = NavigationPath()
+
+    var body: some View {
+        NavigationStack(path: $navigationPath) {
+            EventRSVPListView(
+                goingAttendees: goingAttendees,
+                interestedAttendees: interestedAttendees,
+                notGoingAttendees: notGoingAttendees,
+                isPastEvent: isPastEvent,
+                eventID: eventID,
+                attendeeReviewRatings: attendeeReviewRatings
+            )
+            .navigationDestination(for: EventRSVPAttendeeRoute.self) { route in
+                UserProfileView(
+                    userID: route.userID,
+                    showsFriendAction: !route.isCurrentUser
+                )
+            }
+            .toolbar {
+                ToolbarItem(placement: .topBarLeading) {
+                    Button(action: onDismiss) {
+                        Image(systemName: "chevron.left")
+                    }
+                }
+            }
+        }
+        .background(AppTheme.background.ignoresSafeArea())
+        .simultaneousGesture(
+            DragGesture(minimumDistance: 12)
+            .onEnded { value in
+                let isLeadingEdgeSwipe = value.startLocation.x < 32
+                let isPrimarilyHorizontal = abs(value.predictedEndTranslation.width)
+                    > abs(value.predictedEndTranslation.height)
+
+                guard navigationPath.isEmpty,
+                      isLeadingEdgeSwipe,
+                      isPrimarilyHorizontal,
+                      value.predictedEndTranslation.width > 110
+                else {
+                    return
+                }
+
+                onDismiss()
+            }
+        )
+    }
+}
+
+private struct EventRSVPAttendeeRoute: Hashable {
+    let userID: String
+    let isCurrentUser: Bool
+}
+
 private struct EventRSVPListView: View {
     let goingAttendees: [EventSocialRSVP]
     let interestedAttendees: [EventSocialRSVP]
@@ -1913,7 +1952,7 @@ private struct EventRSVPListView: View {
             .padding(.bottom, 36)
         }
         .background(AppTheme.background.ignoresSafeArea())
-        .navigationTitle("RSVP'd")
+        .navigationTitle("Friends")
         .navigationBarTitleDisplayMode(.inline)
         .toolbar(.visible, for: .navigationBar)
         .task(id: eventID) {
@@ -1943,7 +1982,11 @@ private struct EventAttendeeRow: View {
             name: displayName,
             avatarName: actualName,
             identityKey: attendee.user.id,
-            ringWidth: 0
+            ringWidth: 0,
+            avatarSize: 42,
+            verticalPadding: 5,
+            nameFontSize: 14,
+            subtitleFontSize: 10
         ) {
             if let reviewRating {
                 Text(reviewRating.reviewEmoji)

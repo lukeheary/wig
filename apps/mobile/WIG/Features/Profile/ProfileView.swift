@@ -264,52 +264,53 @@ struct ProfileView: View {
                                 isAvatarSourceDialogPresented = false
                                 isAvatarCameraPresented = true
                             }
-                        )
-
-                        RelationshipSummaryRow(
-                            response: response,
-                            partnerRelationship: partnerRelationship,
-                            availablePartnerCount: availablePartnerCandidates(from: response).count,
-                            isPartnerBusy: isPartnerActionInFlight,
-                            onChoosePartner: {
-                                isPartnerPickerPresented = true
-                            },
-                            onAcceptPartner: {
-                                Task {
-                                    await acceptPartnerRequest()
+                        ) {
+                            RelationshipSummaryRow(
+                                response: response,
+                                partnerRelationship: partnerRelationship,
+                                availablePartnerCount: availablePartnerCandidates(from: response).count,
+                                isPartnerBusy: isPartnerActionInFlight,
+                                onChoosePartner: {
+                                    isPartnerPickerPresented = true
+                                },
+                                onAcceptPartner: {
+                                    Task {
+                                        await acceptPartnerRequest()
+                                    }
+                                },
+                                onDeclinePartner: {
+                                    Task {
+                                        await declinePartnerRequest()
+                                    }
+                                },
+                                onCancelPartnerRequest: {
+                                    Task {
+                                        await declinePartnerRequest()
+                                    }
+                                },
+                                onChangePartner: {
+                                    Task {
+                                        await changePartner()
+                                    }
+                                },
+                                onRemovePartner: {
+                                    isRemovingPartnerConfirmationPresented = true
+                                },
+                                onRemoveFriend: { friend in
+                                    Task {
+                                        await removeFriend(friend)
+                                    }
+                                },
+                                onAcceptFriendRequest: { request in
+                                    await respondToFriendRequest(request, response: .accept)
+                                },
+                                onDeclineFriendRequest: { request in
+                                    await respondToFriendRequest(request, response: .decline)
                                 }
-                            },
-                            onDeclinePartner: {
-                                Task {
-                                    await declinePartnerRequest()
-                                }
-                            },
-                            onCancelPartnerRequest: {
-                                Task {
-                                    await declinePartnerRequest()
-                                }
-                            },
-                            onChangePartner: {
-                                Task {
-                                    await changePartner()
-                                }
-                            },
-                            onRemovePartner: {
-                                isRemovingPartnerConfirmationPresented = true
-                            },
-                            onRemoveFriend: { friend in
-                                Task {
-                                    await removeFriend(friend)
-                                }
-                            },
-                            onAcceptFriendRequest: { request in
-                                await respondToFriendRequest(request, response: .accept)
-                            },
-                            onDeclineFriendRequest: { request in
-                                await respondToFriendRequest(request, response: .decline)
-                            }
-                        )
+                            )
+                        }
                     }
+                    .padding(.bottom, 8)
 
                     profileEventsSection(response: response)
 
@@ -324,20 +325,27 @@ struct ProfileView: View {
             .scrollIndicators(.hidden)
             .background(ProfileTheme.background)
             .overlay(alignment: .top) {
-                HStack {
-                    ProfileEventNavControls(
-                        selection: $selectedEventsTab,
-                        rsvpFilter: $selectedEventsRSVPFilter,
-                        showsFilter: canShowEventsFilter(for: response),
-                        username: response.profile?.username,
-                        onShare: { username in
-                            profileShareURL = ProfileShareURL.url(for: username)
-                        }
-                    )
+                ZStack {
+                    HStack {
+                        ProfileEventNavControls(
+                            selection: $selectedEventsTab,
+                            rsvpFilter: $selectedEventsRSVPFilter,
+                            showsFilter: canShowEventsFilter(for: response),
+                            username: response.profile?.username,
+                            showsShare: false,
+                            onShare: { username in
+                                profileShareURL = ProfileShareURL.url(for: username)
+                            }
+                        )
 
-                    Spacer()
+                        Spacer()
 
-                    signOutButton
+                        signOutButton
+                    }
+
+                    if let username = response.profile?.username {
+                        ProfileTopUsername(username: username)
+                    }
                 }
                 .padding(.horizontal, 16)
                 .padding(.top, 0)
@@ -352,8 +360,12 @@ struct ProfileView: View {
 
     @ViewBuilder
     private func profileEventsSection(response: FriendsFeedResponse) -> some View {
+        let displayWindow = EventFeedDisplayWindow.partition(
+            upcoming: response.upcomingEvents,
+            past: response.pastEvents
+        )
         let events = selectedEventsRSVPFilter.filtered(
-            events: selectedEventsTab == .upcoming ? response.upcomingEvents : response.pastEvents
+            events: selectedEventsTab == .upcoming ? displayWindow.upcoming : displayWindow.past
         )
         let groups = ProfileEventGrouper.groups(for: events, mode: selectedEventsTab)
 
@@ -684,19 +696,43 @@ struct ProfileView: View {
 
     private var signOutButton: some View {
         Menu {
-            Button("Edit Profile") {
+            Button {
                 isEditProfilePresented = true
+            } label: {
+                Label("Edit Profile", systemImage: "pencil")
+                    .foregroundStyle(.white)
+            }
+            .tint(.white)
+
+            if case .loaded(let response) = viewModel.state,
+               let username = response.profile?.username
+            {
+                Button {
+                    profileShareURL = ProfileShareURL.url(for: username)
+                } label: {
+                    Label("Share Profile", systemImage: "square.and.arrow.up")
+                        .foregroundStyle(.white)
+                }
+                .tint(.white)
             }
 
             if appSession.isAdmin {
-                Button("Admin Settings") {
+                Button {
                     isAdminSettingsPresented = true
+                } label: {
+                    Label("Admin Settings", systemImage: "gearshape")
+                        .foregroundStyle(.white)
                 }
+                .tint(.white)
             }
 
-            Button("Sign Out", role: .destructive) {
+            Button(role: .destructive) {
                 isSignOutConfirmationPresented = true
+            } label: {
+                Label("Sign Out", systemImage: "rectangle.portrait.and.arrow.right")
+                    .foregroundStyle(.red)
             }
+            .tint(.red)
         } label: {
             Image(systemName: "ellipsis")
                 .font(.system(size: 18, weight: .bold))
@@ -843,6 +879,7 @@ struct UserProfileView: View {
     let userID: String
     var showsFriendAction = true
 
+    @Environment(Clerk.self) private var clerk
     @Environment(\.apiClient) private var apiClient
     @Environment(\.dismiss) private var dismiss
     @StateObject private var viewModel = UserProfileViewModel()
@@ -940,17 +977,20 @@ struct UserProfileView: View {
             ScrollView {
                 VStack(spacing: 22) {
                     VStack(spacing: 12) {
-                        ProfileHeader(profile: response.profile, isUploadingAvatar: false, isAvatarMenuPresented: nil)
-
-                        if showsFriendAction {
-                            userFriendAction(response: response)
+                        ProfileHeader(profile: response.profile, isUploadingAvatar: false, isAvatarMenuPresented: nil) {
+                            UserRelationshipSummaryRow(response: response)
                         }
 
-                        UserRelationshipSummaryRow(response: response)
+                        if displaysReceivedFriendRequestActions {
+                            receivedFriendRequestAction(response: response)
+                                .padding(.top, 8)
+                        }
                     }
+                    .padding(.bottom, 8)
 
                     UserProfileEventsSection(
                         response: response,
+                        isCurrentUser: isCurrentUserProfile,
                         selectedEventsTab: $selectedEventsTab,
                         selectedEventsRSVPFilter: $selectedEventsRSVPFilter
                     )
@@ -965,88 +1005,223 @@ struct UserProfileView: View {
     }
 
     private var topControls: some View {
-        HStack {
-            FloatingGlassIconButton(systemImage: "chevron.left") {
-                dismiss()
-            }
-
-            if case .loaded(let response) = viewModel.state {
-                ProfileEventNavControls(
-                    selection: $selectedEventsTab,
-                    rsvpFilter: $selectedEventsRSVPFilter,
-                    showsFilter: viewModel.canShowEventsFilter,
-                    username: response.profile?.username,
-                    onShare: { username in
-                        profileShareURL = ProfileShareURL.url(for: username)
+        ZStack {
+            HStack {
+                HStack(spacing: 10) {
+                    FloatingGlassIconButton(systemImage: "chevron.left") {
+                        dismiss()
                     }
-                )
+
+                    if isCurrentUserProfile,
+                       case .loaded(let response) = viewModel.state,
+                       let profile = response.profile {
+                        ProfileEventNavControls(
+                            selection: $selectedEventsTab,
+                            rsvpFilter: $selectedEventsRSVPFilter,
+                            showsFilter: viewModel.canShowEventsFilter,
+                            username: nil,
+                            showsShare: false,
+                            onShare: { username in
+                                profileShareURL = ProfileShareURL.url(for: username)
+                            }
+                        )
+                    } else if case .loaded(let response) = viewModel.state,
+                              let username = response.profile?.username {
+                        ProfileTopUsername(username: username, alignment: .leading)
+                    }
+                }
+
+                Spacer()
+
+                if case .loaded(let response) = viewModel.state, let profile = response.profile {
+                    HStack(spacing: 10) {
+                        if isCurrentUserProfile {
+                            currentUserMenu(for: profile)
+                        } else if showsConfirmedFriendMenu(for: profile) {
+                            confirmedFriendMenu(for: profile)
+                        } else {
+                            profileShareMenu(for: profile)
+                        }
+
+                        if displaysFriendActions {
+                            userFriendNavigationAction(for: profile)
+                        }
+                    }
+                }
             }
 
-            Spacer()
-
-            if case .loaded(let response) = viewModel.state, let profile = response.profile {
-                if showsFriendAction {
-                    navFriendAction(for: profile)
-                }
+            if isCurrentUserProfile,
+               case .loaded(let response) = viewModel.state,
+               let username = response.profile?.username
+            {
+                ProfileTopUsername(username: username)
             }
         }
         .padding(.horizontal, 16)
         .padding(.top, 0)
     }
 
+    private func showsConfirmedFriendMenu(for profile: FriendUserSummary) -> Bool {
+        displaysFriendActions && profile.friendStatus == .accepted
+    }
+
+    private var displaysFriendActions: Bool {
+        showsFriendAction && !isCurrentUserProfile
+    }
+
+    private var displaysReceivedFriendRequestActions: Bool {
+        guard displaysFriendActions,
+              case .loaded(let response) = viewModel.state
+        else {
+            return false
+        }
+
+        return response.profile?.friendStatus == .pendingReceived
+    }
+
+    private var isCurrentUserProfile: Bool {
+        userID == clerk.user?.id || userID == ProfileViewModel.currentUserSummary?.id
+    }
+
+    private func currentUserMenu(for profile: FriendUserSummary) -> some View {
+        Menu {
+            Button {
+                profileShareURL = ProfileShareURL.url(for: profile.username)
+            } label: {
+                Label("Share Profile", systemImage: "square.and.arrow.up")
+                    .foregroundStyle(.white)
+            }
+            .tint(.white)
+        } label: {
+            Image(systemName: "ellipsis")
+                .font(.system(size: 18, weight: .bold))
+                .foregroundStyle(.white)
+                .frame(width: 46, height: 46)
+                .contentShape(Circle())
+                .profileLiquidGlass(in: Circle())
+        }
+        .buttonStyle(.plain)
+    }
+
+    private func profileShareMenu(for profile: FriendUserSummary) -> some View {
+        Menu {
+            Button {
+                profileShareURL = ProfileShareURL.url(for: profile.username)
+            } label: {
+                Label("Share Profile", systemImage: "square.and.arrow.up")
+                    .foregroundStyle(.white)
+            }
+            .tint(.white)
+        } label: {
+            Image(systemName: "ellipsis")
+                .font(.system(size: 18, weight: .bold))
+                .foregroundStyle(.white)
+                .frame(width: 46, height: 46)
+                .contentShape(Circle())
+                .profileLiquidGlass(in: Circle())
+        }
+        .buttonStyle(.plain)
+    }
+
+    private func confirmedFriendMenu(for profile: FriendUserSummary) -> some View {
+        Menu {
+            Button {
+                profileShareURL = ProfileShareURL.url(for: profile.username)
+            } label: {
+                Label("Share Profile", systemImage: "square.and.arrow.up")
+                    .foregroundStyle(.white)
+            }
+            .tint(.white)
+
+            Button(role: .destructive) {
+                pendingUnfriendProfile = profile
+            } label: {
+                Label("Remove Friend", systemImage: "person.crop.circle.badge.minus")
+                    .foregroundStyle(.red)
+            }
+            .tint(.red)
+        } label: {
+            Image(systemName: "ellipsis")
+                .font(.system(size: 18, weight: .bold))
+                .foregroundStyle(.white)
+                .frame(width: 46, height: 46)
+                .contentShape(Circle())
+                .profileLiquidGlass(in: Circle())
+        }
+        .buttonStyle(.plain)
+        .disabled(isRespondingToFriendRequest)
+    }
+
     @ViewBuilder
-    private func userFriendAction(response: UserProfileResponse) -> some View {
+    private func userFriendNavigationAction(for profile: FriendUserSummary) -> some View {
+        switch profile.friendStatus ?? FriendUserSummary.FriendStatus.none {
+        case FriendUserSummary.FriendStatus.none:
+            profileFriendRequestButton(
+                title: "Add Friend",
+                isDisabled: isSendingFriendRequest
+            ) {
+                sendFriendRequest(to: profile.id)
+            }
+        case .pendingSent:
+            profileFriendRequestButton(title: "Added", isDisabled: true) {}
+        case .pendingReceived, .accepted:
+            EmptyView()
+        }
+    }
+
+    @ViewBuilder
+    private func receivedFriendRequestAction(response: UserProfileResponse) -> some View {
         if let profile = response.profile {
             switch profile.friendStatus ?? FriendUserSummary.FriendStatus.none {
-            case FriendUserSummary.FriendStatus.none:
-                EmptyView()
-            case .pendingSent:
-                EmptyView()
             case .pendingReceived:
                 HStack(spacing: 12) {
                     Button("Decline") {
                         respondToFriendRequest(profile: profile, response: .decline)
                     }
-                    .profileActionButtonStyle(kind: .secondary, isDisabled: isRespondingToFriendRequest)
+                    .profileActionButtonStyle(
+                        kind: .secondary,
+                        isDisabled: isRespondingToFriendRequest,
+                        fillsAvailableWidth: true,
+                        fontWeight: .semibold,
+                        cornerRadius: 12
+                    )
                     .disabled(isRespondingToFriendRequest)
 
                     Button("Accept") {
                         respondToFriendRequest(profile: profile, response: .accept)
                     }
-                    .profileActionButtonStyle(kind: .accent, isDisabled: isRespondingToFriendRequest)
+                    .profileActionButtonStyle(
+                        kind: .accent,
+                        isDisabled: isRespondingToFriendRequest,
+                        fillsAvailableWidth: true,
+                        fontWeight: .semibold,
+                        cornerRadius: 12
+                    )
                     .disabled(isRespondingToFriendRequest)
                 }
-            case .accepted:
+            case FriendUserSummary.FriendStatus.none, .pendingSent, .accepted:
                 EmptyView()
             }
         }
     }
 
-    @ViewBuilder
-    private func navFriendAction(for profile: FriendUserSummary) -> some View {
-        switch profile.friendStatus ?? FriendUserSummary.FriendStatus.none {
-        case FriendUserSummary.FriendStatus.none:
-            Button("Add Friend") {
-                sendFriendRequest(to: profile.id)
-            }
-            .profileActionButtonStyle(kind: .primary, isDisabled: isSendingFriendRequest)
-            .disabled(isSendingFriendRequest)
-        case .pendingSent:
-            Button("Request Sent") {}
-                .profileActionButtonStyle(kind: .secondary, isDisabled: true)
-                .disabled(true)
-        case .pendingReceived:
-            EmptyView()
-        case .accepted:
-            Button("Friends") {
-                pendingUnfriendProfile = profile
-            }
-            .profileActionButtonStyle(
-                kind: .secondary,
-                isDisabled: isRespondingToFriendRequest
-            )
-            .disabled(isRespondingToFriendRequest)
+    private func profileFriendRequestButton(
+        title: String,
+        isDisabled: Bool,
+        action: @escaping () -> Void
+    ) -> some View {
+        Button(action: action) {
+            Text(title)
+                .font(.system(size: 15, weight: .bold))
+                .foregroundStyle(.white)
+                .padding(.horizontal, 18)
+                .frame(height: 46)
+                .contentShape(Capsule())
+                .profileLiquidGlass(in: Capsule())
         }
+        .buttonStyle(.plain)
+        .disabled(isDisabled)
+        .opacity(isDisabled ? 0.62 : 1)
     }
 
     private func sendFriendRequest(to userID: String) {
@@ -1081,6 +1256,8 @@ struct UserProfileView: View {
                             )
                         },
                         friendCount: current.friendCount,
+                        followingCount: current.followingCount,
+                        followedPlaces: current.followedPlaces,
                         friends: current.friends,
                         upcomingEvents: current.upcomingEvents,
                         pastEvents: current.pastEvents
@@ -1129,6 +1306,8 @@ struct UserProfileView: View {
                     )
                 },
                 friendCount: current.friendCount,
+                followingCount: current.followingCount,
+                followedPlaces: current.followedPlaces,
                 friends: current.friends,
                 upcomingEvents: current.upcomingEvents,
                 pastEvents: current.pastEvents
@@ -1179,6 +1358,8 @@ struct UserProfileView: View {
                     )
                 },
                 friendCount: max(current.friendCount - 1, 0),
+                followingCount: current.followingCount,
+                followedPlaces: current.followedPlaces,
                 friends: current.friends.filter { $0.id != profile.id },
                 upcomingEvents: current.upcomingEvents,
                 pastEvents: current.pastEvents
@@ -1243,10 +1424,11 @@ private struct ProfileEventNavControls: View {
     @Binding var rsvpFilter: ProfileEventsRSVPFilter
     let showsFilter: Bool
     let username: String?
+    var showsShare = true
     let onShare: (String) -> Void
 
     var body: some View {
-        if showsFilter, let username {
+        if showsFilter, showsShare, let username {
             HStack(spacing: 0) {
                 ProfileEventsFilterButton(
                     selection: $selection,
@@ -1261,9 +1443,25 @@ private struct ProfileEventNavControls: View {
             .profileLiquidGlass(in: Capsule())
         } else if showsFilter {
             ProfileEventsFilterButton(selection: $selection, rsvpFilter: $rsvpFilter)
-        } else if let username {
+        } else if showsShare, let username {
             ProfileShareNavButton(username: username, onShare: onShare)
         }
+    }
+}
+
+private struct ProfileTopUsername: View {
+    let username: String
+    var alignment: Alignment = .center
+
+    var body: some View {
+        Text(username)
+            .font(.system(size: 17, weight: .bold))
+            .foregroundStyle(.white)
+            .lineLimit(1)
+            .minimumScaleFactor(0.72)
+            .frame(maxWidth: 150, alignment: alignment)
+            .allowsHitTesting(false)
+            .accessibilityAddTraits(.isHeader)
     }
 }
 
@@ -1389,16 +1587,21 @@ private enum ProfileEventsRSVPFilter: String, CaseIterable, Identifiable {
 
 private struct UserProfileEventsSection: View {
     let response: UserProfileResponse
+    let isCurrentUser: Bool
     @Binding var selectedEventsTab: ProfileEventsTab
     @Binding var selectedEventsRSVPFilter: ProfileEventsRSVPFilter
 
     private var canViewEventDetails: Bool {
-        response.profile?.friendStatus == .accepted
+        isCurrentUser || response.profile?.friendStatus == .accepted
     }
 
     var body: some View {
+        let displayWindow = EventFeedDisplayWindow.partition(
+            upcoming: response.upcomingEvents,
+            past: response.pastEvents
+        )
         let events = selectedEventsRSVPFilter.filtered(
-            events: selectedEventsTab == .upcoming ? response.upcomingEvents : response.pastEvents
+            events: selectedEventsTab == .upcoming ? displayWindow.upcoming : displayWindow.past
         )
         let groups = ProfileEventGrouper.groups(for: events, mode: selectedEventsTab)
 
@@ -1458,6 +1661,10 @@ private enum ProfileEventGrouper {
     }
 
     private static func label(for event: EventFeedItem, mode: ProfileEventsTab) -> String {
+        if mode == .upcoming, EventFeedDisplayWindow.isLastNight(event) {
+            return "Last Night"
+        }
+
         var calendar = Calendar(identifier: .gregorian)
         calendar.timeZone = event.displayTimeZone
         calendar.firstWeekday = 2
@@ -1517,84 +1724,109 @@ private struct ProfileHeader: View {
     let profile: FriendUserSummary?
     let isUploadingAvatar: Bool
     let isAvatarMenuPresented: Binding<Bool>?
-    var onChooseAvatarPhoto: (() -> Void)? = nil
-    var onTakeAvatarPhoto: (() -> Void)? = nil
+    let onChooseAvatarPhoto: (() -> Void)?
+    let onTakeAvatarPhoto: (() -> Void)?
+    let summary: AnyView
+
+    init<Summary: View>(
+        profile: FriendUserSummary?,
+        isUploadingAvatar: Bool,
+        isAvatarMenuPresented: Binding<Bool>?,
+        onChooseAvatarPhoto: (() -> Void)? = nil,
+        onTakeAvatarPhoto: (() -> Void)? = nil,
+        @ViewBuilder summary: () -> Summary
+    ) {
+        self.profile = profile
+        self.isUploadingAvatar = isUploadingAvatar
+        self.isAvatarMenuPresented = isAvatarMenuPresented
+        self.onChooseAvatarPhoto = onChooseAvatarPhoto
+        self.onTakeAvatarPhoto = onTakeAvatarPhoto
+        self.summary = AnyView(summary())
+    }
 
     var body: some View {
-        VStack(spacing: 12) {
-            if let isAvatarMenuPresented {
-                Button {
-                    isAvatarMenuPresented.wrappedValue = true
-                } label: {
-                    ZStack(alignment: .bottomTrailing) {
-                        FriendAvatarView(user: profile, size: 104)
-
-                        ZStack {
-                            Circle()
-                                .fill(Color(red: 0.14, green: 0.14, blue: 0.16))
-                                .shadow(color: .black.opacity(0.34), radius: 8, x: 0, y: 4)
-
-                            if isUploadingAvatar {
-                                ProgressView()
-                                    .scaleEffect(0.72)
-                                    .tint(.white)
-                            } else {
-                                Image(systemName: "camera.fill")
-                                    .font(.system(size: 14, weight: .bold))
-                                    .foregroundStyle(.white)
-                            }
-                        }
-                        .frame(width: 34, height: 34)
-                        .overlay(
-                            Circle()
-                                .stroke(ProfileTheme.background, lineWidth: 3)
-                        )
-                        .offset(x: 2, y: 2)
-                    }
-                }
-                .buttonStyle(.plain)
-                .disabled(isUploadingAvatar)
-                .accessibilityLabel("Edit profile picture")
-                .popover(
-                    isPresented: isAvatarMenuPresented,
-                    attachmentAnchor: .rect(.bounds),
-                    arrowEdge: .top
-                ) {
-                    ProfileAvatarActionPopover(
-                        canShowCamera: UIImagePickerController.isSourceTypeAvailable(.camera),
-                        onChoosePhoto: {
-                            onChooseAvatarPhoto?()
-                        },
-                        onTakePhoto: {
-                            onTakeAvatarPhoto?()
-                        }
-                    )
-                    .presentationCompactAdaptation(.popover)
-                }
-            } else {
-                FriendAvatarView(user: profile, size: 104)
-            }
+        HStack(alignment: .bottom, spacing: 20) {
+            avatar
 
             if let profile {
-                VStack(spacing: 3) {
-                    Text(profile.name)
-                        .font(.system(size: 22, weight: .bold))
-                        .foregroundStyle(.white)
-                        .lineLimit(3)
-                        .minimumScaleFactor(0.76)
-                        .fixedSize(horizontal: false, vertical: true)
-                        .multilineTextAlignment(.center)
+                VStack(alignment: .leading, spacing: 7) {
+                    VStack(alignment: .leading, spacing: 2) {
+                        Text(profile.name)
+                            .font(.system(size: 17, weight: .bold))
+                            .foregroundStyle(.white)
+                            .lineLimit(2)
+                            .minimumScaleFactor(0.76)
 
-                    Text(profile.usernameText)
-                        .font(.system(size: 15, weight: .medium))
-                        .foregroundStyle(.white.opacity(0.56))
-                        .lineLimit(2)
-                        .minimumScaleFactor(0.78)
-                        .fixedSize(horizontal: false, vertical: true)
+                        if let locationText = profile.locationText {
+                            Text(locationText)
+                                .font(.system(size: 12, weight: .medium))
+                                .lineLimit(1)
+                                .foregroundStyle(.white.opacity(0.58))
+                        }
+                    }
+
+                    summary
                 }
+                .frame(maxWidth: .infinity, minHeight: 104, alignment: .bottomLeading)
             }
         }
-        .frame(maxWidth: .infinity)
+        .frame(maxWidth: .infinity, alignment: .leading)
+    }
+
+    @ViewBuilder
+    private var avatar: some View {
+        if let isAvatarMenuPresented {
+            Button {
+                isAvatarMenuPresented.wrappedValue = true
+            } label: {
+                ZStack(alignment: .bottomTrailing) {
+                    FriendAvatarView(user: profile, size: 104)
+
+                    ZStack {
+                        Circle()
+                            .fill(Color(red: 0.14, green: 0.14, blue: 0.16))
+                            .shadow(color: .black.opacity(0.34), radius: 8, x: 0, y: 4)
+
+                        if isUploadingAvatar {
+                            ProgressView()
+                                .scaleEffect(0.72)
+                                .tint(.white)
+                        } else {
+                            Image(systemName: "camera.fill")
+                                .font(.system(size: 14, weight: .bold))
+                                .foregroundStyle(.white)
+                        }
+                    }
+                    .frame(width: 34, height: 34)
+                    .overlay(
+                        Circle()
+                            .stroke(ProfileTheme.background, lineWidth: 3)
+                    )
+                    .offset(x: 2, y: 2)
+                }
+            }
+            .buttonStyle(.plain)
+            .disabled(isUploadingAvatar)
+            .accessibilityLabel("Edit profile picture")
+            .popover(
+                isPresented: isAvatarMenuPresented,
+                attachmentAnchor: .rect(.bounds),
+                arrowEdge: .top
+            ) {
+                ProfileAvatarActionPopover(
+                    canShowCamera: UIImagePickerController.isSourceTypeAvailable(.camera),
+                    onChoosePhoto: {
+                        onChooseAvatarPhoto?()
+                    },
+                    onTakePhoto: {
+                        onTakeAvatarPhoto?()
+                    }
+                )
+                .presentationCompactAdaptation(.popover)
+            }
+        } else {
+            FriendAvatarView(user: profile, size: 104)
+        }
     }
 }
 
@@ -1654,19 +1886,8 @@ private struct RelationshipSummaryRow: View {
     let onAcceptFriendRequest: (FriendUserSummary) async -> Bool
     let onDeclineFriendRequest: (FriendUserSummary) async -> Bool
 
-    private var locationText: String? {
-        response.profile?.locationText
-    }
-
     var body: some View {
-        HStack(spacing: 16) {
-            if let locationText {
-                Text(locationText)
-                    .font(.system(size: 13, weight: .medium))
-                    .foregroundStyle(.white.opacity(0.58))
-                    .lineLimit(1)
-            }
-
+        HStack(spacing: 0) {
             NavigationLink {
                 MyFriendsView(
                     response: response,
@@ -1709,7 +1930,7 @@ private struct RelationshipSummaryRow: View {
             }
             .buttonStyle(.plain)
         }
-        .frame(maxWidth: .infinity, alignment: .center)
+        .frame(maxWidth: .infinity)
     }
 }
 
@@ -1730,7 +1951,7 @@ private struct MyFriendsView: View {
     var body: some View {
         RelationshipListScreen {
             VStack(alignment: .leading, spacing: 18) {
-                VStack(alignment: .leading, spacing: 14) {
+                VStack(alignment: .leading, spacing: 7) {
                     RelationshipSectionHeader(title: "Partner")
 
                     PartnerManagementCard(
@@ -1746,7 +1967,7 @@ private struct MyFriendsView: View {
                     )
                 }
 
-                VStack(alignment: .leading, spacing: 14) {
+                VStack(alignment: .leading, spacing: 7) {
                     RelationshipSectionHeader(title: "My Friends")
 
                     FriendsListViewContent(
@@ -1824,35 +2045,32 @@ private struct PartnerManagementCard: View {
                 .padding(.vertical, 8)
             }
         }
-        .padding(.horizontal, 16)
-        .padding(.vertical, 8)
         .frame(maxWidth: .infinity, alignment: .leading)
-        .background(ProfileTheme.cardBackground, in: RoundedRectangle(cornerRadius: 18, style: .continuous))
-        .overlay(
-            RoundedRectangle(cornerRadius: 18, style: .continuous)
-                .stroke(.white.opacity(0.08), lineWidth: 1)
-        )
     }
 
     @ViewBuilder
     private func partnerAvatarRow(_ partner: MobilePartnerUser, trailing: AnyView? = nil) -> some View {
-        NavigationLink {
-            UserProfileView(userID: partner.id)
-        } label: {
-            UserListRowView(
-                imageURL: partner.avatarImageURL,
-                name: [partner.firstName, partner.lastName]
-                    .compactMap { $0 }
-                    .joined(separator: " ")
-                    .trimmingCharacters(in: .whitespacesAndNewlines)
-                    .ifEmpty(partner.username),
-                subtitle: "@\(partner.username)",
-                identityKey: partner.id
-            ) {
+        HStack(spacing: 8) {
+            NavigationLink {
+                UserProfileView(userID: partner.id)
+            } label: {
+                CompactUserListRowView(
+                    imageURL: partner.avatarImageURL,
+                    name: [partner.firstName, partner.lastName]
+                        .compactMap { $0 }
+                        .joined(separator: " ")
+                        .trimmingCharacters(in: .whitespacesAndNewlines)
+                        .ifEmpty(partner.username),
+                    subtitle: "@\(partner.username)",
+                    identityKey: partner.id
+                )
+            }
+            .buttonStyle(.plain)
+
+            if let trailing {
                 trailing
             }
         }
-        .buttonStyle(.plain)
     }
 
     @ViewBuilder
@@ -2007,27 +2225,27 @@ private struct PartnerPickerSheet: View {
 private struct UserRelationshipSummaryRow: View {
     let response: UserProfileResponse
 
-    private var locationText: String? {
-        response.profile?.locationText
-    }
-
     var body: some View {
-        HStack(spacing: 16) {
-            if let locationText {
-                Text(locationText)
-                    .font(.system(size: 13, weight: .medium))
-                    .foregroundStyle(.white.opacity(0.58))
-                    .lineLimit(1)
-            }
-
+        HStack(spacing: 0) {
             NavigationLink {
                 FriendsListView(title: "Friends", friends: response.friends)
             } label: {
                 RelationshipSummaryLink(count: response.friendCount, label: "Friends")
             }
             .buttonStyle(.plain)
+
+            NavigationLink {
+                FollowingPlacesView(places: response.followedPlaces ?? [])
+            } label: {
+                RelationshipSummaryLink(count: response.followingCount ?? 0, label: "Following")
+            }
+            .buttonStyle(.plain)
+
+            RelationshipSummaryLink(count: 0, label: "Requests")
+                .hidden()
+                .accessibilityHidden(true)
         }
-        .frame(maxWidth: .infinity, alignment: .center)
+        .frame(maxWidth: .infinity)
     }
 }
 
@@ -2037,23 +2255,26 @@ private struct RelationshipSummaryLink: View {
     var showsIndicator = false
 
     var body: some View {
-        HStack(spacing: 4) {
-            (
+        VStack(alignment: .leading, spacing: 3) {
+            HStack(spacing: 4) {
                 Text("\(count)")
-                    .foregroundColor(.white)
-                    .fontWeight(.medium)
-                +
-                Text(" \(label)")
-                    .foregroundColor(.white.opacity(0.58))
-            )
-            .font(.system(size: 13, weight: .regular))
+                    .font(.system(size: 16, weight: .semibold))
+                    .foregroundStyle(.white)
 
-            if showsIndicator {
-                Circle()
-                    .fill(.red)
-                    .frame(width: 6, height: 6)
+                if showsIndicator {
+                    Circle()
+                        .fill(.red)
+                        .frame(width: 6, height: 6)
+                }
             }
+
+            Text(label)
+                .font(.system(size: 11, weight: .medium))
+                .foregroundStyle(.white.opacity(0.58))
+                .lineLimit(1)
+                .minimumScaleFactor(0.78)
         }
+        .frame(maxWidth: .infinity, alignment: .leading)
     }
 }
 
@@ -2089,16 +2310,7 @@ private struct FollowingPlacesView: View {
                     message: "No followed places yet"
                 )
             } else {
-                VStack(spacing: 12) {
-                    ForEach(places, id: \.listRowID) { place in
-                        NavigationLink {
-                            PlaceDetailView(place: place)
-                        } label: {
-                            PlaceRowView(place: place)
-                        }
-                        .buttonStyle(.plain)
-                    }
-                }
+                CompactPlaceListView(places: places)
             }
         }
     }
@@ -2115,24 +2327,17 @@ private struct FriendsListViewContent: View {
                 message: "No friends yet"
             )
         } else {
-                VStack(spacing: 0) {
-                    ForEach(Array(friends.enumerated()), id: \.element.id) { _, friend in
-                    HStack(spacing: 12) {
+            VStack(spacing: 2) {
+                ForEach(friends) { friend in
+                    HStack(spacing: 8) {
                         NavigationLink {
                             UserProfileView(userID: friend.id)
                         } label: {
-                            UserListRowView(
-                                imageURL: friend.avatarImageURL,
-                                name: friend.name,
-                                subtitle: friend.usernameText,
-                                identityKey: friend.id
-                            )
-                            .frame(maxWidth: .infinity, alignment: .leading)
-                            .contentShape(Rectangle())
+                            friendRow(friend)
                         }
                         .buttonStyle(.plain)
 
-                        if let onRemoveFriend, friend.friendshipID != nil {
+                        if let onRemoveFriend {
                             Menu {
                                 Button("Remove", role: .destructive) {
                                     onRemoveFriend(friend)
@@ -2146,26 +2351,21 @@ private struct FriendsListViewContent: View {
                             }
                         }
                     }
-
-                        if friend.id != friends.last?.id {
-                            Divider()
-                                .overlay(.white.opacity(0.08))
-                                .padding(.leading, 62)
-                        }
-                    }
                 }
-                .padding(.horizontal, 16)
-                .padding(.vertical, 8)
-                .frame(maxWidth: .infinity, alignment: .leading)
-                .background(
-                    RoundedRectangle(cornerRadius: 18, style: .continuous)
-                        .fill(ProfileTheme.cardBackground)
-                )
-                .overlay(
-                    RoundedRectangle(cornerRadius: 18, style: .continuous)
-                        .stroke(.white.opacity(0.08), lineWidth: 1)
-                )
             }
+            .frame(maxWidth: .infinity, alignment: .leading)
+        }
+    }
+
+    private func friendRow(_ friend: FriendUserSummary) -> some View {
+        CompactUserListRowView(
+            imageURL: friend.avatarImageURL,
+            name: friend.name,
+            subtitle: friend.usernameText,
+            identityKey: friend.id
+        )
+        .frame(maxWidth: .infinity, alignment: .leading)
+        .contentShape(Rectangle())
     }
 }
 
@@ -2200,62 +2400,64 @@ private struct FriendRequestsView: View {
                 if receivedRequests.isEmpty {
                     EmptyRequestPlaceholder(message: "No pending friend requests")
                 } else {
-                    VStack(spacing: 12) {
+                    VStack(spacing: 2) {
                         ForEach(receivedRequests) { request in
-                            RelationshipCard(horizontalPadding: 9, verticalPadding: 9) {
-                                HStack(spacing: 12) {
+                            HStack(spacing: 8) {
+                                Button {
+                                    selectedUserProfile = RequestSelectedUserProfile(id: request.id)
+                                } label: {
+                                    CompactUserListRowView(
+                                        imageURL: request.avatarImageURL,
+                                        name: request.name,
+                                        subtitle: request.usernameText,
+                                        identityKey: request.id
+                                    )
+                                    .frame(maxWidth: .infinity, alignment: .leading)
+                                    .contentShape(Rectangle())
+                                }
+                                .buttonStyle(.plain)
+                                .frame(maxWidth: .infinity, alignment: .leading)
+
+                                HStack(spacing: 8) {
                                     Button {
-                                        selectedUserProfile = RequestSelectedUserProfile(id: request.id)
+                                        pendingDeleteRequest = request
                                     } label: {
-                                        UserListRowView(
-                                            imageURL: request.avatarImageURL,
-                                            name: request.name,
-                                            subtitle: request.usernameText,
-                                            identityKey: request.id,
-                                            avatarSize: 42,
-                                            verticalPadding: 0
-                                        )
-                                        .frame(maxWidth: .infinity, alignment: .leading)
-                                        .contentShape(Rectangle())
+                                        Text("Decline")
+                                            .font(.system(size: 12, weight: .semibold))
+                                            .foregroundStyle(.white.opacity(0.82))
+                                            .padding(.horizontal, 11)
+                                            .frame(height: 34)
+                                            .background(
+                                                RoundedRectangle(cornerRadius: 10, style: .continuous)
+                                                    .fill(Color.white.opacity(0.10))
+                                            )
                                     }
                                     .buttonStyle(.plain)
-                                    .frame(maxWidth: .infinity, alignment: .leading)
+                                    .disabled(activeRequestID != nil)
 
-                                    HStack(spacing: 8) {
-                                        Button {
-                                            pendingDeleteRequest = request
-                                        } label: {
-                                            Text("Delete")
-                                                .font(.system(size: 13, weight: .bold))
-                                                .foregroundStyle(.white.opacity(0.82))
-                                                .padding(.horizontal, 12)
-                                                .frame(height: 36)
-                                                .background(Capsule().fill(Color.white.opacity(0.10)))
-                                        }
-                                        .buttonStyle(.plain)
-                                        .disabled(activeRequestID != nil)
-
-                                        Button {
-                                            submit(.accept, for: request)
-                                        } label: {
-                                            Text("Confirm")
-                                                .font(.system(size: 13, weight: .bold))
-                                                .foregroundStyle(.white)
-                                                .padding(.horizontal, 13)
-                                                .frame(height: 36)
-                                                .background(Capsule().fill(AppTheme.accentBlue))
-                                        }
-                                        .buttonStyle(.plain)
-                                        .disabled(activeRequestID != nil)
+                                    Button {
+                                        submit(.accept, for: request)
+                                    } label: {
+                                        Text("Accept")
+                                            .font(.system(size: 12, weight: .semibold))
+                                            .foregroundStyle(.black)
+                                            .padding(.horizontal, 12)
+                                            .frame(height: 34)
+                                            .background(
+                                                RoundedRectangle(cornerRadius: 10, style: .continuous)
+                                                    .fill(AppTheme.accentBlue)
+                                            )
                                     }
-                                    .opacity(activeRequestID != nil ? 0.5 : 1)
+                                    .buttonStyle(.plain)
+                                    .disabled(activeRequestID != nil)
                                 }
+                                .opacity(activeRequestID != nil ? 0.5 : 1)
                             }
                         }
                     }
                 }
 
-                VStack(alignment: .leading, spacing: 12) {
+                VStack(alignment: .leading, spacing: 7) {
                     Text("Sent Requests")
                         .font(.system(size: 20, weight: .bold))
                         .foregroundStyle(.white)
@@ -2263,28 +2465,22 @@ private struct FriendRequestsView: View {
                     if sentRequests.isEmpty {
                         EmptyRequestPlaceholder(message: "No sent requests")
                     } else {
-                        VStack(spacing: 12) {
+                        VStack(spacing: 2) {
                             ForEach(sentRequests) { request in
-                                RelationshipCard(horizontalPadding: 9, verticalPadding: 9) {
-                                    Button {
-                                        selectedUserProfile = RequestSelectedUserProfile(id: request.id)
-                                    } label: {
-                                        UserListRowView(
-                                            imageURL: request.avatarImageURL,
-                                            name: request.name,
-                                            subtitle: request.usernameText,
-                                            identityKey: request.id,
-                                            avatarSize: 42,
-                                            verticalPadding: 0
-                                        ) {
-                                            PendingRequestBadge()
-                                        }
-                                        .frame(maxWidth: .infinity, alignment: .leading)
-                                        .contentShape(Rectangle())
-                                    }
-                                    .buttonStyle(.plain)
+                                Button {
+                                    selectedUserProfile = RequestSelectedUserProfile(id: request.id)
+                                } label: {
+                                    CompactUserListRowView(
+                                        imageURL: request.avatarImageURL,
+                                        name: request.name,
+                                        subtitle: request.usernameText,
+                                        identityKey: request.id
+                                    )
                                     .frame(maxWidth: .infinity, alignment: .leading)
+                                    .contentShape(Rectangle())
                                 }
+                                .buttonStyle(.plain)
+                                .frame(maxWidth: .infinity, alignment: .leading)
                             }
                         }
                     }
@@ -2297,9 +2493,9 @@ private struct FriendRequestsView: View {
         }
         .alert(item: $pendingDeleteRequest) { request in
             Alert(
-                title: Text("Delete friend request?"),
-                message: Text("Delete the friend request from \(request.name)?"),
-                primaryButton: .destructive(Text("Delete")) {
+                title: Text("Decline friend request?"),
+                message: Text("Decline the friend request from \(request.name)?"),
+                primaryButton: .destructive(Text("Decline")) {
                     submit(.decline, for: request)
                 },
                 secondaryButton: .cancel()
@@ -2418,9 +2614,9 @@ private struct FriendRequestConfirmation: Identifiable, Equatable {
     var title: String {
         switch response {
         case .accept:
-            return "Confirmed \(firstName)"
+            return "Accepted \(firstName)"
         case .decline:
-            return "Deleted \(firstName)'s request"
+            return "Declined \(firstName)'s request"
         }
     }
 
@@ -2456,20 +2652,6 @@ private struct FriendRequestConfirmationToast: View {
         .profileLiquidGlass(in: Capsule())
         .accessibilityElement(children: .ignore)
         .accessibilityLabel(confirmation.title)
-    }
-}
-
-private struct PendingRequestBadge: View {
-    var body: some View {
-        Text("Pending")
-            .font(.system(size: 12, weight: .bold))
-            .foregroundStyle(.white)
-            .padding(.horizontal, 14)
-            .frame(height: 34)
-            .background(
-                Capsule()
-                    .strokeBorder(.white.opacity(0.10), lineWidth: 1)
-            )
     }
 }
 
@@ -2889,9 +3071,20 @@ private extension String {
 private extension View {
     func profileActionButtonStyle(
         kind: ProfileActionButtonKind,
-        isDisabled: Bool = false
+        isDisabled: Bool = false,
+        fillsAvailableWidth: Bool = false,
+        fontWeight: Font.Weight = .bold,
+        cornerRadius: CGFloat = 20
     ) -> some View {
-        modifier(ProfileActionButtonModifier(kind: kind, isDisabled: isDisabled))
+        modifier(
+            ProfileActionButtonModifier(
+                kind: kind,
+                isDisabled: isDisabled,
+                fillsAvailableWidth: fillsAvailableWidth,
+                fontWeight: fontWeight,
+                cornerRadius: cornerRadius
+            )
+        )
     }
 
     @ViewBuilder
@@ -3714,13 +3907,16 @@ private struct MetroAreaCreationView: View {
 private struct ProfileActionButtonModifier: ViewModifier {
     let kind: ProfileActionButtonKind
     let isDisabled: Bool
+    let fillsAvailableWidth: Bool
+    let fontWeight: Font.Weight
+    let cornerRadius: CGFloat
 
     private var foregroundColor: Color {
         switch kind {
         case .primary:
             return .black
         case .accent:
-            return .white
+            return .black
         case .secondary:
             return .white
         case .destructive:
@@ -3741,16 +3937,17 @@ private struct ProfileActionButtonModifier: ViewModifier {
 
     func body(content: Content) -> some View {
         content
-            .font(.system(size: 14, weight: .bold))
+            .font(.system(size: 14, weight: fontWeight))
             .foregroundStyle(foregroundColor.opacity(isDisabled ? 0.5 : 1))
             .padding(.horizontal, 15)
+            .frame(maxWidth: fillsAvailableWidth ? .infinity : nil)
             .frame(height: 40)
             .background(
-                Capsule()
+                RoundedRectangle(cornerRadius: cornerRadius, style: .continuous)
                     .fill(backgroundColor.opacity(isDisabled ? 0.55 : 1))
             )
             .overlay(
-                Capsule()
+                RoundedRectangle(cornerRadius: cornerRadius, style: .continuous)
                     .strokeBorder(.white.opacity(kind == .primary || kind == .accent ? 0 : 0.08), lineWidth: 1)
             )
     }

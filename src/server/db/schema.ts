@@ -183,6 +183,7 @@ export const users = pgTable(
 export const usersRelations = relations(users, ({ many }) => ({
   placeMembers: many(placeMembers),
   placeFollows: many(placeFollows),
+  placeHomeHides: many(placeHomeHides),
   rsvps: many(eventRsvps),
   eventSeries: many(eventSeries),
   sentFriendRequests: many(userFriends, { relationName: "sentRequests" }),
@@ -473,6 +474,7 @@ export const placesRelations = relations(places, ({ many }) => ({
     relationName: "organizerEventSeries",
   }),
   follows: many(placeFollows),
+  homeHides: many(placeHomeHides),
   categoryLinks: many(placeCategories),
   scraperConfigs: many(scrapers),
   scraperLogs: many(scraperLogs),
@@ -659,6 +661,45 @@ export const placeFollowsRelations = relations(placeFollows, ({ one }) => ({
     references: [places.id],
   }),
 }));
+
+// ============================================================================
+// PLACE HOME HIDES TABLE
+// ============================================================================
+export const placeHomeHides = pgTable(
+  "place_home_hides",
+  {
+    id: uuid("id").defaultRandom().primaryKey(),
+    userId: text("user_id")
+      .notNull()
+      .references(() => users.id, { onDelete: "cascade" }),
+    placeId: uuid("place_id")
+      .notNull()
+      .references(() => places.id, { onDelete: "cascade" }),
+    createdAt: timestamp("created_at").defaultNow().notNull(),
+  },
+  (table) => ({
+    userPlaceIdx: uniqueIndex("place_home_hides_user_place_idx").on(
+      table.userId,
+      table.placeId
+    ),
+    userIdx: index("place_home_hides_user_idx").on(table.userId),
+    placeIdx: index("place_home_hides_place_idx").on(table.placeId),
+  })
+);
+
+export const placeHomeHidesRelations = relations(
+  placeHomeHides,
+  ({ one }) => ({
+    user: one(users, {
+      fields: [placeHomeHides.userId],
+      references: [users.id],
+    }),
+    place: one(places, {
+      fields: [placeHomeHides.placeId],
+      references: [places.id],
+    }),
+  })
+);
 
 // ============================================================================
 // EVENT SERIES TABLE

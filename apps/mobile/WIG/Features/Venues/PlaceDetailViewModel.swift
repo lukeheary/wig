@@ -11,6 +11,8 @@ final class PlaceDetailViewModel: ObservableObject {
 
     @Published private(set) var state: State = .idle
     @Published private(set) var isUpdatingFollow = false
+    @Published private(set) var isUpdatingHomeVisibility = false
+    @Published private(set) var homeVisibilityErrorMessage: String?
 
     private static var cachedDetails: [String: PlaceDetail] = [:]
     private static var inFlightLoads: [String: Task<PlaceDetail, Error>] = [:]
@@ -29,8 +31,18 @@ final class PlaceDetailViewModel: ObservableObject {
         cachedDetails[detail.slug] = detail
     }
 
-    func load(slug: String, using apiClient: APIClient, forceRefresh: Bool = false) async {
-        if !forceRefresh, let cachedDetail = Self.cachedDetail(for: slug) {
+    func load(
+        slug: String,
+        using apiClient: APIClient,
+        forceRefresh: Bool = false,
+        initialFollowState: Bool? = nil
+    ) async {
+        if !forceRefresh, var cachedDetail = Self.cachedDetail(for: slug) {
+            if let initialFollowState {
+                cachedDetail.isFollowed = initialFollowState
+                Self.seedCache(with: cachedDetail)
+            }
+
             state = .loaded(cachedDetail)
         } else {
             state = .loading
@@ -97,5 +109,51 @@ final class PlaceDetailViewModel: ObservableObject {
         }
 
         isUpdatingFollow = false
+    }
+
+    func setHiddenFromHome(
+        _ isHiddenFromHome: Bool,
+        slug: String,
+        using apiClient: APIClient
+    ) async {
+        guard case .loaded(var detail) = state else {
+            return
+        }
+
+        let previousDetail = detail
+        homeVisibilityErrorMessage = nil
+        detail.isHiddenFromHome = isHiddenFromHome
+        state = .loaded(detail)
+        isUpdatingHomeVisibility = true
+        defer { isUpdatingHomeVisibility = false }
+
+        do {
+            let visibilityState: PlaceHomeVisibilityState
+            if isHiddenFromHome {
+                visibilityState = try await apiClient.send(
+                    APIClient.hideMobilePlaceFromHome(slug: slug)
+                )
+            } else {
+                visibilityState = try await apiClient.send(
+                    APIClient.showMobilePlaceOnHome(slug: slug)
+                )
+            }
+
+            detail.isHiddenFromHome = visibilityState.isHiddenFromHome
+            Self.seedCache(with: detail)
+            state = .loaded(detail)
+            EventFeedViewModel.invalidateSharedCache()
+            NotificationCenter.default.post(
+                name: .homeFeedVisibilityDidChange,
+                object: detail.id
+            )
+        } catch {
+            state = .loaded(previousDetail)
+            homeVisibilityErrorMessage = error.localizedDescription
+        }
+    }
+
+    func clearHomeVisibilityError() {
+        homeVisibilityErrorMessage = nil
     }
 }

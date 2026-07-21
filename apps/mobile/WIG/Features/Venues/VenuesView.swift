@@ -1,5 +1,6 @@
 import CoreImage
 import CoreImage.CIFilterBuiltins
+import ClerkKit
 import SwiftUI
 import UIKit
 
@@ -61,7 +62,7 @@ struct VenuesView: View {
                 LazyVStack(alignment: .leading, spacing: 12) {
                     placesHeader(locationName: selectedLocationName)
 
-                    NativeLoadingView(title: "Loading venues…")
+                    NativeLoadingView(title: "Loading places…")
                         .frame(minHeight: 360)
                 }
                 .padding(.horizontal, 16)
@@ -102,12 +103,13 @@ struct VenuesView: View {
                 .foregroundStyle(.white)
                 .background(venuesBackground)
             } else {
-                ScrollView {
-                    VStack(alignment: .leading, spacing: 12) {
-                        placesHeaderMenu(for: response)
-                        let sections = groupedPlaces(in: response)
+                let places = filteredPlaces(in: response)
 
-                        if sections.isEmpty {
+                ScrollView {
+                    VStack(alignment: .leading, spacing: 4) {
+                        placesHeaderMenu(for: response)
+
+                        if places.isEmpty {
                             ContentUnavailableView {
                                 Label("No Places Found", systemImage: "building.2")
                             } description: {
@@ -117,31 +119,7 @@ struct VenuesView: View {
                             .padding(.top, 48)
                         }
 
-                        // A plain VStack (not LazyVStack): the lazy layout was
-                        // estimating row positions that drifted from where rows
-                        // actually drew, which offset each NavigationLink's tap target
-                        // onto the adjacent row. Eager layout keeps hit-testing aligned.
-                        VStack(alignment: .leading, spacing: 12) {
-                            ForEach(Array(sections.enumerated()), id: \.element.id) { index, section in
-                                VStack(alignment: .leading, spacing: 12) {
-                                    Text(section.title)
-                                        .font(.system(size: 16, weight: .medium))
-                                        .foregroundStyle(.white.opacity(0.42))
-                                        .padding(.horizontal, 2)
-
-                                    ForEach(section.places, id: \.listRowID) { place in
-                                        NavigationLink(value: place) {
-                                            PlaceRowView(place: place)
-                                        }
-                                        .buttonStyle(.plain)
-                                    }
-                                }
-                                // The page header already has the shared 12pt stack gap
-                                // before its first section. Keep the extra breathing room
-                                // only between later alphabetical sections.
-                                .padding(.top, index == 0 ? 0 : 6)
-                            }
-                        }
+                        CompactPlaceListView(places: places)
                     }
                     .padding(.horizontal, 16)
                     .padding(.top, 74)
@@ -313,52 +291,6 @@ struct VenuesView: View {
             .filter { seen.insert($0.listRowID).inserted }
     }
 
-    private func groupedPlaces(in response: MobilePlacesResponse) -> [PlaceListSection] {
-        Dictionary(
-            grouping: filteredPlaces(in: response).sorted(by: sortPlaces),
-            by: sectionTitle(for:)
-        )
-        .map { key, places in
-            PlaceListSection(title: key, places: places)
-        }
-        .sorted(by: sortPlaceSections)
-    }
-
-    private func sortPlaces(_ lhs: PlaceListItem, _ rhs: PlaceListItem) -> Bool {
-        let lhsName = lhs.name.trimmingCharacters(in: .whitespacesAndNewlines)
-        let rhsName = rhs.name.trimmingCharacters(in: .whitespacesAndNewlines)
-        let comparison = lhsName.localizedCaseInsensitiveCompare(rhsName)
-
-        if comparison != .orderedSame {
-            return comparison == .orderedAscending
-        }
-
-        return lhs.listRowID < rhs.listRowID
-    }
-
-    private func sectionTitle(for place: PlaceListItem) -> String {
-        let name = place.name.trimmingCharacters(in: .whitespacesAndNewlines)
-        guard let first = name.first else {
-            return "#"
-        }
-
-        let letter = String(first).uppercased()
-        return letter.range(of: "[A-Z]", options: .regularExpression) != nil ? letter : "#"
-    }
-
-    private func sortPlaceSections(_ lhs: PlaceListSection, _ rhs: PlaceListSection) -> Bool {
-        switch (lhs.title, rhs.title) {
-        case ("#", "#"):
-            return false
-        case ("#", _):
-            return false
-        case (_, "#"):
-            return true
-        default:
-            return lhs.title.localizedCaseInsensitiveCompare(rhs.title) == .orderedAscending
-        }
-    }
-
     private func availableLocationFilters(for response: MobilePlacesResponse) -> [PlaceLocationFilter] {
         var cityFilters = response.availableCities.reduce(into: [PlaceLocationFilter]()) { filters, city in
             let filter = PlaceLocationFilter.city(city: city.city, state: city.state)
@@ -515,13 +447,6 @@ private extension PlaceLocationFilter {
             return .city(city: city, state: state)
         }
     }
-}
-
-private struct PlaceListSection: Identifiable {
-    let title: String
-    let places: [PlaceListItem]
-
-    var id: String { title }
 }
 
 private enum PlaceLocationFilter: Hashable, Identifiable {
@@ -802,11 +727,51 @@ private extension View {
     }
 }
 
+struct CompactPlaceListView: View {
+    let places: [PlaceListItem]
+
+    private var sortedPlaces: [PlaceListItem] {
+        places.sorted { lhs, rhs in
+            let lhsName = lhs.name.trimmingCharacters(in: .whitespacesAndNewlines)
+            let rhsName = rhs.name.trimmingCharacters(in: .whitespacesAndNewlines)
+            let comparison = lhsName.localizedCaseInsensitiveCompare(rhsName)
+
+            if comparison != .orderedSame {
+                return comparison == .orderedAscending
+            }
+
+            return lhs.listRowID < rhs.listRowID
+        }
+    }
+
+    var body: some View {
+        // Keep eager layout here: LazyVStack previously caused NavigationLink hit
+        // targets to drift onto adjacent rows as their final heights resolved.
+        VStack(alignment: .leading, spacing: 0) {
+            ForEach(sortedPlaces, id: \.listRowID) { place in
+                NavigationLink {
+                    PlaceDetailView(place: place)
+                } label: {
+                    PlaceRowView(place: place, style: .plain)
+                }
+                .buttonStyle(.plain)
+            }
+        }
+    }
+}
+
 struct PlaceRowView: View {
+    enum Style: Equatable {
+        case card
+        case plain
+    }
+
     let place: PlaceListItem
+    let style: Style
+
+    @Environment(Clerk.self) private var clerk
 
     private let cardCornerRadius: CGFloat = 18
-    private let logoSide: CGFloat = 84
     private let fallbackTint = Color(red: 0.11, green: 0.11, blue: 0.13)
 
     @State private var loadedLogo: UIImage?
@@ -814,8 +779,78 @@ struct PlaceRowView: View {
     @State private var tint: Color?
 
     private var tintColor: Color { tint ?? fallbackTint }
+    private var logoSide: CGFloat { style == .plain ? 60 : 84 }
+    private var rowHeight: CGFloat { style == .plain ? 76 : 102 }
+
+    init(place: PlaceListItem, style: Style = .card) {
+        self.place = place
+        self.style = style
+    }
 
     var body: some View {
+        Group {
+            if style == .plain {
+                rowContent
+                    .contentShape(Rectangle())
+            } else {
+                rowContent
+                    .background { backdrop }
+                    .clipShape(RoundedRectangle(cornerRadius: cardCornerRadius, style: .continuous))
+                    .overlay {
+                        RoundedRectangle(cornerRadius: cardCornerRadius, style: .continuous)
+                            .strokeBorder(Color.white.opacity(0.08), lineWidth: 1)
+                    }
+                    .contentShape(RoundedRectangle(cornerRadius: cardCornerRadius, style: .continuous))
+            }
+        }
+        .task(id: place.listRowID) {
+            await loadLogo()
+        }
+    }
+
+    @ViewBuilder
+    private var rowContent: some View {
+        if style == .plain {
+            plainRowContent
+        } else {
+            cardRowContent
+        }
+    }
+
+    private var plainRowContent: some View {
+        HStack(alignment: .center, spacing: 12) {
+            placeLogo
+
+            VStack(alignment: .leading, spacing: 3) {
+                Text(place.name)
+                    .font(.system(size: 14, weight: .medium))
+                    .foregroundStyle(.white)
+                    .lineLimit(2)
+                    .minimumScaleFactor(0.88)
+
+                Text(plainRowDetailText)
+                    .font(.system(size: 10, weight: .medium))
+                    .foregroundStyle(.white.opacity(0.58))
+                    .lineLimit(1)
+            }
+            .frame(maxWidth: .infinity, alignment: .leading)
+        }
+        .padding(.horizontal, 2)
+        .padding(.vertical, 8)
+        .frame(height: rowHeight)
+    }
+
+    private var plainRowDetailText: String {
+        let count = place.upcomingEventCount
+        let eventDetail = count > 0
+            ? " • \(count) upcoming event\(count == 1 ? "" : "s")"
+            : ""
+        let followingDetail = clerk.user != nil && place.isFollowed ? " • Following" : ""
+
+        return "\(place.type.displayName)\(eventDetail)\(followingDetail)"
+    }
+
+    private var cardRowContent: some View {
         ZStack(alignment: .bottomTrailing) {
             HStack(alignment: .center, spacing: 12) {
                 placeLogo
@@ -844,7 +879,7 @@ struct PlaceRowView: View {
                 .frame(maxWidth: .infinity, alignment: .leading)
             }
             .padding(9)
-            .frame(height: 102, alignment: .topLeading)
+            .frame(height: rowHeight, alignment: .topLeading)
 
             Text(place.type.displayName)
                 .font(.system(size: 11, weight: .semibold))
@@ -852,17 +887,7 @@ struct PlaceRowView: View {
                 .padding(.trailing, 9)
                 .padding(.bottom, 9)
         }
-        .frame(height: 102)
-        .background { backdrop }
-        .clipShape(RoundedRectangle(cornerRadius: cardCornerRadius, style: .continuous))
-        .overlay {
-            RoundedRectangle(cornerRadius: cardCornerRadius, style: .continuous)
-                .strokeBorder(Color.white.opacity(0.08), lineWidth: 1)
-        }
-        .contentShape(RoundedRectangle(cornerRadius: cardCornerRadius, style: .continuous))
-        .task(id: place.listRowID) {
-            await loadLogo()
-        }
+        .frame(height: rowHeight)
     }
 
     // Dark tint sampled from the logo, with a heavily blurred, darkened copy of the
@@ -895,12 +920,17 @@ struct PlaceRowView: View {
             }
         }
         .frame(width: logoSide, height: logoSide)
-        .clipShape(RoundedRectangle(cornerRadius: 15, style: .continuous))
+        .clipShape(RoundedRectangle(cornerRadius: style == .plain ? 12 : 15, style: .continuous))
         .overlay(
-            RoundedRectangle(cornerRadius: 15, style: .continuous)
+            RoundedRectangle(cornerRadius: style == .plain ? 12 : 15, style: .continuous)
                 .strokeBorder(Color.white.opacity(0.14), lineWidth: 1)
         )
-        .shadow(color: .black.opacity(0.28), radius: 8, x: 0, y: 4)
+        .shadow(
+            color: .black.opacity(style == .plain ? 0 : 0.28),
+            radius: style == .plain ? 0 : 8,
+            x: 0,
+            y: style == .plain ? 0 : 4
+        )
     }
 
     private var logoPlaceholder: some View {
@@ -937,6 +967,13 @@ struct PlaceRowView: View {
         }
 
         guard let image = await RemoteImagePipeline.shared.image(for: logoURL) else {
+            return
+        }
+
+        // Plain list rows only need the decoded logo. Skip the color sampling and
+        // blur work that is used exclusively by the card presentation.
+        if style == .plain {
+            loadedLogo = image
             return
         }
 

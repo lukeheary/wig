@@ -19,7 +19,7 @@ import {
   resolveMobileEventEditPermissions,
 } from "@/app/api/mobile/event-edit-permissions";
 import { eventTimeZone } from "@/lib/utils";
-import { mapEventCategoryData } from "@/server/utils/categories";
+import { mapEventCategoryData, mapPlaceCategoryData } from "@/server/utils/categories";
 
 const DEFAULT_MOBILE_FEED_TIME_ZONE = "America/New_York";
 const timeZoneFormatterCache = new Map<string, Intl.DateTimeFormat>();
@@ -190,6 +190,8 @@ export async function GET(_request: Request, context: RouteContext) {
       {
         profile: null,
         friendCount: 0,
+        followingCount: 0,
+        followedPlaces: [],
         friends: [],
         upcomingEvents: [],
         pastEvents: [],
@@ -226,7 +228,7 @@ export async function GET(_request: Request, context: RouteContext) {
     )
     .filter((friend): friend is NonNullable<typeof friend> => Boolean(friend));
 
-  const [upcomingRsvps, pastRsvps, followedPlaceIds, editPermissions, viewerFriendships, viewerTargetFriendship] =
+  const [upcomingRsvps, pastRsvps, targetFollowedPlaces, followedPlaceIds, editPermissions, viewerFriendships, viewerTargetFriendship] =
     await Promise.all([
       db.query.eventRsvps.findMany({
         where: and(eq(eventRsvps.userId, id), inArray(eventRsvps.status, ["going", "interested"])),
@@ -261,6 +263,21 @@ export async function GET(_request: Request, context: RouteContext) {
           },
         },
         orderBy: [desc(eventRsvps.updatedAt)],
+      }),
+      db.query.placeFollows.findMany({
+        where: eq(placeFollows.userId, id),
+        with: {
+          place: {
+            with: {
+              categoryLinks: {
+                with: {
+                  category: true,
+                },
+              },
+            },
+          },
+        },
+        orderBy: [desc(placeFollows.createdAt)],
       }),
       viewerUserId
         ? db.query.placeFollows.findMany({
@@ -479,6 +496,31 @@ export async function GET(_request: Request, context: RouteContext) {
         }
       : null,
     friendCount: friends.length,
+    followingCount: targetFollowedPlaces.length,
+    followedPlaces: targetFollowedPlaces.map(({ place }) => {
+      const mappedPlace = mapPlaceCategoryData(place);
+      const metroArea = resolveMetroArea({ city: place.city, state: place.state });
+
+      return {
+        id: mappedPlace.id,
+        type: mappedPlace.type,
+        slug: mappedPlace.slug,
+        name: mappedPlace.name,
+        logoImageUrl: mappedPlace.logoImageUrl,
+        address: mappedPlace.address,
+        city: mappedPlace.city,
+        state: mappedPlace.state,
+        website: mappedPlace.website,
+        instagram: mappedPlace.instagram,
+        metroAreaCity: metroArea?.city ?? null,
+        metroAreaState: metroArea?.state ?? null,
+        upcomingEventCount: 0,
+        updatedAt: mappedPlace.updatedAt,
+        isFollowed: followedPlaceIdSet.has(mappedPlace.id),
+        categories: mappedPlace.categories,
+        categoryLabels: mappedPlace.categoryLabels,
+      };
+    }),
     friends,
     upcomingEvents: upcomingEventsRaw.map(mapMobileEvent),
     pastEvents: pastEventsRaw.map(mapMobileEvent),

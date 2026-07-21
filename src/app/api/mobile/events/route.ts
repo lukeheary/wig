@@ -1,6 +1,17 @@
 import { auth } from "@clerk/nextjs/server";
 import { NextResponse } from "next/server";
-import { and, asc, eq, gte, inArray, isNotNull, lt, or } from "drizzle-orm";
+import {
+  and,
+  asc,
+  eq,
+  gte,
+  inArray,
+  isNotNull,
+  isNull,
+  lt,
+  notInArray,
+  or,
+} from "drizzle-orm";
 import { z } from "zod";
 import { db } from "@/server/db";
 import {
@@ -10,6 +21,7 @@ import {
   events,
   metroAreas,
   placeFollows,
+  placeHomeHides,
   userFriends,
   users,
 } from "@/server/db/schema";
@@ -130,24 +142,6 @@ function parseDateParam(value: string | null) {
   return Number.isNaN(date.getTime()) ? null : date;
 }
 
-async function currentMobileUserId() {
-  const { userId } = await auth();
-
-  if (userId) {
-    return userId;
-  }
-
-  const previewUser = await db.query.users.findFirst({
-    where: eq(users.isOnboarding, false),
-    orderBy: [asc(users.createdAt)],
-    columns: {
-      id: true,
-    },
-  });
-
-  return previewUser?.id ?? null;
-}
-
 async function currentMobileUserContext() {
   const { userId } = await auth();
 
@@ -203,37 +197,47 @@ export async function GET(request: Request) {
     : 20;
 
   const now = new Date();
-  const userId = await currentMobileUserId();
+  const { userId, isPreview } = await currentMobileUserContext();
+  const authenticatedUserId = isPreview ? null : userId;
 
-  const [currentUser, availableMetroAreas, cityCoordinates] = await Promise.all([
-    userId
-      ? db.query.users.findFirst({
-          where: eq(users.id, userId),
-          columns: {
-            city: true,
-            state: true,
-          },
+  const [currentUser, availableMetroAreas, cityCoordinates, hiddenPlaces] =
+    await Promise.all([
+      userId
+        ? db.query.users.findFirst({
+            where: eq(users.id, userId),
+            columns: {
+              city: true,
+              state: true,
+            },
+          })
+        : null,
+      db
+        .select({
+          name: metroAreas.name,
+          state: metroAreas.state,
+          latitude: metroAreas.latitude,
+          longitude: metroAreas.longitude,
+          radiusMiles: metroAreas.radiusMiles,
         })
-      : null,
-    db
-      .select({
-        name: metroAreas.name,
-        state: metroAreas.state,
-        latitude: metroAreas.latitude,
-        longitude: metroAreas.longitude,
-        radiusMiles: metroAreas.radiusMiles,
-      })
-      .from(metroAreas)
-      .orderBy(asc(metroAreas.name), asc(metroAreas.state)),
-    db
-      .select({
-        name: cities.name,
-        state: cities.state,
-        latitude: cities.latitude,
-        longitude: cities.longitude,
-      })
-      .from(cities),
-  ]);
+        .from(metroAreas)
+        .orderBy(asc(metroAreas.name), asc(metroAreas.state)),
+      db
+        .select({
+          name: cities.name,
+          state: cities.state,
+          latitude: cities.latitude,
+          longitude: cities.longitude,
+        })
+        .from(cities),
+      authenticatedUserId
+        ? db.query.placeHomeHides.findMany({
+            where: eq(placeHomeHides.userId, authenticatedUserId),
+            columns: {
+              placeId: true,
+            },
+          })
+        : [],
+    ]);
   const resolveMetroArea = createMobileMetroResolver(
     availableMetroAreas,
     cityCoordinates
@@ -260,13 +264,28 @@ export async function GET(request: Request) {
   const endDate =
     parseDateParam(searchParams.get("endDate")) ??
     new Date(startDate.getTime() + 7 * 24 * 60 * 60 * 1000);
+  const hiddenPlaceIds = hiddenPlaces.map((hiddenPlace) => hiddenPlace.placeId);
+  const visiblePlaceCondition =
+    hiddenPlaceIds.length > 0
+      ? and(
+          or(
+            isNull(events.venueId),
+            notInArray(events.venueId, hiddenPlaceIds)
+          ),
+          or(
+            isNull(events.organizerId),
+            notInArray(events.organizerId, hiddenPlaceIds)
+          )
+        )
+      : undefined;
 
   const eventList = await db.query.events.findMany({
     where: and(
       eq(events.visibility, "public"),
       eq(events.status, "active"),
       gte(events.startAt, startDate),
-      lt(events.startAt, endDate)
+      lt(events.startAt, endDate),
+      visiblePlaceCondition
     ),
     orderBy: [asc(events.startAt)],
     limit,

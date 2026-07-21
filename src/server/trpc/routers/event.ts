@@ -1934,7 +1934,7 @@ export const eventRouter = router({
           status: input.status,
           includePartner: includedPartnerInRsvp,
         };
-        void upsertRsvpActivity({
+        await upsertRsvpActivity({
           actorUserId: ctx.auth.userId,
           entityId: input.eventId,
           type: activityType,
@@ -1953,7 +1953,7 @@ export const eventRouter = router({
           );
         }
       } else if (input.status === "not_going") {
-        void upsertRsvpActivity({
+        await upsertRsvpActivity({
           actorUserId: ctx.auth.userId,
           entityId: input.eventId,
           type: "rsvp_not_going",
@@ -2014,7 +2014,7 @@ export const eventRouter = router({
       }
 
       if (existingUserRsvp) {
-        void clearRsvpActivity({
+        await clearRsvpActivity({
           actorUserId: ctx.auth.userId,
           entityId: input.eventId,
         });

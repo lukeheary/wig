@@ -26,24 +26,6 @@ import {
   INSTAGRAM_HANDLE_REGEX,
 } from "@/lib/place-identifiers";
 
-async function currentMobileUserId() {
-  const { userId } = await auth();
-
-  if (userId) {
-    return userId;
-  }
-
-  const previewUser = await db.query.users.findFirst({
-    where: eq(users.isOnboarding, false),
-    orderBy: [asc(users.createdAt)],
-    columns: {
-      id: true,
-    },
-  });
-
-  return previewUser?.id ?? null;
-}
-
 async function currentMobileUserContext() {
   const { userId } = await auth();
 
@@ -133,7 +115,8 @@ export async function GET(request: Request) {
     ? Math.min(Math.max(limitParam, 1), 200)
     : 100;
 
-  const userId = await currentMobileUserId();
+  const { userId, isPreview } = await currentMobileUserContext();
+  const authenticatedUserId = isPreview ? null : userId;
 
   const [currentUser, availableMetroAreas, cityCoordinates, placesList] =
     await Promise.all([
@@ -198,12 +181,12 @@ export async function GET(request: Request) {
 
   const placeIds = placesList.map((place) => place.id);
   const followedPlaceIds =
-    userId && placeIds.length > 0
+    authenticatedUserId && placeIds.length > 0
       ? new Set(
           (
             await db.query.placeFollows.findMany({
               where: and(
-                eq(placeFollows.userId, userId),
+                eq(placeFollows.userId, authenticatedUserId),
                 inArray(placeFollows.placeId, placeIds)
               ),
               columns: {

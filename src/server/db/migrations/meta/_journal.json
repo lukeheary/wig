@@ -325,6 +325,12 @@
       "when": 1784246400000,
       "tag": "0052_add_user_activation_tasks",
       "breakpoints": true
+    },
+    {
+      "idx": 54,
+      "when": 1784642822000,
+      "tag": "0053_add_place_home_hides",
+      "breakpoints": true
     }
   ]
 }

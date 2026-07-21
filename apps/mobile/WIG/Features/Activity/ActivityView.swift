@@ -53,9 +53,9 @@ struct ActivityView: View {
                         .padding(.leading, 16)
                         .padding(.top, 0)
                 }
-                .task {
-                    if case .idle = viewModel.state {
-                        await viewModel.load(using: apiClient)
+                .onAppear {
+                    Task {
+                        await viewModel.load(using: apiClient, forceRefresh: true)
                     }
                 }
                 .onChange(of: selectedFilter) { _, _ in
@@ -160,10 +160,9 @@ struct ActivityView: View {
                 .background(background)
             } else {
                 ScrollView {
-                    LazyVStack(alignment: .leading, spacing: 22) {
+                    LazyVStack(alignment: .leading, spacing: 7) {
                         activityHeader(response: response)
                             .padding(.horizontal, 16)
-                            .padding(.bottom, -16)
 
                         ForEach(groupedActivities(visibleActivities)) { section in
                             ActivitySectionView(
@@ -677,7 +676,7 @@ private struct ActivitySectionView: View {
     let onRespondToRequest: (ActivityFeedItem, ActivityRequestResponse) async -> Void
 
     var body: some View {
-        VStack(alignment: .leading, spacing: 16) {
+        VStack(alignment: .leading, spacing: 12) {
             ForEach(section.activities) { activity in
                 ActivityRowView(
                     activity: activity,
@@ -686,6 +685,7 @@ private struct ActivitySectionView: View {
             }
         }
         .padding(.horizontal, 16)
+        .padding(.top, 5)
     }
 }
 
@@ -705,12 +705,12 @@ private struct ActivityRowView: View {
     }()
 
     var body: some View {
-        HStack(alignment: activity.type.isRequest ? .center : .top, spacing: 12) {
+        HStack(alignment: .top, spacing: 12) {
             ActivityAvatarView(activity: activity)
-                .padding(.top, activity.type.isRequest ? 0 : 6)
 
             if activity.type.isRequest {
                 requestContent
+                    .padding(.top, 4)
             } else {
                 VStack(alignment: .leading, spacing: 4) {
                     InlineLinkedActivityText(
@@ -738,6 +738,7 @@ private struct ActivityRowView: View {
                     .foregroundStyle(.white.opacity(0.42))
                 }
                 .frame(maxWidth: .infinity, alignment: .leading)
+                .padding(.top, 4)
             }
         }
         .navigationDestination(item: $selectedVenue) { venue in
@@ -753,13 +754,10 @@ private struct ActivityRowView: View {
 
     private var requestContent: some View {
         HStack(alignment: .center, spacing: 14) {
-            VStack(alignment: .leading, spacing: 6) {
+            VStack(alignment: .leading, spacing: 4) {
                 requestText
                     .font(.system(size: 14))
                     .lineSpacing(3)
-                    .onTapGesture {
-                        selectedUserProfile = SelectedUserProfile(id: activity.actorUserID)
-                    }
 
                 Text(
                     Self.relativeFormatter
@@ -781,6 +779,14 @@ private struct ActivityRowView: View {
                         .frame(width: 32, height: 32)
                 }
                 .buttonStyle(.plain)
+            }
+        }
+        .contentShape(Rectangle())
+        .onTapGesture {
+            if activity.type.isActionableRequest && requestStore.response(for: activity.id) == nil {
+                isRequestsPagePresented = true
+            } else {
+                selectedUserProfile = SelectedUserProfile(id: activity.actorUserID)
             }
         }
     }
@@ -1135,12 +1141,12 @@ struct ActivityAvatarView: View {
             UserAvatarView(
                 imageURL: activity.actorAvatarImageURL,
                 name: activity.actorName,
-                size: 44,
+                size: 42,
                 identityKey: activity.actorUserID
             )
 
             statusBadge
-                .offset(x: 4, y: 4)
+                .offset(x: 3, y: 3)
         }
     }
 
@@ -1148,10 +1154,10 @@ struct ActivityAvatarView: View {
         ZStack {
             Circle()
                 .fill(Color(red: 0.05, green: 0.06, blue: 0.08))
-                .frame(width: 24, height: 24)
+                .frame(width: 22, height: 22)
 
             Image(systemName: badgeSystemImage)
-                .font(.system(size: 12, weight: .bold))
+                .font(.system(size: 11, weight: .bold))
                 .foregroundStyle(badgeColor)
         }
     }

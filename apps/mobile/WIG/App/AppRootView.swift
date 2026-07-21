@@ -15,12 +15,12 @@ struct AppRootView: View {
             AppTheme.background
                 .ignoresSafeArea()
 
+            AuthGate()
+
             if isShowingLaunchScreen {
                 LaunchLoadingView()
                     .transition(.opacity)
-            } else {
-                AuthGate()
-                    .transition(.opacity)
+                    .zIndex(1)
             }
         }
         .task {
@@ -76,7 +76,7 @@ extension View {
     }
 }
 
-private struct LaunchLoadingView: View {
+struct LaunchLoadingView: View {
     var body: some View {
         Image("LaunchIcon")
             .resizable()

@@ -40,9 +40,29 @@ struct FriendsFeedResponse: Decodable, Sendable {
 struct UserProfileResponse: Decodable, Sendable {
     let profile: FriendUserSummary?
     let friendCount: Int
+    let followingCount: Int?
+    let followedPlaces: [PlaceListItem]?
     let friends: [FriendUserSummary]
     let upcomingEvents: [EventFeedItem]
     let pastEvents: [EventFeedItem]
+
+    init(
+        profile: FriendUserSummary?,
+        friendCount: Int,
+        followingCount: Int? = nil,
+        followedPlaces: [PlaceListItem]? = nil,
+        friends: [FriendUserSummary],
+        upcomingEvents: [EventFeedItem],
+        pastEvents: [EventFeedItem]
+    ) {
+        self.profile = profile
+        self.friendCount = friendCount
+        self.followingCount = followingCount
+        self.followedPlaces = followedPlaces
+        self.friends = friends
+        self.upcomingEvents = upcomingEvents
+        self.pastEvents = pastEvents
+    }
 }
 
 struct FriendUserSummary: Decodable, Identifiable, Hashable, Sendable {

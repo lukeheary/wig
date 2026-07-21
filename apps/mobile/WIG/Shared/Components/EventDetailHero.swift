@@ -49,8 +49,8 @@ struct EventDetailHero<
     private let dynamicIslandClearance: CGFloat = 56
     private let headerSpacing: CGFloat = 18
     private let bottomTail: CGFloat = 8
-    private let solidTail: CGFloat = 22
-    private let fadeHeight: CGFloat = 200
+    private let solidTail: CGFloat = 0
+    private let fadeHeight: CGFloat = 240
     // Extends the tinted background above the hero so pulling / overscrolling at the
     // top reveals more of the fade instead of a hard cutoff line.
     private let overscrollExtension: CGFloat = 500
@@ -58,7 +58,7 @@ struct EventDetailHero<
     // has room to finish reaching transparent before it would otherwise be clipped at
     // the hero bounds — without this the fade cuts off mid-transition as a hard line
     // just under the RSVP button.
-    private let bottomExtension: CGFloat = 280
+    private let bottomExtension: CGFloat = 320
 
     init(
         imageURL: URL?,
@@ -180,13 +180,13 @@ struct EventDetailHero<
                 LinearGradient(
                     stops: [
                         .init(color: .white, location: 0.0),
-                        .init(color: .white.opacity(0.96), location: 0.12),
-                        .init(color: .white.opacity(0.88), location: 0.26),
-                        .init(color: .white.opacity(0.72), location: 0.42),
-                        .init(color: .white.opacity(0.52), location: 0.56),
-                        .init(color: .white.opacity(0.32), location: 0.70),
-                        .init(color: .white.opacity(0.16), location: 0.82),
-                        .init(color: .white.opacity(0.06), location: 0.92),
+                        .init(color: .white.opacity(0.88), location: 0.15),
+                        .init(color: .white.opacity(0.72), location: 0.30),
+                        .init(color: .white.opacity(0.56), location: 0.45),
+                        .init(color: .white.opacity(0.40), location: 0.60),
+                        .init(color: .white.opacity(0.26), location: 0.74),
+                        .init(color: .white.opacity(0.14), location: 0.86),
+                        .init(color: .white.opacity(0.06), location: 0.94),
                         .init(color: .clear, location: 1.0),
                     ],
                     startPoint: .top,

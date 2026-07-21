@@ -70,12 +70,8 @@ private struct ConfiguredAppRootView: View {
                         .allowsHitTesting(false)
                 }
             } else {
-                AppTheme.background
-                    .ignoresSafeArea()
-                    .overlay {
-                        ProgressView()
-                            .tint(.white)
-                    }
+                LaunchLoadingView()
+                    .background(AppTheme.background.ignoresSafeArea())
             }
         }
             .task(id: configuredPublishableKey) {

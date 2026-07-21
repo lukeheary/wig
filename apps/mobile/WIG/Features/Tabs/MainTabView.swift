@@ -301,7 +301,6 @@ struct MainTabView: View {
     private var searchHomeView: some View {
         HomeView(
             showsNativeSearch: true,
-            searchesUsersOnly: true,
             onShowActivity: {
                 showActivityOrAuth()
             },
@@ -458,12 +457,13 @@ struct MainTabView: View {
                     } label: {
                         Image(systemName: "plus")
                             .font(.system(size: 17, weight: .bold))
-                            .foregroundStyle(.primary)
+                            .foregroundStyle(.white)
                             .frame(width: floatingCreationButtonSize, height: floatingCreationButtonSize)
                             .contentShape(Circle())
                             .mainTabLiquidGlass(in: Circle())
                     }
                     .buttonStyle(.plain)
+                    .tint(.white)
                     .padding(.trailing, 16)
                     .padding(.bottom, floatingCreationButtonBottomPadding)
                 }

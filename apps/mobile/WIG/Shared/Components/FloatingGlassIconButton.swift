@@ -88,6 +88,8 @@ struct UserListRowView<Trailing: View>: View {
     var ringWidth: CGFloat = 0
     var avatarSize: CGFloat = 42
     var verticalPadding: CGFloat = 10
+    var nameFontSize: CGFloat = 15
+    var subtitleFontSize: CGFloat = 11
     @ViewBuilder let trailing: () -> Trailing
 
     init(
@@ -100,6 +102,8 @@ struct UserListRowView<Trailing: View>: View {
         ringWidth: CGFloat = 0,
         avatarSize: CGFloat = 42,
         verticalPadding: CGFloat = 10,
+        nameFontSize: CGFloat = 15,
+        subtitleFontSize: CGFloat = 11,
         @ViewBuilder trailing: @escaping () -> Trailing = { EmptyView() }
     ) {
         self.imageURL = imageURL
@@ -111,6 +115,8 @@ struct UserListRowView<Trailing: View>: View {
         self.ringWidth = ringWidth
         self.avatarSize = avatarSize
         self.verticalPadding = verticalPadding
+        self.nameFontSize = nameFontSize
+        self.subtitleFontSize = subtitleFontSize
         self.trailing = trailing
     }
 
@@ -131,13 +137,13 @@ struct UserListRowView<Trailing: View>: View {
 
             VStack(alignment: .leading, spacing: 3) {
                 Text(name)
-                    .font(.system(size: 15, weight: .medium))
+                    .font(.system(size: nameFontSize, weight: .medium))
                     .foregroundStyle(.white)
                     .lineLimit(1)
 
                 if let subtitle, !subtitle.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty {
                     Text(subtitle)
-                        .font(.system(size: 11, weight: .medium))
+                        .font(.system(size: subtitleFontSize, weight: .medium))
                         .foregroundStyle(.white.opacity(0.58))
                         .lineLimit(1)
                 }
@@ -148,6 +154,28 @@ struct UserListRowView<Trailing: View>: View {
             trailing()
         }
         .padding(.vertical, verticalPadding)
+    }
+}
+
+struct CompactUserListRowView: View {
+    let imageURL: URL?
+    let name: String
+    let subtitle: String?
+    let identityKey: String?
+
+    var body: some View {
+        UserListRowView(
+            imageURL: imageURL,
+            name: name,
+            subtitle: subtitle,
+            identityKey: identityKey,
+            avatarSize: 42,
+            verticalPadding: 5,
+            nameFontSize: 14,
+            subtitleFontSize: 10
+        ) {
+            EmptyView()
+        }
     }
 }
 

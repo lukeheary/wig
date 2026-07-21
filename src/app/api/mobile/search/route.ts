@@ -153,7 +153,11 @@ export async function GET(request: Request) {
                   lastName: true,
                   avatarImageUrl: true,
                 },
-                orderBy: [sql`random()`],
+                orderBy: [
+                  asc(users.firstName),
+                  asc(users.lastName),
+                  asc(users.username),
+                ],
                 limit: 20,
               });
             }
@@ -173,7 +177,11 @@ export async function GET(request: Request) {
               lastName: true,
               avatarImageUrl: true,
             },
-            orderBy: [sql`random()`],
+            orderBy: [
+              asc(users.firstName),
+              asc(users.lastName),
+              asc(users.username),
+            ],
             limit: 20,
           });
         })()
@@ -193,6 +201,39 @@ export async function GET(request: Request) {
         friendStatusByUserId.set(otherUserId, "pending_received");
       }
     }
+
+    const recentNonFriendUsers = recentUsers.filter(
+      (user) => friendStatusByUserId.get(user.id) !== "accepted"
+    );
+    const acceptedFriendUserIds = matchedUsers
+      .filter((friendship) => friendship.status === "accepted")
+      .map((friendship) =>
+        friendship.userId === userId
+          ? friendship.friendUserId
+          : friendship.userId
+      );
+    const remainingRecentUserSlots = Math.max(
+      20 - recentNonFriendUsers.length,
+      0
+    );
+    const recentFriendUsers =
+      !query && remainingRecentUserSlots > 0 && acceptedFriendUserIds.length > 0
+        ? await db.query.users.findMany({
+            where: and(
+              ...userBaseConditions,
+              inArray(users.id, acceptedFriendUserIds)
+            ),
+            columns: {
+              id: true,
+              username: true,
+              firstName: true,
+              lastName: true,
+              avatarImageUrl: true,
+            },
+            orderBy: [asc(users.firstName), asc(users.lastName)],
+            limit: remainingRecentUserSlots,
+          })
+        : [];
 
     const matchingPlaces = query
       ? await db.query.places.findMany({
@@ -592,8 +633,8 @@ export async function GET(request: Request) {
         avatarImageUrl: user.avatarImageUrl,
         friendStatus: friendStatusByUserId.get(user.id) ?? "none",
       })),
-      recentUsers: recentUsers
-        .filter((user) => friendStatusByUserId.get(user.id) !== "accepted")
+      recentUsers: [...recentNonFriendUsers, ...recentFriendUsers]
+        .slice(0, 20)
         .map((user) => ({
           id: user.id,
           name:

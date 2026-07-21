@@ -5,6 +5,7 @@ extension Notification.Name {
     static let mobileEventDidChange = Notification.Name("mobileEventDidChange")
     static let mobileEventDidDelete = Notification.Name("mobileEventDidDelete")
     static let mobilePlaceDidChange = Notification.Name("mobilePlaceDidChange")
+    static let homeFeedVisibilityDidChange = Notification.Name("homeFeedVisibilityDidChange")
     static let friendRequestDidChange = Notification.Name("friendRequestDidChange")
     static let activationDidChange = Notification.Name("activationDidChange")
 }
@@ -18,8 +19,14 @@ final class EventFeedViewModel: ObservableObject {
         case failed(String)
     }
 
-    private static var inFlightLoads = [Date: Task<MobileEventsResponse, Error>]()
-    private static var inFlightTokens = [Date: UUID]()
+    private struct LoadKey: Hashable {
+        let weekStart: Date
+        let cacheIdentity: String
+    }
+
+    private static var preloadedResponses = [LoadKey: MobileEventsResponse]()
+    private static var inFlightLoads = [LoadKey: Task<MobileEventsResponse, Error>]()
+    private static var inFlightTokens = [LoadKey: UUID]()
 
     @Published private(set) var state: State
     @Published private(set) var responsesByWeek = [Date: MobileEventsResponse]()
@@ -30,16 +37,53 @@ final class EventFeedViewModel: ObservableObject {
         state = .idle
     }
 
-    func load(using apiClient: APIClient, forceRefresh: Bool = false) async {
-        await load(weekStart: Self.cacheKey(for: .now), using: apiClient, forceRefresh: forceRefresh)
+    static func preload(using apiClient: APIClient, cacheIdentity: String) async {
+        let viewModel = EventFeedViewModel()
+        await viewModel.load(
+            weekStart: Self.startOfWeek(for: .now),
+            using: apiClient,
+            cacheIdentity: cacheIdentity
+        )
+    }
+
+    static func invalidateSharedCache() {
+        preloadedResponses.removeAll()
+        inFlightLoads.values.forEach { $0.cancel() }
+        inFlightLoads.removeAll()
+        inFlightTokens.removeAll()
+    }
+
+    func invalidateResponses(keeping weekStart: Date) {
+        let retainedKey = Self.cacheKey(for: weekStart)
+        let retainedResponse = responsesByWeek[retainedKey]
+
+        responsesByWeek.removeAll()
+        if let retainedResponse {
+            responsesByWeek[retainedKey] = retainedResponse
+        }
+    }
+
+    func load(
+        using apiClient: APIClient,
+        cacheIdentity: String = "guest",
+        forceRefresh: Bool = false
+    ) async {
+        await load(
+            weekStart: Self.startOfWeek(for: .now),
+            using: apiClient,
+            cacheIdentity: cacheIdentity,
+            forceRefresh: forceRefresh
+        )
     }
 
     func load(
         weekStart: Date,
         using apiClient: APIClient,
+        cacheIdentity: String = "guest",
         forceRefresh: Bool = false
     ) async {
         let cacheKey = Self.cacheKey(for: weekStart)
+        let loadKey = LoadKey(weekStart: cacheKey, cacheIdentity: cacheIdentity)
 
         if !forceRefresh, let cachedResponse = responsesByWeek[cacheKey] {
             rememberCurrentUserLocation(from: cachedResponse)
@@ -47,7 +91,14 @@ final class EventFeedViewModel: ObservableObject {
             return
         }
 
-        if !forceRefresh, let inFlightLoad = Self.inFlightLoads[cacheKey] {
+        if !forceRefresh, let preloadedResponse = Self.preloadedResponses[loadKey] {
+            responsesByWeek[cacheKey] = preloadedResponse
+            rememberCurrentUserLocation(from: preloadedResponse)
+            state = .loaded(preloadedResponse)
+            return
+        }
+
+        if !forceRefresh, let inFlightLoad = Self.inFlightLoads[loadKey] {
             loadingWeekStarts.insert(cacheKey)
             defer {
                 loadingWeekStarts.remove(cacheKey)
@@ -60,6 +111,7 @@ final class EventFeedViewModel: ObservableObject {
             do {
                 let response = try await inFlightLoad.value
                 responsesByWeek[cacheKey] = response
+                Self.preloadedResponses[loadKey] = response
                 rememberCurrentUserLocation(from: response)
                 state = .loaded(response)
             } catch {
@@ -95,11 +147,12 @@ final class EventFeedViewModel: ObservableObject {
                     )
                 )
             }
-            Self.inFlightLoads[cacheKey] = loadTask
-            Self.inFlightTokens[cacheKey] = token
+            Self.inFlightLoads[loadKey] = loadTask
+            Self.inFlightTokens[loadKey] = token
 
             let response = try await loadTask.value
             responsesByWeek[cacheKey] = response
+            Self.preloadedResponses[loadKey] = response
             rememberCurrentUserLocation(from: response)
             state = .loaded(response)
         } catch {
@@ -110,9 +163,9 @@ final class EventFeedViewModel: ObservableObject {
 
         loadingWeekStarts.remove(cacheKey)
 
-        if Self.inFlightTokens[cacheKey] == token {
-            Self.inFlightLoads[cacheKey] = nil
-            Self.inFlightTokens[cacheKey] = nil
+        if Self.inFlightTokens[loadKey] == token {
+            Self.inFlightLoads[loadKey] = nil
+            Self.inFlightTokens[loadKey] = nil
         }
     }
 

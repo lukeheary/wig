@@ -19,6 +19,7 @@ struct PlaceDetail: Decodable, Identifiable, Hashable, Sendable {
     let updatedAt: Date?
     var isEnabled = true
     var isFollowed = false
+    var isHiddenFromHome = false
     var canManage = false
     let events: [EventFeedItem]
     let pastEvents: [EventFeedItem]
@@ -42,6 +43,7 @@ struct PlaceDetail: Decodable, Identifiable, Hashable, Sendable {
         case updatedAt
         case isEnabled
         case isFollowed
+        case isHiddenFromHome
         case canManage
         case events
         case pastEvents
@@ -156,6 +158,7 @@ extension PlaceDetail {
         updatedAt = try container.decodeIfPresent(Date.self, forKey: .updatedAt)
         isEnabled = try container.decodeIfPresent(Bool.self, forKey: .isEnabled) ?? true
         isFollowed = try container.decodeIfPresent(Bool.self, forKey: .isFollowed) ?? false
+        isHiddenFromHome = try container.decodeIfPresent(Bool.self, forKey: .isHiddenFromHome) ?? false
         canManage = try container.decodeIfPresent(Bool.self, forKey: .canManage) ?? false
         events = try container.decodeIfPresent([EventFeedItem].self, forKey: .events) ?? []
         pastEvents = try container.decodeIfPresent([EventFeedItem].self, forKey: .pastEvents) ?? []

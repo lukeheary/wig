@@ -8,6 +8,7 @@ import {
   eventRsvps,
   events,
   placeFollows,
+  placeHomeHides,
   places,
   userFriends,
   users,
@@ -81,13 +82,7 @@ const mobileUpdatePlaceSchema = z
     }
   });
 
-async function currentMobileUserId() {
-  const { userId } = await auth();
-
-  if (userId) {
-    return userId;
-  }
-
+async function previewMobileUserId() {
   const previewUser = await db.query.users.findFirst({
     where: eq(users.isOnboarding, false),
     orderBy: [asc(users.createdAt)],
@@ -227,9 +222,13 @@ export async function GET(
   });
 
   const mappedPlace = mapPlaceCategoryData(place);
-  const userId = await currentMobileUserId();
-  const editPermissions = await resolveMobileEventEditPermissions(userId);
-  const canManagePlace = editPermissions.isAdmin || editPermissions.manageablePlaceIds.has(place.id);
+  const { userId: authenticatedUserId } = await auth();
+  const userId = authenticatedUserId ?? (await previewMobileUserId());
+  const editPermissions = await resolveMobileEventEditPermissions(
+    authenticatedUserId
+  );
+  const canManagePlace =
+    editPermissions.isAdmin || editPermissions.manageablePlaceIds.has(place.id);
   const allEvents = [...upcomingEvents, ...pastEvents];
   const eventIds = allEvents.map((event) => event.id);
   const socialRsvpsMap = new Map<
@@ -407,18 +406,28 @@ export async function GET(
     }
   }
 
-  const follow =
-    userId
-      ? await db.query.placeFollows.findFirst({
+  const [follow, homeHide] = authenticatedUserId
+    ? await Promise.all([
+        db.query.placeFollows.findFirst({
           where: and(
-            eq(placeFollows.userId, userId),
+            eq(placeFollows.userId, authenticatedUserId),
             eq(placeFollows.placeId, place.id)
           ),
           columns: {
             id: true,
           },
-        })
-      : null;
+        }),
+        db.query.placeHomeHides.findFirst({
+          where: and(
+            eq(placeHomeHides.userId, authenticatedUserId),
+            eq(placeHomeHides.placeId, place.id)
+          ),
+          columns: {
+            id: true,
+          },
+        }),
+      ])
+    : [null, null];
 
   return NextResponse.json({
     id: mappedPlace.id,
@@ -439,6 +448,7 @@ export async function GET(
     updatedAt: mappedPlace.updatedAt,
     isEnabled: place.isEnabled,
     isFollowed: Boolean(follow),
+    isHiddenFromHome: Boolean(homeHide),
     canManage: canManagePlace,
     events: upcomingEvents.map((event) =>
       mapMobileEvent(

@@ -5,15 +5,12 @@ import UIKit
 @MainActor
 private final class HomeActivationViewModel: ObservableObject {
     @Published private(set) var state: MobileActivationState?
-    @Published private(set) var hasResolvedInitialLoad = false
 
     var incompleteTasks: [MobileActivationTask] {
         (state?.tasks ?? []).filter { !$0.isComplete }
     }
 
     func load(using apiClient: APIClient) async {
-        defer { hasResolvedInitialLoad = true }
-
         do {
             state = try await apiClient.send(APIClient.mobileActivationState())
         } catch {
@@ -94,7 +91,6 @@ private final class HomeForegroundRefreshCoordinator: ObservableObject {
 
 struct HomeView: View {
     let showsNativeSearch: Bool
-    let searchesUsersOnly: Bool
     let resetToCurrentWeekTrigger: Int
     let onShowActivity: () -> Void
     let onSearchDismiss: () -> Void
@@ -117,10 +113,8 @@ struct HomeView: View {
     @State private var searchText = ""
     @State private var homeEventSearchText = ""
     @State private var isHomeEventSearchPresented = false
-    @State private var selectedSearchFilter: SearchFilter = .all
     @FocusState private var isSearchFieldFocused: Bool
     @FocusState private var isHomeEventSearchFocused: Bool
-    @State private var isSearchKeyboardDismissEnabled = false
     @State private var selectedLocationFilter: HomeLocationFilter?
     @State private var selectedEventFilter: HomeEventFilter = .all
     @State private var selectedCategoryFilterID: String?
@@ -149,7 +143,6 @@ struct HomeView: View {
 
     init(
         showsNativeSearch: Bool = false,
-        searchesUsersOnly: Bool = false,
         resetToCurrentWeekTrigger: Int = 0,
         onShowActivity: @escaping () -> Void = {},
         onSearchDismiss: @escaping () -> Void = {},
@@ -158,7 +151,6 @@ struct HomeView: View {
         onAddProfilePhoto: @escaping () -> Void = {}
     ) {
         self.showsNativeSearch = showsNativeSearch
-        self.searchesUsersOnly = searchesUsersOnly
         self.resetToCurrentWeekTrigger = resetToCurrentWeekTrigger
         self.onShowActivity = onShowActivity
         self.onSearchDismiss = onSearchDismiss
@@ -204,6 +196,13 @@ struct HomeView: View {
                     }
                 }
                 .onReceive(NotificationCenter.default.publisher(for: .mobileEventDidChange)) { _ in
+                    Task {
+                        await loadHome(for: selectedWeekStart, using: apiClient, forceRefresh: true)
+                    }
+                }
+                .onReceive(NotificationCenter.default.publisher(for: .homeFeedVisibilityDidChange)) { _ in
+                    viewModel.invalidateResponses(keeping: selectedWeekStart)
+
                     Task {
                         await loadHome(for: selectedWeekStart, using: apiClient, forceRefresh: true)
                     }
@@ -322,21 +321,6 @@ struct HomeView: View {
 
                     homeEventSearchViewModel.prepare(query: value)
                 }
-                .onChange(of: isSearchFieldFocused) { _, isFocused in
-                    if isFocused {
-                        isSearchKeyboardDismissEnabled = false
-
-                        Task { @MainActor in
-                            try? await Task.sleep(for: .milliseconds(350))
-
-                            if isSearchFieldFocused {
-                                isSearchKeyboardDismissEnabled = true
-                            }
-                        }
-                    } else {
-                        isSearchKeyboardDismissEnabled = false
-                    }
-                }
                 .task(id: displayedEventPrefetchKey) {
                     guard !displayedEventsForPrefetch.isEmpty else {
                         return
@@ -359,15 +343,7 @@ struct HomeView: View {
 
     @ViewBuilder
     private var content: some View {
-        if isWaitingForInitialActivation {
-            ProgressView("Loading events...")
-                .frame(maxWidth: .infinity, maxHeight: .infinity)
-                .tint(.white)
-                .foregroundStyle(.white)
-                .background(feedBackground)
-        } else {
-            contentForEventFeedState
-        }
+        contentForEventFeedState
     }
 
     @ViewBuilder
@@ -411,10 +387,6 @@ struct HomeView: View {
         }
     }
 
-    private var isWaitingForInitialActivation: Bool {
-        shouldLoadActivation && !activationViewModel.hasResolvedInitialLoad
-    }
-
     private var shouldLoadActivation: Bool {
         isAuthenticated && !showsNativeSearch
     }
@@ -451,7 +423,6 @@ struct HomeView: View {
                         postEventFeedbackEvent = postEventFeedbackPrompt
                     }
                     .padding(.horizontal, 16)
-                    .padding(.top, 10)
                 }
 
                 if isViewingCurrentWeek, isAuthenticated, !activationViewModel.incompleteTasks.isEmpty {
@@ -462,7 +433,6 @@ struct HomeView: View {
                         onAddProfilePhoto: onAddProfilePhoto
                     )
                     .transition(.opacity.combined(with: .move(edge: .top)))
-                    .padding(.top, postEventFeedbackPrompt == nil ? 18 : 0)
                 }
 
                 if shouldShowRecentActivity {
@@ -489,10 +459,6 @@ struct HomeView: View {
                             }
                         }
                     )
-                    .padding(
-                        .top,
-                        activationViewModel.incompleteTasks.isEmpty ? 18 : 0
-                    )
                 }
 
                 ForEach(Array(groupedEvents.enumerated()), id: \.element.day) { index, section in
@@ -505,12 +471,12 @@ struct HomeView: View {
                             showsLocation: index == 0 && isViewingCurrentWeek
                         )
                     }
-                    // Add the standalone first-section offset only when no optional
-                    // Home section is already providing content above the event rows.
-                    .padding(.top, index == 0 && !hasPreEventSection ? 18 : 0)
                 }
             }
-            .padding(.top, 56)
+            .padding(
+                .top,
+                isViewingCurrentWeek && postEventFeedbackPrompt != nil ? 66 : 74
+            )
             .padding(.bottom, 48)
         }
         .scrollIndicators(.hidden)
@@ -522,18 +488,9 @@ struct HomeView: View {
             .padding(.top, 56)
     }
 
-    @ViewBuilder
     private var searchResultsContent: some View {
-        if searchesUsersOnly {
-            usersOnlySearchResultsContent
-        } else {
-            directorySearchResultsContent
-        }
-    }
-
-    private var usersOnlySearchResultsContent: some View {
         ScrollView {
-            LazyVStack(alignment: .leading, spacing: 12) {
+            LazyVStack(alignment: .leading, spacing: 7) {
                 searchInputBar
                     .padding(.horizontal, 16)
 
@@ -541,7 +498,7 @@ struct HomeView: View {
                     if !emptyStateRecentUsers.isEmpty {
                         SearchSectionHeader(title: "People")
                             .padding(.horizontal, 16)
-                            .padding(.top, 24)
+                            .padding(.top, 21)
 
                         SearchUsersList(users: emptyStateRecentUsers)
                             .padding(.horizontal, 16)
@@ -573,7 +530,7 @@ struct HomeView: View {
                 } else {
                     SearchSectionHeader(title: "People")
                         .padding(.horizontal, 16)
-                        .padding(.top, 24)
+                        .padding(.top, 21)
 
                     SearchUsersList(users: searchUserResults)
                         .padding(.horizontal, 16)
@@ -591,166 +548,6 @@ struct HomeView: View {
         }
         .scrollIndicators(.hidden)
         .scrollDismissesKeyboard(.interactively)
-    }
-
-    private var directorySearchResultsContent: some View {
-        ScrollView {
-            LazyVStack(alignment: .leading, spacing: 12) {
-                if showsNativeSearch {
-                    searchInputBar
-                        .padding(.horizontal, 16)
-                }
-
-                if normalizedSearchQuery.isEmpty {
-                    VStack(alignment: .leading, spacing: 12) {
-                        if !emptyStateRecentUsers.isEmpty {
-                            SearchSectionHeader(title: "People")
-                                .padding(.horizontal, 16)
-                                .padding(.top, 8)
-
-                            SearchUsersList(users: emptyStateRecentUsers)
-                                .padding(.horizontal, 16)
-                        }
-
-                        if !emptyStateSuggestedPlaces.isEmpty {
-                            SearchSectionHeader(title: "Places")
-                                .padding(.horizontal, 16)
-                                .padding(.top, emptyStateRecentUsers.isEmpty ? 8 : 4)
-
-                            ForEach(emptyStateSuggestedPlaces, id: \.listRowID) { place in
-                                NavigationLink {
-                                    PlaceDetailView(place: place)
-                                } label: {
-                                    PlaceRowView(place: place)
-                                        .padding(.horizontal, 16)
-                                }
-                                .buttonStyle(.plain)
-                            }
-                        }
-
-                        if !emptyStateUpcomingEvents.isEmpty {
-                            SearchSectionHeader(title: "Events")
-                                .padding(.horizontal, 16)
-                                .padding(.top, emptyStateRecentUsers.isEmpty && emptyStateSuggestedPlaces.isEmpty ? 8 : 4)
-
-                            ForEach(emptyStateUpcomingEvents) { event in
-                                EventDetailNavigationLink(event: event) {
-                                    EventSearchRow(event: event)
-                                        .padding(.horizontal, 16)
-                                }
-                            }
-                        }
-
-                        if emptyStateRecentUsers.isEmpty && emptyStateSuggestedPlaces.isEmpty && emptyStateUpcomingEvents.isEmpty && !searchViewModel.isLoading {
-                            ContentUnavailableView {
-                                Label(
-                                    "People, places, events...",
-                                    systemImage: "magnifyingglass"
-                                )
-                            } description: {
-                                Text(
-                                    isAuthenticated
-                                        ? "Search people, places, and events."
-                                        : "Search places and events."
-                                )
-                            }
-                            .foregroundStyle(.white)
-                            .frame(maxWidth: .infinity)
-                            .padding(.top, 48)
-                        }
-
-                        if searchViewModel.isLoading {
-                            ProgressView()
-                                .tint(.white)
-                                .frame(maxWidth: .infinity)
-                                .padding(.top, 16)
-                        }
-                    }
-                    .frame(maxWidth: .infinity, alignment: .leading)
-                    .padding(.top, 8)
-                } else {
-                    if searchViewModel.isLoading && searchUserResults.isEmpty && searchVenueResults.isEmpty && searchEvents.isEmpty {
-                        ProgressView("Searching...")
-                            .frame(maxWidth: .infinity)
-                            .tint(.white)
-                            .foregroundStyle(.white)
-                            .padding(.top, 48)
-                    } else if searchUserResults.isEmpty && searchVenueResults.isEmpty && searchEvents.isEmpty && !searchViewModel.isLoading {
-                        ContentUnavailableView {
-                            Label("No Results", systemImage: "magnifyingglass")
-                        } description: {
-                            Text("Try a different person, place, or event.")
-                        }
-                        .foregroundStyle(.white)
-                        .frame(maxWidth: .infinity)
-                        .padding(.top, 48)
-                    } else {
-                        VStack(alignment: .leading, spacing: 12) {
-                        if showsPeopleResults {
-                            SearchSectionHeader(title: "People")
-                                .padding(.horizontal, 16)
-                                .padding(.top, 8)
-
-                            SearchUsersList(users: searchUserResults)
-                                .padding(.horizontal, 16)
-                        }
-
-                        if showsPlaceResults {
-                            SearchSectionHeader(title: "Places")
-                                .padding(.horizontal, 16)
-                                .padding(.top, 8)
-
-                            ForEach(searchVenueResults, id: \.listRowID) { place in
-                                NavigationLink {
-                                    PlaceDetailView(place: place)
-                                } label: {
-                                    PlaceRowView(place: place)
-                                        .padding(.horizontal, 16)
-                                }
-                                .buttonStyle(.plain)
-                            }
-                        }
-
-                        if showsEventResults {
-                            SearchSectionHeader(title: "Events")
-                                .padding(.horizontal, 16)
-                                .padding(.top, 8)
-
-                            ForEach(searchEvents) { event in
-                                EventDetailNavigationLink(event: event) {
-                                    EventSearchRow(event: event)
-                                        .padding(.horizontal, 16)
-                                }
-                            }
-                        }
-
-                        if searchViewModel.isLoading {
-                            ProgressView()
-                                .tint(.white)
-                                .frame(maxWidth: .infinity)
-                                .padding(.top, 6)
-                        }
-                        }
-                        .frame(maxWidth: .infinity, alignment: .leading)
-                        .padding(.top, 8)
-                    }
-                }
-            }
-            .frame(maxWidth: .infinity)
-            .padding(.top, showsNativeSearch ? 0 : 66)
-            .padding(.bottom, 48)
-        }
-        .scrollIndicators(.hidden)
-        .scrollDismissesKeyboard(.interactively)
-        .simultaneousGesture(
-            TapGesture().onEnded {
-                guard isSearchFieldFocused, isSearchKeyboardDismissEnabled else {
-                    return
-                }
-
-                isSearchFieldFocused = false
-            }
-        )
     }
 
     private var homeEventSearchBar: some View {
@@ -874,7 +671,7 @@ struct HomeView: View {
                     .font(.system(size: 20, weight: .medium))
                     .foregroundStyle(.white.opacity(0.92))
 
-                TextField("", text: $searchText, prompt: Text(searchesUsersOnly ? "Search people..." : "People, places, events...").foregroundStyle(.white.opacity(0.42)))
+                TextField("", text: $searchText, prompt: Text("Search people...").foregroundStyle(.white.opacity(0.42)))
                     .font(.system(size: 17, weight: .medium))
                     .foregroundStyle(.white)
                     .textInputAutocapitalization(.never)
@@ -904,29 +701,6 @@ struct HomeView: View {
                 isSearchPresented = true
             }
 
-            if !searchesUsersOnly {
-                Menu {
-                    ForEach(SearchFilter.allCases) { filter in
-                        Button {
-                            selectedSearchFilter = filter
-                        } label: {
-                            if selectedSearchFilter == filter {
-                                Label(filter.title, systemImage: "checkmark")
-                            } else {
-                                Text(filter.title)
-                            }
-                        }
-                    }
-                } label: {
-                    Image(systemName: "line.3.horizontal.decrease")
-                        .font(.system(size: 17, weight: .semibold))
-                        .foregroundStyle(selectedSearchFilter == .all ? Color.primary : AppTheme.accentBlue)
-                        .frame(width: 46, height: 46)
-                        .contentShape(Circle())
-                        .modifier(HomeStandaloneControlStyle(isStandalone: true))
-                }
-                .buttonStyle(.plain)
-            }
         }
     }
 
@@ -1047,12 +821,17 @@ struct HomeView: View {
             visibleSectionDay(for: event)
         }
 
-        return visibleWeekDays.map { day in
+        return visibleWeekDays.compactMap { day in
             let events = grouped[day] ?? []
+            let title = sectionTitle(for: day)
+
+            guard title != "Last Night" || !events.isEmpty else {
+                return nil
+            }
 
             return EventSection(
                 day: day,
-                title: sectionTitle(for: day),
+                title: title,
                 events: events.sorted(by: sortEventsForDayRow)
             )
         }
@@ -1121,30 +900,6 @@ struct HomeView: View {
         }
     }
 
-    private var searchEvents: [EventFeedItem] {
-        guard selectedSearchFilter.includesEvents else {
-            return []
-        }
-
-        let query = normalizedSearchQuery
-        guard !query.isEmpty else {
-            return []
-        }
-
-        let localMatches = filteredCurrentEvents
-            .filter { $0.startAt >= .now }
-            .filter { event in
-                event.matchesSearch(query)
-            }
-            .sorted(by: { $0.startAt < $1.startAt })
-
-        var seenEventIDs = Set<UUID>()
-        return (searchViewModel.events + localMatches)
-            .filter { event in
-                seenEventIDs.insert(event.id).inserted
-            }
-    }
-
     private var homeEventSearchQuery: String {
         homeEventSearchText.trimmingCharacters(in: .whitespacesAndNewlines)
     }
@@ -1199,61 +954,19 @@ struct HomeView: View {
     }
 
     private var searchUserResults: [FriendUserSummary] {
-        selectedSearchFilter.includesPeople ? searchViewModel.users : []
+        searchViewModel.users
     }
 
     private var emptyStateRecentUsers: [FriendUserSummary] {
-        guard selectedSearchFilter.includesPeople else {
-            return []
-        }
-
-        let count = searchesUsersOnly || selectedSearchFilter == .people ? 20 : 7
         let sourceUsers = searchViewModel.recentUsers.isEmpty
             ? searchViewModel.users
             : searchViewModel.recentUsers
-        return Array(sourceUsers.prefix(count))
-    }
-
-    private var emptyStateSuggestedPlaces: [PlaceListItem] {
-        guard selectedSearchFilter.includesPlaces else {
-            return []
-        }
-
-        let count = selectedSearchFilter == .places ? 10 : 5
-        let sourcePlaces = searchViewModel.suggestedPlaces.isEmpty
-            ? searchViewModel.places
-            : searchViewModel.suggestedPlaces
-        return Array(sourcePlaces.prefix(count))
-    }
-
-    private var emptyStateUpcomingEvents: [EventFeedItem] {
-        guard selectedSearchFilter.includesEvents else {
-            return []
-        }
-
-        let count = selectedSearchFilter == .events ? 10 : 5
-        return Array(searchViewModel.upcomingEvents.prefix(count))
-    }
-
-    private var searchVenueResults: [PlaceListItem] {
-        selectedSearchFilter.includesPlaces ? searchViewModel.places : []
-    }
-
-    private var showsPeopleResults: Bool {
-        !searchUserResults.isEmpty
-    }
-
-    private var showsPlaceResults: Bool {
-        !searchVenueResults.isEmpty
-    }
-
-    private var showsEventResults: Bool {
-        !searchEvents.isEmpty
+        return Array(sourceUsers.prefix(20))
     }
 
     private var displayedEventsForPrefetch: [EventFeedItem] {
         if isShowingSearchResults {
-            return searchEvents
+            return []
         }
 
         if isHomeEventSearchPresented {
@@ -1386,16 +1099,6 @@ struct HomeView: View {
             !recentActivityViewModel.activities.isEmpty
     }
 
-    private var hasPreEventSection: Bool {
-        shouldShowRecentActivity ||
-            (isViewingCurrentWeek && postEventFeedbackPrompt != nil) ||
-            (
-                isViewingCurrentWeek &&
-                    isAuthenticated &&
-                    !activationViewModel.incompleteTasks.isEmpty
-            )
-    }
-
     private var isShowingSearchResults: Bool {
         isSearchPresented || !searchText.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty
     }
@@ -1435,6 +1138,7 @@ struct HomeView: View {
         async let eventLoad: Void = viewModel.load(
             weekStart: weekStart,
             using: apiClient,
+            cacheIdentity: eventFeedCacheIdentity,
             forceRefresh: forceRefresh
         )
         async let reviewPromptLoad: Void = loadPostEventFeedbackPrompt(using: apiClient)
@@ -1459,6 +1163,10 @@ struct HomeView: View {
         } catch {
             postEventFeedbackPrompt = nil
         }
+    }
+
+    private var eventFeedCacheIdentity: String {
+        appSession.isAuthBypassed ? "bypass" : clerk.user?.id ?? "guest"
     }
 
     private func loadCompletedPostEventFeedbackIDs() {
@@ -2486,7 +2194,7 @@ private struct HomeRecentActivitySection: View {
     var body: some View {
         let visible = visibleActivities
         if !visible.isEmpty {
-            VStack(alignment: .leading, spacing: 6) {
+            VStack(alignment: .leading, spacing: 7) {
                 Button(action: onShowActivity) {
                     HStack(spacing: 6) {
                         Text("Recent Activity")
@@ -2501,7 +2209,7 @@ private struct HomeRecentActivitySection: View {
                 .buttonStyle(.plain)
                 .padding(.horizontal, 16)
 
-                VStack(alignment: .leading, spacing: 16) {
+                VStack(alignment: .leading, spacing: 12) {
                     ForEach(visible) { activity in
                         HomeRecentActivityRow(
                             activity: activity,
@@ -2510,6 +2218,7 @@ private struct HomeRecentActivitySection: View {
                     }
                 }
                 .padding(.horizontal, 16)
+                .padding(.top, 5)
             }
         }
     }
@@ -2531,12 +2240,12 @@ private struct HomeRecentActivityRow: View {
     }()
 
     var body: some View {
-        HStack(alignment: activity.type.isRequest ? .center : .top, spacing: 12) {
+        HStack(alignment: .top, spacing: 12) {
             ActivityAvatarView(activity: activity)
-                .padding(.top, activity.type.isRequest ? 0 : 6)
 
             if activity.type.isRequest {
                 requestContent
+                    .padding(.top, 4)
             } else {
                 VStack(alignment: .leading, spacing: 4) {
                     InlineLinkedActivityText(
@@ -2564,6 +2273,7 @@ private struct HomeRecentActivityRow: View {
                     .foregroundStyle(.white.opacity(0.42))
                 }
                 .frame(maxWidth: .infinity, alignment: .leading)
+                .padding(.top, 4)
             }
         }
         .navigationDestination(item: $selectedVenue) { venue in
@@ -2579,7 +2289,7 @@ private struct HomeRecentActivityRow: View {
 
     private var requestContent: some View {
         HStack(alignment: .center, spacing: 14) {
-            VStack(alignment: .leading, spacing: 6) {
+            VStack(alignment: .leading, spacing: 4) {
                 (
                     Text(activity.actorName)
                         .fontWeight(.medium)
@@ -2626,89 +2336,6 @@ private struct RecentActivitySelectedUserProfile: Identifiable, Hashable {
     let id: String
 }
 
-private struct EventSearchRow: View {
-    let event: EventFeedItem
-
-    var body: some View {
-        HStack(alignment: .center, spacing: 12) {
-            artwork
-                .frame(width: 84, height: 84)
-                .clipShape(RoundedRectangle(cornerRadius: 15, style: .continuous))
-                .overlay(alignment: .bottomTrailing) {
-                    if !event.socialAttendees.isEmpty {
-                        EventSocialOverlayView(attendees: event.socialAttendees, size: .searchRow)
-                            .padding(6)
-                    }
-                }
-
-            VStack(alignment: .leading, spacing: 3) {
-                Text(event.title)
-                    .font(.system(size: 14, weight: .semibold))
-                    .foregroundStyle(.white)
-                    .multilineTextAlignment(.leading)
-                    .lineLimit(2)
-                    .lineSpacing(1)
-                    .frame(maxWidth: .infinity, alignment: .leading)
-
-                Text(event.formattedCardStart)
-                    .font(.system(size: 13, weight: .medium))
-                    .foregroundStyle(AppTheme.accentBlue)
-                    .lineLimit(1)
-                    .minimumScaleFactor(0.82)
-
-                Text(event.primaryLocation)
-                    .font(.system(size: 13, weight: .medium))
-                    .foregroundStyle(.white.opacity(0.76))
-                    .lineLimit(1)
-                    .minimumScaleFactor(0.82)
-            }
-            .frame(maxWidth: .infinity, alignment: .leading)
-        }
-        .padding(9)
-        .frame(minHeight: 102, alignment: .topLeading)
-        .background(
-            RoundedRectangle(cornerRadius: 18, style: .continuous)
-                .fill(Color(red: 0.11, green: 0.11, blue: 0.13))
-        )
-    }
-
-    @ViewBuilder
-    private var artwork: some View {
-        if let url = event.displayImageURL {
-            AsyncImage(url: url) { phase in
-                switch phase {
-                case .success(let image):
-                    image
-                        .resizable()
-                        .scaledToFill()
-                default:
-                    placeholder
-                }
-            }
-        } else {
-            placeholder
-        }
-    }
-
-    private var placeholder: some View {
-        ZStack {
-            LinearGradient(
-                colors: [
-                    Color(red: 0.13, green: 0.22, blue: 0.38),
-                    Color(red: 0.46, green: 0.14, blue: 0.43),
-                    Color(red: 0.86, green: 0.36, blue: 0.22),
-                ],
-                startPoint: .topLeading,
-                endPoint: .bottomTrailing
-            )
-
-            Image(systemName: "music.mic")
-                .font(.system(size: 28, weight: .regular))
-                .foregroundStyle(.white.opacity(0.78))
-        }
-    }
-}
-
 private struct SearchSectionHeader: View {
     let title: String
 
@@ -2724,29 +2351,18 @@ private struct SearchUserRow: View {
     let user: FriendUserSummary
 
     var body: some View {
-        UserListRowView(
+        CompactUserListRowView(
             imageURL: user.avatarImageURL,
             name: user.name,
-            subtitle: user.usernameText,
-            identityKey: user.id,
-            avatarSize: 42,
-            verticalPadding: 0
-        ) {
-            if user.friendStatus == .accepted {
-                Text("Friends")
-                    .font(.system(size: 12, weight: .bold))
-                    .foregroundStyle(.white.opacity(0.62))
-            } else if user.friendStatus == .pendingSent {
-                Text("Pending")
-                    .font(.system(size: 12, weight: .bold))
-                    .foregroundStyle(.white.opacity(0.62))
-                    .padding(.trailing, 4)
-            } else if user.friendStatus == .pendingReceived {
-                Text("Requested You")
-                    .font(.system(size: 12, weight: .bold))
-                    .foregroundStyle(.white.opacity(0.62))
-            }
-        }
+            subtitle: subtitleText,
+            identityKey: user.id
+        )
+    }
+
+    private var subtitleText: String {
+        user.friendStatus == .accepted
+            ? "\(user.usernameText) • Friends"
+            : user.usernameText
     }
 }
 
@@ -2755,117 +2371,21 @@ private struct SearchUsersList: View {
     @Environment(\.apiClient) private var apiClient
 
     var body: some View {
-        VStack(spacing: 12) {
+        VStack(spacing: 2) {
             ForEach(users) { user in
                 NavigationLink {
                     UserProfileView(userID: user.id)
                 } label: {
                     SearchUserRow(user: user)
-                        .padding(9)
                         .frame(maxWidth: .infinity, alignment: .leading)
-                        .background(
-                            RoundedRectangle(cornerRadius: 18, style: .continuous)
-                                .fill(Color(red: 0.11, green: 0.11, blue: 0.13))
-                        )
-                        .overlay(
-                            RoundedRectangle(cornerRadius: 18, style: .continuous)
-                                .strokeBorder(.white.opacity(0.08), lineWidth: 1)
-                        )
                         .contentShape(Rectangle())
                 }
+                .buttonStyle(.plain)
                 .task {
                     await UserProfileViewModel.preload(userID: user.id, using: apiClient)
                 }
-                .buttonStyle(.plain)
             }
         }
-    }
-}
-
-private struct SearchVenueRow: View {
-    let place: PlaceListItem
-
-    var body: some View {
-        ZStack(alignment: .bottomTrailing) {
-            HStack(alignment: .center, spacing: 12) {
-                logo
-
-                VStack(alignment: .leading, spacing: 7) {
-                    Text(place.name)
-                        .font(.system(size: 14, weight: .semibold))
-                        .foregroundStyle(.white)
-                        .lineLimit(2)
-                        .minimumScaleFactor(0.88)
-
-                    if !place.locationText.isEmpty {
-                        Text(place.locationText)
-                            .font(.system(size: 13, weight: .semibold))
-                            .foregroundStyle(Color(red: 0.48, green: 0.77, blue: 1.0))
-                            .lineLimit(1)
-                    }
-
-                    if let eventCountText = place.eventCountText {
-                        Text(eventCountText)
-                            .font(.system(size: 13, weight: .medium))
-                            .foregroundStyle(.white.opacity(0.62))
-                            .lineLimit(1)
-                    }
-                }
-                .frame(maxWidth: .infinity, alignment: .leading)
-            }
-            .padding(9)
-            .frame(minHeight: 102, alignment: .topLeading)
-
-            Text(place.type.displayName)
-                .font(.system(size: 11, weight: .semibold))
-                .foregroundStyle(.white.opacity(0.36))
-                .padding(.trailing, 9)
-                .padding(.bottom, 9)
-        }
-        .background(
-            RoundedRectangle(cornerRadius: 18, style: .continuous)
-                .fill(Color(red: 0.11, green: 0.11, blue: 0.13))
-        )
-    }
-
-    @ViewBuilder
-    private var logo: some View {
-        if let url = place.displayLogoURL {
-            AsyncImage(url: url) { phase in
-                switch phase {
-                case .success(let image):
-                    image
-                        .resizable()
-                        .scaledToFill()
-                default:
-                    logoPlaceholder
-                }
-            }
-            .frame(width: 84, height: 84)
-            .clipShape(RoundedRectangle(cornerRadius: 15, style: .continuous))
-        } else {
-            logoPlaceholder
-        }
-    }
-
-    private var logoPlaceholder: some View {
-        ZStack {
-            LinearGradient(
-                colors: [
-                    Color(red: 0.16, green: 0.18, blue: 0.24),
-                    Color(red: 0.30, green: 0.22, blue: 0.32),
-                    Color(red: 0.08, green: 0.08, blue: 0.09),
-                ],
-                startPoint: .topLeading,
-                endPoint: .bottomTrailing
-            )
-
-            Image(systemName: place.type == .venue ? "building.2" : "sparkles")
-                .font(.system(size: 30, weight: .semibold))
-                .foregroundStyle(.white.opacity(0.72))
-        }
-        .frame(width: 84, height: 84)
-        .clipShape(RoundedRectangle(cornerRadius: 16, style: .continuous))
     }
 }
 
@@ -2974,15 +2494,25 @@ final class HomeSearchDirectoryViewModel: ObservableObject {
                 response = try await loadTask.value
             }
 
+            var resolvedResponse = response
+            if normalizedQuery.isEmpty,
+               response.recentUsers.count < 20,
+               let friendsResponse = try? await apiClient.send(APIClient.mobileFriends()) {
+                resolvedResponse = fillingRecentUsers(
+                    in: response,
+                    with: friendsResponse.friends
+                )
+            }
+
             guard activeQuery == normalizedQuery else {
                 return
             }
 
             if normalizedQuery.isEmpty {
-                Self.cachedResponse = response
+                Self.cachedResponse = resolvedResponse
             }
 
-            apply(response)
+            apply(resolvedResponse)
         } catch {
             guard activeQuery == normalizedQuery else {
                 return
@@ -3003,6 +2533,42 @@ final class HomeSearchDirectoryViewModel: ObservableObject {
         if activeQuery == normalizedQuery {
             phase = .loaded
         }
+    }
+
+    private func fillingRecentUsers(
+        in response: MobileSearchResponse,
+        with friends: [FriendUserSummary]
+    ) -> MobileSearchResponse {
+        var combinedUsers = response.recentUsers
+        var seenUserIDs = Set(combinedUsers.map(\.id))
+
+        for friend in friends where combinedUsers.count < 20 {
+            guard seenUserIDs.insert(friend.id).inserted else {
+                continue
+            }
+
+            combinedUsers.append(
+                FriendUserSummary(
+                    id: friend.id,
+                    friendshipID: friend.friendshipID,
+                    name: friend.name,
+                    username: friend.username,
+                    avatarImageURL: friend.avatarImageURL,
+                    city: friend.city,
+                    state: friend.state,
+                    friendStatus: .accepted
+                )
+            )
+        }
+
+        return MobileSearchResponse(
+            events: response.events,
+            upcomingEvents: response.upcomingEvents,
+            users: response.users,
+            recentUsers: Array(combinedUsers.prefix(20)),
+            suggestedPlaces: response.suggestedPlaces,
+            places: response.places
+        )
     }
 
     static func preload(using apiClient: APIClient) async {
@@ -3064,53 +2630,6 @@ final class HomeSearchDirectoryViewModel: ObservableObject {
             suggestedPlaces: cachedResponse.suggestedPlaces,
             places: cachedResponse.places
         )
-    }
-}
-
-private enum SearchFilter: String, CaseIterable, Identifiable {
-    case all
-    case people
-    case places
-    case events
-
-    var id: String { rawValue }
-
-    var title: String {
-        switch self {
-        case .all:
-            return "All"
-        case .people:
-            return "People"
-        case .places:
-            return "Places"
-        case .events:
-            return "Events"
-        }
-    }
-
-    var systemImage: String {
-        switch self {
-        case .all:
-            return "line.3.horizontal.decrease.circle"
-        case .people:
-            return "person.2"
-        case .places:
-            return "mappin.and.ellipse"
-        case .events:
-            return "calendar"
-        }
-    }
-
-    var includesPeople: Bool {
-        self == .all || self == .people
-    }
-
-    var includesPlaces: Bool {
-        self == .all || self == .places
-    }
-
-    var includesEvents: Bool {
-        self == .all || self == .events
     }
 }
 

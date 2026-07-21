@@ -31,6 +31,7 @@ struct AuthGate: View {
     @Environment(\.apiClient) private var apiClient
     @EnvironmentObject private var appSession: AppSession
     @StateObject private var viewModel = MobileAuthGateViewModel()
+    @State private var isHomePreloadReady = false
 
     var body: some View {
         Group {
@@ -55,6 +56,8 @@ struct AuthGate: View {
                             UserProfileViewModel.invalidateAllCaches()
                             viewModel.markCompleted()
                         }
+                    } else if !isHomePreloadReady {
+                        MobileOnboardingLoadingView()
                     } else {
                         MainTabView()
                     }
@@ -63,10 +66,18 @@ struct AuthGate: View {
         }
         .task(id: gateTaskID) {
             guard requiresOnboardingGate else {
+                isHomePreloadReady = true
                 return
             }
 
+            isHomePreloadReady = false
+            async let homePreload: Void = EventFeedViewModel.preload(
+                using: apiClient,
+                cacheIdentity: eventFeedCacheIdentity
+            )
             await viewModel.load(using: apiClient)
+            await homePreload
+            isHomePreloadReady = true
         }
         .onChange(of: requiresOnboardingGate) { _, requiresOnboardingGate in
             if !requiresOnboardingGate {
@@ -90,14 +101,16 @@ struct AuthGate: View {
     private var gateTaskID: String {
         "\(clerk.user?.id ?? "guest")-\(appSession.isAuthBypassed)"
     }
+
+    private var eventFeedCacheIdentity: String {
+        appSession.isAuthBypassed ? "bypass" : clerk.user?.id ?? "guest"
+    }
 }
 
 private struct MobileOnboardingLoadingView: View {
     var body: some View {
-        ProgressView()
-            .tint(.white.opacity(0.72))
-            .frame(maxWidth: .infinity, maxHeight: .infinity)
-            .background(AppTheme.background)
+        LaunchLoadingView()
+            .background(AppTheme.background.ignoresSafeArea())
     }
 }
 
@@ -719,7 +732,9 @@ struct MobileOnboardingView: View {
         let formatter = DateFormatter()
         formatter.calendar = Calendar(identifier: .gregorian)
         formatter.locale = Locale(identifier: "en_US_POSIX")
-        formatter.timeZone = TimeZone(secondsFromGMT: 0)
+        // A birthday is a calendar date, not a UTC instant. Parsing at UTC midnight
+        // displays the previous day in time zones west of Greenwich.
+        formatter.timeZone = .autoupdatingCurrent
         formatter.dateFormat = "yyyy-MM-dd"
         return formatter
     }()

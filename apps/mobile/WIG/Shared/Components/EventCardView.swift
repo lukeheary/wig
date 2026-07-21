@@ -394,7 +394,7 @@ private struct EventCardContent: View {
             VStack(alignment: .leading, spacing: 0) {
                 ZStack(alignment: .topTrailing) {
                     if isAuthenticated {
-                        EventSocialOverlayView(attendees: event.socialAttendees, size: .card)
+                        EventSocialOverlayView(attendees: goingAttendees, size: .card)
                             .padding(.trailing, 10)
                             .padding(.top, 10)
                     }
@@ -418,11 +418,28 @@ private struct EventCardContent: View {
                         .lineLimit(1)
                         .minimumScaleFactor(0.82)
 
-                    Text(event.primaryLocation)
-                        .font(.system(size: 13, weight: .medium))
-                        .foregroundStyle(.white.opacity(0.76))
-                        .lineLimit(1)
-                        .minimumScaleFactor(0.82)
+                    HStack(spacing: 8) {
+                        Text(event.primaryLocation)
+                            .font(.system(size: 13, weight: .medium))
+                            .foregroundStyle(.white.opacity(0.76))
+                            .lineLimit(1)
+                            .minimumScaleFactor(0.82)
+
+                        Spacer(minLength: 4)
+
+                        if isAuthenticated && interestedCount > 0 {
+                            HStack(spacing: 3) {
+                                Image(systemName: "star.fill")
+                                Text("\(interestedCount)")
+                            }
+                            .font(.system(size: 11, weight: .semibold))
+                            .foregroundStyle(.yellow)
+                            .fixedSize()
+                            .accessibilityLabel(
+                                "\(interestedCount) \(interestedCount == 1 ? "person" : "people") interested"
+                            )
+                        }
+                    }
                 }
                 .padding(.horizontal, 14)
                 .padding(.bottom, 14)
@@ -430,6 +447,28 @@ private struct EventCardContent: View {
             .frame(width: cardWidth, height: cardHeight, alignment: .topLeading)
         }
     }
+
+    private var goingAttendees: [EventSocialAttendee] {
+        event.friendsGoing
+            .filter { $0.user.isCurrentUser || $0.user.isFriend }
+            .sorted { lhs, rhs in
+                lhs.user.isCurrentUser && !rhs.user.isCurrentUser
+            }
+            .map { rsvp in
+                EventSocialAttendee(
+                    id: rsvp.user.id,
+                    firstName: rsvp.user.firstName,
+                    lastName: rsvp.user.lastName,
+                    avatarImageURL: rsvp.user.avatarImageURL,
+                    status: .going
+                )
+            }
+    }
+
+    private var interestedCount: Int {
+        event.friendsInterested.filter { $0.user.isCurrentUser || $0.user.isFriend }.count
+    }
+
 }
 
 private struct EventCardPrivacyOverlay: View {
@@ -571,7 +610,7 @@ private final class EventCardArtworkCache {
 }
 
 private struct EventCardPalette {
-    // Dark, muted dominant color used behind the text and as the fade target.
+    // Dark dominant color used behind the text and as the fade target.
     let textAreaColor: Color
     // Slightly darker variant for the very bottom edge and the card backing.
     let bottomColor: Color
@@ -587,7 +626,7 @@ private struct EventCardPalette {
         }
 
         let textArea = sampled.darkDominant()
-        let bottom = textArea.adjusted(saturation: 1.0, brightness: 0.84)
+        let bottom = textArea.adjusted(saturation: 1.04, brightness: 0.84)
 
         return EventCardPalette(
             textAreaColor: Color(uiColor: textArea),
@@ -695,7 +734,7 @@ private extension UIColor {
         )
     }
 
-    // Muted, dark version of the color that keeps white text readable while still
+    // Rich, dark version of the color that keeps white text readable while still
     // reading as a tint of the original artwork rather than generic black/gray.
     func darkDominant() -> UIColor {
         var hue: CGFloat = 0
@@ -712,12 +751,12 @@ private extension UIColor {
             return self
         }
 
-        let mutedSaturation = min(max(saturation * 0.82, 0), 0.60)
+        let vibrantSaturation = min(max(saturation * 1.08, 0), 0.78)
         let readableBrightness = min(max(brightness * 0.55, 0.14), 0.30)
 
         return UIColor(
             hue: hue,
-            saturation: mutedSaturation,
+            saturation: vibrantSaturation,
             brightness: readableBrightness,
             alpha: 1
         )
@@ -744,11 +783,13 @@ struct EventSocialOverlayView: View {
 
     var body: some View {
         if !attendees.isEmpty {
-            HStack(spacing: size.stackSpacing) {
-                HStack(spacing: size.avatarSpacing) {
-                    ForEach(visibleAttendees) { attendee in
-                        EventSocialAvatarView(attendee: attendee, size: size.avatarSize)
-                    }
+            HStack(spacing: size.avatarSpacing) {
+                ForEach(visibleAttendees) { attendee in
+                    EventSocialAvatarView(
+                        attendee: attendee,
+                        size: size.avatarSize,
+                        showsStatusRing: size.showsStatusRing
+                    )
                 }
 
                 if remainingCount > 0 {
@@ -756,8 +797,11 @@ struct EventSocialOverlayView: View {
                         .font(.system(size: size.overflowFontSize, weight: .bold))
                         .foregroundStyle(.white)
                         .frame(width: size.avatarSize, height: size.avatarSize)
-                        .background(Color.black.opacity(0.58), in: Circle())
-                        .overlay(Circle().strokeBorder(.white.opacity(0.72), lineWidth: 1))
+                        .background {
+                            Circle()
+                                .fill(.ultraThinMaterial)
+                                .overlay(Circle().fill(.black.opacity(0.48)))
+                        }
                 }
             }
             .padding(.trailing, size.trailingPadding)
@@ -803,24 +847,19 @@ struct EventSocialOverlayView: View {
             }
         }
 
-        var stackSpacing: CGFloat {
-            switch self {
-            case .searchRow:
-                return 3
-            case .summaryRow:
-                return 4
-            default:
-                return 5
-            }
+        var showsStatusRing: Bool {
+            self != .card
         }
 
         var maxDisplay: Int {
             switch self {
+            case .card:
+                return 4
             case .searchRow:
                 return 2
             case .summaryRow:
                 return 3
-            default:
+            case .detail:
                 return 3
             }
         }
@@ -921,20 +960,32 @@ struct EventSocialOverlayView: View {
 private struct EventSocialAvatarView: View {
     let attendee: EventSocialAttendee
     let size: CGFloat
+    let showsStatusRing: Bool
 
+    @ViewBuilder
     var body: some View {
-        ZStack {
-            Circle()
-                .fill(ringColor)
+        if showsStatusRing {
+            ZStack {
+                Circle()
+                    .fill(ringColor)
 
+                UserAvatarView(
+                    imageURL: attendee.avatarImageURL,
+                    name: displayName,
+                    size: size - 4,
+                    identityKey: attendee.id
+                )
+            }
+            .frame(width: size, height: size)
+        } else {
             UserAvatarView(
                 imageURL: attendee.avatarImageURL,
                 name: displayName,
-                size: size - 4,
+                size: size,
                 identityKey: attendee.id
             )
+            .shadow(color: .black.opacity(0.7), radius: 3, x: 0, y: 1)
         }
-        .frame(width: size, height: size)
     }
 
     private var displayName: String {

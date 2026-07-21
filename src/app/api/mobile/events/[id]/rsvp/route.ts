@@ -178,6 +178,18 @@ export async function POST(request: Request, context: RouteContext) {
         })
       : null;
 
+    await upsertRsvpActivity({
+      actorUserId: userId,
+      entityId: eventId,
+      type: body.status === "going" ? "rsvp_going" : "rsvp_interested",
+      metadata: {
+        status: body.status,
+        includePartner: Boolean(mirroredPartnerRsvp),
+        reason: null,
+        notifyFriends: true,
+      },
+    });
+
     await notifyFriendsOfRsvp(
       {
         actorUserId: userId,
@@ -283,7 +295,7 @@ export async function POST(request: Request, context: RouteContext) {
         ? "rsvp_interested"
         : "rsvp_not_going";
 
-  void upsertRsvpActivity({
+  await upsertRsvpActivity({
     actorUserId: userId,
     entityId: eventId,
     type: activityType,
@@ -356,7 +368,7 @@ export async function DELETE(_request: Request, context: RouteContext) {
       );
   }
 
-  void clearRsvpActivity({
+  await clearRsvpActivity({
     actorUserId: userId,
     entityId: eventId,
   });

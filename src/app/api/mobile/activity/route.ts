@@ -74,7 +74,6 @@ export async function GET(request: Request) {
     availableMetroAreas,
     cityCoordinates,
     friendConnections,
-    activityList,
     pendingFriendRequests,
     pendingPartnerRequests,
     acceptedFriendRequests,
@@ -115,28 +114,6 @@ export async function GET(request: Request) {
           ),
         })
       : Promise.resolve([]),
-    db.query.userActivity.findMany({
-      where: and(
-        eq(userActivity.entityType, "event"),
-        sql`${userActivity.type} in ('rsvp_going', 'rsvp_interested', 'rsvp_not_going')`
-      ),
-      orderBy: [desc(userActivity.updatedAt), desc(userActivity.createdAt)],
-      limit,
-      with: {
-        actor: true,
-        event: {
-          with: {
-            venue: true,
-            organizer: true,
-            categoryLinks: {
-              with: {
-                category: true,
-              },
-            },
-          },
-        },
-      },
-    }),
     userId
       ? db.query.userFriends.findMany({
           where: and(
@@ -200,6 +177,32 @@ export async function GET(request: Request) {
     friendship.userId === userId ? friendship.friendUserId : friendship.userId
   );
   const friendIdSet = new Set(friendIds);
+  const activityList =
+    friendIds.length > 0
+      ? await db.query.userActivity.findMany({
+          where: and(
+            eq(userActivity.entityType, "event"),
+            inArray(userActivity.actorUserId, friendIds),
+            sql`${userActivity.type} in ('rsvp_going', 'rsvp_interested', 'rsvp_not_going')`
+          ),
+          orderBy: [desc(userActivity.updatedAt), desc(userActivity.createdAt)],
+          limit: Math.min(limit * 4, 400),
+          with: {
+            actor: true,
+            event: {
+              with: {
+                venue: true,
+                organizer: true,
+                categoryLinks: {
+                  with: {
+                    category: true,
+                  },
+                },
+              },
+            },
+          },
+        })
+      : [];
 
   const visibleActivities = activityList.filter((activity) => {
     if (!VISIBLE_ACTIVITY_TYPES.has(activity.type)) return false;

@@ -28,6 +28,8 @@ struct APIClient: Sendable {
         var body: Data?
         var requiresAuthentication = true
         var includesAuthenticationIfAvailable = false
+        var timeoutInterval: TimeInterval?
+        var notifiesDataChange = true
 
         init(
             path: String,
@@ -36,7 +38,9 @@ struct APIClient: Sendable {
             queryItems: [URLQueryItem] = [],
             body: Data? = nil,
             requiresAuthentication: Bool = true,
-            includesAuthenticationIfAvailable: Bool = false
+            includesAuthenticationIfAvailable: Bool = false,
+            timeoutInterval: TimeInterval? = nil,
+            notifiesDataChange: Bool = true
         ) {
             self.path = path
             self.method = method
@@ -45,6 +49,8 @@ struct APIClient: Sendable {
             self.body = body
             self.requiresAuthentication = requiresAuthentication
             self.includesAuthenticationIfAvailable = includesAuthenticationIfAvailable
+            self.timeoutInterval = timeoutInterval
+            self.notifiesDataChange = notifiesDataChange
         }
     }
 
@@ -216,7 +222,8 @@ struct APIClient: Sendable {
             path: "/api/mobile/places/\(slug)/follow",
             method: .post,
             requiresAuthentication: false,
-            includesAuthenticationIfAvailable: true
+            includesAuthenticationIfAvailable: true,
+            notifiesDataChange: false
         )
     }
 
@@ -225,7 +232,26 @@ struct APIClient: Sendable {
             path: "/api/mobile/places/\(slug)/follow",
             method: .delete,
             requiresAuthentication: false,
-            includesAuthenticationIfAvailable: true
+            includesAuthenticationIfAvailable: true,
+            notifiesDataChange: false
+        )
+    }
+
+    static func hideMobilePlaceFromHome(slug: String) -> Endpoint<PlaceHomeVisibilityState> {
+        Endpoint(
+            path: "/api/mobile/places/\(slug)/home-hide",
+            method: .post,
+            timeoutInterval: 20,
+            notifiesDataChange: false
+        )
+    }
+
+    static func showMobilePlaceOnHome(slug: String) -> Endpoint<PlaceHomeVisibilityState> {
+        Endpoint(
+            path: "/api/mobile/places/\(slug)/home-hide",
+            method: .delete,
+            timeoutInterval: 20,
+            notifiesDataChange: false
         )
     }
 
@@ -325,7 +351,8 @@ struct APIClient: Sendable {
                 MobileFriendRequestRequest(friendUserID: friendUserID)
             ),
             requiresAuthentication: false,
-            includesAuthenticationIfAvailable: true
+            includesAuthenticationIfAvailable: true,
+            notifiesDataChange: false
         )
     }
 
@@ -962,7 +989,7 @@ struct APIClient: Sendable {
     }
 
     private func notifyDataChange<Response>(after endpoint: Endpoint<Response>) {
-        guard endpoint.method != .get else {
+        guard endpoint.method != .get, endpoint.notifiesDataChange else {
             return
         }
 
@@ -990,6 +1017,9 @@ struct APIClient: Sendable {
         }
 
         var request = URLRequest(url: url)
+        if let timeoutInterval = endpoint.timeoutInterval {
+            request.timeoutInterval = timeoutInterval
+        }
         request.httpMethod = endpoint.method.rawValue
         request.httpBody = endpoint.body
         request.setValue("application/json", forHTTPHeaderField: "Accept")
@@ -1047,6 +1077,10 @@ struct EmptyResponse: Decodable, Sendable {}
 
 struct PlaceFollowState: Decodable, Hashable, Sendable {
     let isFollowed: Bool
+}
+
+struct PlaceHomeVisibilityState: Decodable, Hashable, Sendable {
+    let isHiddenFromHome: Bool
 }
 
 struct MobileActivationState: Decodable, Hashable, Sendable {

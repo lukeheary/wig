@@ -546,6 +546,58 @@ struct EventSocialAttendee: Identifiable, Hashable, Sendable {
     let status: EventRSVPStatus
 }
 
+enum EventFeedDisplayWindow {
+    static let earlyMorningCutoffHour = 6
+
+    static func partition(
+        upcoming: [EventFeedItem],
+        past: [EventFeedItem],
+        now: Date = .now
+    ) -> (upcoming: [EventFeedItem], past: [EventFeedItem]) {
+        var seenIDs = Set<UUID>()
+        let allEvents = (upcoming + past).filter { event in
+            seenIDs.insert(event.id).inserted
+        }
+        let cutoff = displayRangeStartDate(now: now)
+
+        return (
+            upcoming: allEvents.filter { $0.startAt >= cutoff },
+            past: allEvents.filter { $0.startAt < cutoff }
+        )
+    }
+
+    static func isLastNight(_ event: EventFeedItem, now: Date = .now) -> Bool {
+        let localCalendar = calendar
+        guard localCalendar.component(.hour, from: now) < earlyMorningCutoffHour else {
+            return false
+        }
+
+        let startOfToday = localCalendar.startOfDay(for: now)
+        guard let yesterday = localCalendar.date(byAdding: .day, value: -1, to: startOfToday) else {
+            return false
+        }
+
+        return localCalendar.isDate(event.startAt, inSameDayAs: yesterday)
+    }
+
+    private static func displayRangeStartDate(now: Date) -> Date {
+        let localCalendar = calendar
+        let startOfToday = localCalendar.startOfDay(for: now)
+
+        guard localCalendar.component(.hour, from: now) < earlyMorningCutoffHour else {
+            return startOfToday
+        }
+
+        return localCalendar.date(byAdding: .day, value: -1, to: startOfToday) ?? startOfToday
+    }
+
+    private static var calendar: Calendar {
+        var calendar = Calendar(identifier: .gregorian)
+        calendar.firstWeekday = 2
+        return calendar
+    }
+}
+
 extension EventFeedItem {
     func updatingSocialRSVP(
         for user: EventSocialUser,

@@ -1,5 +1,6 @@
 import CoreImage
 import CoreImage.CIFilterBuiltins
+import ClerkKit
 import SafariServices
 import SwiftUI
 import UIKit
@@ -10,10 +11,12 @@ struct PlaceDetailView: View {
 
     @Environment(\.apiClient) private var apiClient
     @Environment(\.dismiss) private var dismiss
+    @Environment(Clerk.self) private var clerk
     @StateObject private var viewModel = PlaceDetailViewModel()
     @State private var selectedTab: PlaceEventsTab = .upcoming
     @State private var presentedAction: PlaceDetailAction?
     @State private var isUnfollowConfirmationPresented = false
+    @State private var isHideFromHomeConfirmationPresented = false
     @State private var blurredLogo: UIImage?
     @State private var logoTint: Color?
 
@@ -67,7 +70,11 @@ struct PlaceDetailView: View {
                         } actions: {
                             Button("Try Again") {
                                 Task {
-                                    await viewModel.load(slug: place.slug, using: apiClient)
+                                    await viewModel.load(
+                                        slug: place.slug,
+                                        using: apiClient,
+                                        initialFollowState: place.isFollowed
+                                    )
                                 }
                             }
                         }
@@ -112,46 +119,23 @@ struct PlaceDetailView: View {
             leadingTopControls
         }
         .overlay(alignment: .topTrailing) {
-            HStack(spacing: 10) {
-                if case .loaded(let detail) = viewModel.state, detail.canManage {
-                    FloatingGlassIconButton(systemImage: "square.and.pencil") {
-                        presentedAction = .edit
+            if isAuthenticated, case .loaded(let detail) = viewModel.state {
+                HStack(spacing: 10) {
+                    placeActionsMenu(for: detail)
+
+                    if !detail.isFollowed {
+                        placeFollowNavigationButton(for: detail)
                     }
                 }
-
-                if case .loaded(let detail) = viewModel.state, detail.canManage {
-                    PlaceCreationMenuButton { action in
-                        presentedAction = action
-                    }
-                }
-
-                if case .loaded(let detail) = viewModel.state {
-                    followButton(
-                        isFollowed: detail.isFollowed,
-                        isDisabled: viewModel.isUpdatingFollow
-                    ) {
-                        UIImpactFeedbackGenerator(style: .light).impactOccurred()
-
-                        if detail.isFollowed {
-                            isUnfollowConfirmationPresented = true
-                        } else {
-                            Task {
-                                await viewModel.setFollowed(
-                                    true,
-                                    slug: detail.slug,
-                                    using: apiClient
-                                )
-                            }
-                        }
-                    }
-                }
+                .padding(.trailing, 16)
+                .padding(.top, 0)
             }
-            .padding(.trailing, 16)
-            .padding(.top, 0)
         }
         .alert(unfollowAlertTitle, isPresented: $isUnfollowConfirmationPresented) {
             if case .loaded(let detail) = viewModel.state {
                 Button("Unfollow", role: .destructive) {
+                    UIImpactFeedbackGenerator(style: .heavy).impactOccurred()
+
                     Task {
                         await viewModel.setFollowed(
                             false,
@@ -163,8 +147,32 @@ struct PlaceDetailView: View {
             }
 
             Button("Cancel", role: .cancel) {}
+        }
+        .alert(hideFromHomeAlertTitle, isPresented: $isHideFromHomeConfirmationPresented) {
+            if case .loaded(let detail) = viewModel.state {
+                Button("Hide", role: .destructive) {
+                    UIImpactFeedbackGenerator(style: .heavy).impactOccurred()
+
+                    Task {
+                        await viewModel.setHiddenFromHome(
+                            true,
+                            slug: detail.slug,
+                            using: apiClient
+                        )
+                    }
+                }
+            }
+
+            Button("Cancel", role: .cancel) {}
         } message: {
-            Text("Are you sure you want to unfollow?")
+            Text(hideFromHomeAlertMessage)
+        }
+        .alert("Couldn’t Update Home", isPresented: homeVisibilityErrorBinding) {
+            Button("OK") {
+                viewModel.clearHomeVisibilityError()
+            }
+        } message: {
+            Text(viewModel.homeVisibilityErrorMessage ?? "Please try again.")
         }
         .sheet(item: $presentedAction) { action in
             if case .loaded(let detail) = viewModel.state {
@@ -210,7 +218,11 @@ struct PlaceDetailView: View {
         }
         .task {
             if case .idle = viewModel.state {
-                await viewModel.load(slug: place.slug, using: apiClient)
+                await viewModel.load(
+                    slug: place.slug,
+                    using: apiClient,
+                    initialFollowState: place.isFollowed
+                )
             }
         }
         .task(id: currentLogoURL) {
@@ -265,34 +277,6 @@ struct PlaceDetailView: View {
         PlaceDetailViewModel.cachedDetail(for: place.slug) ?? PlaceDetail(listItem: place)
     }
 
-    private struct PlaceCreationMenuButton: View {
-        let onSelect: (PlaceDetailAction) -> Void
-
-        var body: some View {
-            Menu {
-                Button {
-                    onSelect(.createEvent)
-                } label: {
-                    Label("Create Event", systemImage: "calendar.badge.plus")
-                }
-
-                Button {
-                    onSelect(.createEventSeries)
-                } label: {
-                    Label("Create Event Series", systemImage: "calendar.badge.clock")
-                }
-            } label: {
-                Image(systemName: "plus")
-                    .font(.system(size: 17, weight: .semibold))
-                    .foregroundStyle(.primary)
-                    .frame(width: 46, height: 46)
-                    .contentShape(Circle())
-                    .placeDetailLiquidGlass(in: Circle())
-            }
-            .buttonStyle(.plain)
-        }
-    }
-
     private enum PlaceDetailAction: String, Identifiable {
         case edit
         case createEvent
@@ -309,6 +293,21 @@ struct PlaceDetailView: View {
         return !detail.pastEvents.isEmpty
     }
 
+    private var isAuthenticated: Bool {
+        clerk.user != nil
+    }
+
+    private var homeVisibilityErrorBinding: Binding<Bool> {
+        Binding(
+            get: { viewModel.homeVisibilityErrorMessage != nil },
+            set: { isPresented in
+                if !isPresented {
+                    viewModel.clearHomeVisibilityError()
+                }
+            }
+        )
+    }
+
     private var placeEventPrefetchKey: String {
         guard case .loaded(let detail) = viewModel.state else {
             return "idle"
@@ -321,35 +320,126 @@ struct PlaceDetailView: View {
 
     private var unfollowAlertTitle: String {
         if case .loaded(let detail) = viewModel.state {
-            return "Unfollow \(detail.name)?"
+            return "Are you sure you want to unfollow \(detail.name)?"
         }
 
-        return "Unfollow \(place.name)?"
+        return "Are you sure you want to unfollow \(place.name)?"
     }
 
-    private func followButton(
-        isFollowed: Bool,
-        isDisabled: Bool,
-        action: @escaping () -> Void
-    ) -> some View {
-        Button(action: action) {
-            Text(isFollowed ? "Following" : "Follow")
+    private var hideFromHomeAlertTitle: String {
+        if case .loaded(let detail) = viewModel.state {
+            return "Hide events from \(detail.name)?"
+        }
+
+        return "Hide events from \(place.name)?"
+    }
+
+    private var hideFromHomeAlertMessage: String {
+        if case .loaded(let detail) = viewModel.state {
+            return "Events from \(detail.name) will no longer appear on Home."
+        }
+
+        return "Events from \(place.name) will no longer appear on Home."
+    }
+
+    private func placeActionsMenu(for detail: PlaceDetail) -> some View {
+        Menu {
+            if detail.canManage {
+                Button {
+                    presentedAction = .edit
+                } label: {
+                    Label("Edit Place", systemImage: "square.and.pencil")
+                        .foregroundStyle(.white)
+                }
+                .tint(.white)
+
+                Button {
+                    presentedAction = .createEvent
+                } label: {
+                    Label("Add Event", systemImage: "calendar.badge.plus")
+                        .foregroundStyle(.white)
+                }
+                .tint(.white)
+
+                Button {
+                    presentedAction = .createEventSeries
+                } label: {
+                    Label("Add Event Series", systemImage: "calendar.badge.clock")
+                        .foregroundStyle(.white)
+                }
+                .tint(.white)
+            }
+
+            if detail.isHiddenFromHome {
+                Button {
+                    UIImpactFeedbackGenerator(style: .medium).impactOccurred()
+
+                    Task {
+                        await viewModel.setHiddenFromHome(
+                            false,
+                            slug: detail.slug,
+                            using: apiClient
+                        )
+                    }
+                } label: {
+                    Label("Show Events on Home", systemImage: "eye")
+                        .foregroundStyle(.white)
+                }
+                .tint(.white)
+            } else {
+                Button {
+                    isHideFromHomeConfirmationPresented = true
+                } label: {
+                    Label("Hide Events from Home", systemImage: "eye.slash")
+                        .foregroundStyle(.white)
+                }
+                .tint(.white)
+            }
+
+            if detail.isFollowed {
+                Button(role: .destructive) {
+                    isUnfollowConfirmationPresented = true
+                } label: {
+                    Label("Unfollow", systemImage: "minus.circle")
+                        .foregroundStyle(.red)
+                }
+                .tint(.red)
+            }
+        } label: {
+            Image(systemName: "ellipsis")
+                .font(.system(size: 18, weight: .bold))
+                .foregroundStyle(.white)
+                .frame(width: 46, height: 46)
+                .contentShape(Circle())
+                .placeDetailLiquidGlass(in: Circle())
+        }
+        .buttonStyle(.plain)
+        .disabled(viewModel.isUpdatingFollow || viewModel.isUpdatingHomeVisibility)
+    }
+
+    private func placeFollowNavigationButton(for detail: PlaceDetail) -> some View {
+        Button {
+            UIImpactFeedbackGenerator(style: .light).impactOccurred()
+
+            Task {
+                await viewModel.setFollowed(
+                    true,
+                    slug: detail.slug,
+                    using: apiClient
+                )
+            }
+        } label: {
+            Text("Follow")
                 .font(.system(size: 15, weight: .bold))
-                .foregroundStyle(isFollowed ? .white : .black)
-                .padding(.horizontal, 20)
+                .foregroundStyle(.white)
+                .padding(.horizontal, 18)
                 .frame(height: 46)
                 .contentShape(Capsule())
-                .background {
-                    if !isFollowed {
-                        Capsule()
-                            .fill(.white)
-                    }
-                }
                 .placeDetailLiquidGlass(in: Capsule())
         }
         .buttonStyle(.plain)
-        .disabled(isDisabled)
-        .opacity(isDisabled ? 0.72 : 1)
+        .disabled(viewModel.isUpdatingFollow)
+        .opacity(viewModel.isUpdatingFollow ? 0.62 : 1)
     }
 
     private struct PlaceEventFilterDropdown: View {
@@ -392,7 +482,11 @@ struct PlaceDetailView: View {
 
     @ViewBuilder
     private func eventGroups(for detail: PlaceDetail) -> some View {
-        let events = selectedTab == .upcoming ? detail.events : detail.pastEvents
+        let displayWindow = EventFeedDisplayWindow.partition(
+            upcoming: detail.events,
+            past: detail.pastEvents
+        )
+        let events = selectedTab == .upcoming ? displayWindow.upcoming : displayWindow.past
         let groups = PlaceEventGrouper.groups(for: events, mode: selectedTab)
 
         if groups.isEmpty {
@@ -624,20 +718,18 @@ private struct PlaceDetailHeader: View {
     @State private var isImageViewerPresented = false
 
     var body: some View {
-        VStack(spacing: 12) {
+        HStack(alignment: .bottom, spacing: 20) {
             logo
-            .padding(.top, 64)
 
-            VStack(spacing: 3) {
-                Text(name)
-                    .font(.system(size: 22, weight: .bold))
-                    .foregroundStyle(.white)
-                    .lineLimit(3)
-                    .minimumScaleFactor(0.76)
-                    .fixedSize(horizontal: false, vertical: true)
-                    .multilineTextAlignment(.center)
+            VStack(alignment: .leading, spacing: 12) {
+                VStack(alignment: .leading, spacing: 2) {
+                    Text(name)
+                        .font(.system(size: 17, weight: .bold))
+                        .foregroundStyle(.white)
+                        .lineLimit(2)
+                        .minimumScaleFactor(0.76)
+                        .multilineTextAlignment(.leading)
 
-                HStack(alignment: .center, spacing: 12) {
                     Group {
                         if let cityStateText {
                             Text(cityStateText)
@@ -645,58 +737,58 @@ private struct PlaceDetailHeader: View {
                             Text(categoryLabel)
                         }
                     }
-                    .font(.system(size: 15, weight: .medium))
-                    .foregroundStyle(.white.opacity(0.56))
-                    .lineLimit(2)
+                    .font(.system(size: 12, weight: .medium))
+                    .foregroundStyle(.white.opacity(0.58))
+                    .lineLimit(1)
                     .minimumScaleFactor(0.78)
-                    .fixedSize(horizontal: false, vertical: true)
                 }
-            }
-            .frame(maxWidth: .infinity)
 
-            HStack(alignment: .center, spacing: 12) {
-                if mapsQueryText != nil {
-                    PlaceDetailActionCircleButton {
-                    Image(systemName: "location")
-                        .font(.system(size: 18, weight: .semibold))
-                        .foregroundStyle(.white)
-                    } action: {
-                        isMapsDialogPresented = true
-                    }
-                    .confirmationDialog("Open Location", isPresented: $isMapsDialogPresented) {
-                        if let mapsQueryText {
-                            Button("Open in Maps") {
-                                openInMaps(address: mapsQueryText)
+                HStack(alignment: .center, spacing: 12) {
+                    if mapsQueryText != nil {
+                        PlaceDetailActionCircleButton {
+                            Image(systemName: "location")
+                                .font(.system(size: 18, weight: .semibold))
+                                .foregroundStyle(.white)
+                        } action: {
+                            isMapsDialogPresented = true
+                        }
+                        .confirmationDialog("Open Location", isPresented: $isMapsDialogPresented) {
+                            if let mapsQueryText {
+                                Button("Open in Maps") {
+                                    openInMaps(address: mapsQueryText)
+                                }
+                            }
+
+                            Button("Cancel", role: .cancel) {}
+                        } message: {
+                            if let mapsQueryText {
+                                Text(mapsQueryText)
                             }
                         }
+                    }
 
-                        Button("Cancel", role: .cancel) {}
-                    } message: {
-                        if let mapsQueryText {
-                            Text(mapsQueryText)
+                    if let websiteURL {
+                        PlaceDetailActionCircleButton {
+                            Image(systemName: "globe")
+                                .font(.system(size: 18, weight: .semibold))
+                                .foregroundStyle(.white)
+                        } action: {
+                            safariRoute = SafariRoute(url: websiteURL)
+                        }
+                    }
+
+                    if let instagramURL {
+                        PlaceDetailActionCircleButton {
+                            InstagramGlyph()
+                        } action: {
+                            openInstagram(url: instagramURL)
                         }
                     }
                 }
-
-                if let websiteURL {
-                    PlaceDetailActionCircleButton {
-                        Image(systemName: "globe")
-                            .font(.system(size: 18, weight: .semibold))
-                            .foregroundStyle(.white)
-                    } action: {
-                        safariRoute = SafariRoute(url: websiteURL)
-                    }
-                }
-
-                if let instagramURL {
-                    PlaceDetailActionCircleButton {
-                        InstagramGlyph()
-                    } action: {
-                        openInstagram(url: instagramURL)
-                    }
-                }
             }
+            .frame(maxWidth: .infinity, minHeight: 104, alignment: .bottomLeading)
         }
+        .padding(.top, 64)
         .frame(maxWidth: .infinity)
         .sheet(item: $safariRoute) { route in
             SafariView(url: route.url)
@@ -809,7 +901,7 @@ private struct PlaceDetailActionCircleButton<Content: View>: View {
     var body: some View {
         Button(action: action) {
             content
-                .frame(width: 46, height: 46)
+                .frame(width: 36, height: 36)
                 .contentShape(Circle())
                 .background(Color.white.opacity(0.07), in: Circle())
                 .overlay {
@@ -913,6 +1005,10 @@ private enum PlaceEventGrouper {
     }
 
     private static func label(for event: EventFeedItem, mode: PlaceEventsTab) -> String {
+        if mode == .upcoming, EventFeedDisplayWindow.isLastNight(event) {
+            return "Last Night"
+        }
+
         var calendar = Calendar(identifier: .gregorian)
         calendar.timeZone = event.displayTimeZone
         calendar.firstWeekday = 2
