@@ -14,6 +14,7 @@ final class ProfileViewModel: ObservableObject {
     @Published var avatarUploadError: String?
     private static var cachedResponse: FriendsFeedResponse?
     private static var inFlightLoad: Task<FriendsFeedResponse, Error>?
+    private static var friendRequestStatusOverrides: [String: FriendRequestStatusOverride] = [:]
 
     /// The signed-in user's summary, if the friends feed has been loaded.
     static var currentUserSummary: FriendUserSummary? {
@@ -34,7 +35,7 @@ final class ProfileViewModel: ObservableObject {
             state = .loading
 
             do {
-                let response = try await inFlightLoad.value
+                let response = Self.applyingFriendRequestStatusOverrides(to: try await inFlightLoad.value)
                 Self.cachedResponse = response
                 state = .loaded(response)
             } catch {
@@ -44,7 +45,11 @@ final class ProfileViewModel: ObservableObject {
             return
         }
 
-        state = .loading
+        if let cachedResponse = Self.cachedResponse {
+            state = .loaded(cachedResponse)
+        } else {
+            state = .loading
+        }
 
         do {
             let loadTask = Task {
@@ -52,7 +57,7 @@ final class ProfileViewModel: ObservableObject {
             }
             Self.inFlightLoad = loadTask
 
-            let response = try await loadTask.value
+            let response = Self.applyingFriendRequestStatusOverrides(to: try await loadTask.value)
             Self.cachedResponse = response
             state = .loaded(response)
         } catch {
@@ -116,6 +121,33 @@ final class ProfileViewModel: ObservableObject {
         }
     }
 
+    func applyFriendRequestStatusChange(
+        for user: FriendUserSummary,
+        status: FriendUserSummary.FriendStatus
+    ) {
+        let change = FriendRequestStatusOverride(user: user, status: status)
+        Self.recordFriendRequestStatusOverride(for: user, status: status)
+        updateLoadedResponse { response in
+            Self.applying(change, to: response)
+        }
+    }
+
+    static func recordFriendRequestStatusOverride(
+        for user: FriendUserSummary,
+        status: FriendUserSummary.FriendStatus
+    ) {
+        let change = FriendRequestStatusOverride(user: user, status: status)
+        friendRequestStatusOverrides[user.id] = change
+
+        if let cachedResponse {
+            Self.cachedResponse = applying(change, to: cachedResponse)
+        }
+    }
+
+    static func confirmFriendRequestStatusChange(userID: String) {
+        friendRequestStatusOverrides[userID] = nil
+    }
+
     func snapshotLoadedResponse() -> FriendsFeedResponse? {
         guard case .loaded(let response) = state else {
             return nil
@@ -145,7 +177,7 @@ final class ProfileViewModel: ObservableObject {
         inFlightLoad = loadTask
 
         do {
-            cachedResponse = try await loadTask.value
+            cachedResponse = applyingFriendRequestStatusOverrides(to: try await loadTask.value)
         } catch {
             // Ignore preload failures; the screen can still load normally later.
         }
@@ -158,6 +190,134 @@ final class ProfileViewModel: ObservableObject {
         inFlightLoad?.cancel()
         inFlightLoad = nil
     }
+
+    private static func applyingFriendRequestStatusOverrides(
+        to response: FriendsFeedResponse
+    ) -> FriendsFeedResponse {
+        let sanitizedResponse = removingCurrentUserFromRelationships(in: response)
+        var result = sanitizedResponse
+
+        for (userID, change) in Array(friendRequestStatusOverrides) {
+            if change.user.id == sanitizedResponse.profile?.id {
+                friendRequestStatusOverrides[userID] = nil
+            } else if responseReflects(change, in: sanitizedResponse) {
+                friendRequestStatusOverrides[userID] = nil
+            } else {
+                result = applying(change, to: result)
+            }
+        }
+
+        return result
+    }
+
+    private static func removingCurrentUserFromRelationships(
+        in response: FriendsFeedResponse
+    ) -> FriendsFeedResponse {
+        guard let currentUserID = response.profile?.id else {
+            return response
+        }
+
+        let friends = response.friends.filter { $0.id != currentUserID }
+        let receivedRequests = response.receivedRequests.filter { $0.id != currentUserID }
+        let sentRequests = response.sentRequests.filter { $0.id != currentUserID }
+
+        return FriendsFeedResponse(
+            profile: response.profile,
+            friendCount: friends.count,
+            requestCount: receivedRequests.count,
+            followingCount: response.followingCount,
+            followedPlaces: response.followedPlaces,
+            friends: friends,
+            receivedRequests: receivedRequests,
+            sentRequests: sentRequests,
+            upcomingEvents: response.upcomingEvents,
+            pastEvents: response.pastEvents
+        )
+    }
+
+    private static func responseReflects(
+        _ change: FriendRequestStatusOverride,
+        in response: FriendsFeedResponse
+    ) -> Bool {
+        let userID = change.user.id
+
+        switch change.status {
+        case .none:
+            return !response.friends.contains { $0.id == userID }
+                && !response.receivedRequests.contains { $0.id == userID }
+                && !response.sentRequests.contains { $0.id == userID }
+        case .accepted:
+            return response.friends.contains { $0.id == userID }
+        case .pendingSent:
+            return response.sentRequests.contains { $0.id == userID }
+        case .pendingReceived:
+            return response.receivedRequests.contains { $0.id == userID }
+        }
+    }
+
+    private static func applying(
+        _ change: FriendRequestStatusOverride,
+        to response: FriendsFeedResponse
+    ) -> FriendsFeedResponse {
+        guard change.user.id != response.profile?.id else {
+            return response
+        }
+
+        let user = change.user
+        let status = change.status
+        let wasPending = response.receivedRequests.contains { $0.id == user.id }
+        let wasFriend = response.friends.contains { $0.id == user.id }
+        let isPending = status == .pendingReceived
+        let isSent = status == .pendingSent
+        var receivedRequests = response.receivedRequests.filter { $0.id != user.id }
+        var sentRequests = response.sentRequests.filter { $0.id != user.id }
+        var friends = response.friends.filter { $0.id != user.id }
+        let updatedUser = FriendUserSummary(
+            id: user.id,
+            friendshipID: user.friendshipID,
+            name: user.name,
+            username: user.username,
+            avatarImageURL: user.avatarImageURL,
+            city: user.city,
+            state: user.state,
+            friendStatus: status
+        )
+
+        if isPending {
+            receivedRequests.append(updatedUser)
+        } else if isSent {
+            sentRequests.append(updatedUser)
+        } else if status == .accepted {
+            friends.append(updatedUser)
+        }
+
+        return FriendsFeedResponse(
+            profile: response.profile,
+            friendCount: max(
+                response.friendCount
+                    + (status == .accepted && !wasFriend ? 1 : 0)
+                    - (status != .accepted && wasFriend ? 1 : 0),
+                0
+            ),
+            requestCount: max(
+                response.requestCount
+                    + (isPending ? (wasPending ? 0 : 1) : (wasPending ? -1 : 0)),
+                0
+            ),
+            followingCount: response.followingCount,
+            followedPlaces: response.followedPlaces,
+            friends: friends,
+            receivedRequests: receivedRequests,
+            sentRequests: sentRequests,
+            upcomingEvents: response.upcomingEvents,
+            pastEvents: response.pastEvents
+        )
+    }
+}
+
+private struct FriendRequestStatusOverride {
+    let user: FriendUserSummary
+    let status: FriendUserSummary.FriendStatus
 }
 
 @MainActor
@@ -261,5 +421,20 @@ final class UserProfileViewModel: ObservableObject {
             Self.cachedResponses[profileID] = updated
         }
         state = .loaded(updated)
+    }
+
+    func snapshotLoadedResponse() -> UserProfileResponse? {
+        guard case .loaded(let response) = state else {
+            return nil
+        }
+
+        return response
+    }
+
+    func restoreLoadedResponse(_ response: UserProfileResponse) {
+        if let profileID = response.profile?.id {
+            Self.cachedResponses[profileID] = response
+        }
+        state = .loaded(response)
     }
 }

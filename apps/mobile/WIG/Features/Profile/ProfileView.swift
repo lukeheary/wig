@@ -68,12 +68,19 @@ struct ProfileView: View {
                         await loadProfileScreen()
                     }
                 }
-                .onReceive(NotificationCenter.default.publisher(for: .friendRequestDidChange)) { _ in
-                    ProfileViewModel.invalidateCache()
+                .onReceive(NotificationCenter.default.publisher(for: .friendRequestDidChange)) { notification in
                     UserProfileViewModel.invalidateAllCaches()
 
-                    Task {
-                        await loadProfileScreen()
+                    if let user = notification.object as? FriendUserSummary,
+                       let rawStatus = notification.userInfo?["friendStatus"] as? String,
+                       let status = FriendUserSummary.FriendStatus(rawValue: rawStatus) {
+                        viewModel.applyFriendRequestStatusChange(for: user, status: status)
+                    } else {
+                        ProfileViewModel.invalidateCache()
+
+                        Task {
+                            await loadProfileScreen()
+                        }
                     }
                 }
                 .onReceive(NotificationCenter.default.publisher(for: .appDataDidChange)) { _ in
@@ -189,6 +196,7 @@ struct ProfileView: View {
                         )
                         .presentationDetents([.medium, .large])
                         .presentationDragIndicator(.visible)
+                        .presentationBackground(ProfileTheme.cardBackground)
                     }
                 }
                 .navigationDestination(isPresented: $isAdminSettingsPresented) {
@@ -230,7 +238,7 @@ struct ProfileView: View {
     private var content: some View {
         switch viewModel.state {
         case .idle, .loading:
-            NativeLoadingView(title: "Loading profile…")
+            NativeLoadingView()
             .background(ProfileTheme.background)
 
         case .failed(let message):
@@ -579,6 +587,7 @@ struct ProfileView: View {
 
         let previousResponse = viewModel.snapshotLoadedResponse()
         viewModel.removeFriend(userID: friend.id)
+        updateSearchFriendStatus(userID: friend.id, status: .none)
 
         do {
             try await apiClient.send(APIClient.declineMobileFriendRequest(friendRequestID: friendshipID))
@@ -586,7 +595,23 @@ struct ProfileView: View {
             if let previousResponse {
                 viewModel.restoreLoadedResponse(previousResponse)
             }
+            updateSearchFriendStatus(userID: friend.id, status: .accepted)
         }
+    }
+
+    private func updateSearchFriendStatus(
+        userID: String,
+        status: FriendUserSummary.FriendStatus
+    ) {
+        HomeSearchDirectoryViewModel.updateCachedFriendStatus(for: userID, status: status)
+        NotificationCenter.default.post(
+            name: .friendRequestDidChange,
+            object: nil,
+            userInfo: [
+                "userID": userID,
+                "friendStatus": status.rawValue,
+            ]
+        )
     }
 
     private func respondToFriendRequest(
@@ -656,6 +681,11 @@ struct ProfileView: View {
             }
         }
 
+        postOptimisticFriendRequestChange(
+            for: resolvedRequest,
+            status: response == .accept ? .accepted : .none
+        )
+
         do {
             switch response {
             case .accept:
@@ -668,6 +698,7 @@ struct ProfileView: View {
             if let previousResponse {
                 viewModel.restoreLoadedResponse(previousResponse)
             }
+            postOptimisticFriendRequestChange(for: resolvedRequest, status: .pendingReceived)
             friendRequestActionErrorMessage = error.localizedDescription
             return false
         }
@@ -770,7 +801,7 @@ private struct MobileEditProfileView: View {
         Group {
             switch viewModel.state {
             case .idle, .loading:
-                NativeLoadingView(title: "Loading profile…")
+                NativeLoadingView()
                     .background(ProfileTheme.background)
 
             case .failed(let message):
@@ -899,10 +930,13 @@ struct UserProfileView: View {
             .overlay(alignment: .top) {
                 topControls
             }
-            .task {
-                if case .idle = viewModel.state {
-                    await viewModel.load(userID: userID, using: apiClient)
+            .task(id: userID) {
+                if case .loaded(let response) = viewModel.state,
+                   response.profile?.id == userID {
+                    return
                 }
+
+                await viewModel.load(userID: userID, using: apiClient)
             }
             .onReceive(NotificationCenter.default.publisher(for: .appDataDidChange)) { _ in
                 // Friend actions update this profile optimistically below. Ignore the
@@ -955,7 +989,7 @@ struct UserProfileView: View {
     private var content: some View {
         switch viewModel.state {
         case .idle, .loading:
-            NativeLoadingView(title: "Loading profile…")
+            NativeLoadingView()
             .background(ProfileTheme.background)
 
         case .failed(let message):
@@ -979,6 +1013,11 @@ struct UserProfileView: View {
                     VStack(spacing: 12) {
                         ProfileHeader(profile: response.profile, isUploadingAvatar: false, isAvatarMenuPresented: nil) {
                             UserRelationshipSummaryRow(response: response)
+                        }
+
+                        if displaysFriendActions, let profile = response.profile {
+                            userFriendProfileAction(for: profile)
+                                .padding(.top, 8)
                         }
 
                         if displaysReceivedFriendRequestActions {
@@ -1043,9 +1082,6 @@ struct UserProfileView: View {
                             profileShareMenu(for: profile)
                         }
 
-                        if displaysFriendActions {
-                            userFriendNavigationAction(for: profile)
-                        }
                     }
                 }
             }
@@ -1133,13 +1169,6 @@ struct UserProfileView: View {
             }
             .tint(.white)
 
-            Button(role: .destructive) {
-                pendingUnfriendProfile = profile
-            } label: {
-                Label("Remove Friend", systemImage: "person.crop.circle.badge.minus")
-                    .foregroundStyle(.red)
-            }
-            .tint(.red)
         } label: {
             Image(systemName: "ellipsis")
                 .font(.system(size: 18, weight: .bold))
@@ -1153,18 +1182,56 @@ struct UserProfileView: View {
     }
 
     @ViewBuilder
-    private func userFriendNavigationAction(for profile: FriendUserSummary) -> some View {
+    private func userFriendProfileAction(for profile: FriendUserSummary) -> some View {
         switch profile.friendStatus ?? FriendUserSummary.FriendStatus.none {
         case FriendUserSummary.FriendStatus.none:
-            profileFriendRequestButton(
-                title: "Add Friend",
-                isDisabled: isSendingFriendRequest
-            ) {
+            Button {
                 sendFriendRequest(to: profile.id)
+            } label: {
+                Text("Add Friend")
+                    .frame(maxWidth: .infinity)
+                    .frame(height: 40)
+                    .contentShape(RoundedRectangle(cornerRadius: 12, style: .continuous))
             }
+            .profileActionButtonStyle(
+                kind: .accent,
+                isDisabled: isSendingFriendRequest,
+                fillsAvailableWidth: true,
+                fontWeight: .semibold,
+                cornerRadius: 12,
+                fontSize: 15
+            )
+            .disabled(isSendingFriendRequest)
         case .pendingSent:
-            profileFriendRequestButton(title: "Added", isDisabled: true) {}
-        case .pendingReceived, .accepted:
+            Button("Added") {}
+                .profileActionButtonStyle(
+                    kind: .secondary,
+                    isDisabled: true,
+                    fillsAvailableWidth: true,
+                    cornerRadius: 12,
+                    fontSize: 15
+                )
+                .disabled(true)
+        case .accepted:
+            Button {
+                UIImpactFeedbackGenerator(style: .light).impactOccurred()
+                pendingUnfriendProfile = profile
+            } label: {
+                Text("Friends")
+                    .frame(maxWidth: .infinity)
+                    .frame(height: 40)
+                    .contentShape(RoundedRectangle(cornerRadius: 12, style: .continuous))
+            }
+            .profileActionButtonStyle(
+                kind: .secondary,
+                isDisabled: isRespondingToFriendRequest,
+                fillsAvailableWidth: true,
+                fontWeight: .semibold,
+                cornerRadius: 12,
+                fontSize: 15
+            )
+            .disabled(isRespondingToFriendRequest)
+        case .pendingReceived:
             EmptyView()
         }
     }
@@ -1205,32 +1272,56 @@ struct UserProfileView: View {
         }
     }
 
-    private func profileFriendRequestButton(
-        title: String,
-        isDisabled: Bool,
-        action: @escaping () -> Void
-    ) -> some View {
-        Button(action: action) {
-            Text(title)
-                .font(.system(size: 15, weight: .bold))
-                .foregroundStyle(.white)
-                .padding(.horizontal, 18)
-                .frame(height: 46)
-                .contentShape(Capsule())
-                .profileLiquidGlass(in: Capsule())
-        }
-        .buttonStyle(.plain)
-        .disabled(isDisabled)
-        .opacity(isDisabled ? 0.62 : 1)
-    }
-
     private func sendFriendRequest(to userID: String) {
-        guard !isSendingFriendRequest else {
+        guard !isSendingFriendRequest,
+              let previousResponse = viewModel.snapshotLoadedResponse(),
+              let profile = previousResponse.profile,
+              profile.id == userID,
+              profile.id != ProfileViewModel.currentUserSummary?.id
+        else {
             return
         }
 
-        UIImpactFeedbackGenerator(style: .light).impactOccurred()
+        let optimisticProfile = FriendUserSummary(
+            id: profile.id,
+            friendshipID: profile.friendshipID,
+            name: profile.name,
+            username: profile.username,
+            avatarImageURL: profile.avatarImageURL,
+            city: profile.city,
+            state: profile.state,
+            friendStatus: .pendingSent
+        )
+
+        ConfirmationHaptic.play()
         isSendingFriendRequest = true
+        viewModel.updateLoadedResponse { current in
+            UserProfileResponse(
+                profile: current.profile.map {
+                    FriendUserSummary(
+                        id: $0.id,
+                        friendshipID: $0.friendshipID,
+                        name: $0.name,
+                        username: $0.username,
+                        avatarImageURL: $0.avatarImageURL,
+                        city: $0.city,
+                        state: $0.state,
+                        friendStatus: .pendingSent
+                    )
+                },
+                friendCount: current.friendCount,
+                followingCount: current.followingCount,
+                followedPlaces: current.followedPlaces,
+                friends: current.friends,
+                upcomingEvents: current.upcomingEvents,
+                pastEvents: current.pastEvents
+            )
+        }
+        postFriendStatusChange(
+            userID: userID,
+            status: .pendingSent,
+            sourceUser: optimisticProfile
+        )
 
         Task {
             defer {
@@ -1263,16 +1354,19 @@ struct UserProfileView: View {
                         pastEvents: current.pastEvents
                     )
                 }
-                NotificationCenter.default.post(
-                    name: .friendRequestDidChange,
-                    object: nil,
-                    userInfo: [
-                        "userID": userID,
-                        "friendStatus": response.friendStatus.rawValue,
-                    ]
+                postFriendStatusChange(
+                    userID: userID,
+                    status: response.friendStatus,
+                    sourceUser: optimisticProfile
                 )
             } catch {
-                // Keep the current profile visible without interrupting the screen.
+                viewModel.restoreLoadedResponse(previousResponse)
+                postFriendStatusChange(
+                    userID: userID,
+                    status: .none,
+                    sourceUser: optimisticProfile
+                )
+                ProfileViewModel.confirmFriendRequestStatusChange(userID: userID)
             }
         }
     }
@@ -1290,6 +1384,8 @@ struct UserProfileView: View {
         }
 
         isRespondingToFriendRequest = true
+        let previousResponse = viewModel.snapshotLoadedResponse()
+        let optimisticStatus: FriendUserSummary.FriendStatus = response == .accept ? .accepted : .none
 
         viewModel.updateLoadedResponse { current in
             UserProfileResponse(
@@ -1302,7 +1398,7 @@ struct UserProfileView: View {
                         avatarImageURL: $0.avatarImageURL,
                         city: $0.city,
                         state: $0.state,
-                        friendStatus: response == .accept ? .accepted : FriendUserSummary.FriendStatus.none
+                        friendStatus: optimisticStatus
                     )
                 },
                 friendCount: current.friendCount,
@@ -1313,6 +1409,12 @@ struct UserProfileView: View {
                 pastEvents: current.pastEvents
             )
         }
+        postFriendStatusChange(
+            userID: profile.id,
+            status: optimisticStatus,
+            sourceUser: profile
+        )
+        playFriendRequestResponseHaptic(response)
 
         Task {
             defer {
@@ -1327,7 +1429,15 @@ struct UserProfileView: View {
                     try await apiClient.send(APIClient.declineMobileFriendRequest(friendRequestID: friendshipID))
                 }
             } catch {
-                await viewModel.load(userID: userID, using: apiClient)
+                if let previousResponse {
+                    viewModel.restoreLoadedResponse(previousResponse)
+                }
+                postFriendStatusChange(
+                    userID: profile.id,
+                    status: .pendingReceived,
+                    sourceUser: profile
+                )
+                ProfileViewModel.confirmFriendRequestStatusChange(userID: profile.id)
             }
         }
     }
@@ -1342,6 +1452,7 @@ struct UserProfileView: View {
         }
 
         isRespondingToFriendRequest = true
+        let previousResponse = viewModel.snapshotLoadedResponse()
 
         viewModel.updateLoadedResponse { current in
             UserProfileResponse(
@@ -1366,7 +1477,7 @@ struct UserProfileView: View {
             )
         }
         ProfileViewModel.invalidateCache()
-        UserProfileViewModel.invalidateAllCaches()
+        postFriendStatusChange(userID: profile.id, status: .none)
 
         Task {
             defer {
@@ -1378,9 +1489,36 @@ struct UserProfileView: View {
                     APIClient.declineMobileFriendRequest(friendRequestID: friendshipID)
                 )
             } catch {
-                await viewModel.load(userID: userID, using: apiClient)
+                if let previousResponse {
+                    viewModel.restoreLoadedResponse(previousResponse)
+                }
+                postFriendStatusChange(userID: profile.id, status: .accepted)
             }
         }
+    }
+
+    private func postFriendStatusChange(
+        userID: String,
+        status: FriendUserSummary.FriendStatus,
+        sourceUser: FriendUserSummary? = nil
+    ) {
+        HomeSearchDirectoryViewModel.updateCachedFriendStatus(for: userID, status: status)
+
+        if let sourceUser {
+            ProfileViewModel.recordFriendRequestStatusOverride(
+                for: sourceUser,
+                status: status
+            )
+        }
+
+        NotificationCenter.default.post(
+            name: .friendRequestDidChange,
+            object: sourceUser,
+            userInfo: [
+                "userID": userID,
+                "friendStatus": status.rawValue,
+            ]
+        )
     }
 
     private var userProfileEventPrefetchKey: String {
@@ -1749,7 +1887,7 @@ private struct ProfileHeader: View {
             avatar
 
             if let profile {
-                VStack(alignment: .leading, spacing: 7) {
+                VStack(alignment: .leading, spacing: 14) {
                     VStack(alignment: .leading, spacing: 2) {
                         Text(profile.name)
                             .font(.system(size: 17, weight: .bold))
@@ -2024,25 +2162,28 @@ private struct PartnerManagementCard: View {
             if let relationship {
                 partnerStateView(relationship)
             } else {
-                VStack(alignment: .leading, spacing: 16) {
-                    Text(
-                        availableFriendCount == 0
-                            ? "You need an accepted friend before you can choose a partner."
-                            : "Choose a partner from your accepted friends."
-                    )
-                    .font(.system(size: 14, weight: .medium))
-                    .foregroundStyle(.white.opacity(0.64))
-
-                    Button("Add Partner") {
-                        onChoosePartner()
-                    }
-                    .profileActionButtonStyle(
-                        kind: .primary,
-                        isDisabled: availableFriendCount == 0 || isBusy
-                    )
-                    .disabled(availableFriendCount == 0 || isBusy)
+                Button {
+                    onChoosePartner()
+                } label: {
+                    Text("Add Partner")
+                        .frame(maxWidth: .infinity)
+                        .frame(height: 40)
+                        .contentShape(RoundedRectangle(cornerRadius: 12, style: .continuous))
                 }
-                .padding(.vertical, 8)
+                .profileActionButtonStyle(
+                    kind: .accent,
+                    isDisabled: availableFriendCount == 0 || isBusy,
+                    fillsAvailableWidth: true,
+                    fontWeight: .semibold,
+                    cornerRadius: 12,
+                    fontSize: 15
+                )
+                .disabled(availableFriendCount == 0 || isBusy)
+                .accessibilityHint(
+                    availableFriendCount == 0
+                        ? "Add an accepted friend before choosing a partner."
+                        : "Choose a partner from your accepted friends."
+                )
             }
         }
         .frame(maxWidth: .infinity, alignment: .leading)
@@ -2145,6 +2286,7 @@ private struct PartnerPickerSheet: View {
 
     @Environment(\.dismiss) private var dismiss
     @State private var searchText = ""
+    @State private var pendingPartner: FriendUserSummary?
 
     private var filteredFriends: [FriendUserSummary] {
         let query = searchText.trimmingCharacters(in: .whitespacesAndNewlines)
@@ -2159,16 +2301,23 @@ private struct PartnerPickerSheet: View {
     }
 
     var body: some View {
-        VStack(spacing: 0) {
-            Text("Choose Partner")
-                .font(.system(size: 17, weight: .bold))
-                .foregroundStyle(.white)
-                .frame(maxWidth: .infinity)
-                .padding(.top, 10)
-                .padding(.bottom, 14)
+        ZStack {
+            Color(red: 0.11, green: 0.11, blue: 0.13)
+                .ignoresSafeArea()
 
             ScrollView {
-                VStack(alignment: .leading, spacing: 18) {
+                VStack(alignment: .leading, spacing: 20) {
+                    VStack(alignment: .leading, spacing: 8) {
+                        Text("Choose a partner from your accepted friends.")
+                            .font(.system(size: 20, weight: .bold))
+                            .foregroundStyle(.white)
+
+                        Text("Partners can add or update RSVP statuses for both of you. Your friends may see your names together in activity and event attendance.")
+                            .font(.system(size: 14, weight: .medium))
+                            .foregroundStyle(.white.opacity(0.64))
+                            .fixedSize(horizontal: false, vertical: true)
+                    }
+
                     TextField("Search accepted friends...", text: $searchText)
                         .font(.system(size: 16, weight: .medium))
                         .foregroundStyle(.white)
@@ -2178,7 +2327,11 @@ private struct PartnerPickerSheet: View {
                         .frame(height: 50)
                         .background(
                             RoundedRectangle(cornerRadius: 18, style: .continuous)
-                                .fill(ProfileTheme.cardBackground)
+                                .fill(.black.opacity(0.28))
+                        )
+                        .overlay(
+                            RoundedRectangle(cornerRadius: 18, style: .continuous)
+                                .strokeBorder(.white.opacity(0.08), lineWidth: 1)
                         )
 
                     if friends.isEmpty {
@@ -2192,33 +2345,41 @@ private struct PartnerPickerSheet: View {
                             message: "No friends found"
                         )
                     } else {
-                        RelationshipCard {
-                            ForEach(Array(filteredFriends.enumerated()), id: \.element.id) { index, friend in
-                                HStack(spacing: 12) {
-                                    FriendRowView(user: friend)
-
-                                    Button("Send") {
-                                        onSelectFriend(friend)
-                                        dismiss()
-                                    }
-                                    .font(.system(size: 14, weight: .bold))
-                                    .foregroundStyle(AppTheme.accentBlue)
+                        VStack(spacing: 2) {
+                            ForEach(filteredFriends) { friend in
+                                Button {
+                                    pendingPartner = friend
+                                } label: {
+                                    CompactUserListRowView(
+                                        imageURL: friend.avatarImageURL,
+                                        name: friend.name,
+                                        subtitle: friend.usernameText,
+                                        identityKey: friend.id
+                                    )
+                                    .frame(maxWidth: .infinity, alignment: .leading)
+                                    .contentShape(Rectangle())
                                 }
-
-                                if friend.id != filteredFriends.last?.id {
-                                    Divider()
-                                        .overlay(.white.opacity(0.08))
-                                        .padding(.leading, 62)
-                                }
+                                .buttonStyle(.plain)
                             }
                         }
                     }
                 }
                 .padding(16)
+                .padding(.top, 16)
                 .padding(.bottom, 40)
             }
         }
-        .background(ProfileTheme.background.ignoresSafeArea())
+        .alert(item: $pendingPartner) { friend in
+            Alert(
+                title: Text("Add \(friend.name) as your partner?"),
+                message: Text("This will send \(friend.name) a partner request. They’ll need to accept before either of you can manage RSVP statuses for both of you."),
+                primaryButton: .default(Text("Send Request")) {
+                    onSelectFriend(friend)
+                    dismiss()
+                },
+                secondaryButton: .cancel()
+            )
+        }
     }
 }
 
@@ -2254,6 +2415,16 @@ private struct RelationshipSummaryLink: View {
     let label: String
     var showsIndicator = false
 
+    private var displayLabel: String {
+        guard count == 1 else { return label }
+
+        return switch label {
+        case "Friends": "Friend"
+        case "Requests": "Request"
+        default: label
+        }
+    }
+
     var body: some View {
         VStack(alignment: .leading, spacing: 3) {
             HStack(spacing: 4) {
@@ -2268,7 +2439,7 @@ private struct RelationshipSummaryLink: View {
                 }
             }
 
-            Text(label)
+            Text(displayLabel)
                 .font(.system(size: 11, weight: .medium))
                 .foregroundStyle(.white.opacity(0.58))
                 .lineLimit(1)
@@ -2370,6 +2541,8 @@ private struct FriendsListViewContent: View {
 }
 
 private struct FriendRequestsView: View {
+    let sourceReceivedRequests: [FriendUserSummary]
+    let sourceSentRequests: [FriendUserSummary]
     let onAcceptRequest: (FriendUserSummary) async -> Bool
     let onDeclineRequest: (FriendUserSummary) async -> Bool
     @EnvironmentObject private var activityRequestStore: ActivityRequestStore
@@ -2388,6 +2561,8 @@ private struct FriendRequestsView: View {
         onAcceptRequest: @escaping (FriendUserSummary) async -> Bool,
         onDeclineRequest: @escaping (FriendUserSummary) async -> Bool
     ) {
+        self.sourceReceivedRequests = receivedRequests
+        self.sourceSentRequests = sentRequests
         self.onAcceptRequest = onAcceptRequest
         self.onDeclineRequest = onDeclineRequest
         _receivedRequests = State(initialValue: receivedRequests)
@@ -2491,6 +2666,12 @@ private struct FriendRequestsView: View {
         .navigationDestination(item: $selectedUserProfile) { selection in
             UserProfileView(userID: selection.id)
         }
+        .onChange(of: sourceReceivedRequests) { _, newRequests in
+            receivedRequests = newRequests
+        }
+        .onChange(of: sourceSentRequests) { _, newRequests in
+            sentRequests = newRequests
+        }
         .alert(item: $pendingDeleteRequest) { request in
             Alert(
                 title: Text("Decline friend request?"),
@@ -2530,6 +2711,8 @@ private struct FriendRequestsView: View {
 
     private func submit(_ response: ActivityRequestResponse, for request: FriendUserSummary) {
         activeRequestID = request.id
+        playFriendRequestResponseHaptic(response)
+
         Task {
             let previousReceivedRequests = receivedRequests
             withAnimation(.snappy(duration: 0.2)) {
@@ -2550,9 +2733,6 @@ private struct FriendRequestsView: View {
                 }
             } else if let friendshipID = request.friendshipID, let requestID = UUID(uuidString: friendshipID) {
                 activityRequestStore.record(response, for: requestID)
-                NotificationCenter.default.post(name: .friendRequestDidChange, object: requestID)
-            } else if succeeded {
-                NotificationCenter.default.post(name: .friendRequestDidChange, object: nil)
             }
 
             if succeeded {
@@ -2571,9 +2751,6 @@ private struct FriendRequestsView: View {
         requestConfirmationToken = confirmation.id
         isRequestConfirmationVisible = false
         requestConfirmation = confirmation
-
-        let feedback = UINotificationFeedbackGenerator()
-        feedback.notificationOccurred(response == .accept ? .success : .warning)
 
         Task { @MainActor in
             await Task.yield()
@@ -2658,7 +2835,7 @@ private struct FriendRequestConfirmationToast: View {
 private struct RequestsPageLoadingContent: View {
     var body: some View {
         RelationshipListScreen(title: "Received Requests") {
-            NativeLoadingView(title: "Loading requests…")
+            NativeLoadingView()
                 .frame(minHeight: 320)
         }
     }
@@ -2703,14 +2880,20 @@ struct RequestsPageView: View {
                 )
             }
         }
-        .task {
-            if case .idle = viewModel.state {
+        .onAppear {
+            Task {
                 await viewModel.load(using: apiClient, forceRefresh: true)
             }
         }
-        .onReceive(NotificationCenter.default.publisher(for: .friendRequestDidChange)) { _ in
-            Task {
-                await viewModel.load(using: apiClient, forceRefresh: true)
+        .onReceive(NotificationCenter.default.publisher(for: .friendRequestDidChange)) { notification in
+            if let user = notification.object as? FriendUserSummary,
+               let rawStatus = notification.userInfo?["friendStatus"] as? String,
+               let status = FriendUserSummary.FriendStatus(rawValue: rawStatus) {
+                viewModel.applyFriendRequestStatusChange(for: user, status: status)
+            } else {
+                Task {
+                    await viewModel.load(using: apiClient, forceRefresh: true)
+                }
             }
         }
         .onReceive(NotificationCenter.default.publisher(for: .appDataDidChange)) { _ in
@@ -2805,6 +2988,11 @@ struct RequestsPageView: View {
             }
         }
 
+        postOptimisticFriendRequestChange(
+            for: resolvedRequest,
+            status: response == .accept ? .accepted : .none
+        )
+
         do {
             switch response {
             case .accept:
@@ -2817,9 +3005,37 @@ struct RequestsPageView: View {
             if let previousResponse {
                 viewModel.restoreLoadedResponse(previousResponse)
             }
+            postOptimisticFriendRequestChange(for: resolvedRequest, status: .pendingReceived)
             errorMessage = error.localizedDescription
             return false
         }
+    }
+}
+
+@MainActor
+private func postOptimisticFriendRequestChange(
+    for user: FriendUserSummary,
+    status: FriendUserSummary.FriendStatus
+) {
+    ProfileViewModel.recordFriendRequestStatusOverride(for: user, status: status)
+    HomeSearchDirectoryViewModel.updateCachedFriendStatus(for: user.id, status: status)
+    NotificationCenter.default.post(
+        name: .friendRequestDidChange,
+        object: user,
+        userInfo: [
+            "userID": user.id,
+            "friendStatus": status.rawValue,
+        ]
+    )
+}
+
+@MainActor
+private func playFriendRequestResponseHaptic(_ response: ActivityRequestResponse) {
+    switch response {
+    case .accept:
+        ConfirmationHaptic.play()
+    case .decline:
+        UIImpactFeedbackGenerator(style: .medium).impactOccurred()
     }
 }
 
@@ -3074,15 +3290,17 @@ private extension View {
         isDisabled: Bool = false,
         fillsAvailableWidth: Bool = false,
         fontWeight: Font.Weight = .bold,
-        cornerRadius: CGFloat = 20
+        cornerRadius: CGFloat = 20,
+        fontSize: CGFloat = 14
     ) -> some View {
-        modifier(
-            ProfileActionButtonModifier(
+        buttonStyle(
+            ProfileActionButtonStyle(
                 kind: kind,
                 isDisabled: isDisabled,
                 fillsAvailableWidth: fillsAvailableWidth,
                 fontWeight: fontWeight,
-                cornerRadius: cornerRadius
+                cornerRadius: cornerRadius,
+                fontSize: fontSize
             )
         )
     }
@@ -3476,9 +3694,9 @@ private struct AdminScrapersView: View {
                 .foregroundStyle(.white)
 
             if viewModel.isLoadingRows && viewModel.scraperRows.isEmpty {
-                Text("Loading scrapers...")
-                    .font(.system(size: 14, weight: .medium))
+                NativeLoadingView(fillsAvailableSpace: false)
                     .foregroundStyle(.white.opacity(0.56))
+                    .frame(minHeight: 64)
             } else if viewModel.scraperRows.isEmpty {
                 Text("No scraper rows found. Configure them from a venue or organizer first.")
                     .font(.system(size: 14, weight: .medium))
@@ -3904,12 +4122,13 @@ private struct MetroAreaCreationView: View {
     }
 }
 
-private struct ProfileActionButtonModifier: ViewModifier {
+private struct ProfileActionButtonStyle: ButtonStyle {
     let kind: ProfileActionButtonKind
     let isDisabled: Bool
     let fillsAvailableWidth: Bool
     let fontWeight: Font.Weight
     let cornerRadius: CGFloat
+    let fontSize: CGFloat
 
     private var foregroundColor: Color {
         switch kind {
@@ -3935,9 +4154,9 @@ private struct ProfileActionButtonModifier: ViewModifier {
         }
     }
 
-    func body(content: Content) -> some View {
-        content
-            .font(.system(size: 14, weight: fontWeight))
+    func makeBody(configuration: Configuration) -> some View {
+        configuration.label
+            .font(.system(size: fontSize, weight: fontWeight))
             .foregroundStyle(foregroundColor.opacity(isDisabled ? 0.5 : 1))
             .padding(.horizontal, 15)
             .frame(maxWidth: fillsAvailableWidth ? .infinity : nil)
@@ -3950,6 +4169,8 @@ private struct ProfileActionButtonModifier: ViewModifier {
                 RoundedRectangle(cornerRadius: cornerRadius, style: .continuous)
                     .strokeBorder(.white.opacity(kind == .primary || kind == .accent ? 0 : 0.08), lineWidth: 1)
             )
+            .contentShape(RoundedRectangle(cornerRadius: cornerRadius, style: .continuous))
+            .opacity(configuration.isPressed ? 0.82 : 1)
     }
 }
 

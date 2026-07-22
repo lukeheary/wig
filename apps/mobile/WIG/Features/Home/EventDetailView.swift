@@ -1249,7 +1249,7 @@ struct EventDetailView: View {
         rsvpConfirmationToken = confirmation.id
         isRSVPConfirmationVisible = false
 
-        UINotificationFeedbackGenerator().notificationOccurred(.success)
+        ConfirmationHaptic.play()
 
         rsvpConfirmation = confirmation
 
@@ -2510,7 +2510,7 @@ private extension EventReviewRating {
         case .okay:
             return "😐"
         case .didNotLikeIt:
-            return "🙁"
+            return "😞"
         }
     }
 }
@@ -2645,7 +2645,7 @@ private struct EventSeriesEditSheet: View {
         Group {
             switch state {
             case .loading:
-                ProgressView("Loading series...")
+                NativeLoadingView()
                     .frame(maxWidth: .infinity, maxHeight: .infinity)
                     .tint(.white)
                     .foregroundStyle(.white)

@@ -203,8 +203,15 @@ export async function GET(request: Request) {
     }
 
     const recentNonFriendUsers = recentUsers.filter(
-      (user) => friendStatusByUserId.get(user.id) !== "accepted"
+      (user) => !friendStatusByUserId.has(user.id)
     );
+    const pendingRequestUserIds = matchedUsers
+      .filter((friendship) => friendship.status === "pending")
+      .map((friendship) =>
+        friendship.userId === userId
+          ? friendship.friendUserId
+          : friendship.userId
+      );
     const acceptedFriendUserIds = matchedUsers
       .filter((friendship) => friendship.status === "accepted")
       .map((friendship) =>
@@ -212,8 +219,30 @@ export async function GET(request: Request) {
           ? friendship.friendUserId
           : friendship.userId
       );
-    const remainingRecentUserSlots = Math.max(
+    const remainingPendingUserSlots = Math.max(
       20 - recentNonFriendUsers.length,
+      0
+    );
+    const recentPendingUsers =
+      !query && remainingPendingUserSlots > 0 && pendingRequestUserIds.length > 0
+        ? await db.query.users.findMany({
+            where: and(
+              ...userBaseConditions,
+              inArray(users.id, pendingRequestUserIds)
+            ),
+            columns: {
+              id: true,
+              username: true,
+              firstName: true,
+              lastName: true,
+              avatarImageUrl: true,
+            },
+            orderBy: [asc(users.firstName), asc(users.lastName)],
+            limit: remainingPendingUserSlots,
+          })
+        : [];
+    const remainingRecentUserSlots = Math.max(
+      20 - recentNonFriendUsers.length - recentPendingUsers.length,
       0
     );
     const recentFriendUsers =
@@ -633,7 +662,11 @@ export async function GET(request: Request) {
         avatarImageUrl: user.avatarImageUrl,
         friendStatus: friendStatusByUserId.get(user.id) ?? "none",
       })),
-      recentUsers: [...recentNonFriendUsers, ...recentFriendUsers]
+      recentUsers: [
+        ...recentNonFriendUsers,
+        ...recentPendingUsers,
+        ...recentFriendUsers,
+      ]
         .slice(0, 20)
         .map((user) => ({
           id: user.id,

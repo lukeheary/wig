@@ -17,6 +17,8 @@ struct PlaceDetailView: View {
     @State private var presentedAction: PlaceDetailAction?
     @State private var isUnfollowConfirmationPresented = false
     @State private var isHideFromHomeConfirmationPresented = false
+    @State private var isLocationPopoverPresented = false
+    @State private var presentedWebsite: PlaceWebsiteDestination?
     @State private var blurredLogo: UIImage?
     @State private var logoTint: Color?
 
@@ -36,32 +38,46 @@ struct PlaceDetailView: View {
                     case .idle, .loading:
                         let seededDetail = seededDetailState
 
-                        PlaceDetailHeader(
-                            name: seededDetail.name,
-                            type: seededDetail.type,
-                            logoURL: seededDetail.displayLogoURL,
-                            cityStateText: seededDetail.cityStateText,
-                            mapsQueryText: seededDetail.locationText,
-                            categoryLabel: seededDetail.primaryCategoryLabel,
-                            websiteURL: seededDetail.website,
-                            instagramHandle: seededDetail.instagram
-                        )
+                        VStack(spacing: 12) {
+                            PlaceDetailHeader(
+                                name: seededDetail.name,
+                                type: seededDetail.type,
+                                logoURL: seededDetail.displayLogoURL,
+                                cityStateText: seededDetail.cityStateText,
+                                followerCount: seededDetail.followerCount,
+                                upcomingEventCount: place.upcomingEventCount
+                            )
+
+                            if isAuthenticated {
+                                placeFollowProfileButton(for: seededDetail)
+                                    .padding(.top, 8)
+                                    .allowsHitTesting(false)
+                            }
+                        }
+                        .padding(.bottom, 8)
 
                         PlaceDetailEventLoadingSection()
 
                     case .failed(let message):
                         let seededDetail = seededDetailState
 
-                        PlaceDetailHeader(
-                            name: seededDetail.name,
-                            type: seededDetail.type,
-                            logoURL: seededDetail.displayLogoURL,
-                            cityStateText: seededDetail.cityStateText,
-                            mapsQueryText: seededDetail.locationText,
-                            categoryLabel: seededDetail.primaryCategoryLabel,
-                            websiteURL: seededDetail.website,
-                            instagramHandle: seededDetail.instagram
-                        )
+                        VStack(spacing: 12) {
+                            PlaceDetailHeader(
+                                name: seededDetail.name,
+                                type: seededDetail.type,
+                                logoURL: seededDetail.displayLogoURL,
+                                cityStateText: seededDetail.cityStateText,
+                                followerCount: seededDetail.followerCount,
+                                upcomingEventCount: place.upcomingEventCount
+                            )
+
+                            if isAuthenticated {
+                                placeFollowProfileButton(for: seededDetail)
+                                    .padding(.top, 8)
+                                    .allowsHitTesting(false)
+                            }
+                        }
+                        .padding(.bottom, 8)
 
                         ContentUnavailableView {
                             Label("Couldn’t Load Place", systemImage: "wifi.exclamationmark")
@@ -72,8 +88,7 @@ struct PlaceDetailView: View {
                                 Task {
                                     await viewModel.load(
                                         slug: place.slug,
-                                        using: apiClient,
-                                        initialFollowState: place.isFollowed
+                                        using: apiClient
                                     )
                                 }
                             }
@@ -81,22 +96,28 @@ struct PlaceDetailView: View {
                         .foregroundStyle(.white)
 
                     case .loaded(let detail):
-                        PlaceDetailHeader(
-                            name: detail.name,
-                            type: detail.type,
-                            logoURL: detail.displayLogoURL,
-                            cityStateText: detail.cityStateText,
-                            mapsQueryText: detail.locationText,
-                            categoryLabel: detail.primaryCategoryLabel,
-                            websiteURL: detail.website,
-                            instagramHandle: detail.instagram
-                        )
+                        VStack(spacing: 12) {
+                            PlaceDetailHeader(
+                                name: detail.name,
+                                type: detail.type,
+                                logoURL: detail.displayLogoURL,
+                                cityStateText: detail.cityStateText,
+                                followerCount: detail.followerCount,
+                                upcomingEventCount: detail.events.count
+                            )
+
+                            if isAuthenticated {
+                                placeFollowProfileButton(for: detail)
+                                    .padding(.top, 8)
+                            }
+                        }
+                        .padding(.bottom, 8)
 
                         eventGroups(for: detail)
                     }
                 }
                 .padding(.horizontal, 16)
-                .padding(.top, 18)
+                .padding(.top, 74)
                 .padding(.bottom, 48)
                 .frame(maxWidth: .infinity, alignment: .topLeading)
                 .background(alignment: .top) {
@@ -119,16 +140,10 @@ struct PlaceDetailView: View {
             leadingTopControls
         }
         .overlay(alignment: .topTrailing) {
-            if isAuthenticated, case .loaded(let detail) = viewModel.state {
-                HStack(spacing: 10) {
-                    placeActionsMenu(for: detail)
-
-                    if !detail.isFollowed {
-                        placeFollowNavigationButton(for: detail)
-                    }
-                }
-                .padding(.trailing, 16)
-                .padding(.top, 0)
+            if case .loaded(let detail) = viewModel.state {
+                placeActionsMenu(for: detail)
+                    .padding(.trailing, 16)
+                    .padding(.top, 0)
             }
         }
         .alert(unfollowAlertTitle, isPresented: $isUnfollowConfirmationPresented) {
@@ -216,12 +231,15 @@ struct PlaceDetailView: View {
                 }
             }
         }
+        .sheet(item: $presentedWebsite) { destination in
+            PlaceWebsiteBrowser(url: destination.url)
+                .ignoresSafeArea()
+        }
         .task {
             if case .idle = viewModel.state {
                 await viewModel.load(
                     slug: place.slug,
-                    using: apiClient,
-                    initialFollowState: place.isFollowed
+                    using: apiClient
                 )
             }
         }
@@ -244,6 +262,10 @@ struct PlaceDetailView: View {
             }
         }
         .onReceive(NotificationCenter.default.publisher(for: .appDataDidChange)) { _ in
+            guard !viewModel.isUpdatingFollow else {
+                return
+            }
+
             Task {
                 PlaceDetailViewModel.invalidateCache(for: place.slug)
                 await viewModel.load(slug: place.slug, using: apiClient, forceRefresh: true)
@@ -274,7 +296,11 @@ struct PlaceDetailView: View {
     }
 
     private var seededDetailState: PlaceDetail {
-        PlaceDetailViewModel.cachedDetail(for: place.slug) ?? PlaceDetail(listItem: place)
+        if let cachedDetail = PlaceDetailViewModel.cachedDetail(for: place.slug) {
+            return cachedDetail
+        }
+
+        return PlaceDetail(listItem: place)
     }
 
     private enum PlaceDetailAction: String, Identifiable {
@@ -343,6 +369,80 @@ struct PlaceDetailView: View {
     }
 
     private func placeActionsMenu(for detail: PlaceDetail) -> some View {
+        let locationText = detail.locationText
+        let website = detail.website
+        let instagramURL = instagramURL(for: detail.instagram)
+
+        return HStack(spacing: 0) {
+            if detail.type == .venue {
+                Button {
+                    guard locationText != nil else { return }
+                    isLocationPopoverPresented = true
+                } label: {
+                    placeActionIcon("location", isAvailable: locationText != nil)
+                }
+                .buttonStyle(.plain)
+                .disabled(locationText == nil)
+                .accessibilityLabel("Show address")
+                .popover(
+                    isPresented: $isLocationPopoverPresented,
+                    attachmentAnchor: .rect(.bounds),
+                    arrowEdge: .top
+                ) {
+                    if let locationText {
+                        PlaceLocationPopover(location: locationText) {
+                            openInMaps(locationText)
+                            isLocationPopoverPresented = false
+                        }
+                    }
+                }
+            }
+
+            Button {
+                guard let website else { return }
+                presentedWebsite = PlaceWebsiteDestination(url: website)
+            } label: {
+                placeActionIcon("globe", isAvailable: website != nil)
+            }
+            .buttonStyle(.plain)
+            .disabled(website == nil)
+            .accessibilityLabel("Open website")
+
+            Button {
+                guard let instagramURL else { return }
+                UIApplication.shared.open(instagramURL)
+            } label: {
+                placeInstagramActionIcon(isAvailable: instagramURL != nil)
+            }
+            .buttonStyle(.plain)
+            .disabled(instagramURL == nil)
+            .accessibilityLabel("Open Instagram")
+
+            placeOverflowMenu(for: detail)
+        }
+        .frame(height: 46)
+        .clipShape(Capsule())
+        .placeDetailLiquidGlass(in: Capsule())
+    }
+
+    private func placeActionIcon(_ systemName: String, isAvailable: Bool) -> some View {
+        Image(systemName: systemName)
+            .font(.system(size: 18, weight: .semibold))
+            .foregroundStyle(isAvailable ? .white : .white.opacity(0.32))
+            .frame(width: 46, height: 46)
+            .contentShape(Rectangle())
+            .accessibilityHidden(true)
+    }
+
+    private func placeInstagramActionIcon(isAvailable: Bool) -> some View {
+        InstagramGlyph()
+            .opacity(isAvailable ? 1 : 0.32)
+            .frame(width: 46, height: 46)
+            .contentShape(Rectangle())
+            .accessibilityHidden(true)
+    }
+
+    private func placeOverflowMenu(for detail: PlaceDetail) -> some View {
         Menu {
             if detail.canManage {
                 Button {
@@ -370,76 +470,106 @@ struct PlaceDetailView: View {
                 .tint(.white)
             }
 
-            if detail.isHiddenFromHome {
-                Button {
-                    UIImpactFeedbackGenerator(style: .medium).impactOccurred()
+            if isAuthenticated {
+                if detail.isHiddenFromHome {
+                    Button {
+                        UIImpactFeedbackGenerator(style: .medium).impactOccurred()
 
-                    Task {
-                        await viewModel.setHiddenFromHome(
-                            false,
-                            slug: detail.slug,
-                            using: apiClient
-                        )
+                        Task {
+                            await viewModel.setHiddenFromHome(
+                                false,
+                                slug: detail.slug,
+                                using: apiClient
+                            )
+                        }
+                    } label: {
+                        Label("Show Events on Home", systemImage: "eye")
+                            .foregroundStyle(.white)
                     }
-                } label: {
-                    Label("Show Events on Home", systemImage: "eye")
-                        .foregroundStyle(.white)
+                    .tint(.white)
+                } else {
+                    Button {
+                        isHideFromHomeConfirmationPresented = true
+                    } label: {
+                        Label("Hide Events from Home", systemImage: "eye.slash")
+                            .foregroundStyle(.white)
+                    }
+                    .tint(.white)
                 }
-                .tint(.white)
-            } else {
-                Button {
-                    isHideFromHomeConfirmationPresented = true
-                } label: {
-                    Label("Hide Events from Home", systemImage: "eye.slash")
-                        .foregroundStyle(.white)
-                }
-                .tint(.white)
-            }
 
-            if detail.isFollowed {
-                Button(role: .destructive) {
-                    isUnfollowConfirmationPresented = true
-                } label: {
-                    Label("Unfollow", systemImage: "minus.circle")
-                        .foregroundStyle(.red)
-                }
-                .tint(.red)
             }
         } label: {
-            Image(systemName: "ellipsis")
-                .font(.system(size: 18, weight: .bold))
-                .foregroundStyle(.white)
-                .frame(width: 46, height: 46)
-                .contentShape(Circle())
-                .placeDetailLiquidGlass(in: Circle())
+            placeActionIcon("ellipsis", isAvailable: true)
+                .accessibilityHidden(false)
         }
         .buttonStyle(.plain)
         .disabled(viewModel.isUpdatingFollow || viewModel.isUpdatingHomeVisibility)
+        .accessibilityLabel("More place actions")
     }
 
-    private func placeFollowNavigationButton(for detail: PlaceDetail) -> some View {
-        Button {
-            UIImpactFeedbackGenerator(style: .light).impactOccurred()
+    private func openInMaps(_ location: String) {
+        guard let encodedLocation = location.addingPercentEncoding(withAllowedCharacters: .urlQueryAllowed),
+              let url = URL(string: "http://maps.apple.com/?q=\(encodedLocation)")
+        else {
+            return
+        }
 
-            Task {
-                await viewModel.setFollowed(
-                    true,
-                    slug: detail.slug,
-                    using: apiClient
-                )
+        UIApplication.shared.open(url)
+    }
+
+    private func instagramURL(for handle: String?) -> URL? {
+        guard let handle else {
+            return nil
+        }
+
+        let cleanedHandle = handle
+            .trimmingCharacters(in: .whitespacesAndNewlines)
+            .replacingOccurrences(of: "@", with: "")
+
+        guard !cleanedHandle.isEmpty else {
+            return nil
+        }
+
+        return URL(string: "instagram://user?username=\(cleanedHandle)")
+            ?? URL(string: "https://www.instagram.com/\(cleanedHandle)")
+    }
+
+    private func placeFollowProfileButton(for detail: PlaceDetail) -> some View {
+        Button {
+            if detail.isFollowed {
+                UIImpactFeedbackGenerator(style: .light).impactOccurred()
+                isUnfollowConfirmationPresented = true
+            } else {
+                Task {
+                    let didFollow = await viewModel.setFollowed(
+                        true,
+                        slug: detail.slug,
+                        using: apiClient
+                    )
+
+                    if didFollow {
+                        ConfirmationHaptic.play()
+                    }
+                }
             }
-        } label: {
-            Text("Follow")
-                .font(.system(size: 15, weight: .bold))
-                .foregroundStyle(.white)
-                .padding(.horizontal, 18)
-                .frame(height: 46)
-                .contentShape(Capsule())
-                .placeDetailLiquidGlass(in: Capsule())
+        }
+        label: {
+            Text(detail.isFollowed ? "Following" : "Follow")
+                .font(.system(size: 15, weight: .semibold))
+                .foregroundStyle(detail.isFollowed ? .white : .black)
+                .frame(maxWidth: .infinity)
+                .frame(height: 40)
+                .background(
+                    RoundedRectangle(cornerRadius: 12, style: .continuous)
+                        .fill(detail.isFollowed ? Color.white.opacity(0.08) : AppTheme.accentBlue)
+                )
+                .overlay(
+                    RoundedRectangle(cornerRadius: 12, style: .continuous)
+                        .strokeBorder(.white.opacity(detail.isFollowed ? 0.08 : 0), lineWidth: 1)
+                )
         }
         .buttonStyle(.plain)
         .disabled(viewModel.isUpdatingFollow)
-        .opacity(viewModel.isUpdatingFollow ? 0.62 : 1)
     }
 
     private struct PlaceEventFilterDropdown: View {
@@ -699,7 +829,7 @@ private extension UIColor {
 
 private struct PlaceDetailEventLoadingSection: View {
     var body: some View {
-        NativeLoadingView(title: "Loading events…")
+        NativeLoadingView()
             .frame(minHeight: 286)
     }
 }
@@ -709,19 +839,15 @@ private struct PlaceDetailHeader: View {
     let type: PlaceListItem.PlaceType
     let logoURL: URL?
     let cityStateText: String?
-    let mapsQueryText: String?
-    let categoryLabel: String?
-    let websiteURL: URL?
-    let instagramHandle: String?
-    @State private var isMapsDialogPresented = false
-    @State private var safariRoute: SafariRoute?
+    let followerCount: Int
+    let upcomingEventCount: Int
     @State private var isImageViewerPresented = false
 
     var body: some View {
         HStack(alignment: .bottom, spacing: 20) {
             logo
 
-            VStack(alignment: .leading, spacing: 12) {
+            VStack(alignment: .leading, spacing: 14) {
                 VStack(alignment: .leading, spacing: 2) {
                     Text(name)
                         .font(.system(size: 17, weight: .bold))
@@ -730,70 +856,23 @@ private struct PlaceDetailHeader: View {
                         .minimumScaleFactor(0.76)
                         .multilineTextAlignment(.leading)
 
-                    Group {
-                        if let cityStateText {
-                            Text(cityStateText)
-                        } else if let categoryLabel {
-                            Text(categoryLabel)
-                        }
+                    if let cityStateText {
+                        Text(cityStateText)
+                            .font(.system(size: 12, weight: .medium))
+                            .foregroundStyle(.white.opacity(0.58))
+                            .lineLimit(1)
+                            .minimumScaleFactor(0.78)
                     }
-                    .font(.system(size: 12, weight: .medium))
-                    .foregroundStyle(.white.opacity(0.58))
-                    .lineLimit(1)
-                    .minimumScaleFactor(0.78)
                 }
 
-                HStack(alignment: .center, spacing: 12) {
-                    if mapsQueryText != nil {
-                        PlaceDetailActionCircleButton {
-                            Image(systemName: "location")
-                                .font(.system(size: 18, weight: .semibold))
-                                .foregroundStyle(.white)
-                        } action: {
-                            isMapsDialogPresented = true
-                        }
-                        .confirmationDialog("Open Location", isPresented: $isMapsDialogPresented) {
-                            if let mapsQueryText {
-                                Button("Open in Maps") {
-                                    openInMaps(address: mapsQueryText)
-                                }
-                            }
-
-                            Button("Cancel", role: .cancel) {}
-                        } message: {
-                            if let mapsQueryText {
-                                Text(mapsQueryText)
-                            }
-                        }
-                    }
-
-                    if let websiteURL {
-                        PlaceDetailActionCircleButton {
-                            Image(systemName: "globe")
-                                .font(.system(size: 18, weight: .semibold))
-                                .foregroundStyle(.white)
-                        } action: {
-                            safariRoute = SafariRoute(url: websiteURL)
-                        }
-                    }
-
-                    if let instagramURL {
-                        PlaceDetailActionCircleButton {
-                            InstagramGlyph()
-                        } action: {
-                            openInstagram(url: instagramURL)
-                        }
-                    }
+                HStack(spacing: 24) {
+                    PlaceDetailStat(count: upcomingEventCount, label: "Upcoming Events")
+                    PlaceDetailStat(count: followerCount, label: "Followers")
                 }
             }
             .frame(maxWidth: .infinity, minHeight: 104, alignment: .bottomLeading)
         }
-        .padding(.top, 64)
         .frame(maxWidth: .infinity)
-        .sheet(item: $safariRoute) { route in
-            SafariView(url: route.url)
-                .ignoresSafeArea()
-        }
         .fullScreenCover(isPresented: $isImageViewerPresented) {
             if let logoURL {
                 EventArtworkViewer(imageURL: logoURL)
@@ -843,73 +922,34 @@ private struct PlaceDetailHeader: View {
         }
     }
 
-    private func openInMaps(address: String) {
-        guard let encodedAddress = address.addingPercentEncoding(withAllowedCharacters: .urlQueryAllowed),
-              let url = URL(string: "http://maps.apple.com/?q=\(encodedAddress)")
-        else {
-            return
-        }
-
-        UIApplication.shared.open(url)
-    }
-
-    private var instagramURL: URL? {
-        guard let handle = cleanedInstagramHandle else {
-            return nil
-        }
-
-        return URL(string: "instagram://user?username=\(handle)")
-            ?? URL(string: "https://www.instagram.com/\(handle)")
-    }
-
-    private var cleanedInstagramHandle: String? {
-        guard let instagramHandle else {
-            return nil
-        }
-
-        let trimmed = instagramHandle
-            .trimmingCharacters(in: .whitespacesAndNewlines)
-            .replacingOccurrences(of: "@", with: "")
-        return trimmed.isEmpty ? nil : trimmed
-    }
-
-    private func openInstagram(url: URL) {
-        if UIApplication.shared.canOpenURL(url) {
-            UIApplication.shared.open(url)
-            return
-        }
-
-        if let handle = cleanedInstagramHandle,
-           let webURL = URL(string: "https://www.instagram.com/\(handle)") {
-            UIApplication.shared.open(webURL)
-        }
-    }
 }
 
-private struct PlaceDetailActionCircleButton<Content: View>: View {
-    let content: Content
-    let action: () -> Void
+private struct PlaceDetailStat: View {
+    let count: Int
+    let label: String
 
-    init(
-        @ViewBuilder content: () -> Content,
-        action: @escaping () -> Void
-    ) {
-        self.content = content()
-        self.action = action
+    private var displayLabel: String {
+        guard count == 1 else { return label }
+
+        return switch label {
+        case "Followers": "Follower"
+        case "Upcoming Events": "Upcoming Event"
+        default: label
+        }
     }
 
     var body: some View {
-        Button(action: action) {
-            content
-                .frame(width: 36, height: 36)
-                .contentShape(Circle())
-                .background(Color.white.opacity(0.07), in: Circle())
-                .overlay {
-                    Circle()
-                        .stroke(Color.white.opacity(0.10), lineWidth: 1)
-                }
+        VStack(alignment: .leading, spacing: 3) {
+            Text("\(count)")
+                .font(.system(size: 16, weight: .semibold))
+                .foregroundStyle(.white)
+
+            Text(displayLabel)
+                .font(.system(size: 11, weight: .medium))
+                .foregroundStyle(.white.opacity(0.58))
+                .lineLimit(1)
+                .minimumScaleFactor(0.78)
         }
-        .buttonStyle(.plain)
     }
 }
 
@@ -919,18 +959,15 @@ private struct InstagramGlyph: View {
     var body: some View {
         let lineWidth = side * 0.09
 
-        // Camera body
         RoundedRectangle(cornerRadius: side * 0.28, style: .continuous)
             .strokeBorder(.white, lineWidth: lineWidth)
             .frame(width: side, height: side)
             .overlay {
-                // Lens
                 Circle()
                     .strokeBorder(.white, lineWidth: lineWidth)
                     .frame(width: side * 0.42, height: side * 0.42)
             }
             .overlay(alignment: .topTrailing) {
-                // Flash — spaced between the lens and the outer square, touching neither
                 Circle()
                     .fill(.white)
                     .frame(width: side * 0.10, height: side * 0.10)
@@ -938,21 +975,6 @@ private struct InstagramGlyph: View {
                     .padding(.trailing, side * 0.23)
             }
     }
-}
-
-private struct SafariRoute: Identifiable {
-    let id = UUID()
-    let url: URL
-}
-
-private struct SafariView: UIViewControllerRepresentable {
-    let url: URL
-
-    func makeUIViewController(context: Context) -> SFSafariViewController {
-        SFSafariViewController(url: url)
-    }
-
-    func updateUIViewController(_ uiViewController: SFSafariViewController, context: Context) {}
 }
 
 private enum PlaceEventsTab: CaseIterable, Identifiable {
@@ -1081,6 +1103,59 @@ private enum PlaceEventGrouper {
             updatedAt: nil
         )
     )
+}
+
+private struct PlaceWebsiteDestination: Identifiable {
+    let id = UUID()
+    let url: URL
+}
+
+private struct PlaceLocationPopover: View {
+    let location: String
+    let onOpenInMaps: () -> Void
+
+    var body: some View {
+        VStack(alignment: .leading, spacing: 18) {
+            VStack(alignment: .leading, spacing: 6) {
+                Text("Address")
+                    .font(.system(size: 17, weight: .semibold))
+
+                Text(location)
+                    .font(.system(size: 15))
+                    .foregroundStyle(.secondary)
+            }
+
+            Button(action: onOpenInMaps) {
+                Text("Open in Maps")
+                    .frame(maxWidth: .infinity)
+                    .frame(height: 40)
+                    .font(.system(size: 15, weight: .semibold))
+                    .foregroundStyle(.black)
+                    .background(
+                        RoundedRectangle(cornerRadius: 12, style: .continuous)
+                            .fill(AppTheme.accentBlue)
+                    )
+                    .contentShape(RoundedRectangle(cornerRadius: 12, style: .continuous))
+            }
+            .buttonStyle(.plain)
+        }
+        .padding(20)
+        .frame(width: 260, alignment: .leading)
+        .presentationCompactAdaptation(.popover)
+    }
+}
+
+private struct PlaceWebsiteBrowser: UIViewControllerRepresentable {
+    let url: URL
+
+    func makeUIViewController(context: Context) -> SFSafariViewController {
+        SFSafariViewController(url: url)
+    }
+
+    func updateUIViewController(
+        _ uiViewController: SFSafariViewController,
+        context: Context
+    ) {}
 }
 
 extension View {

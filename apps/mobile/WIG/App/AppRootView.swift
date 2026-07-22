@@ -7,6 +7,23 @@ enum AppTheme {
     static let uiBackground = UIColor.black
 }
 
+@MainActor
+enum ConfirmationHaptic {
+    private static let pulseInterval: TimeInterval = 0.09
+
+    static func play() {
+        let firstPulse = UIImpactFeedbackGenerator(style: .medium)
+        let secondPulse = UIImpactFeedbackGenerator(style: .medium)
+        firstPulse.prepare()
+        secondPulse.prepare()
+        firstPulse.impactOccurred()
+
+        DispatchQueue.main.asyncAfter(deadline: .now() + pulseInterval) {
+            secondPulse.impactOccurred()
+        }
+    }
+}
+
 struct AppRootView: View {
     @State private var isShowingLaunchScreen = true
 

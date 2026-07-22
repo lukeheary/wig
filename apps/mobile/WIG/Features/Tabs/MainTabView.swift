@@ -147,10 +147,8 @@ struct MainTabView: View {
 
             await preloadAuthenticatedTabs()
         }
-        .onReceive(NotificationCenter.default.publisher(for: .friendRequestDidChange)) { _ in
-            Task {
-                await refreshFriendRequestBadge()
-            }
+        .onReceive(NotificationCenter.default.publisher(for: .friendRequestDidChange)) { notification in
+            handleFriendRequestChange(notification)
         }
         .onReceive(NotificationCenter.default.publisher(for: .appDataDidChange)) { _ in
             Task {
@@ -276,10 +274,8 @@ struct MainTabView: View {
 
             await preloadAuthenticatedTabs()
         }
-        .onReceive(NotificationCenter.default.publisher(for: .friendRequestDidChange)) { _ in
-            Task {
-                await refreshFriendRequestBadge()
-            }
+        .onReceive(NotificationCenter.default.publisher(for: .friendRequestDidChange)) { notification in
+            handleFriendRequestChange(notification)
         }
         .sheet(isPresented: $isAuthSheetPresented) {
             WIGAuthSheetView(isDismissable: true)
@@ -407,6 +403,19 @@ struct MainTabView: View {
             syncAppIconBadge()
         } catch {
             // Keep the last known badge state if a refresh fails.
+        }
+    }
+
+    private func handleFriendRequestChange(_ notification: Notification) {
+        pendingFriendRequestCount = ProfileViewModel.pendingFriendRequestCount
+        syncAppIconBadge()
+
+        guard !(notification.object is FriendUserSummary) else {
+            return
+        }
+
+        Task {
+            await refreshFriendRequestBadge()
         }
     }
 

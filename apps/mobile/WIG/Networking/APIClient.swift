@@ -975,14 +975,14 @@ struct APIClient: Sendable {
 
     func send(_ endpoint: Endpoint<EmptyResponse>) async throws {
         let request = try await makeRequest(for: endpoint)
-        let (_, response) = try await session.data(for: request)
+        let (data, response) = try await session.data(for: request)
 
         guard let httpResponse = response as? HTTPURLResponse else {
             throw APIError.invalidResponse
         }
 
         guard 200 ..< 300 ~= httpResponse.statusCode else {
-            throw APIError.requestFailed(statusCode: httpResponse.statusCode, payload: Data())
+            throw APIError.requestFailed(statusCode: httpResponse.statusCode, payload: data)
         }
 
         notifyDataChange(after: endpoint)
@@ -1058,6 +1058,13 @@ extension APIClient.APIError: LocalizedError {
         case .invalidResponse:
             return "The server returned an invalid response."
         case .requestFailed(let statusCode, let payload):
+            if let object = try? JSONSerialization.jsonObject(with: payload),
+               let dictionary = object as? [String: Any],
+               let serverMessage = dictionary["error"] as? String,
+               !serverMessage.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty {
+                return serverMessage
+            }
+
             let body = String(data: payload, encoding: .utf8)?
                 .replacingOccurrences(of: "\n", with: " ")
                 .trimmingCharacters(in: .whitespacesAndNewlines)

@@ -238,6 +238,10 @@ export async function GET() {
   const receivedRequests: UserSummary[] = [];
 
   for (const friendship of friendships) {
+    if (friendship.userId === friendship.friendUserId) {
+      continue;
+    }
+
     if (friendship.status === "accepted") {
       const otherUser =
         friendship.userId === userId ? friendship.friend : friendship.user;

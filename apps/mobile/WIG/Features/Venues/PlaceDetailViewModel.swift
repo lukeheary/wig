@@ -34,15 +34,9 @@ final class PlaceDetailViewModel: ObservableObject {
     func load(
         slug: String,
         using apiClient: APIClient,
-        forceRefresh: Bool = false,
-        initialFollowState: Bool? = nil
+        forceRefresh: Bool = false
     ) async {
-        if !forceRefresh, var cachedDetail = Self.cachedDetail(for: slug) {
-            if let initialFollowState {
-                cachedDetail.isFollowed = initialFollowState
-                Self.seedCache(with: cachedDetail)
-            }
-
+        if !forceRefresh, let cachedDetail = Self.cachedDetail(for: slug) {
             state = .loaded(cachedDetail)
         } else {
             state = .loading
@@ -80,14 +74,17 @@ final class PlaceDetailViewModel: ObservableObject {
         Self.inFlightLoads[slug] = nil
     }
 
-    func setFollowed(_ isFollowed: Bool, slug: String, using apiClient: APIClient) async {
+    @discardableResult
+    func setFollowed(_ isFollowed: Bool, slug: String, using apiClient: APIClient) async -> Bool {
         guard case .loaded(var detail) = state else {
-            return
+            return false
         }
 
         let previousDetail = detail
-        detail.isFollowed = isFollowed
+        applyFollowState(isFollowed, to: &detail)
+        Self.seedCache(with: detail)
         state = .loaded(detail)
+        postFollowChange(for: detail)
         isUpdatingFollow = true
 
         do {
@@ -98,17 +95,38 @@ final class PlaceDetailViewModel: ObservableObject {
                 followState = try await apiClient.send(APIClient.unfollowMobilePlace(slug: slug))
             }
 
-            detail.isFollowed = followState.isFollowed
+            applyFollowState(followState.isFollowed, to: &detail)
             Self.seedCache(with: detail)
             state = .loaded(detail)
+            postFollowChange(for: detail)
             if isFollowed {
                 NotificationCenter.default.post(name: .activationDidChange, object: nil)
             }
+            isUpdatingFollow = false
+            return followState.isFollowed == isFollowed
         } catch {
+            Self.seedCache(with: previousDetail)
             state = .loaded(previousDetail)
+            postFollowChange(for: previousDetail)
+            isUpdatingFollow = false
+            return false
+        }
+    }
+
+    private func applyFollowState(_ isFollowed: Bool, to detail: inout PlaceDetail) {
+        guard detail.isFollowed != isFollowed else {
+            return
         }
 
-        isUpdatingFollow = false
+        detail.isFollowed = isFollowed
+        detail.followerCount = max(0, detail.followerCount + (isFollowed ? 1 : -1))
+    }
+
+    private func postFollowChange(for detail: PlaceDetail) {
+        NotificationCenter.default.post(
+            name: .placeFollowDidChange,
+            object: PlaceFollowChange(slug: detail.slug, isFollowed: detail.isFollowed)
+        )
     }
 
     func setHiddenFromHome(

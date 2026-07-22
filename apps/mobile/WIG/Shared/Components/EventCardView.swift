@@ -413,14 +413,14 @@ private struct EventCardContent: View {
                         .frame(maxWidth: .infinity, alignment: .leading)
 
                     Text(event.formattedCardStart)
-                        .font(.system(size: 13, weight: .medium))
+                        .font(.system(size: 12, weight: .medium))
                         .foregroundStyle(AppTheme.accentBlue)
                         .lineLimit(1)
                         .minimumScaleFactor(0.82)
 
                     HStack(spacing: 8) {
                         Text(event.primaryLocation)
-                            .font(.system(size: 13, weight: .medium))
+                            .font(.system(size: 12, weight: .medium))
                             .foregroundStyle(.white.opacity(0.76))
                             .lineLimit(1)
                             .minimumScaleFactor(0.82)

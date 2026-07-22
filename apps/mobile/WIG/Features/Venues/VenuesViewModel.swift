@@ -13,6 +13,38 @@ final class VenuesViewModel: ObservableObject {
     private static var cachedResponse: MobilePlacesResponse?
     private static var inFlightLoad: Task<MobilePlacesResponse, Error>?
 
+    func applyFollowChange(_ change: PlaceFollowChange) {
+        let response: MobilePlacesResponse
+        if case .loaded(let loadedResponse) = state {
+            response = loadedResponse
+        } else if let cachedResponse = Self.cachedResponse {
+            response = cachedResponse
+        } else {
+            return
+        }
+
+        let updatedPlaces = response.places.map { place in
+            guard place.slug == change.slug, place.isFollowed != change.isFollowed else {
+                return place
+            }
+
+            var updatedPlace = place
+            updatedPlace.isFollowed = change.isFollowed
+            updatedPlace.followerCount = max(
+                0,
+                place.followerCount + (change.isFollowed ? 1 : -1)
+            )
+            return updatedPlace
+        }
+        let updatedResponse = MobilePlacesResponse(
+            places: updatedPlaces,
+            availableCities: response.availableCities,
+            currentUserLocation: response.currentUserLocation
+        )
+        Self.cachedResponse = updatedResponse
+        state = .loaded(updatedResponse)
+    }
+
     func load(using apiClient: APIClient, forceRefresh: Bool = false) async {
         if !forceRefresh, let cachedResponse = Self.cachedResponse {
             state = .loaded(cachedResponse)

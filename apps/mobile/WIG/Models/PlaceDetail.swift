@@ -17,6 +17,7 @@ struct PlaceDetail: Decodable, Identifiable, Hashable, Sendable {
     let categories: [String]
     let categoryLabels: [String: String]
     let updatedAt: Date?
+    var followerCount = 0
     var isEnabled = true
     var isFollowed = false
     var isHiddenFromHome = false
@@ -41,6 +42,7 @@ struct PlaceDetail: Decodable, Identifiable, Hashable, Sendable {
         case categories
         case categoryLabels
         case updatedAt
+        case followerCount
         case isEnabled
         case isFollowed
         case isHiddenFromHome
@@ -129,6 +131,7 @@ extension PlaceDetail {
             categories: listItem.categories,
             categoryLabels: listItem.categoryLabels,
             updatedAt: listItem.updatedAt,
+            followerCount: listItem.followerCount,
             isEnabled: true,
             isFollowed: listItem.isFollowed,
             canManage: false,
@@ -156,6 +159,7 @@ extension PlaceDetail {
         categories = try container.decodeIfPresent([String].self, forKey: .categories) ?? []
         categoryLabels = try container.decodeIfPresent([String: String].self, forKey: .categoryLabels) ?? [:]
         updatedAt = try container.decodeIfPresent(Date.self, forKey: .updatedAt)
+        followerCount = try container.decodeFlexibleIntIfPresent(forKey: .followerCount) ?? 0
         isEnabled = try container.decodeIfPresent(Bool.self, forKey: .isEnabled) ?? true
         isFollowed = try container.decodeIfPresent(Bool.self, forKey: .isFollowed) ?? false
         isHiddenFromHome = try container.decodeIfPresent(Bool.self, forKey: .isHiddenFromHome) ?? false
@@ -214,5 +218,17 @@ private extension KeyedDecodingContainer where Key == PlaceDetail.CodingKeys {
         }
 
         return URL(string: value)
+    }
+
+    func decodeFlexibleIntIfPresent(forKey key: Key) throws -> Int? {
+        if let value = try decodeIfPresent(Int.self, forKey: key) {
+            return value
+        }
+
+        if let value = try decodeIfPresent(String.self, forKey: key) {
+            return Int(value)
+        }
+
+        return nil
     }
 }

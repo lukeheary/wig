@@ -40,6 +40,13 @@ struct VenuesView: View {
                         await viewModel.load(using: apiClient, forceRefresh: true)
                     }
                 }
+                .onReceive(NotificationCenter.default.publisher(for: .placeFollowDidChange)) { notification in
+                    guard let change = notification.object as? PlaceFollowChange else {
+                        return
+                    }
+
+                    viewModel.applyFollowChange(change)
+                }
                 .onReceive(NotificationCenter.default.publisher(for: .appDataDidChange)) { _ in
                     Task {
                         await viewModel.load(using: apiClient, forceRefresh: true)
@@ -62,7 +69,7 @@ struct VenuesView: View {
                 LazyVStack(alignment: .leading, spacing: 12) {
                     placesHeader(locationName: selectedLocationName)
 
-                    NativeLoadingView(title: "Loading places…")
+                    NativeLoadingView()
                         .frame(minHeight: 360)
                 }
                 .padding(.horizontal, 16)

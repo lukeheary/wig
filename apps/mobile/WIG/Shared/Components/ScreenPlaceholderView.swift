@@ -20,14 +20,22 @@ struct ScreenPlaceholderView: View {
 }
 
 struct NativeLoadingView: View {
-    let title: String
+    var fillsAvailableSpace = true
 
     var body: some View {
-        ProgressView(title)
-            .controlSize(.regular)
-            .tint(.primary)
-            .foregroundStyle(.secondary)
-            .frame(maxWidth: .infinity, maxHeight: .infinity)
+        VStack(spacing: 12) {
+            ProgressView()
+                .controlSize(.regular)
+
+            Text("Loading…")
+                .font(.system(size: 15, weight: .medium))
+        }
+        .tint(.primary)
+        .foregroundStyle(.secondary)
+            .frame(
+                maxWidth: .infinity,
+                maxHeight: fillsAvailableSpace ? .infinity : nil
+            )
             .accessibilityAddTraits(.updatesFrequently)
     }
 }

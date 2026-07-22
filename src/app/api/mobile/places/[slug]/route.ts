@@ -1,6 +1,6 @@
 import { auth } from "@clerk/nextjs/server";
 import { NextResponse } from "next/server";
-import { and, asc, desc, eq, gte, inArray, isNotNull, lt, or } from "drizzle-orm";
+import { and, asc, desc, eq, gte, inArray, isNotNull, lt, or, sql } from "drizzle-orm";
 import { z } from "zod";
 import { db } from "@/server/db";
 import {
@@ -406,18 +406,24 @@ export async function GET(
     }
   }
 
-  const [follow, homeHide] = authenticatedUserId
-    ? await Promise.all([
-        db.query.placeFollows.findFirst({
+  const [followerCountResult, follow, homeHide] = await Promise.all([
+    db
+      .select({ count: sql<number>`count(*)::int` })
+      .from(placeFollows)
+      .where(eq(placeFollows.placeId, place.id)),
+    userId
+      ? db.query.placeFollows.findFirst({
           where: and(
-            eq(placeFollows.userId, authenticatedUserId),
+            eq(placeFollows.userId, userId),
             eq(placeFollows.placeId, place.id)
           ),
           columns: {
             id: true,
           },
-        }),
-        db.query.placeHomeHides.findFirst({
+        })
+      : Promise.resolve(null),
+    authenticatedUserId
+      ? db.query.placeHomeHides.findFirst({
           where: and(
             eq(placeHomeHides.userId, authenticatedUserId),
             eq(placeHomeHides.placeId, place.id)
@@ -425,9 +431,9 @@ export async function GET(
           columns: {
             id: true,
           },
-        }),
-      ])
-    : [null, null];
+        })
+      : Promise.resolve(null),
+  ]);
 
   return NextResponse.json({
     id: mappedPlace.id,
@@ -446,6 +452,7 @@ export async function GET(
     categories: mappedPlace.categories,
     categoryLabels: mappedPlace.categoryLabels,
     updatedAt: mappedPlace.updatedAt,
+    followerCount: followerCountResult[0]?.count ?? 0,
     isEnabled: place.isEnabled,
     isFollowed: Boolean(follow),
     isHiddenFromHome: Boolean(homeHide),

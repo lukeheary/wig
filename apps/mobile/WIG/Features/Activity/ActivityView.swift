@@ -108,7 +108,7 @@ struct ActivityView: View {
     private var content: some View {
         switch viewModel.state {
         case .idle, .loading:
-            ProgressView("Loading activity...")
+            NativeLoadingView()
                 .frame(maxWidth: .infinity, maxHeight: .infinity)
                 .tint(.white)
                 .foregroundStyle(.white)
@@ -1157,7 +1157,7 @@ struct ActivityAvatarView: View {
                 .frame(width: 22, height: 22)
 
             Image(systemName: badgeSystemImage)
-                .font(.system(size: 11, weight: .bold))
+                .font(.system(size: 11, weight: badgeWeight))
                 .foregroundStyle(badgeColor)
         }
     }
@@ -1189,15 +1189,17 @@ struct ActivityAvatarView: View {
             return Color.yellow
         case .rsvpNotGoing:
             return Color.red
-        case .friendRequestReceived:
-            return AppTheme.accentBlue
+        case .friendRequestReceived, .friendRequestAccepted:
+            return .white
         case .partnerRequestReceived:
             return Color(red: 1.0, green: 0.43, blue: 0.66)
-        case .friendRequestAccepted:
-            return Color(red: 0.45, green: 0.76, blue: 1)
         case .partnerRequestAccepted:
             return Color(red: 1.0, green: 0.43, blue: 0.66)
         }
+    }
+
+    private var badgeWeight: Font.Weight {
+        activity.type == .rsvpGoing ? .heavy : .bold
     }
 }
 

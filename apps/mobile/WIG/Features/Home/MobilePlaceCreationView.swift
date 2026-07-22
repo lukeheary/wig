@@ -332,13 +332,8 @@ struct MobilePlaceCreationView: View {
     private var categoriesSection: some View {
         Section("Categories") {
             if viewModel.isLoadingCategories {
-                HStack(spacing: 10) {
-                    ProgressView()
-                        .tint(AppTheme.accentBlue)
-                    Text("Loading categories...")
-                        .font(.system(size: 14, weight: .medium))
-                        .foregroundStyle(.secondary)
-                }
+                NativeLoadingView(fillsAvailableSpace: false)
+                    .tint(AppTheme.accentBlue)
                 .frame(maxWidth: .infinity, alignment: .leading)
             } else if viewModel.categories.isEmpty {
                 VStack(alignment: .leading, spacing: 8) {
@@ -1053,7 +1048,7 @@ struct GooglePlaceSearchSheet: View {
     @ViewBuilder
     private var content: some View {
         if viewModel.isLoading && viewModel.predictions.isEmpty {
-            ProgressView("Loading...")
+            NativeLoadingView()
                 .frame(maxWidth: .infinity, minHeight: 220)
                 .tint(.white)
                 .foregroundStyle(.white)

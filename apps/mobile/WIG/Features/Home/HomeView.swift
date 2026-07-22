@@ -161,7 +161,8 @@ struct HomeView: View {
 
     var body: some View {
         NavigationStack {
-            content
+            AnyView(
+                content
                 .background(feedBackground)
                 .topStatusBarScrim()
                 .toolbar(.hidden, for: .navigationBar)
@@ -234,6 +235,7 @@ struct HomeView: View {
                         }
                     }
                 }
+            )
                 .onChange(of: selectedWeekStart) { _, weekStart in
                     Task {
                         await loadHome(for: weekStart, using: apiClient)
@@ -288,45 +290,19 @@ struct HomeView: View {
                     onSearchDismiss()
                 }
                 .task(id: normalizedSearchQuery) {
-                    guard showsNativeSearch else {
-                        return
-                    }
-
-                    await searchViewModel.load(
-                        query: normalizedSearchQuery,
-                        using: apiClient
-                    )
+                    await loadNativeSearchResults()
                 }
                 .task(id: homeEventSearchRequestKey) {
-                    guard !showsNativeSearch, isHomeEventSearchPresented else {
-                        return
-                    }
-
-                    await homeEventSearchViewModel.load(
-                        query: homeEventSearchQuery,
-                        using: apiClient
-                    )
+                    await loadHomeEventSearchResults()
                 }
                 .onChange(of: searchText) { _, value in
-                    guard showsNativeSearch else {
-                        return
-                    }
-
-                    searchViewModel.prepare(query: value)
+                    prepareNativeSearch(query: value)
                 }
                 .onChange(of: homeEventSearchText) { _, value in
-                    guard !showsNativeSearch, isHomeEventSearchPresented else {
-                        return
-                    }
-
-                    homeEventSearchViewModel.prepare(query: value)
+                    prepareHomeEventSearch(query: value)
                 }
                 .task(id: displayedEventPrefetchKey) {
-                    guard !displayedEventsForPrefetch.isEmpty else {
-                        return
-                    }
-
-                    await EventArtworkPrefetcher.prefetch(events: displayedEventsForPrefetch)
+                    await prefetchDisplayedEventArtwork()
                 }
                 .sheet(
                     item: $postEventFeedbackEvent,
@@ -341,6 +317,53 @@ struct HomeView: View {
         )
     }
 
+    private func loadNativeSearchResults() async {
+        guard showsNativeSearch else {
+            return
+        }
+
+        await searchViewModel.load(
+            query: normalizedSearchQuery,
+            using: apiClient
+        )
+    }
+
+    private func loadHomeEventSearchResults() async {
+        guard !showsNativeSearch, isHomeEventSearchPresented else {
+            return
+        }
+
+        await homeEventSearchViewModel.load(
+            query: homeEventSearchQuery,
+            using: apiClient
+        )
+    }
+
+    private func prepareNativeSearch(query: String) {
+        guard showsNativeSearch else {
+            return
+        }
+
+        searchViewModel.prepare(query: query)
+    }
+
+    private func prepareHomeEventSearch(query: String) {
+        guard !showsNativeSearch, isHomeEventSearchPresented else {
+            return
+        }
+
+        homeEventSearchViewModel.prepare(query: query)
+    }
+
+    private func prefetchDisplayedEventArtwork() async {
+        let events = displayedEventsForPrefetch
+        guard !events.isEmpty else {
+            return
+        }
+
+        await EventArtworkPrefetcher.prefetch(events: events)
+    }
+
     @ViewBuilder
     private var content: some View {
         contentForEventFeedState
@@ -353,7 +376,7 @@ struct HomeView: View {
             if currentResponse != nil || viewModel.isLoading(weekStart: selectedWeekStart) {
                 homeContentShell
             } else {
-                ProgressView("Loading events...")
+                NativeLoadingView()
                     .frame(maxWidth: .infinity, maxHeight: .infinity)
                     .tint(.white)
                     .foregroundStyle(.white)
@@ -484,70 +507,76 @@ struct HomeView: View {
     }
 
     private var weekLoadingContent: some View {
-        NativeLoadingView(title: "Loading events…")
+        NativeLoadingView()
             .padding(.top, 56)
     }
 
     private var searchResultsContent: some View {
-        ScrollView {
-            LazyVStack(alignment: .leading, spacing: 7) {
-                searchInputBar
-                    .padding(.horizontal, 16)
+        ZStack {
+            ScrollView {
+                LazyVStack(alignment: .leading, spacing: 7) {
+                    searchInputBar
+                        .padding(.horizontal, 16)
 
-                if normalizedSearchQuery.isEmpty {
-                    if !emptyStateRecentUsers.isEmpty {
-                        SearchSectionHeader(title: "People")
-                            .padding(.horizontal, 16)
-                            .padding(.top, 21)
+                    if normalizedSearchQuery.isEmpty {
+                        if !emptyStateRecentUsers.isEmpty {
+                            SearchSectionHeader(title: "People")
+                                .padding(.horizontal, 16)
+                                .padding(.top, 21)
 
-                        SearchUsersList(users: emptyStateRecentUsers)
-                            .padding(.horizontal, 16)
-                    } else if !searchViewModel.isLoading {
+                            SearchUsersList(users: emptyStateRecentUsers)
+                                .padding(.horizontal, 16)
+                        } else if !searchViewModel.isLoading {
+                            ContentUnavailableView {
+                                Label("Search Users", systemImage: "person.2")
+                            } description: {
+                                Text("Search by name or username.")
+                            }
+                            .foregroundStyle(.white)
+                            .frame(maxWidth: .infinity)
+                            .padding(.top, 48)
+                        }
+                    } else if !searchViewModel.isLoading && searchUserResults.isEmpty {
                         ContentUnavailableView {
-                            Label("Search Users", systemImage: "person.2")
+                            Label("No Users Found", systemImage: "person.2")
                         } description: {
-                            Text("Search by name or username.")
+                            Text("Try a different name or username.")
                         }
                         .foregroundStyle(.white)
                         .frame(maxWidth: .infinity)
                         .padding(.top, 48)
-                    }
-                } else if searchViewModel.isLoading && searchUserResults.isEmpty {
-                    ProgressView("Searching users...")
-                        .frame(maxWidth: .infinity)
-                        .tint(.white)
-                        .foregroundStyle(.white)
-                        .padding(.top, 48)
-                } else if searchUserResults.isEmpty {
-                    ContentUnavailableView {
-                        Label("No Users Found", systemImage: "person.2")
-                    } description: {
-                        Text("Try a different name or username.")
-                    }
-                    .foregroundStyle(.white)
-                    .frame(maxWidth: .infinity)
-                    .padding(.top, 48)
-                } else {
-                    SearchSectionHeader(title: "People")
-                        .padding(.horizontal, 16)
-                        .padding(.top, 21)
+                    } else if !searchUserResults.isEmpty {
+                        SearchSectionHeader(title: "People")
+                            .padding(.horizontal, 16)
+                            .padding(.top, 21)
 
-                    SearchUsersList(users: searchUserResults)
-                        .padding(.horizontal, 16)
+                        SearchUsersList(users: searchUserResults)
+                            .padding(.horizontal, 16)
+                    }
                 }
-
-                if searchViewModel.isLoading && normalizedSearchQuery.isEmpty {
-                    ProgressView()
-                        .tint(.white)
-                        .frame(maxWidth: .infinity)
-                        .padding(.top, 16)
-                }
+                .frame(maxWidth: .infinity)
+                .padding(.bottom, 48)
             }
-            .frame(maxWidth: .infinity)
-            .padding(.bottom, 48)
+            .scrollIndicators(.hidden)
+            .scrollDismissesKeyboard(.interactively)
+
+            if showsCenteredSearchLoadingState {
+                NativeLoadingView()
+                    .tint(.white)
+                    .foregroundStyle(.white)
+                    .allowsHitTesting(false)
+            }
         }
-        .scrollIndicators(.hidden)
-        .scrollDismissesKeyboard(.interactively)
+    }
+
+    private var showsCenteredSearchLoadingState: Bool {
+        guard searchViewModel.isLoading else {
+            return false
+        }
+
+        return normalizedSearchQuery.isEmpty
+            ? emptyStateRecentUsers.isEmpty
+            : searchUserResults.isEmpty
     }
 
     private var homeEventSearchBar: some View {
@@ -630,7 +659,7 @@ struct HomeView: View {
     @ViewBuilder
     private var homeEventSearchGridContent: some View {
         if (homeEventSearchViewModel.isLoading || !homeEventSearchViewModel.hasLoadedResults) && homeEventSearchResults.isEmpty {
-            ProgressView("Searching events...")
+            NativeLoadingView(fillsAvailableSpace: false)
                 .frame(maxWidth: .infinity)
                 .tint(.white)
                 .foregroundStyle(.white)
@@ -1250,7 +1279,7 @@ struct HomeView: View {
     }
 
     private func completePostEventFeedback(for event: MobileEventReviewPrompt) {
-        UINotificationFeedbackGenerator().notificationOccurred(.success)
+        ConfirmationHaptic.play()
         completedPostEventFeedbackIDs.insert(event.id.uuidString)
         UserDefaults.standard.set(
             Array(completedPostEventFeedbackIDs),
@@ -1638,9 +1667,9 @@ private struct PostEventFeedbackBanner: View {
                     }
                 }
                 .frame(width: 48, height: 48)
-                .clipShape(RoundedRectangle(cornerRadius: 14, style: .continuous))
+                .clipShape(RoundedRectangle(cornerRadius: 10, style: .continuous))
                 .overlay {
-                    RoundedRectangle(cornerRadius: 14, style: .continuous)
+                    RoundedRectangle(cornerRadius: 10, style: .continuous)
                         .strokeBorder(.white.opacity(0.14), lineWidth: 1)
                 }
                 .shadow(color: .black.opacity(0.28), radius: 8, x: 0, y: 4)
@@ -1662,14 +1691,14 @@ private struct PostEventFeedbackBanner: View {
             .padding(7)
             .frame(height: 62)
             .background(
-                Color(red: 0.14, green: 0.14, blue: 0.16),
-                in: RoundedRectangle(cornerRadius: 18, style: .continuous)
+                Color.white.opacity(0.08),
+                in: RoundedRectangle(cornerRadius: 14, style: .continuous)
             )
             .overlay {
-                RoundedRectangle(cornerRadius: 18, style: .continuous)
+                RoundedRectangle(cornerRadius: 14, style: .continuous)
                     .strokeBorder(Color.white.opacity(0.08), lineWidth: 1)
             }
-            .contentShape(RoundedRectangle(cornerRadius: 18, style: .continuous))
+            .contentShape(RoundedRectangle(cornerRadius: 14, style: .continuous))
         }
         .buttonStyle(.plain)
         .accessibilityLabel("How was \(event.title)?")
@@ -2596,27 +2625,15 @@ final class HomeSearchDirectoryViewModel: ObservableObject {
     }
 
     func updateFriendStatus(for userID: String, status: FriendUserSummary.FriendStatus) {
-        func updating(_ source: [FriendUserSummary]) -> [FriendUserSummary] {
-            source.map { user in
-                guard user.id == userID else {
-                    return user
-                }
+        users = Self.updatingFriendStatus(in: users, for: userID, status: status)
+        recentUsers = Self.updatingFriendStatus(in: recentUsers, for: userID, status: status)
+        Self.updateCachedFriendStatus(for: userID, status: status)
+    }
 
-                return FriendUserSummary(
-                    id: user.id,
-                    friendshipID: user.friendshipID,
-                    name: user.name,
-                    username: user.username,
-                    avatarImageURL: user.avatarImageURL,
-                    city: user.city,
-                    state: user.state,
-                    friendStatus: status
-                )
-            }
-        }
-
-        users = updating(users)
-        recentUsers = updating(recentUsers)
+    static func updateCachedFriendStatus(
+        for userID: String,
+        status: FriendUserSummary.FriendStatus
+    ) {
 
         guard let cachedResponse = Self.cachedResponse else {
             return
@@ -2625,11 +2642,34 @@ final class HomeSearchDirectoryViewModel: ObservableObject {
         Self.cachedResponse = MobileSearchResponse(
             events: cachedResponse.events,
             upcomingEvents: cachedResponse.upcomingEvents,
-            users: updating(cachedResponse.users),
-            recentUsers: updating(cachedResponse.recentUsers),
+            users: updatingFriendStatus(in: cachedResponse.users, for: userID, status: status),
+            recentUsers: updatingFriendStatus(in: cachedResponse.recentUsers, for: userID, status: status),
             suggestedPlaces: cachedResponse.suggestedPlaces,
             places: cachedResponse.places
         )
+    }
+
+    private static func updatingFriendStatus(
+        in source: [FriendUserSummary],
+        for userID: String,
+        status: FriendUserSummary.FriendStatus
+    ) -> [FriendUserSummary] {
+        source.map { user in
+            guard user.id == userID else {
+                return user
+            }
+
+            return FriendUserSummary(
+                id: user.id,
+                friendshipID: user.friendshipID,
+                name: user.name,
+                username: user.username,
+                avatarImageURL: user.avatarImageURL,
+                city: user.city,
+                state: user.state,
+                friendStatus: status
+            )
+        }
     }
 }
 

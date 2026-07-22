@@ -199,6 +199,19 @@ export async function GET(request: Request) {
 
   const now = new Date();
 
+  const followerCounts = await db
+    .select({
+      placeId: placeFollows.placeId,
+      count: sql<number>`count(*)::int`,
+    })
+    .from(placeFollows)
+    .where(inArray(placeFollows.placeId, placeIds))
+    .groupBy(placeFollows.placeId);
+
+  const followerCountByPlaceId = new Map(
+    followerCounts.map((row) => [row.placeId, row.count])
+  );
+
   const venueCounts = await db
     .select({
       placeId: events.venueId,
@@ -274,6 +287,7 @@ export async function GET(request: Request) {
       metroAreaState: metroArea?.state ?? null,
       eventCount,
       upcomingEventCount: eventCount,
+      followerCount: followerCountByPlaceId.get(mappedPlace.id) ?? 0,
       updatedAt: mappedPlace.updatedAt,
       isFollowed: followedPlaceIds.has(mappedPlace.id),
       categories: mappedPlace.categories,

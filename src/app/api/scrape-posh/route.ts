@@ -35,6 +35,133 @@ interface PoshJsonLd {
   };
 }
 
+function findEventJsonLd(
+  value: unknown,
+  visited = new WeakSet<object>()
+): PoshJsonLd | null {
+  if (!value || typeof value !== "object") return null;
+  if (visited.has(value)) return null;
+  visited.add(value);
+
+  if (Array.isArray(value)) {
+    for (const item of value) {
+      const event = findEventJsonLd(item, visited);
+      if (event) return event;
+    }
+    return null;
+  }
+
+  const obj = value as Record<string, unknown>;
+  const type = obj["@type"];
+  if (
+    type === "Event" ||
+    (Array.isArray(type) && type.some((item) => item === "Event"))
+  ) {
+    return obj as unknown as PoshJsonLd;
+  }
+
+  for (const child of Object.values(obj)) {
+    const event = findEventJsonLd(child, visited);
+    if (event) return event;
+  }
+
+  return null;
+}
+
+function parseEventJsonLd(raw: string | null | undefined): PoshJsonLd | null {
+  if (!raw) return null;
+  try {
+    return findEventJsonLd(JSON.parse(raw));
+  } catch {
+    return null;
+  }
+}
+
+function findJsonObjectEnd(text: string, start: number): number | null {
+  let depth = 0;
+  let inString = false;
+  let escaped = false;
+
+  for (let index = start; index < text.length; index += 1) {
+    const character = text[index];
+
+    if (inString) {
+      if (escaped) {
+        escaped = false;
+      } else if (character === "\\") {
+        escaped = true;
+      } else if (character === '"') {
+        inString = false;
+      }
+      continue;
+    }
+
+    if (character === '"') {
+      inString = true;
+    } else if (character === "{") {
+      depth += 1;
+    } else if (character === "}") {
+      depth -= 1;
+      if (depth === 0) return index + 1;
+    }
+  }
+
+  return null;
+}
+
+function extractEventJsonLdFromText(text: string): PoshJsonLd | null {
+  const eventTypePattern = /"@type"\s*:\s*"Event"/g;
+
+  for (const match of text.matchAll(eventTypePattern)) {
+    if (match.index === undefined) continue;
+
+    // @type is normally one of the first fields, so the nearest opening brace
+    // is the JSON-LD event object rather than a surrounding Flight record.
+    let objectStart = text.lastIndexOf("{", match.index);
+    while (objectStart !== -1) {
+      const objectEnd = findJsonObjectEnd(text, objectStart);
+      if (objectEnd !== null) {
+        const event = parseEventJsonLd(text.slice(objectStart, objectEnd));
+        if (event) return event;
+      }
+      objectStart = text.lastIndexOf("{", objectStart - 1);
+    }
+  }
+
+  return null;
+}
+
+function extractEventJsonLdFromReactFlight(
+  $: cheerio.CheerioAPI
+): PoshJsonLd | null {
+  let event: PoshJsonLd | null = null;
+
+  $("script").each((_, element) => {
+    if (event) return false;
+
+    const content = $(element).html()?.trim();
+    const prefix = "self.__next_f.push(";
+    if (!content?.startsWith(prefix) || !content.endsWith(")")) return;
+
+    try {
+      const flightEntry = JSON.parse(
+        content.slice(prefix.length, content.length - 1)
+      ) as unknown;
+      if (
+        Array.isArray(flightEntry) &&
+        flightEntry[0] === 1 &&
+        typeof flightEntry[1] === "string"
+      ) {
+        event = extractEventJsonLdFromText(flightEntry[1]);
+      }
+    } catch {
+      // Ignore unrelated or malformed React Flight records.
+    }
+  });
+
+  return event;
+}
+
 function normalizePoshEventUrl(
   rawUrl: string | null | undefined
 ): string | null {
@@ -782,6 +909,7 @@ function mapPoshApiEvent(
       "eventSlug",
       "url_slug",
       "urlSlug",
+      "url",
       ["event", "slug"],
       ["event", "eventSlug"],
     ]) ||
@@ -1146,21 +1274,23 @@ async function scrapeEventPage(url: string) {
   const html = await response.text();
   const $ = cheerio.load(html);
 
-  // Try the specific script tag first
-  let jsonLdScript = $("#event-page-google-script").html();
+  // Older Posh pages render JSON-LD as a normal script element.
+  let jsonLd = parseEventJsonLd($("#event-page-google-script").html());
 
-  // Fallback: look for any application/ld+json script with Event type
-  if (!jsonLdScript) {
+  if (!jsonLd) {
     $('script[type="application/ld+json"]').each((_, el) => {
-      const content = $(el).html();
-      if (content && content.includes('"@type":"Event"')) {
-        jsonLdScript = content;
-        return false; // break
-      }
+      jsonLd = parseEventJsonLd($(el).html());
+      if (jsonLd) return false;
     });
   }
 
-  if (!jsonLdScript) {
+  // Current Posh pages stream the JSON-LD inside a Next.js React Flight record
+  // instead of rendering the script element represented by that record.
+  if (!jsonLd) {
+    jsonLd = extractEventJsonLdFromReactFlight($);
+  }
+
+  if (!jsonLd) {
     const nextData = $("#__NEXT_DATA__").html();
     if (!nextData) {
       throw new Error(`No JSON-LD event data found on ${url}`);
@@ -1178,7 +1308,6 @@ async function scrapeEventPage(url: string) {
     throw new Error(`No event data found in JSON-LD or Next.js data on ${url}`);
   }
 
-  const jsonLd: PoshJsonLd = JSON.parse(jsonLdScript);
   return extractEventFromJsonLd(jsonLd, url);
 }
 
