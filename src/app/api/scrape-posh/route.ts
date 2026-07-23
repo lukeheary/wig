@@ -2,27 +2,155 @@ import { NextRequest, NextResponse } from "next/server";
 import * as cheerio from "cheerio";
 import { inferCategoriesFromText } from "@/server/utils/inferCategories";
 
+export const maxDuration = 60;
+
 const POSH_EVENT_URL_REGEX = /https?:\/\/posh\.vip\/e\/[A-Za-z0-9_-]+/g;
 const POSH_EVENT_PATH_REGEX = /["'](\/e\/[A-Za-z0-9_-]+)(?:[?#][^"']*)?["']/g;
 const POSH_GROUP_API_BASE = "https://posh.vip/api/web/v2/util/group_url/";
+const POSH_USER_AGENT =
+  "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36";
 const timeZoneFormatterCache = new Map<string, Intl.DateTimeFormat>();
 
-function describePoshResponse(response: Response, body?: string): string {
+interface PoshFetchResult {
+  response: Response;
+  body: string;
+  transport: "direct" | "scrape.do-datacenter" | "scrape.do-residential";
+}
+
+function isBotChallenge(response: Response, body: string): boolean {
+  return (
+    response.headers.get("cf-mitigated") === "challenge" ||
+    /cf-chl-|challenge-platform|captcha|access denied/i.test(body)
+  );
+}
+
+function describePoshResponse(result: PoshFetchResult): string {
+  const { response, body, transport } = result;
   const details = [
     `HTTP ${response.status}${response.statusText ? ` ${response.statusText}` : ""}`,
     `content-type ${response.headers.get("content-type") || "unknown"}`,
+    transport === "scrape.do-datacenter"
+      ? "via Scrape.do datacenter"
+      : transport === "scrape.do-residential"
+        ? "via Scrape.do residential"
+        : "direct from Posh",
   ];
   const botCategory = response.headers.get("x-amzn-waf-waf-bot-category");
-  const challengeDetected =
-    response.headers.get("cf-mitigated") === "challenge" ||
-    /cf-chl-|challenge-platform|captcha|access denied/i.test(body || "");
 
   if (botCategory) details.push(`WAF bot category ${botCategory}`);
-  if (challengeDetected) details.push("bot challenge detected");
-  if (body !== undefined)
-    details.push(`${Buffer.byteLength(body)} response bytes`);
+  if (isBotChallenge(response, body)) details.push("bot challenge detected");
+  details.push(`${Buffer.byteLength(body)} response bytes`);
 
   return details.join("; ");
+}
+
+function shouldEscalateScrapeDoResult(
+  result: PoshFetchResult,
+  accept: string
+): boolean {
+  if (
+    result.response.status === 403 ||
+    result.response.status === 429 ||
+    result.response.status >= 500 ||
+    isBotChallenge(result.response, result.body)
+  ) {
+    return true;
+  }
+
+  if (result.response.ok && accept.includes("application/json")) {
+    try {
+      JSON.parse(result.body);
+    } catch {
+      return true;
+    }
+  }
+
+  return false;
+}
+
+async function fetchViaScrapeDo(
+  url: string,
+  accept: string,
+  token: string,
+  residential: boolean
+): Promise<PoshFetchResult> {
+  const scrapeDoUrl = new URL("https://api.scrape.do/");
+  scrapeDoUrl.searchParams.set("token", token);
+  scrapeDoUrl.searchParams.set("url", url);
+  scrapeDoUrl.searchParams.set("super", residential ? "true" : "false");
+  scrapeDoUrl.searchParams.set("geoCode", "us");
+  scrapeDoUrl.searchParams.set("render", "false");
+  scrapeDoUrl.searchParams.set("output", "raw");
+
+  const response = await fetch(scrapeDoUrl, {
+    headers: { Accept: accept },
+    signal: AbortSignal.timeout(residential ? 30000 : 20000),
+  });
+  return {
+    response,
+    body: await response.text(),
+    transport: residential ? "scrape.do-residential" : "scrape.do-datacenter",
+  };
+}
+
+async function fetchPoshResource(
+  url: string,
+  accept: string
+): Promise<PoshFetchResult> {
+  let directResult: PoshFetchResult | null = null;
+
+  try {
+    const response = await fetch(url, {
+      headers: {
+        "User-Agent": POSH_USER_AGENT,
+        Accept: accept,
+      },
+      signal: AbortSignal.timeout(10000),
+    });
+    directResult = {
+      response,
+      body: await response.text(),
+      transport: "direct",
+    };
+
+    const shouldRetryWithProxy =
+      response.status === 403 ||
+      response.status === 429 ||
+      isBotChallenge(response, directResult.body);
+    if (!shouldRetryWithProxy) return directResult;
+  } catch {
+    // A configured Scrape.do fallback can also recover network-level errors.
+  }
+
+  const scrapeDoToken = process.env.SCRAPE_DO_TOKEN?.trim();
+  if (!scrapeDoToken) {
+    if (directResult) return directResult;
+    throw new Error(
+      "Direct Posh request failed and SCRAPE_DO_TOKEN is not configured"
+    );
+  }
+
+  try {
+    const datacenterResult = await fetchViaScrapeDo(
+      url,
+      accept,
+      scrapeDoToken,
+      false
+    );
+    if (!shouldEscalateScrapeDoResult(datacenterResult, accept)) {
+      return datacenterResult;
+    }
+  } catch {
+    // Escalate network and timeout failures to the residential pool.
+  }
+
+  try {
+    return await fetchViaScrapeDo(url, accept, scrapeDoToken, true);
+  } catch {
+    throw new Error(
+      "Scrape.do datacenter and residential requests failed before receiving a response"
+    );
+  }
 }
 
 interface PoshJsonLd {
@@ -1147,23 +1275,23 @@ async function fetchGroupEventsFromApi(groupUrl: string) {
   }
 
   const apiUrl = `${POSH_GROUP_API_BASE}${groupSlug}`;
-  const response = await fetch(apiUrl, {
-    headers: {
-      "User-Agent":
-        "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36",
-      Accept: "application/json",
-    },
-    signal: AbortSignal.timeout(15000),
-  });
+  const fetchResult = await fetchPoshResource(apiUrl, "application/json");
+  const { response, body } = fetchResult;
 
   if (!response.ok) {
-    const body = await response.text();
     throw new Error(
-      `Failed to fetch Posh group API: ${describePoshResponse(response, body)}`
+      `Failed to fetch Posh group API: ${describePoshResponse(fetchResult)}`
     );
   }
 
-  const data = (await response.json()) as unknown;
+  let data: unknown;
+  try {
+    data = JSON.parse(body) as unknown;
+  } catch {
+    throw new Error(
+      `Posh group API returned invalid JSON: ${describePoshResponse(fetchResult)}`
+    );
+  }
   const rawEvents = extractEventCandidatesFromApi(data);
   const organizer = extractGroupInfoFromApi(data, rawEvents);
   const now = new Date();
@@ -1279,23 +1407,18 @@ function extractEventFromStructuredData(data: unknown, eventUrl: string) {
 }
 
 async function scrapeEventPage(url: string) {
-  const response = await fetch(url, {
-    headers: {
-      "User-Agent":
-        "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36",
-      Accept: "text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8",
-    },
-    signal: AbortSignal.timeout(15000),
-  });
+  const fetchResult = await fetchPoshResource(
+    url,
+    "text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8"
+  );
+  const { response, body: html } = fetchResult;
 
   if (!response.ok) {
-    const body = await response.text();
     throw new Error(
-      `Failed to fetch Posh event page: ${describePoshResponse(response, body)}`
+      `Failed to fetch Posh event page: ${describePoshResponse(fetchResult)}`
     );
   }
 
-  const html = await response.text();
   const $ = cheerio.load(html);
 
   // Older Posh pages render JSON-LD as a normal script element.
@@ -1318,7 +1441,7 @@ async function scrapeEventPage(url: string) {
     const nextData = $("#__NEXT_DATA__").html();
     if (!nextData) {
       throw new Error(
-        `Posh returned no recognizable event data (${describePoshResponse(response, html)})`
+        `Posh returned no recognizable event data (${describePoshResponse(fetchResult)})`
       );
     }
     try {
@@ -1338,22 +1461,15 @@ async function scrapeEventPage(url: string) {
 }
 
 async function discoverEventUrls(groupUrl: string): Promise<string[]> {
-  const response = await fetch(groupUrl, {
-    headers: {
-      "User-Agent":
-        "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36",
-    },
-    signal: AbortSignal.timeout(15000),
-  });
+  const fetchResult = await fetchPoshResource(groupUrl, "text/html");
+  const { response, body: html } = fetchResult;
 
   if (!response.ok) {
-    const body = await response.text();
     throw new Error(
-      `Failed to fetch Posh group page: ${describePoshResponse(response, body)}`
+      `Failed to fetch Posh group page: ${describePoshResponse(fetchResult)}`
     );
   }
 
-  const html = await response.text();
   const $ = cheerio.load(html);
 
   return extractEventUrlsFromHtml(html, $);
