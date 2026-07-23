@@ -1273,6 +1273,21 @@ function extractGroupInfoFromApi(
   return null;
 }
 
+function mapGroupEventsFromApiData(data: unknown) {
+  const rawEvents = extractEventCandidatesFromApi(data);
+  const organizer = extractGroupInfoFromApi(data, rawEvents);
+  const now = new Date();
+  const events = rawEvents
+    .map((raw) => mapPoshApiEvent(raw, organizer))
+    .filter((event) => event.startAt)
+    .filter((event) => {
+      const start = new Date(event.startAt!);
+      return !Number.isNaN(start.getTime()) && start >= now;
+    });
+
+  return { events, organizer };
+}
+
 async function fetchGroupEventsFromApi(groupUrl: string) {
   const groupSlug = extractSlugFromUrl(groupUrl, "g");
   if (!groupSlug) {
@@ -1297,18 +1312,8 @@ async function fetchGroupEventsFromApi(groupUrl: string) {
       `Posh group API returned invalid JSON: ${describePoshResponse(fetchResult)}`
     );
   }
-  const rawEvents = extractEventCandidatesFromApi(data);
-  const organizer = extractGroupInfoFromApi(data, rawEvents);
-  const now = new Date();
-  const events = rawEvents
-    .map((raw) => mapPoshApiEvent(raw, organizer))
-    .filter((event) => event.startAt)
-    .filter((event) => {
-      const start = new Date(event.startAt!);
-      return !Number.isNaN(start.getTime()) && start >= now;
-    });
 
-  return { events, organizer };
+  return mapGroupEventsFromApiData(data);
 }
 
 function parseAddress(fullAddress: string): {
@@ -1480,7 +1485,22 @@ async function discoverEventUrls(groupUrl: string): Promise<string[]> {
   return extractEventUrlsFromHtml(html, $);
 }
 
-export async function scrapePosh(urls: string[]) {
+interface PrefetchedPoshGroup {
+  groupUrl: string;
+  data: unknown;
+}
+
+function normalizeGroupUrlKey(url: string): string {
+  return url
+    .trim()
+    .replace(/[?#].*$/, "")
+    .replace(/\/$/, "");
+}
+
+export async function scrapePosh(
+  urls: string[],
+  prefetchedGroups: PrefetchedPoshGroup[] = []
+) {
   // Separate group URLs from event URLs
   const eventUrls: string[] = [];
   const groupUrls: string[] = [];
@@ -1502,15 +1522,27 @@ export async function scrapePosh(urls: string[]) {
   const events: any[] = [];
   const errors: { url: string; error: string }[] = [];
   let organizerFromGroup: { name: string; url?: string } | null = null;
+  const prefetchedGroupData = new Map(
+    prefetchedGroups.map(({ groupUrl, data }) => [
+      normalizeGroupUrlKey(groupUrl),
+      data,
+    ])
+  );
 
   // Try the group API first (best chance of full data)
   for (const groupUrl of groupUrls) {
     let groupEvents: any[] = [];
     let groupOrganizer: { name: string; url?: string } | null = null;
     let groupApiError: string | null = null;
+    const prefetchedData = prefetchedGroupData.get(
+      normalizeGroupUrlKey(groupUrl)
+    );
+    const usedPrefetchedData = prefetchedData !== undefined;
 
     try {
-      const result = await fetchGroupEventsFromApi(groupUrl);
+      const result = usedPrefetchedData
+        ? mapGroupEventsFromApiData(prefetchedData)
+        : await fetchGroupEventsFromApi(groupUrl);
       groupEvents = result.events;
       groupOrganizer = result.organizer;
     } catch (error) {
@@ -1523,6 +1555,14 @@ export async function scrapePosh(urls: string[]) {
       if (!organizerFromGroup && groupOrganizer) {
         organizerFromGroup = groupOrganizer;
       }
+      continue;
+    }
+
+    if (usedPrefetchedData) {
+      errors.push({
+        url: groupUrl,
+        error: "Browser-fetched Posh group data contained no upcoming events",
+      });
       continue;
     }
 
@@ -1612,7 +1652,10 @@ export async function scrapePosh(urls: string[]) {
 
 export async function POST(request: NextRequest) {
   try {
-    const { urls } = (await request.json()) as { urls: string[] };
+    const { urls, prefetchedGroups } = (await request.json()) as {
+      urls: string[];
+      prefetchedGroups?: PrefetchedPoshGroup[];
+    };
 
     if (!urls || !Array.isArray(urls) || urls.length === 0) {
       return NextResponse.json(
@@ -1621,7 +1664,17 @@ export async function POST(request: NextRequest) {
       );
     }
 
-    const result = await scrapePosh(urls);
+    const validPrefetchedGroups = Array.isArray(prefetchedGroups)
+      ? prefetchedGroups.filter(
+          (item) =>
+            item &&
+            typeof item.groupUrl === "string" &&
+            item.groupUrl.includes("posh.vip/g/") &&
+            item.data !== undefined
+        )
+      : [];
+
+    const result = await scrapePosh(urls, validPrefetchedGroups);
 
     if (result.events.length === 0) {
       console.error("[posh-scraper] Failed to scrape any events", {

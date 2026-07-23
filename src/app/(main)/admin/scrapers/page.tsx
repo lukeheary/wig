@@ -166,6 +166,60 @@ function findFirstHttpUrl(value: string): string | null {
   return null;
 }
 
+function getPoshGroupSlug(value: string): string | null {
+  try {
+    const parsed = new URL(value);
+    if (parsed.hostname !== "posh.vip" && parsed.hostname !== "www.posh.vip") {
+      return null;
+    }
+    const parts = parsed.pathname.split("/").filter(Boolean);
+    const groupIndex = parts.indexOf("g");
+    return groupIndex >= 0 ? parts[groupIndex + 1] || null : null;
+  } catch {
+    return null;
+  }
+}
+
+async function fetchPoshGroupsFromBrowser(urls: string[]) {
+  return Promise.all(
+    urls.map(async (groupUrl) => {
+      const slug = getPoshGroupSlug(groupUrl);
+      if (!slug) {
+        throw new Error(`Invalid Posh group URL: ${groupUrl}`);
+      }
+
+      let response: Response;
+      try {
+        response = await fetch(
+          `https://posh.vip/api/web/v2/util/group_url/${encodeURIComponent(slug)}`,
+          {
+            headers: { Accept: "application/json" },
+            cache: "no-store",
+          }
+        );
+      } catch {
+        throw new Error(
+          `Your browser could not reach Posh for ${groupUrl}. Check your connection and try again.`
+        );
+      }
+
+      if (!response.ok) {
+        throw new Error(
+          `Posh returned HTTP ${response.status} for ${groupUrl} in your browser.`
+        );
+      }
+
+      try {
+        return { groupUrl, data: (await response.json()) as unknown };
+      } catch {
+        throw new Error(
+          `Posh returned invalid group data for ${groupUrl} in your browser.`
+        );
+      }
+    })
+  );
+}
+
 function formatDateTimeLabel(value: string | null) {
   if (!value) return "Unknown time";
   const parsed = new Date(value);
@@ -622,7 +676,9 @@ export default function AdminScrapersPage() {
         if (urls.length === 0) {
           throw new Error("This Posh scraper has an empty search string.");
         }
-        payload = { urls };
+        const groupUrls = urls.filter((url) => getPoshGroupSlug(url));
+        const prefetchedGroups = await fetchPoshGroupsFromBrowser(groupUrls);
+        payload = { urls, prefetchedGroups };
       } else if (selectedRow.scraper === "ticketmaster") {
         endpoint = "/api/scrape-ticketmaster";
         if (!selectedRow.place.state) {
