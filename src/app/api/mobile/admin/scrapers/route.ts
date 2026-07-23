@@ -19,6 +19,15 @@ const scraperTypeSchema = z.enum(["dice", "posh", "ticketmaster"]);
 
 const runScraperSchema = z.object({
   scraperId: z.string().uuid(),
+  prefetchedGroups: z
+    .array(
+      z.object({
+        groupUrl: z.string().url(),
+        data: z.unknown(),
+      })
+    )
+    .max(20)
+    .optional(),
 });
 
 const importScrapedEventsSchema = z.object({
@@ -201,7 +210,10 @@ function scoreScrapedVenueMatch(
   return score;
 }
 
-async function runSelectedScraper(scraperId: string) {
+async function runSelectedScraper(
+  scraperId: string,
+  prefetchedGroups: Array<{ groupUrl: string; data: unknown }> = []
+) {
   const row = await db.query.scrapers.findFirst({
     where: eq(scrapers.id, scraperId),
     with: {
@@ -226,7 +238,7 @@ async function runSelectedScraper(scraperId: string) {
       throw new Error("This Posh scraper has an empty search string.");
     }
 
-    result = await scrapePosh(urls);
+    result = await scrapePosh(urls, prefetchedGroups);
   } else {
     if (!row.place.state) {
       throw new Error("Ticketmaster scrapers require the linked venue to have a 2-letter state code.");
@@ -373,7 +385,10 @@ export async function POST(request: Request) {
 
   try {
     const body = runScraperSchema.parse(await request.json());
-    const result = await runSelectedScraper(body.scraperId);
+    const result = await runSelectedScraper(
+      body.scraperId,
+      body.prefetchedGroups?.map(({ groupUrl, data }) => ({ groupUrl, data }))
+    );
     return NextResponse.json(result);
   } catch (error) {
     const message = error instanceof Error ? error.message : "Failed to run scraper";

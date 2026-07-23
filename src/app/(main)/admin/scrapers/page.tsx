@@ -115,6 +115,16 @@ interface ScrapeErrorResponse {
   details?: { url: string; error: string }[];
 }
 
+interface BatchPoshEvent extends ScrapedEvent {
+  timeZone?: string | null;
+  venueMatch?: SelectedVenue | null;
+}
+
+interface BatchPoshScrapeResult {
+  events: BatchPoshEvent[];
+  errors?: { url: string; error: string }[];
+}
+
 function formatScrapeError(data: ScrapeErrorResponse, status: number): string {
   const message = data.error || `Failed to scrape (HTTP ${status})`;
   if (!data.details?.length) return message;
@@ -545,6 +555,11 @@ export default function AdminScrapersPage() {
   const [search, setSearch] = useState("");
   const [selectedScraperId, setSelectedScraperId] = useState("");
   const [isScraping, setIsScraping] = useState(false);
+  const [isRunningAllPosh, setIsRunningAllPosh] = useState(false);
+  const [batchPoshProgress, setBatchPoshProgress] = useState<{
+    current: number;
+    total: number;
+  } | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [result, setResult] = useState<ScrapeResult | null>(null);
   const [editableEvents, setEditableEvents] = useState<EditableScrapedEvent[]>(
@@ -571,6 +586,7 @@ export default function AdminScrapersPage() {
 
   const { data: scraperRows = [], isLoading } =
     trpc.admin.listScrapers.useQuery(queryInput);
+  const { data: allScraperRows = [] } = trpc.admin.listScrapers.useQuery();
 
   const { data: categoryOptions = [] } = trpc.category.listActive.useQuery();
 
@@ -730,6 +746,130 @@ export default function AdminScrapersPage() {
     }
   };
 
+  const runAllPoshScrapers = async () => {
+    const poshRows = allScraperRows.filter(
+      (row) => row.scraper === "posh"
+    ) as ScraperRow[];
+    if (poshRows.length === 0) return;
+
+    setIsRunningAllPosh(true);
+    setError(null);
+    setBatchPoshProgress({ current: 0, total: poshRows.length });
+
+    let eventsFound = 0;
+    let eventsCreated = 0;
+    const failures: string[] = [];
+
+    for (let index = 0; index < poshRows.length; index += 1) {
+      const row = poshRows[index];
+      setBatchPoshProgress({ current: index + 1, total: poshRows.length });
+
+      try {
+        const urls = row.searchString
+          .split(/[\n,]+/)
+          .map((value) => value.trim())
+          .filter(Boolean);
+        const groupUrls = urls.filter((url) => getPoshGroupSlug(url));
+
+        if (urls.length === 0 || groupUrls.length !== urls.length) {
+          throw new Error(
+            "Run All currently supports Posh group URLs only (/g/...)."
+          );
+        }
+
+        const prefetchedGroups = await fetchPoshGroupsFromBrowser(groupUrls);
+        const scrapeResponse = await fetch("/api/mobile/admin/scrapers", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({
+            scraperId: row.id,
+            prefetchedGroups,
+          }),
+        });
+        const scrapeData = (await scrapeResponse.json()) as
+          | BatchPoshScrapeResult
+          | ScrapeErrorResponse;
+
+        if (!scrapeResponse.ok || !("events" in scrapeData)) {
+          throw new Error(
+            formatScrapeError(
+              scrapeData as ScrapeErrorResponse,
+              scrapeResponse.status
+            )
+          );
+        }
+
+        if (scrapeData.events.length === 0 && scrapeData.errors?.length) {
+          throw new Error(
+            formatScrapeError(
+              {
+                error: "Failed to scrape any events",
+                details: scrapeData.errors,
+              },
+              502
+            )
+          );
+        }
+
+        eventsFound += scrapeData.events.length;
+        const importResponse = await fetch("/api/mobile/admin/scrapers", {
+          method: "PATCH",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({
+            scraperId: row.id,
+            overrideExisting: false,
+            events: scrapeData.events.map((event) => ({
+              title: event.title,
+              description: event.description,
+              coverImageUrl: event.coverImageUrl,
+              eventUrl: event.eventUrl,
+              externalId: event.externalId,
+              source: event.source,
+              startAt: event.startAt,
+              endAt: event.endAt,
+              address: event.address,
+              city: event.city,
+              state: event.state,
+              categories: event.categories,
+              visibility: "public",
+              status: "active",
+              timeZone: event.timeZone,
+              venueId: event.venueMatch?.id ?? null,
+            })),
+          }),
+        });
+        const importData = (await importResponse.json()) as {
+          created?: number;
+          error?: string;
+        };
+        if (!importResponse.ok) {
+          throw new Error(importData.error || "Failed to import events");
+        }
+        eventsCreated += importData.created ?? 0;
+      } catch (err) {
+        failures.push(
+          `${row.place.name}: ${err instanceof Error ? err.message : "Unknown error"}`
+        );
+      }
+    }
+
+    setIsRunningAllPosh(false);
+    setBatchPoshProgress(null);
+    if (failures.length > 0) {
+      setError(
+        `Completed ${poshRows.length - failures.length} of ${poshRows.length} Posh scrapers.\n\n${failures.join("\n\n")}`
+      );
+    }
+    toast({
+      title:
+        failures.length === 0
+          ? "All Posh scrapers completed"
+          : "Posh batch completed with errors",
+      description: `${eventsFound} events found; ${eventsCreated} new events imported.`,
+      variant: failures.length === poshRows.length ? "destructive" : "default",
+    });
+  };
+
   const handleImport = async () => {
     if (!result || !selectedRow || editableEvents.length === 0) return;
 
@@ -869,6 +1009,28 @@ export default function AdminScrapersPage() {
                 </Select>
               </div>
 
+              {allScraperRows.some((row) => row.scraper === "posh") && (
+                <div className="flex flex-wrap items-center gap-3 rounded-md border border-dashed p-3">
+                  <Button
+                    variant="outline"
+                    onClick={runAllPoshScrapers}
+                    disabled={isScraping || isRunningAllPosh}
+                  >
+                    {isRunningAllPosh ? (
+                      <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+                    ) : (
+                      <RefreshCw className="mr-2 h-4 w-4" />
+                    )}
+                    {isRunningAllPosh && batchPoshProgress
+                      ? `Running Posh ${batchPoshProgress.current} of ${batchPoshProgress.total}`
+                      : `Run & Import All Posh (${allScraperRows.filter((row) => row.scraper === "posh").length})`}
+                  </Button>
+                  <p className="text-xs text-muted-foreground">
+                    Fetches through this browser and imports new events only.
+                  </p>
+                </div>
+              )}
+
               {selectedRow && (
                 <div className="space-y-3 rounded-md border p-3 text-sm">
                   <div className="flex flex-wrap items-center gap-2">
@@ -886,7 +1048,10 @@ export default function AdminScrapersPage() {
                       {selectedRow.searchString}
                     </span>
                   </p>
-                  <Button onClick={runScraper} disabled={isScraping}>
+                  <Button
+                    onClick={runScraper}
+                    disabled={isScraping || isRunningAllPosh}
+                  >
                     {isScraping ? (
                       <Loader2 className="mr-2 h-4 w-4 animate-spin" />
                     ) : (
