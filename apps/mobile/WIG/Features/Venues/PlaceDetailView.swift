@@ -12,9 +12,12 @@ struct PlaceDetailView: View {
     @Environment(\.apiClient) private var apiClient
     @Environment(\.dismiss) private var dismiss
     @Environment(Clerk.self) private var clerk
+    @EnvironmentObject private var appSession: AppSession
     @StateObject private var viewModel = PlaceDetailViewModel()
     @State private var selectedTab: PlaceEventsTab = .upcoming
     @State private var presentedAction: PlaceDetailAction?
+    @State private var isManagePlaceActive = false
+    @State private var managePlaceDetail: PlaceDetail?
     @State private var isUnfollowConfirmationPresented = false
     @State private var isHideFromHomeConfirmationPresented = false
     @State private var isLocationPopoverPresented = false
@@ -40,11 +43,13 @@ struct PlaceDetailView: View {
 
                         VStack(spacing: 12) {
                             PlaceDetailHeader(
+                                slug: seededDetail.slug,
                                 name: seededDetail.name,
                                 type: seededDetail.type,
                                 logoURL: seededDetail.displayLogoURL,
                                 cityStateText: seededDetail.cityStateText,
                                 followerCount: seededDetail.followerCount,
+                                memberCount: seededDetail.memberCount,
                                 upcomingEventCount: place.upcomingEventCount
                             )
 
@@ -63,11 +68,13 @@ struct PlaceDetailView: View {
 
                         VStack(spacing: 12) {
                             PlaceDetailHeader(
+                                slug: seededDetail.slug,
                                 name: seededDetail.name,
                                 type: seededDetail.type,
                                 logoURL: seededDetail.displayLogoURL,
                                 cityStateText: seededDetail.cityStateText,
                                 followerCount: seededDetail.followerCount,
+                                memberCount: seededDetail.memberCount,
                                 upcomingEventCount: place.upcomingEventCount
                             )
 
@@ -98,11 +105,13 @@ struct PlaceDetailView: View {
                     case .loaded(let detail):
                         VStack(spacing: 12) {
                             PlaceDetailHeader(
+                                slug: detail.slug,
                                 name: detail.name,
                                 type: detail.type,
                                 logoURL: detail.displayLogoURL,
                                 cityStateText: detail.cityStateText,
                                 followerCount: detail.followerCount,
+                                memberCount: detail.memberCount,
                                 upcomingEventCount: detail.events.count
                             )
 
@@ -228,7 +237,18 @@ struct PlaceDetailView: View {
                             }
                         }
                     )
+
                 }
+            }
+        }
+        .navigationDestination(isPresented: $isManagePlaceActive) {
+            if let detail = managePlaceDetail {
+                ManagePlaceView(
+                    placeSlug: detail.slug,
+                    placeName: detail.name,
+                    placeDetail: detail,
+                    onPlaceDeleted: { dismiss() }
+                )
             }
         }
         .sheet(item: $presentedWebsite) { destination in
@@ -465,6 +485,17 @@ struct PlaceDetailView: View {
                     presentedAction = .createEventSeries
                 } label: {
                     Label("Add Event Series", systemImage: "calendar.badge.clock")
+                        .foregroundStyle(.white)
+                }
+                .tint(.white)
+            }
+
+            if appSession.isAdmin {
+                Button {
+                    managePlaceDetail = detail
+                    isManagePlaceActive = true
+                } label: {
+                    Label("Manage Place", systemImage: "slider.horizontal.3")
                         .foregroundStyle(.white)
                 }
                 .tint(.white)
@@ -835,11 +866,13 @@ private struct PlaceDetailEventLoadingSection: View {
 }
 
 private struct PlaceDetailHeader: View {
+    let slug: String
     let name: String
     let type: PlaceListItem.PlaceType
     let logoURL: URL?
     let cityStateText: String?
     let followerCount: Int
+    let memberCount: Int
     let upcomingEventCount: Int
     @State private var isImageViewerPresented = false
 
@@ -866,8 +899,21 @@ private struct PlaceDetailHeader: View {
                 }
 
                 HStack(spacing: 24) {
-                    PlaceDetailStat(count: upcomingEventCount, label: "Upcoming Events")
-                    PlaceDetailStat(count: followerCount, label: "Followers")
+                    PlaceDetailStat(count: upcomingEventCount, label: "Upcoming")
+
+                    NavigationLink {
+                        PlaceFollowersView(slug: slug)
+                    } label: {
+                        PlaceDetailStat(count: followerCount, label: "Followers")
+                    }
+                    .buttonStyle(.plain)
+
+                    NavigationLink {
+                        PlaceMembersView(slug: slug)
+                    } label: {
+                        PlaceDetailStat(count: memberCount, label: "Members")
+                    }
+                    .buttonStyle(.plain)
                 }
             }
             .frame(maxWidth: .infinity, minHeight: 104, alignment: .bottomLeading)
@@ -933,7 +979,7 @@ private struct PlaceDetailStat: View {
 
         return switch label {
         case "Followers": "Follower"
-        case "Upcoming Events": "Upcoming Event"
+        case "Members": "Member"
         default: label
         }
     }
@@ -1001,6 +1047,160 @@ private enum PlaceEventsTab: CaseIterable, Identifiable {
         }
     }
 }
+
+// MARK: - Followers / Members List Views
+
+private struct PlaceFollowersView: View {
+    let slug: String
+
+    @Environment(\.apiClient) private var apiClient
+    @Environment(\.dismiss) private var dismiss
+    @State private var followers: [FriendUserSummary] = []
+    @State private var isLoading = true
+    @State private var failed = false
+
+    var body: some View {
+        ScrollView {
+            VStack(alignment: .leading, spacing: 8) {
+                Text("Followers")
+                    .font(.system(size: 20, weight: .bold))
+                    .foregroundStyle(.white)
+
+                if isLoading {
+                    ProgressView().frame(maxWidth: .infinity).padding(.top, 40)
+                } else if failed {
+                    ContentUnavailableView("Couldn't Load Followers", systemImage: "wifi.exclamationmark")
+                        .foregroundStyle(.white)
+                } else if followers.isEmpty {
+                    ContentUnavailableView("No Followers Yet", systemImage: "person.slash")
+                        .foregroundStyle(.white)
+                } else {
+                    VStack(spacing: 2) {
+                        ForEach(followers) { user in
+                            NavigationLink {
+                                UserProfileView(userID: user.id)
+                            } label: {
+                                CompactUserListRowView(
+                                    imageURL: user.avatarImageURL,
+                                    name: user.name,
+                                    subtitle: user.usernameText,
+                                    identityKey: user.id
+                                )
+                                .frame(maxWidth: .infinity, alignment: .leading)
+                                .contentShape(Rectangle())
+                            }
+                            .buttonStyle(.plain)
+                        }
+                    }
+                    .frame(maxWidth: .infinity, alignment: .leading)
+                }
+            }
+            .padding(.horizontal, 16)
+            .padding(.top, 74)
+            .padding(.bottom, 48)
+        }
+        .background(AppTheme.background.ignoresSafeArea())
+        .background(SwipeBackEnabler())
+        .toolbar(.hidden, for: .navigationBar)
+        .navigationBarBackButtonHidden()
+        .overlay(alignment: .topLeading) {
+            FloatingGlassIconButton(systemImage: "chevron.left") { dismiss() }
+                .padding(.leading, 16)
+        }
+        .task {
+            await load()
+        }
+    }
+
+    private func load() async {
+        isLoading = true
+        failed = false
+        do {
+            let response = try await apiClient.send(APIClient.mobilePlaceFollowers(slug: slug))
+            followers = response.followers
+        } catch {
+            failed = true
+        }
+        isLoading = false
+    }
+}
+
+private struct PlaceMembersView: View {
+    let slug: String
+
+    @Environment(\.apiClient) private var apiClient
+    @Environment(\.dismiss) private var dismiss
+    @State private var members: [PlaceMemberListItem] = []
+    @State private var isLoading = true
+    @State private var failed = false
+
+    var body: some View {
+        ScrollView {
+            VStack(alignment: .leading, spacing: 8) {
+                Text("Members")
+                    .font(.system(size: 20, weight: .bold))
+                    .foregroundStyle(.white)
+
+                if isLoading {
+                    ProgressView().frame(maxWidth: .infinity).padding(.top, 40)
+                } else if failed {
+                    ContentUnavailableView("Couldn't Load Members", systemImage: "wifi.exclamationmark")
+                        .foregroundStyle(.white)
+                } else if members.isEmpty {
+                    ContentUnavailableView("No Members Yet", systemImage: "person.slash")
+                        .foregroundStyle(.white)
+                } else {
+                    VStack(spacing: 2) {
+                        ForEach(members) { member in
+                            NavigationLink {
+                                UserProfileView(userID: member.id)
+                            } label: {
+                                CompactUserListRowView(
+                                    imageURL: member.avatarImageURL,
+                                    name: member.name,
+                                    subtitle: "\(member.usernameText) · \(member.role.displayName)",
+                                    identityKey: member.id
+                                )
+                                .frame(maxWidth: .infinity, alignment: .leading)
+                                .contentShape(Rectangle())
+                            }
+                            .buttonStyle(.plain)
+                        }
+                    }
+                    .frame(maxWidth: .infinity, alignment: .leading)
+                }
+            }
+            .padding(.horizontal, 16)
+            .padding(.top, 74)
+            .padding(.bottom, 48)
+        }
+        .background(AppTheme.background.ignoresSafeArea())
+        .background(SwipeBackEnabler())
+        .toolbar(.hidden, for: .navigationBar)
+        .navigationBarBackButtonHidden()
+        .overlay(alignment: .topLeading) {
+            FloatingGlassIconButton(systemImage: "chevron.left") { dismiss() }
+                .padding(.leading, 16)
+        }
+        .task {
+            await load()
+        }
+    }
+
+    private func load() async {
+        isLoading = true
+        failed = false
+        do {
+            let response = try await apiClient.send(APIClient.mobilePlaceMembers(slug: slug))
+            members = response.members
+        } catch {
+            failed = true
+        }
+        isLoading = false
+    }
+}
+
+// MARK: -
 
 private struct PlaceEventGroup: Identifiable {
     let label: String

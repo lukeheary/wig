@@ -52,6 +52,8 @@
 		F74EA1B7DFBC703848E6041D /* EventFeedViewModel.swift in Sources */ = {isa = PBXBuildFile; fileRef = AF740D90915ACDB1EBB99A78 /* EventFeedViewModel.swift */; };
 		FE7A9BA137F5A6BA54F396A9 /* AppSession.swift in Sources */ = {isa = PBXBuildFile; fileRef = E9F25C520369E8D97B2E2329 /* AppSession.swift */; };
 		FF1C1CF9891F1B9469DEE892 /* PlaceDetailView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 851827A09CFB3DE3E0B03109 /* PlaceDetailView.swift */; };
+		AA3F7B82C1D94E5F9D0B2A61 /* AddUserToPlaceView.swift in Sources */ = {isa = PBXBuildFile; fileRef = BB9E4C31A7F8235D6E0C4712 /* AddUserToPlaceView.swift */; };
+		CC8F2A4DB1E35C970D2E6183 /* ManagePlaceView.swift in Sources */ = {isa = PBXBuildFile; fileRef = DD7A3B91F4C0286E5A1B8047 /* ManagePlaceView.swift */; };
 /* End PBXBuildFile section */
 
 /* Begin PBXFileReference section */
@@ -102,6 +104,8 @@
 		EB564D2CF3E17440A471C692 /* WIGAuthSheetView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = WIGAuthSheetView.swift; sourceTree = "<group>"; };
 		F1A0ACCD8478786570AD3796 /* Debug.xcconfig */ = {isa = PBXFileReference; lastKnownFileType = text.xcconfig; path = Debug.xcconfig; sourceTree = "<group>"; };
 		FB7522ACC7AF252899EB4576 /* PlaceDetailViewModel.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = PlaceDetailViewModel.swift; sourceTree = "<group>"; };
+		BB9E4C31A7F8235D6E0C4712 /* AddUserToPlaceView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AddUserToPlaceView.swift; sourceTree = "<group>"; };
+		DD7A3B91F4C0286E5A1B8047 /* ManagePlaceView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ManagePlaceView.swift; sourceTree = "<group>"; };
 		FD0F542B4F30067E41ACD974 /* HomeView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = HomeView.swift; sourceTree = "<group>"; };
 /* End PBXFileReference section */
 
@@ -165,6 +169,8 @@
 		42775395698970E0DB0413BC /* Venues */ = {
 			isa = PBXGroup;
 			children = (
+				BB9E4C31A7F8235D6E0C4712 /* AddUserToPlaceView.swift */,
+				DD7A3B91F4C0286E5A1B8047 /* ManagePlaceView.swift */,
 				851827A09CFB3DE3E0B03109 /* PlaceDetailView.swift */,
 				FB7522ACC7AF252899EB4576 /* PlaceDetailViewModel.swift */,
 				A55BD291C4FD0C9CAEB90B10 /* VenuesView.swift */,
@@ -409,6 +415,8 @@
 				6A4D4419594A5F5153DCDD79 /* MobilePlaceCreationView.swift in Sources */,
 				D660CF02FF972B340A8A88B0 /* Person.swift in Sources */,
 				DADC279B33BBB821553BCA3D /* PlaceDetail.swift in Sources */,
+				AA3F7B82C1D94E5F9D0B2A61 /* AddUserToPlaceView.swift in Sources */,
+				CC8F2A4DB1E35C970D2E6183 /* ManagePlaceView.swift in Sources */,
 				FF1C1CF9891F1B9469DEE892 /* PlaceDetailView.swift in Sources */,
 				D0A5C649C6897F8D058D193C /* PlaceDetailViewModel.swift in Sources */,
 				5EC46501B348BC70CE9B7797 /* PlaceListItem.swift in Sources */,

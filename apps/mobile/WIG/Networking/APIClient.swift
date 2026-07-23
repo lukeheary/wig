@@ -255,6 +255,42 @@ struct APIClient: Sendable {
         )
     }
 
+    static func mobilePlaceEventSeries(slug: String) -> Endpoint<MobilePlaceEventSeriesResponse> {
+        Endpoint(
+            path: "/api/mobile/places/\(slug)/event-series",
+            requiresAuthentication: false,
+            includesAuthenticationIfAvailable: true
+        )
+    }
+
+    static func mobilePlaceFollowers(slug: String) -> Endpoint<MobilePlaceFollowersResponse> {
+        Endpoint(
+            path: "/api/mobile/places/\(slug)/followers",
+            requiresAuthentication: false,
+            includesAuthenticationIfAvailable: true
+        )
+    }
+
+    static func mobilePlaceMembers(slug: String) -> Endpoint<MobilePlaceMembersResponse> {
+        Endpoint(
+            path: "/api/mobile/places/\(slug)/members",
+            requiresAuthentication: false,
+            includesAuthenticationIfAvailable: true
+        )
+    }
+
+    static func mobileAddUserToPlace(
+        slug: String,
+        userId: String,
+        role: PlaceMemberRole
+    ) throws -> Endpoint<MobileAddUserToPlaceResponse> {
+        Endpoint(
+            path: "/api/mobile/places/\(slug)/members",
+            method: .post,
+            body: try JSONEncoder().encode(MobileAddUserToPlaceRequest(userId: userId, role: role))
+        )
+    }
+
     static func mobileActivity(limit: Int = 40) -> Endpoint<ActivityFeedResponse> {
         Endpoint(
             path: "/api/mobile/activity",
@@ -1174,6 +1210,97 @@ struct MobileFriendRequestResponse: Decodable, Hashable, Sendable {
 
 struct MobileAdminStatusResponse: Decodable, Hashable, Sendable {
     let isAdmin: Bool
+}
+
+enum PlaceMemberRole: String, Codable, CaseIterable, Sendable {
+    case owner
+    case manager
+    case promoter
+    case staff
+
+    var displayName: String {
+        switch self {
+        case .owner: return "Owner"
+        case .manager: return "Manager"
+        case .promoter: return "Promoter"
+        case .staff: return "Staff"
+        }
+    }
+}
+
+struct MobileAddUserToPlaceRequest: Encodable, Sendable {
+    let userId: String
+    let role: PlaceMemberRole
+}
+
+struct MobileAddUserToPlaceResponse: Decodable, Sendable {
+    let success: Bool
+}
+
+struct MobilePlaceFollowersResponse: Decodable, Sendable {
+    let followers: [FriendUserSummary]
+}
+
+struct PlaceMemberListItem: Decodable, Identifiable, Sendable {
+    let id: String
+    let name: String
+    let username: String
+    let avatarImageURL: URL?
+    let role: PlaceMemberRole
+
+    var usernameText: String { "@\(username)" }
+
+    enum CodingKeys: String, CodingKey {
+        case id, name, username, role
+        case avatarImageURL = "avatarImageUrl"
+    }
+}
+
+struct MobilePlaceMembersResponse: Decodable, Sendable {
+    let members: [PlaceMemberListItem]
+}
+
+struct PlaceEventSeriesSummary: Decodable, Identifiable, Sendable {
+    let id: UUID
+    let title: String
+    let frequency: MobileEventSeriesFrequency
+    let interval: Int
+    let daysOfWeek: [Int]?
+    let startAt: Date
+
+    var recurrenceLabel: String {
+        switch frequency {
+        case .daily:
+            return interval == 1 ? "Daily" : "Every \(interval) days"
+        case .weekly:
+            let dayNames = (daysOfWeek ?? []).compactMap { Self.shortDayName($0) }
+            let days = dayNames.isEmpty ? "" : " on \(dayNames.joined(separator: ", "))"
+            return interval == 1 ? "Weekly\(days)" : "Every \(interval) weeks\(days)"
+        case .monthly:
+            return interval == 1 ? "Monthly" : "Every \(interval) months"
+        }
+    }
+
+    private static func shortDayName(_ day: Int) -> String? {
+        switch day {
+        case 0: return "Sun"
+        case 1: return "Mon"
+        case 2: return "Tue"
+        case 3: return "Wed"
+        case 4: return "Thu"
+        case 5: return "Fri"
+        case 6: return "Sat"
+        default: return nil
+        }
+    }
+
+    enum CodingKeys: String, CodingKey {
+        case id, title, frequency, interval, daysOfWeek, startAt
+    }
+}
+
+struct MobilePlaceEventSeriesResponse: Decodable, Sendable {
+    let series: [PlaceEventSeriesSummary]
 }
 
 struct MobileEventTitleSuggestionsResponse: Decodable, Hashable, Sendable {

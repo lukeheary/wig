@@ -18,6 +18,7 @@ struct PlaceDetail: Decodable, Identifiable, Hashable, Sendable {
     let categoryLabels: [String: String]
     let updatedAt: Date?
     var followerCount = 0
+    var memberCount = 0
     var isEnabled = true
     var isFollowed = false
     var isHiddenFromHome = false
@@ -43,6 +44,7 @@ struct PlaceDetail: Decodable, Identifiable, Hashable, Sendable {
         case categoryLabels
         case updatedAt
         case followerCount
+        case memberCount
         case isEnabled
         case isFollowed
         case isHiddenFromHome
@@ -132,6 +134,7 @@ extension PlaceDetail {
             categoryLabels: listItem.categoryLabels,
             updatedAt: listItem.updatedAt,
             followerCount: listItem.followerCount,
+            memberCount: listItem.memberCount,
             isEnabled: true,
             isFollowed: listItem.isFollowed,
             canManage: false,
@@ -160,6 +163,7 @@ extension PlaceDetail {
         categoryLabels = try container.decodeIfPresent([String: String].self, forKey: .categoryLabels) ?? [:]
         updatedAt = try container.decodeIfPresent(Date.self, forKey: .updatedAt)
         followerCount = try container.decodeFlexibleIntIfPresent(forKey: .followerCount) ?? 0
+        memberCount = try container.decodeFlexibleIntIfPresent(forKey: .memberCount) ?? 0
         isEnabled = try container.decodeIfPresent(Bool.self, forKey: .isEnabled) ?? true
         isFollowed = try container.decodeIfPresent(Bool.self, forKey: .isFollowed) ?? false
         isHiddenFromHome = try container.decodeIfPresent(Bool.self, forKey: .isHiddenFromHome) ?? false

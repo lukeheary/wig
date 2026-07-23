@@ -199,17 +199,31 @@ export async function GET(request: Request) {
 
   const now = new Date();
 
-  const followerCounts = await db
-    .select({
-      placeId: placeFollows.placeId,
-      count: sql<number>`count(*)::int`,
-    })
-    .from(placeFollows)
-    .where(inArray(placeFollows.placeId, placeIds))
-    .groupBy(placeFollows.placeId);
+  const [followerCounts, memberCounts] = await Promise.all([
+    db
+      .select({
+        placeId: placeFollows.placeId,
+        count: sql<number>`count(*)::int`,
+      })
+      .from(placeFollows)
+      .where(inArray(placeFollows.placeId, placeIds))
+      .groupBy(placeFollows.placeId),
+    db
+      .select({
+        placeId: placeMembers.placeId,
+        count: sql<number>`count(*)::int`,
+      })
+      .from(placeMembers)
+      .where(inArray(placeMembers.placeId, placeIds))
+      .groupBy(placeMembers.placeId),
+  ]);
 
   const followerCountByPlaceId = new Map(
     followerCounts.map((row) => [row.placeId, row.count])
+  );
+
+  const memberCountByPlaceId = new Map(
+    memberCounts.map((row) => [row.placeId, row.count])
   );
 
   const venueCounts = await db
@@ -288,6 +302,7 @@ export async function GET(request: Request) {
       eventCount,
       upcomingEventCount: eventCount,
       followerCount: followerCountByPlaceId.get(mappedPlace.id) ?? 0,
+      memberCount: memberCountByPlaceId.get(mappedPlace.id) ?? 0,
       updatedAt: mappedPlace.updatedAt,
       isFollowed: followedPlaceIds.has(mappedPlace.id),
       categories: mappedPlace.categories,

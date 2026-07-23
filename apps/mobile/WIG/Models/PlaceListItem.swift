@@ -37,6 +37,7 @@ struct PlaceListItem: Decodable, Identifiable, Hashable, Sendable {
     var metroAreaState: String? = nil
     let upcomingEventCount: Int
     var followerCount = 0
+    var memberCount = 0
     let updatedAt: Date?
     var isFollowed = false
     var categories: [String] = []
@@ -58,6 +59,7 @@ struct PlaceListItem: Decodable, Identifiable, Hashable, Sendable {
         case upcomingEventCount
         case eventCount
         case followerCount
+        case memberCount
         case updatedAt
         case isFollowed
         case categories
@@ -142,6 +144,7 @@ extension PlaceListItem {
         let decodedEventCount = try container.decodeFlexibleIntIfPresent(forKey: .eventCount)
         upcomingEventCount = decodedUpcomingEventCount ?? decodedEventCount ?? 0
         followerCount = try container.decodeFlexibleIntIfPresent(forKey: .followerCount) ?? 0
+        memberCount = try container.decodeFlexibleIntIfPresent(forKey: .memberCount) ?? 0
 
         updatedAt = try container.decodeIfPresent(Date.self, forKey: .updatedAt)
         isFollowed = try container.decodeIfPresent(Bool.self, forKey: .isFollowed) ?? false

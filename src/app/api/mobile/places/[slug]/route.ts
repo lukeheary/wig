@@ -9,6 +9,7 @@ import {
   events,
   placeFollows,
   placeHomeHides,
+  placeMembers,
   places,
   userFriends,
   users,
@@ -406,11 +407,15 @@ export async function GET(
     }
   }
 
-  const [followerCountResult, follow, homeHide] = await Promise.all([
+  const [followerCountResult, memberCountResult, follow, homeHide] = await Promise.all([
     db
       .select({ count: sql<number>`count(*)::int` })
       .from(placeFollows)
       .where(eq(placeFollows.placeId, place.id)),
+    db
+      .select({ count: sql<number>`count(*)::int` })
+      .from(placeMembers)
+      .where(eq(placeMembers.placeId, place.id)),
     userId
       ? db.query.placeFollows.findFirst({
           where: and(
@@ -453,6 +458,7 @@ export async function GET(
     categoryLabels: mappedPlace.categoryLabels,
     updatedAt: mappedPlace.updatedAt,
     followerCount: followerCountResult[0]?.count ?? 0,
+    memberCount: memberCountResult[0]?.count ?? 0,
     isEnabled: place.isEnabled,
     isFollowed: Boolean(follow),
     isHiddenFromHome: Boolean(homeHide),
