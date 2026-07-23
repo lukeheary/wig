@@ -126,11 +126,15 @@ async function runScraper(
   }));
 
   if (scrapedEvents.length === 0) {
+    const scrapeErrors = scrapeResult.errors ?? [];
     return {
-      status: "success",
+      status: scrapeErrors.length > 0 ? "error" : "success",
       eventsFound: 0,
       eventsAdded: 0,
-      error: null,
+      error:
+        scrapeErrors.length > 0
+          ? scrapeErrors.map(({ url, error }) => `${url}: ${error}`).join("; ")
+          : null,
       data: { eventsFound: [], eventsAdded: [] },
     };
   }

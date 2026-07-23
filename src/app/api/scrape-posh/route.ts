@@ -7,6 +7,24 @@ const POSH_EVENT_PATH_REGEX = /["'](\/e\/[A-Za-z0-9_-]+)(?:[?#][^"']*)?["']/g;
 const POSH_GROUP_API_BASE = "https://posh.vip/api/web/v2/util/group_url/";
 const timeZoneFormatterCache = new Map<string, Intl.DateTimeFormat>();
 
+function describePoshResponse(response: Response, body?: string): string {
+  const details = [
+    `HTTP ${response.status}${response.statusText ? ` ${response.statusText}` : ""}`,
+    `content-type ${response.headers.get("content-type") || "unknown"}`,
+  ];
+  const botCategory = response.headers.get("x-amzn-waf-waf-bot-category");
+  const challengeDetected =
+    response.headers.get("cf-mitigated") === "challenge" ||
+    /cf-chl-|challenge-platform|captcha|access denied/i.test(body || "");
+
+  if (botCategory) details.push(`WAF bot category ${botCategory}`);
+  if (challengeDetected) details.push("bot challenge detected");
+  if (body !== undefined)
+    details.push(`${Buffer.byteLength(body)} response bytes`);
+
+  return details.join("; ");
+}
+
 interface PoshJsonLd {
   "@type": string;
   name?: string;
@@ -1139,7 +1157,10 @@ async function fetchGroupEventsFromApi(groupUrl: string) {
   });
 
   if (!response.ok) {
-    throw new Error(`Failed to fetch group API ${apiUrl}: ${response.status}`);
+    const body = await response.text();
+    throw new Error(
+      `Failed to fetch Posh group API: ${describePoshResponse(response, body)}`
+    );
   }
 
   const data = (await response.json()) as unknown;
@@ -1268,7 +1289,10 @@ async function scrapeEventPage(url: string) {
   });
 
   if (!response.ok) {
-    throw new Error(`Failed to fetch ${url}: ${response.status}`);
+    const body = await response.text();
+    throw new Error(
+      `Failed to fetch Posh event page: ${describePoshResponse(response, body)}`
+    );
   }
 
   const html = await response.text();
@@ -1293,7 +1317,9 @@ async function scrapeEventPage(url: string) {
   if (!jsonLd) {
     const nextData = $("#__NEXT_DATA__").html();
     if (!nextData) {
-      throw new Error(`No JSON-LD event data found on ${url}`);
+      throw new Error(
+        `Posh returned no recognizable event data (${describePoshResponse(response, html)})`
+      );
     }
     try {
       const parsed = JSON.parse(nextData);
@@ -1321,8 +1347,9 @@ async function discoverEventUrls(groupUrl: string): Promise<string[]> {
   });
 
   if (!response.ok) {
+    const body = await response.text();
     throw new Error(
-      `Failed to fetch group page: ${response.status} ${response.statusText}`
+      `Failed to fetch Posh group page: ${describePoshResponse(response, body)}`
     );
   }
 
@@ -1359,14 +1386,15 @@ export async function scrapePosh(urls: string[]) {
   for (const groupUrl of groupUrls) {
     let groupEvents: any[] = [];
     let groupOrganizer: { name: string; url?: string } | null = null;
-    let groupApiFailed = false;
+    let groupApiError: string | null = null;
 
     try {
       const result = await fetchGroupEventsFromApi(groupUrl);
       groupEvents = result.events;
       groupOrganizer = result.organizer;
     } catch (error) {
-      groupApiFailed = true;
+      groupApiError =
+        error instanceof Error ? error.message : "Failed to scrape group API";
     }
 
     if (groupEvents.length > 0) {
@@ -1381,14 +1409,21 @@ export async function scrapePosh(urls: string[]) {
     try {
       const discovered = await discoverEventUrls(groupUrl);
       eventUrls.push(...discovered);
-    } catch (error) {
-      if (groupApiFailed) {
+      if (discovered.length === 0 && groupApiError) {
         errors.push({
           url: groupUrl,
-          error:
-            error instanceof Error ? error.message : "Failed to scrape group",
+          error: `${groupApiError}; group page contained no event URLs`,
         });
       }
+    } catch (error) {
+      const groupPageError =
+        error instanceof Error ? error.message : "Failed to scrape group page";
+      errors.push({
+        url: groupUrl,
+        error: groupApiError
+          ? `${groupApiError}; ${groupPageError}`
+          : groupPageError,
+      });
     }
   }
 
@@ -1468,9 +1503,13 @@ export async function POST(request: NextRequest) {
     const result = await scrapePosh(urls);
 
     if (result.events.length === 0) {
+      console.error("[posh-scraper] Failed to scrape any events", {
+        urls,
+        details: result.errors,
+      });
       return NextResponse.json(
         { error: "Failed to scrape any events", details: result.errors },
-        { status: 404 }
+        { status: 502 }
       );
     }
 

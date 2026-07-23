@@ -110,6 +110,21 @@ interface ScrapeResult {
   errors?: { url: string; error: string }[];
 }
 
+interface ScrapeErrorResponse {
+  error?: string;
+  details?: { url: string; error: string }[];
+}
+
+function formatScrapeError(data: ScrapeErrorResponse, status: number): string {
+  const message = data.error || `Failed to scrape (HTTP ${status})`;
+  if (!data.details?.length) return message;
+
+  return [
+    message,
+    ...data.details.map(({ url, error }) => `${url}\n${error}`),
+  ].join("\n\n");
+}
+
 const SCRAPER_LABELS: Record<ScraperType, string> = {
   dice: "Dice.fm",
   posh: "Posh",
@@ -628,10 +643,15 @@ export default function AdminScrapersPage() {
         body: JSON.stringify(payload),
       });
 
-      const data = await response.json();
+      const contentType = response.headers.get("content-type") || "";
+      const data = contentType.includes("application/json")
+        ? ((await response.json()) as ScrapeResult & ScrapeErrorResponse)
+        : ({
+            error: `Scraper returned an unexpected ${contentType || "unknown content type"} response (HTTP ${response.status})`,
+          } as ScrapeErrorResponse);
 
       if (!response.ok) {
-        setError(data.error || "Failed to scrape");
+        setError(formatScrapeError(data, response.status));
         return;
       }
 
@@ -827,7 +847,7 @@ export default function AdminScrapersPage() {
 
       {error && (
         <Card className="border-destructive">
-          <CardContent className="p-4 text-sm text-destructive">
+          <CardContent className="whitespace-pre-wrap break-words p-4 text-sm text-destructive">
             {error}
           </CardContent>
         </Card>
