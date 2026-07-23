@@ -81,10 +81,15 @@ async function fetchViaScrapeDo(
   scrapeDoUrl.searchParams.set("geoCode", "us");
   scrapeDoUrl.searchParams.set("render", "false");
   scrapeDoUrl.searchParams.set("output", "raw");
+  scrapeDoUrl.searchParams.set("timeout", residential ? "25000" : "8000");
+  scrapeDoUrl.searchParams.set("retryTimeout", "5000");
+  if (!residential) {
+    scrapeDoUrl.searchParams.set("disableRetry", "true");
+  }
 
   const response = await fetch(scrapeDoUrl, {
     headers: { Accept: accept },
-    signal: AbortSignal.timeout(residential ? 30000 : 20000),
+    signal: AbortSignal.timeout(residential ? 30000 : 12000),
   });
   return {
     response,
@@ -105,7 +110,7 @@ async function fetchPoshResource(
         "User-Agent": POSH_USER_AGENT,
         Accept: accept,
       },
-      signal: AbortSignal.timeout(10000),
+      signal: AbortSignal.timeout(5000),
     });
     directResult = {
       response,
