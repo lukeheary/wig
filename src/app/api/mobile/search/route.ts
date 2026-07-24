@@ -15,6 +15,7 @@ import {
   resolveMobileEventEditPermissions,
 } from "@/app/api/mobile/event-edit-permissions";
 import { mapEventCategoryData } from "@/server/utils/categories";
+import { goingRsvpCountsForEventIds } from "@/app/api/mobile/event-rsvp-counts";
 import { accentInsensitiveLike } from "@/server/db/search";
 
 function searchQueryVariants(query: string) {
@@ -370,6 +371,7 @@ export async function GET(request: Request) {
       : [];
     const eventsToMap = query ? matchingEvents : upcomingEvents;
     const eventIds = eventsToMap.map((event) => event.id);
+    const goingRsvpCounts = await goingRsvpCountsForEventIds(eventIds);
 
     const placeIds = [
       ...new Set([
@@ -584,6 +586,7 @@ export async function GET(request: Request) {
           organizerLogoImageUrl: mapped.organizer?.logoImageUrl ?? null,
           categories: mapped.categories,
           categoryLabels: mapped.categoryLabels,
+          createdAt: mapped.createdAt,
           updatedAt: mapped.updatedAt,
           status: mapped.status,
           canEdit:
@@ -598,6 +601,7 @@ export async function GET(request: Request) {
           isCreatedByCurrentUser: Boolean(userId) && mapped.createdByUserId === userId,
           userRsvpStatus: currentUserRsvp?.status ?? null,
           userRsvpNotGoingReason: currentUserRsvp?.notGoingReason ?? null,
+          goingCount: goingRsvpCounts.get(mapped.id) ?? 0,
           friendsGoing: socialRsvps.filter((rsvp) => rsvp.status === "going"),
           friendsInterested: socialRsvps.filter((rsvp) => rsvp.status === "interested"),
           friendsNotGoing: socialRsvps.filter((rsvp) => rsvp.status === "not_going"),
@@ -633,6 +637,7 @@ export async function GET(request: Request) {
           organizerLogoImageUrl: mapped.organizer?.logoImageUrl ?? null,
           categories: mapped.categories,
           categoryLabels: mapped.categoryLabels,
+          createdAt: mapped.createdAt,
           updatedAt: mapped.updatedAt,
           status: mapped.status,
           canEdit:
@@ -647,6 +652,7 @@ export async function GET(request: Request) {
           isCreatedByCurrentUser: Boolean(userId) && mapped.createdByUserId === userId,
           userRsvpStatus: currentUserRsvp?.status ?? null,
           userRsvpNotGoingReason: currentUserRsvp?.notGoingReason ?? null,
+          goingCount: goingRsvpCounts.get(mapped.id) ?? 0,
           friendsGoing: socialRsvps.filter((rsvp) => rsvp.status === "going"),
           friendsInterested: socialRsvps.filter((rsvp) => rsvp.status === "interested"),
           friendsNotGoing: socialRsvps.filter((rsvp) => rsvp.status === "not_going"),

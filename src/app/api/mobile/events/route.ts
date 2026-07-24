@@ -41,6 +41,7 @@ import {
 } from "@/server/utils/categories";
 import { logEventActivity } from "@/server/utils/event-activity-logger";
 import { EVENT_STATUS_VALUES } from "@/lib/event-status";
+import { goingRsvpCountsForEventIds } from "@/app/api/mobile/event-rsvp-counts";
 
 const DEFAULT_MOBILE_FEED_TIME_ZONE = "America/New_York";
 const timeZoneFormatterCache = new Map<string, Intl.DateTimeFormat>();
@@ -302,6 +303,7 @@ export async function GET(request: Request) {
 
 
   const eventIds = eventList.map((event) => event.id);
+  const goingRsvpCounts = await goingRsvpCountsForEventIds(eventIds);
   const socialRsvpsMap = new Map<
     string,
     Array<{
@@ -520,6 +522,7 @@ export async function GET(request: Request) {
       categories: mapped.categories,
       categoryLabels: mapped.categoryLabels,
       status: mapped.status,
+      createdAt: mapped.createdAt,
       updatedAt: mapped.updatedAt,
       canEdit: canEditMobileEvent(editPermissions, {
         venueId: mapped.venueId,
@@ -533,6 +536,7 @@ export async function GET(request: Request) {
       userRsvpStatus: currentUserRsvp?.status ?? null,
       userRsvpNotGoingReason: currentUserRsvp?.notGoingReason ?? null,
       currentUserReview: currentUserReviewMap.get(mapped.id) ?? null,
+      goingCount: goingRsvpCounts.get(mapped.id) ?? 0,
       friendsGoing: socialRsvps.filter((rsvp) => rsvp.status === "going"),
       friendsInterested: socialRsvps.filter(
         (rsvp) => rsvp.status === "interested"

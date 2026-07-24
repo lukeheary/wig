@@ -89,6 +89,7 @@
 		940FBAD68FAA1A5667BD434D /* AppRootView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AppRootView.swift; sourceTree = "<group>"; };
 		A30D69DCD03425BA20337C4B /* WIG.app */ = {isa = PBXFileReference; explicitFileType = wrapper.application; includeInIndex = 0; path = WIG.app; sourceTree = BUILT_PRODUCTS_DIR; };
 		A475F5DF3650AE1E3FB243DC /* Release.xcconfig */ = {isa = PBXFileReference; lastKnownFileType = text.xcconfig; path = Release.xcconfig; sourceTree = "<group>"; };
+		5E0E7D5A8C0B4E4D9AA10001 /* ProdLocal.xcconfig */ = {isa = PBXFileReference; lastKnownFileType = text.xcconfig; path = ProdLocal.xcconfig; sourceTree = "<group>"; };
 		A55BD291C4FD0C9CAEB90B10 /* VenuesView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = VenuesView.swift; sourceTree = "<group>"; };
 		AAD15E52E6FB10DA10806575 /* PlaceListItem.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = PlaceListItem.swift; sourceTree = "<group>"; };
 		ABB9069D0CFEF946D66D463C /* ActivityFeed.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ActivityFeed.swift; sourceTree = "<group>"; };
@@ -253,6 +254,7 @@
 			isa = PBXGroup;
 			children = (
 				F1A0ACCD8478786570AD3796 /* Debug.xcconfig */,
+				5E0E7D5A8C0B4E4D9AA10001 /* ProdLocal.xcconfig */,
 				A475F5DF3650AE1E3FB243DC /* Release.xcconfig */,
 			);
 			path = Config;
@@ -561,6 +563,13 @@
 			};
 			name = Release;
 		};
+		5E0E7D5A8C0B4E4D9AA10003 /* Prod Local */ = {
+			isa = XCBuildConfiguration;
+			baseConfigurationReference = 5E0E7D5A8C0B4E4D9AA10001 /* ProdLocal.xcconfig */;
+			buildSettings = {
+			};
+			name = "Prod Local";
+		};
 		93918B0D8B665897D2FECB4A /* Debug */ = {
 			isa = XCBuildConfiguration;
 			baseConfigurationReference = F1A0ACCD8478786570AD3796 /* Debug.xcconfig */;
@@ -587,6 +596,33 @@
 				SUPPORTS_MACCATALYST = NO;
 			};
 			name = Debug;
+		};
+		5E0E7D5A8C0B4E4D9AA10002 /* Prod Local */ = {
+			isa = XCBuildConfiguration;
+			baseConfigurationReference = 5E0E7D5A8C0B4E4D9AA10001 /* ProdLocal.xcconfig */;
+			buildSettings = {
+				APS_ENVIRONMENT = production;
+				ASSETCATALOG_COMPILER_APPICON_NAME = AppIcon;
+				ASSETCATALOG_COMPILER_GLOBAL_ACCENT_COLOR_NAME = AccentColor;
+				CODE_SIGN_ENTITLEMENTS = WIG/Support/WIG.entitlements;
+				CODE_SIGN_IDENTITY = "iPhone Developer";
+				CODE_SIGN_STYLE = Automatic;
+				CURRENT_PROJECT_VERSION = 17;
+				DEVELOPMENT_TEAM = V347D294CZ;
+				INFOPLIST_FILE = WIG/Support/Info.plist;
+				INFOPLIST_KEY_CFBundleDisplayName = "Who Is Going";
+				LD_RUNPATH_SEARCH_PATHS = (
+					"$(inherited)",
+					"@executable_path/Frameworks",
+				);
+				MARKETING_VERSION = 1.0.6;
+				PRODUCT_BUNDLE_IDENTIFIER = com.whoisgoing.app;
+				PRODUCT_NAME = WIG;
+				SDKROOT = iphoneos;
+				SUPPORTED_PLATFORMS = "iphoneos iphonesimulator";
+				SUPPORTS_MACCATALYST = NO;
+			};
+			name = "Prod Local";
 		};
 		DB87D3D9EC2576FAAC576C29 /* Release */ = {
 			isa = XCBuildConfiguration;
@@ -622,6 +658,7 @@
 			isa = XCConfigurationList;
 			buildConfigurations = (
 				93918B0D8B665897D2FECB4A /* Debug */,
+				5E0E7D5A8C0B4E4D9AA10002 /* Prod Local */,
 				DB87D3D9EC2576FAAC576C29 /* Release */,
 			);
 			defaultConfigurationIsVisible = 0;
@@ -631,6 +668,7 @@
 			isa = XCConfigurationList;
 			buildConfigurations = (
 				1343768D4ECAE534035CBB19 /* Debug */,
+				5E0E7D5A8C0B4E4D9AA10003 /* Prod Local */,
 				8DB5EA8B965479DA8D5D29CC /* Release */,
 			);
 			defaultConfigurationIsVisible = 0;

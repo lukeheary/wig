@@ -463,6 +463,7 @@ export async function GET(_request: Request, context: RouteContext) {
       organizerLogoImageUrl: mapped.organizer?.logoImageUrl ?? null,
       categories: mapped.categories,
       categoryLabels: mapped.categoryLabels,
+      createdAt: mapped.createdAt,
       updatedAt: mapped.updatedAt,
       canEdit: canEditMobileEvent(editPermissions, {
         venueId: mapped.venueId,

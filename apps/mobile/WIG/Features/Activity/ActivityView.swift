@@ -182,7 +182,7 @@ struct ActivityView: View {
                         }
                     }
                     .padding(.top, 74)
-                    .padding(.bottom, 48)
+                    .padding(.bottom, 32)
                 }
                 .scrollIndicators(.hidden)
                 .background(background)

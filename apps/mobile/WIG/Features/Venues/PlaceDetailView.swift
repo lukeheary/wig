@@ -114,7 +114,7 @@ struct PlaceDetailView: View {
                 }
                 .padding(.horizontal, 16)
                 .padding(.top, 74)
-                .padding(.bottom, 48)
+                .padding(.bottom, 32)
                 .frame(maxWidth: .infinity, alignment: .topLeading)
         }
         .background(AppTheme.background.ignoresSafeArea())
@@ -821,7 +821,7 @@ private struct PlaceFollowersView: View {
             }
             .padding(.horizontal, 16)
             .padding(.top, 74)
-            .padding(.bottom, 48)
+            .padding(.bottom, 32)
         }
         .background(AppTheme.background.ignoresSafeArea())
         .background(SwipeBackEnabler())
@@ -896,7 +896,7 @@ private struct PlaceMembersView: View {
             }
             .padding(.horizontal, 16)
             .padding(.top, 74)
-            .padding(.bottom, 48)
+            .padding(.bottom, 32)
         }
         .background(AppTheme.background.ignoresSafeArea())
         .background(SwipeBackEnabler())

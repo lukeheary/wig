@@ -132,7 +132,7 @@ struct EventDetailView: View {
                     }
                     .padding(.horizontal, 16)
                     .padding(.top, 10)
-                    .padding(.bottom, 36)
+                    .padding(.bottom, 20)
                 }
                 .frame(maxWidth: .infinity, alignment: .leading)
             }
@@ -893,7 +893,7 @@ struct EventDetailView: View {
         VStack(alignment: .leading, spacing: 0) {
             VStack(spacing: 2) {
                 ForEach(RSVPMenuOption.allCases.filter { option in
-                    option != .notGoing || hasFriendGoingOrInterested
+                    option != .notGoing || shouldShowNotGoingOption
                 }) { option in
                     RSVPMenuOptionButton(
                         option: option,
@@ -1479,8 +1479,10 @@ struct EventDetailView: View {
         displayedEvent.friendsNotGoing.filter { !$0.user.isCurrentUser }
     }
 
-    private var hasFriendGoingOrInterested: Bool {
-        !friendGoingAttendees.isEmpty || !friendInterestedAttendees.isEmpty
+    private var shouldShowNotGoingOption: Bool {
+        rsvpViewModel.status == .going || rsvpViewModel.status == .interested ||
+            !friendGoingAttendees.isEmpty ||
+            !friendInterestedAttendees.isEmpty
     }
 
     private var hasFriendRSVPs: Bool {
@@ -1949,7 +1951,7 @@ private struct EventRSVPListView: View {
             }
             .padding(.horizontal, 16)
             .padding(.top, 18)
-            .padding(.bottom, 36)
+            .padding(.bottom, 20)
         }
         .background(AppTheme.background.ignoresSafeArea())
         .navigationTitle("Friends")

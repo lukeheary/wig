@@ -500,7 +500,7 @@ struct HomeView: View {
                 .top,
                 isViewingCurrentWeek && postEventFeedbackPrompt != nil ? 66 : 74
             )
-            .padding(.bottom, 48)
+            .padding(.bottom, 32)
         }
         .scrollIndicators(.hidden)
         .scrollDismissesKeyboard(.interactively)
@@ -555,7 +555,7 @@ struct HomeView: View {
                     }
                 }
                 .frame(maxWidth: .infinity)
-                .padding(.bottom, 48)
+                .padding(.bottom, 32)
             }
             .scrollIndicators(.hidden)
             .scrollDismissesKeyboard(.interactively)
@@ -629,7 +629,7 @@ struct HomeView: View {
                     homeEventSearchGridContent
                 }
                 .padding(.top, 74)
-                .padding(.bottom, 48)
+                .padding(.bottom, 32)
             }
             .scrollIndicators(.hidden)
             .scrollDismissesKeyboard(.interactively)

@@ -328,7 +328,7 @@ struct ProfileView: View {
                 }
                 .padding(.horizontal, 16)
                 .padding(.top, 74)
-                .padding(.bottom, 48)
+                .padding(.bottom, 32)
             }
             .scrollIndicators(.hidden)
             .background(ProfileTheme.background)
@@ -1036,7 +1036,7 @@ struct UserProfileView: View {
                 }
                 .padding(.horizontal, 16)
                 .padding(.top, 74)
-                .padding(.bottom, 48)
+                .padding(.bottom, 32)
             }
             .scrollIndicators(.hidden)
             .background(ProfileTheme.background)
@@ -1865,6 +1865,7 @@ private struct ProfileHeader: View {
     let onChooseAvatarPhoto: (() -> Void)?
     let onTakeAvatarPhoto: (() -> Void)?
     let summary: AnyView
+    @State private var isAvatarImageViewerPresented = false
 
     init<Summary: View>(
         profile: FriendUserSummary?,
@@ -1909,6 +1910,11 @@ private struct ProfileHeader: View {
             }
         }
         .frame(maxWidth: .infinity, alignment: .leading)
+        .fullScreenCover(isPresented: $isAvatarImageViewerPresented) {
+            if let avatarImageURL = profile?.avatarImageURL {
+                EventArtworkViewer(imageURL: avatarImageURL)
+            }
+        }
     }
 
     @ViewBuilder
@@ -1962,6 +1968,14 @@ private struct ProfileHeader: View {
                 )
                 .presentationCompactAdaptation(.popover)
             }
+        } else if profile?.avatarImageURL != nil {
+            Button {
+                isAvatarImageViewerPresented = true
+            } label: {
+                FriendAvatarView(user: profile, size: 104)
+            }
+            .buttonStyle(.plain)
+            .accessibilityLabel("View profile picture")
         } else {
             FriendAvatarView(user: profile, size: 104)
         }
@@ -3066,7 +3080,7 @@ private struct RelationshipListScreen<Content: View>: View {
             }
             .padding(.horizontal, 16)
             .padding(.top, 74)
-            .padding(.bottom, 48)
+            .padding(.bottom, 32)
         }
         .background(ProfileTheme.background.ignoresSafeArea())
         .background(SwipeBackEnabler())
@@ -3406,7 +3420,7 @@ private struct AdminSettingsView: View {
             }
             .padding(.horizontal, 16)
             .padding(.top, 74)
-            .padding(.bottom, 48)
+            .padding(.bottom, 32)
         }
         .scrollIndicators(.hidden)
         .background(ProfileTheme.background.ignoresSafeArea())
@@ -3459,13 +3473,13 @@ private struct AdminSettingsActionButton: View {
                         .fill(Color.white.opacity(0.08))
 
                     Image(systemName: systemImage)
-                        .font(.system(size: 18, weight: .semibold))
+                        .font(.system(size: 17, weight: .semibold))
                         .foregroundStyle(AppTheme.accentBlue)
                 }
-                .frame(width: 52, height: 52)
+                .frame(width: 44, height: 44)
 
                 Text(title)
-                    .font(.system(size: 17, weight: .semibold))
+                    .font(.system(size: 15, weight: .semibold))
                     .foregroundStyle(.white)
 
                 Spacer(minLength: 12)
@@ -3474,14 +3488,15 @@ private struct AdminSettingsActionButton: View {
                     .font(.system(size: 14, weight: .semibold))
                     .foregroundStyle(.white.opacity(0.4))
             }
-            .padding(16)
+            .padding(.horizontal, 16)
+            .padding(.vertical, 12)
             .frame(maxWidth: .infinity, alignment: .leading)
             .background(
-                RoundedRectangle(cornerRadius: 20, style: .continuous)
+                RoundedRectangle(cornerRadius: 18, style: .continuous)
                     .fill(ProfileTheme.cardBackground)
             )
             .overlay(
-                RoundedRectangle(cornerRadius: 20, style: .continuous)
+                RoundedRectangle(cornerRadius: 18, style: .continuous)
                     .strokeBorder(.white.opacity(0.08), lineWidth: 1)
             )
         }
@@ -3616,7 +3631,7 @@ private struct AdminScrapersView: View {
             }
             .padding(.horizontal, 16)
             .padding(.top, 74)
-            .padding(.bottom, 48)
+            .padding(.bottom, 32)
         }
         .scrollIndicators(.hidden)
         .background(ProfileTheme.background.ignoresSafeArea())

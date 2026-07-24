@@ -106,7 +106,9 @@ struct MainTabView: View {
             }
             .tabBarMinimizeBehavior(.never)
 
-            creationMenuButton
+            // Temporarily hidden: keep the admin creation control available for a
+            // future restore without showing a fixed bottom-right button on every tab.
+            // creationMenuButton
             guestAuthButton
         }
         .background(AppTheme.background.ignoresSafeArea())
@@ -233,7 +235,9 @@ struct MainTabView: View {
                 }
             }
 
-            creationMenuButton
+            // Temporarily hidden: keep the admin creation control available for a
+            // future restore without showing a fixed bottom-right button on every tab.
+            // creationMenuButton
             guestAuthButton
         }
         .background(AppTheme.background.ignoresSafeArea())

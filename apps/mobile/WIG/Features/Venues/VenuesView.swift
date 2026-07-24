@@ -74,7 +74,7 @@ struct VenuesView: View {
                 }
                 .padding(.horizontal, 16)
                 .padding(.top, 74)
-                .padding(.bottom, 48)
+                .padding(.bottom, 32)
             }
             .overlay(alignment: .topLeading) {
                 topControls(for: nil)
@@ -130,7 +130,7 @@ struct VenuesView: View {
                     }
                     .padding(.horizontal, 16)
                     .padding(.top, 74)
-                    .padding(.bottom, 48)
+                    .padding(.bottom, 32)
                 }
                 .overlay(alignment: .topLeading) {
                     topControls(for: response)

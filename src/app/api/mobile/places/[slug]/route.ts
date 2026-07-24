@@ -29,6 +29,7 @@ import {
   INSTAGRAM_HANDLE_ERROR,
   INSTAGRAM_HANDLE_REGEX,
 } from "@/lib/place-identifiers";
+import { goingRsvpCountsForEventIds } from "@/app/api/mobile/event-rsvp-counts";
 
 const mobileUpdatePlaceSchema = z
   .object({
@@ -115,7 +116,8 @@ function mapMobileEvent(
     };
     isCurrentUser: boolean;
     isFriend: boolean;
-  }> = []
+  }> = [],
+  goingCount = 0
 ) {
   const mapped = mapEventCategoryData(event);
 
@@ -143,6 +145,7 @@ function mapMobileEvent(
     categories: mapped.categories,
     categoryLabels: mapped.categoryLabels,
     status: mapped.status,
+    createdAt: mapped.createdAt,
     updatedAt: mapped.updatedAt,
     canEdit: canEditMobileEvent(permissions, {
       venueId: mapped.venueId,
@@ -151,6 +154,7 @@ function mapMobileEvent(
     userRsvpStatus: currentUserRsvp?.status ?? null,
     userRsvpNotGoingReason: currentUserRsvp?.notGoingReason ?? null,
     currentUserReview: currentUserReview ?? null,
+    goingCount,
     friendsGoing: socialRsvps.filter((rsvp) => rsvp.status === "going"),
     friendsInterested: socialRsvps.filter((rsvp) => rsvp.status === "interested"),
     friendsNotGoing: socialRsvps.filter((rsvp) => rsvp.status === "not_going"),
@@ -232,6 +236,7 @@ export async function GET(
     editPermissions.isAdmin || editPermissions.manageablePlaceIds.has(place.id);
   const allEvents = [...upcomingEvents, ...pastEvents];
   const eventIds = allEvents.map((event) => event.id);
+  const goingRsvpCounts = await goingRsvpCountsForEventIds(eventIds);
   const socialRsvpsMap = new Map<
     string,
     Array<{
@@ -469,7 +474,8 @@ export async function GET(
         editPermissions,
         currentUserRsvpMap.get(event.id),
         currentUserReviewMap.get(event.id),
-        socialRsvpsMap.get(event.id) ?? []
+        socialRsvpsMap.get(event.id) ?? [],
+        goingRsvpCounts.get(event.id) ?? 0
       )
     ),
     pastEvents: pastEvents.map((event) =>
@@ -478,7 +484,8 @@ export async function GET(
         editPermissions,
         currentUserRsvpMap.get(event.id),
         currentUserReviewMap.get(event.id),
-        socialRsvpsMap.get(event.id) ?? []
+        socialRsvpsMap.get(event.id) ?? [],
+        goingRsvpCounts.get(event.id) ?? 0
       )
     ),
   });

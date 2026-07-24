@@ -194,6 +194,7 @@ export async function GET(
     categories: mapped.categories,
     categoryLabels: mapped.categoryLabels,
     status: mapped.status,
+    createdAt: mapped.createdAt,
     updatedAt: mapped.updatedAt,
     canEdit: canEditMobileEvent(permissions, { venueId: mapped.venueId, organizerId: mapped.organizerId }),
     isFollowed:
@@ -426,6 +427,7 @@ export async function PATCH(
       categories: mapped.categories,
       categoryLabels: mapped.categoryLabels,
       status: mapped.status,
+      createdAt: mapped.createdAt,
       updatedAt: mapped.updatedAt,
       canEdit: permissions.isAdmin || isCreator || canEditMobileEvent(permissions, {
         venueId: mapped.venueId,

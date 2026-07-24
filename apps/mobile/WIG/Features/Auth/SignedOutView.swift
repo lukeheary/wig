@@ -41,7 +41,7 @@ struct SignedOutView: View {
                 }
                 .padding(.horizontal, 22)
                 .padding(.top, 92)
-                .padding(.bottom, 44)
+                .padding(.bottom, 28)
             }
             .scrollIndicators(.hidden)
             .background(background)

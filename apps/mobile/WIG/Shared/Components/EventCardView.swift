@@ -314,7 +314,7 @@ struct EventCardView: View {
     }
 
     private var isAuthenticated: Bool {
-        appSession.isAuthBypassed || clerk.user != nil
+        clerk.user != nil
     }
 
     private var imageURL: URL? {
@@ -397,6 +397,13 @@ private struct EventCardContent: View {
                         EventSocialOverlayView(attendees: goingAttendees, size: .card)
                             .padding(.trailing, 10)
                             .padding(.top, 10)
+                    } else if anonymousGoingCount > 0 {
+                        AnonymousEventSocialOverlayView(
+                            attendeeCount: anonymousGoingCount,
+                            attendeeIdentityKeys: event.friendsGoing.map(\.user.id)
+                        )
+                        .padding(.trailing, 10)
+                        .padding(.top, 10)
                     }
                 }
                 .frame(width: cardWidth, height: artworkOverlayHeight, alignment: .topTrailing)
@@ -467,6 +474,13 @@ private struct EventCardContent: View {
 
     private var interestedCount: Int {
         event.friendsInterested.filter { $0.user.isCurrentUser || $0.user.isFriend }.count
+    }
+
+    // Production clients that have not yet received the aggregate count can
+    // still show an anonymous attendance signal. This count is never used to
+    // render names or profile images.
+    private var anonymousGoingCount: Int {
+        max(event.goingCount ?? 0, event.friendsGoing.count)
     }
 
 }
@@ -954,6 +968,72 @@ struct EventSocialOverlayView: View {
                 return 0
             }
         }
+    }
+}
+
+/// A signed-out view of event attendance that never carries attendee identity.
+private struct AnonymousEventSocialOverlayView: View {
+    let attendeeCount: Int
+    let attendeeIdentityKeys: [String]
+
+    private let avatarSize: CGFloat = 40
+    private let avatarSpacing: CGFloat = -10
+    private let maxDisplay = 3
+
+    private var visibleCount: Int { min(attendeeCount, maxDisplay) }
+    private var remainingCount: Int { max(0, attendeeCount - maxDisplay) }
+
+    private func attendeeIdentityKey(at index: Int) -> String? {
+        attendeeIdentityKeys.indices.contains(index) ? attendeeIdentityKeys[index] : nil
+    }
+
+    var body: some View {
+        HStack(spacing: avatarSpacing) {
+            ForEach(0..<visibleCount, id: \.self) { index in
+                AnonymousAttendeeGlyph(
+                    backgroundColor: UserAvatarFallbackPalette.color(
+                        identityKey: attendeeIdentityKey(at: index),
+                        name: "Anonymous"
+                    )
+                )
+                    .frame(width: avatarSize, height: avatarSize)
+            }
+
+            if remainingCount > 0 {
+                Text("+\(remainingCount)")
+                    .font(.system(size: 13, weight: .bold))
+                    .foregroundStyle(.white)
+                    .frame(width: avatarSize, height: avatarSize)
+                    .background {
+                        Circle()
+                            .fill(AppTheme.accentBlue)
+                    }
+            }
+        }
+        .shadow(color: .black.opacity(0.7), radius: 3, x: 0, y: 1)
+        .allowsHitTesting(false)
+        .accessibilityElement(children: .ignore)
+        .accessibilityLabel("\(attendeeCount) \(attendeeCount == 1 ? "person is" : "people are") going")
+    }
+}
+
+private struct AnonymousAttendeeGlyph: View {
+    let backgroundColor: Color
+
+    var body: some View {
+        ZStack {
+            Circle()
+                .frame(width: 14, height: 14)
+                .offset(y: -4)
+
+            Circle()
+                .frame(width: 30, height: 30)
+                .offset(y: 21)
+        }
+        .foregroundStyle(.white)
+        .frame(maxWidth: .infinity, maxHeight: .infinity)
+        .clipShape(Circle())
+        .background(Circle().fill(backgroundColor))
     }
 }
 

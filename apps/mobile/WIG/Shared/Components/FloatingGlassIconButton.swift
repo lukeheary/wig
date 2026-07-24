@@ -1,5 +1,28 @@
 import SwiftUI
 
+enum UserAvatarFallbackPalette {
+    static let colors = [
+        Color(red: 0.88, green: 0.48, blue: 0.36),
+        Color(red: 0.88, green: 0.68, blue: 0.46),
+        Color(red: 0.57, green: 0.35, blue: 0.70),
+        Color(red: 0.43, green: 0.70, blue: 0.62),
+        Color(red: 0.15, green: 0.63, blue: 0.58),
+    ]
+
+    static func color(identityKey: String?, name: String) -> Color {
+        let key = (identityKey?.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty == false)
+            ? identityKey!
+            : name
+
+        var hash = 0
+        for scalar in key.unicodeScalars {
+            hash = (hash &* 31) &+ Int(scalar.value)
+        }
+
+        return colors[abs(hash) % colors.count]
+    }
+}
+
 struct FloatingGlassIconButton: View {
     let systemImage: String
     var foregroundColor: Color = .primary
@@ -25,14 +48,6 @@ struct UserAvatarView: View {
     let size: CGFloat
     var identityKey: String?
 
-    private let fallbackColors = [
-        Color(red: 0.88, green: 0.48, blue: 0.36),
-        Color(red: 0.88, green: 0.68, blue: 0.46),
-        Color(red: 0.57, green: 0.35, blue: 0.70),
-        Color(red: 0.43, green: 0.70, blue: 0.62),
-        Color(red: 0.15, green: 0.63, blue: 0.58),
-    ]
-
     var body: some View {
         Group {
             if let imageURL {
@@ -56,7 +71,7 @@ struct UserAvatarView: View {
 
     private var fallbackAvatar: some View {
         Circle()
-            .fill(fallbackColors[fallbackIndex])
+            .fill(UserAvatarFallbackPalette.color(identityKey: identityKey, name: name))
             .overlay {
                 Text(String(name.prefix(1)).uppercased().ifEmpty("J"))
                     .font(.system(size: size * 0.34, weight: .bold))
@@ -64,18 +79,6 @@ struct UserAvatarView: View {
             }
     }
 
-    private var fallbackIndex: Int {
-        let key = (identityKey?.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty == false)
-            ? identityKey!
-            : name
-
-        var hash = 0
-        for scalar in key.unicodeScalars {
-            hash = (hash &* 31) &+ Int(scalar.value)
-        }
-
-        return abs(hash) % fallbackColors.count
-    }
 }
 
 struct UserListRowView<Trailing: View>: View {

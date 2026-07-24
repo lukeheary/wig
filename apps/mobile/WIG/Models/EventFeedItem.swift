@@ -77,6 +77,7 @@ struct EventFeedItem: Codable, Identifiable, Hashable, Sendable {
     let categories: [String]
     let categoryLabels: [String: String]
     let status: EventStatus
+    var createdAt: Date? = nil
     let updatedAt: Date?
     var canEdit = false
     var isFollowed = false
@@ -88,6 +89,7 @@ struct EventFeedItem: Codable, Identifiable, Hashable, Sendable {
     var friendsGoing: [EventSocialRSVP] = []
     var friendsInterested: [EventSocialRSVP] = []
     var friendsNotGoing: [EventSocialRSVP] = []
+    var goingCount: Int? = nil
 
     enum CodingKeys: String, CodingKey {
         case id
@@ -115,6 +117,7 @@ struct EventFeedItem: Codable, Identifiable, Hashable, Sendable {
         case categories
         case categoryLabels
         case status
+        case createdAt
         case updatedAt
         case canEdit
         case isFollowed
@@ -125,6 +128,7 @@ struct EventFeedItem: Codable, Identifiable, Hashable, Sendable {
         case friendsGoing
         case friendsInterested
         case friendsNotGoing
+        case goingCount
     }
 
     var primaryLocation: String {

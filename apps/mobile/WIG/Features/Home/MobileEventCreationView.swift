@@ -559,6 +559,12 @@ struct MobileEventCreationView: View {
                 Button("Delete Event", role: .destructive) {
                     activeAlert = .deleteConfirmation
                 }
+
+                if let createdAt = eventCreatedAt {
+                    Text("Created on \(createdAt.formatted(date: .long, time: .omitted))")
+                        .font(.footnote)
+                        .foregroundStyle(.secondary)
+                }
             }
         case .editSeries:
             Section {
@@ -569,6 +575,14 @@ struct MobileEventCreationView: View {
         case .create:
             EmptyView()
         }
+    }
+
+    private var eventCreatedAt: Date? {
+        guard case .edit(let event) = mode else {
+            return nil
+        }
+
+        return event.createdAt
     }
 
     private func placeSelectionSection(

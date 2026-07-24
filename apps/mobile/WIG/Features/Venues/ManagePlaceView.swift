@@ -24,7 +24,7 @@ struct ManagePlaceView: View {
             }
             .padding(.horizontal, 20)
             .padding(.top, 84)
-            .padding(.bottom, 60)
+            .padding(.bottom, 44)
         }
         .background(AppTheme.background.ignoresSafeArea())
         .navigationBarBackButtonHidden()
@@ -144,6 +144,7 @@ struct ManagePlaceView: View {
                 .overlay(Circle().strokeBorder(.white.opacity(0.12), lineWidth: 1))
         }
         .buttonStyle(.plain)
+        .tint(.white)
         .accessibilityLabel("Add event")
     }
 
