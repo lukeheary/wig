@@ -1,5 +1,3 @@
-import CoreImage
-import CoreImage.CIFilterBuiltins
 import ClerkKit
 import SafariServices
 import SwiftUI
@@ -15,27 +13,16 @@ struct PlaceDetailView: View {
     @EnvironmentObject private var appSession: AppSession
     @StateObject private var viewModel = PlaceDetailViewModel()
     @State private var selectedTab: PlaceEventsTab = .upcoming
-    @State private var presentedAction: PlaceDetailAction?
     @State private var isManagePlaceActive = false
     @State private var managePlaceDetail: PlaceDetail?
     @State private var isUnfollowConfirmationPresented = false
     @State private var isHideFromHomeConfirmationPresented = false
     @State private var isLocationPopoverPresented = false
     @State private var presentedWebsite: PlaceWebsiteDestination?
-    @State private var blurredLogo: UIImage?
-    @State private var logoTint: Color?
-
-    private let topWashHeight: CGFloat = 460
-
-    // Grows the tinted wash this far above the top edge (matching the event hero) so
-    // overscrolling past the top keeps showing a continuous fade, never a hard cutoff.
-    private let overscrollExtension: CGFloat = 500
-
     private let eventCardWidth: CGFloat = 220
 
     var body: some View {
-        GeometryReader { proxy in
-            ScrollView {
+        ScrollView {
                 VStack(alignment: .leading, spacing: 22) {
                     switch viewModel.state {
                     case .idle, .loading:
@@ -129,12 +116,8 @@ struct PlaceDetailView: View {
                 .padding(.top, 74)
                 .padding(.bottom, 48)
                 .frame(maxWidth: .infinity, alignment: .topLeading)
-                .background(alignment: .top) {
-                    topColorWash(safeAreaTop: proxy.safeAreaInsets.top)
-                }
-            }
-            .background(AppTheme.background.ignoresSafeArea())
         }
+        .background(AppTheme.background.ignoresSafeArea())
         .background {
             // When embedded over an event, UIKit's native pop gesture targets the
             // event presentation underneath this page. The host supplies a local
@@ -198,49 +181,6 @@ struct PlaceDetailView: View {
         } message: {
             Text(viewModel.homeVisibilityErrorMessage ?? "Please try again.")
         }
-        .sheet(item: $presentedAction) { action in
-            if case .loaded(let detail) = viewModel.state {
-                switch action {
-                case .edit:
-                    MobilePlaceCreationView(
-                        mode: .edit(detail),
-                        onCompleted: {
-                            Task {
-                                PlaceDetailViewModel.invalidateCache(for: detail.slug)
-                                await viewModel.load(slug: detail.slug, using: apiClient, forceRefresh: true)
-                            }
-                        },
-                        onDeleted: {
-                            dismiss()
-                        }
-                    )
-                case .createEvent:
-                    MobileEventCreationView(
-                        mode: .create,
-                        preselectedPlace: detail,
-                        onCompleted: { _ in
-                            Task {
-                                PlaceDetailViewModel.invalidateCache(for: detail.slug)
-                                await viewModel.load(slug: detail.slug, using: apiClient, forceRefresh: true)
-                            }
-                        }
-                    )
-                case .createEventSeries:
-                    MobileEventCreationView(
-                        mode: .create,
-                        creationKind: .eventSeries,
-                        preselectedPlace: detail,
-                        onSeriesCompleted: {
-                            Task {
-                                PlaceDetailViewModel.invalidateCache(for: detail.slug)
-                                await viewModel.load(slug: detail.slug, using: apiClient, forceRefresh: true)
-                            }
-                        }
-                    )
-
-                }
-            }
-        }
         .navigationDestination(isPresented: $isManagePlaceActive) {
             if let detail = managePlaceDetail {
                 ManagePlaceView(
@@ -262,9 +202,6 @@ struct PlaceDetailView: View {
                     using: apiClient
                 )
             }
-        }
-        .task(id: currentLogoURL) {
-            await loadLogoArtwork()
         }
         .task(id: placeEventPrefetchKey) {
             guard case .loaded(let detail) = viewModel.state else {
@@ -321,14 +258,6 @@ struct PlaceDetailView: View {
         }
 
         return PlaceDetail(listItem: place)
-    }
-
-    private enum PlaceDetailAction: String, Identifiable {
-        case edit
-        case createEvent
-        case createEventSeries
-
-        var id: String { rawValue }
     }
 
     private var canShowEventFilter: Bool {
@@ -464,32 +393,6 @@ struct PlaceDetailView: View {
 
     private func placeOverflowMenu(for detail: PlaceDetail) -> some View {
         Menu {
-            if detail.canManage {
-                Button {
-                    presentedAction = .edit
-                } label: {
-                    Label("Edit Place", systemImage: "square.and.pencil")
-                        .foregroundStyle(.white)
-                }
-                .tint(.white)
-
-                Button {
-                    presentedAction = .createEvent
-                } label: {
-                    Label("Add Event", systemImage: "calendar.badge.plus")
-                        .foregroundStyle(.white)
-                }
-                .tint(.white)
-
-                Button {
-                    presentedAction = .createEventSeries
-                } label: {
-                    Label("Add Event Series", systemImage: "calendar.badge.clock")
-                        .foregroundStyle(.white)
-                }
-                .tint(.white)
-            }
-
             if appSession.isAdmin {
                 Button {
                     managePlaceDetail = detail
@@ -677,185 +580,6 @@ struct PlaceDetailView: View {
         }
     }
 
-    // A blurred bloom of the logo tinted with its dominant color, filling the top of
-    // the page and dissolving into the black app background — the same artwork-derived
-    // treatment as the place cards, giving the page a little color up top.
-    //
-    // Like the event hero, the whole wash is grown upward beyond the top edge (a solid
-    // color region above the visible fade) so overscrolling past the top keeps showing
-    // a continuous fade instead of a hard cutoff at the card edge.
-    private func topColorWash(safeAreaTop: CGFloat) -> some View {
-        let tint = logoTint ?? .clear
-        // Solid region from `overscrollExtension` above the device top down to the top
-        // edge; then the visible fade over the same region it always occupied.
-        let solidHeight = overscrollExtension
-        let visibleFadeHeight = topWashHeight + safeAreaTop
-
-        return ZStack {
-            tint
-
-            if let blurredLogo {
-                VStack(spacing: 0) {
-                    Image(uiImage: blurredLogo)
-                        .resizable()
-                        .scaledToFill()
-                        .frame(maxWidth: .infinity)
-                        .frame(height: solidHeight + visibleFadeHeight)
-                        .clipped()
-                        .overlay(Color.black.opacity(0.32))
-                        .overlay(tint.opacity(0.34))
-
-                    Spacer(minLength: 0)
-                }
-            }
-        }
-        .frame(maxWidth: .infinity)
-        .mask(
-            VStack(spacing: 0) {
-                // Solid through the overscroll region so pulling past the top stays filled.
-                Color.white
-                    .frame(height: solidHeight)
-
-                LinearGradient(
-                    stops: [
-                        .init(color: .white, location: 0.0),
-                        .init(color: .white.opacity(0.7), location: 0.45),
-                        .init(color: .white.opacity(0.25), location: 0.75),
-                        .init(color: .clear, location: 1.0),
-                    ],
-                    startPoint: .top,
-                    endPoint: .bottom
-                )
-                .frame(height: visibleFadeHeight)
-
-                Color.clear
-                    .frame(maxWidth: .infinity, maxHeight: .infinity)
-            }
-        )
-        .padding(.top, -(overscrollExtension + safeAreaTop))
-    }
-
-    private var currentLogoURL: URL? {
-        if case .loaded(let detail) = viewModel.state {
-            return detail.displayLogoURL
-        }
-
-        return place.displayLogoURL
-    }
-
-    private func loadLogoArtwork() async {
-        guard let url = currentLogoURL else {
-            blurredLogo = nil
-            logoTint = nil
-            return
-        }
-
-        guard let image = await RemoteImagePipeline.shared.image(for: url) else {
-            return
-        }
-
-        // CoreImage sampling + blur off the main thread.
-        let processed = await Task.detached(priority: .userInitiated) { () -> (UIImage?, Color?) in
-            let tint = image.placeDetailTintColor.map(Color.init(uiColor:))
-            let blurred = image.placeDetailBlurredBackdrop()
-            return (blurred, tint)
-        }.value
-
-        blurredLogo = processed.0
-        logoTint = processed.1
-    }
-}
-
-private enum PlaceDetailImageProcessing {
-    static let context = CIContext(options: [.workingColorSpace: NSNull()])
-}
-
-private extension UIImage {
-    // Average color of the logo, adjusted into a dark, tasteful tint for the top wash.
-    var placeDetailTintColor: UIColor? {
-        guard let cgImage else { return nil }
-
-        let ciImage = CIImage(cgImage: cgImage)
-        let extent = ciImage.extent
-        guard extent.width > 0, extent.height > 0 else { return nil }
-
-        let filter = CIFilter.areaAverage()
-        filter.inputImage = ciImage
-        filter.extent = extent
-
-        guard let outputImage = filter.outputImage else { return nil }
-
-        var bitmap = [UInt8](repeating: 0, count: 4)
-        PlaceDetailImageProcessing.context.render(
-            outputImage,
-            toBitmap: &bitmap,
-            rowBytes: 4,
-            bounds: CGRect(x: 0, y: 0, width: 1, height: 1),
-            format: .RGBA8,
-            colorSpace: nil
-        )
-
-        return UIColor(
-            red: CGFloat(bitmap[0]) / 255,
-            green: CGFloat(bitmap[1]) / 255,
-            blue: CGFloat(bitmap[2]) / 255,
-            alpha: 1
-        ).placeDetailAdjusted()
-    }
-
-    // Small, heavily blurred copy of the logo used as the top backdrop bloom.
-    func placeDetailBlurredBackdrop() -> UIImage? {
-        guard cgImage != nil else { return nil }
-
-        let maxDimension: CGFloat = 160
-        let scale = min(maxDimension / max(size.width, size.height), 1)
-        let targetSize = CGSize(width: size.width * scale, height: size.height * scale)
-        let renderer = UIGraphicsImageRenderer(size: targetSize)
-        let thumbnail = renderer.image { _ in
-            draw(in: CGRect(origin: .zero, size: targetSize))
-        }
-
-        guard let thumbnailCGImage = thumbnail.cgImage else { return nil }
-
-        let inputImage = CIImage(cgImage: thumbnailCGImage)
-        let clampedImage = inputImage.clampedToExtent()
-        let filter = CIFilter.gaussianBlur()
-        filter.inputImage = clampedImage
-        filter.radius = 40
-
-        guard let outputImage = filter.outputImage else { return thumbnail }
-
-        guard let blurredCGImage = PlaceDetailImageProcessing.context.createCGImage(
-            outputImage,
-            from: inputImage.extent
-        ) else {
-            return thumbnail
-        }
-
-        return UIImage(cgImage: blurredCGImage, scale: thumbnail.scale, orientation: thumbnail.imageOrientation)
-    }
-}
-
-private extension UIColor {
-    // Keep the sampled hue but darken so the top wash reads as a subtle tint that
-    // keeps the white header text readable before it fades to black.
-    func placeDetailAdjusted() -> UIColor {
-        var hue: CGFloat = 0
-        var saturation: CGFloat = 0
-        var brightness: CGFloat = 0
-        var alpha: CGFloat = 0
-
-        guard getHue(&hue, saturation: &saturation, brightness: &brightness, alpha: &alpha) else {
-            return self
-        }
-
-        return UIColor(
-            hue: hue,
-            saturation: min(max(saturation * 0.9, 0), 0.85),
-            brightness: min(max(brightness, 0), 0.36),
-            alpha: 1
-        )
-    }
 }
 
 private struct PlaceDetailEventLoadingSection: View {

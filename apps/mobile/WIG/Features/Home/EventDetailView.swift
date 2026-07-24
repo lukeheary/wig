@@ -2635,8 +2635,9 @@ private struct EventSeriesEditRoute: Identifiable {
     let id: UUID
 }
 
-private struct EventSeriesEditSheet: View {
+struct EventSeriesEditSheet: View {
     let seriesID: UUID
+    var onSeriesUpdated: (() -> Void)? = nil
 
     @Environment(\.apiClient) private var apiClient
     @State private var state: LoadState = .loading
@@ -2656,6 +2657,7 @@ private struct EventSeriesEditSheet: View {
                     mode: .editSeries(series),
                     onSeriesCompleted: {
                         NotificationCenter.default.post(name: .mobileEventDidChange, object: seriesID)
+                        onSeriesUpdated?()
                     }
                 )
 

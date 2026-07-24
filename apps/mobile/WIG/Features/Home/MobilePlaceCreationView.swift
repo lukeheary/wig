@@ -103,12 +103,6 @@ struct MobilePlaceCreationView: View {
             .navigationTitle(navigationTitle)
             .navigationBarTitleDisplayMode(.inline)
             .toolbar {
-                ToolbarItem(placement: .cancellationAction) {
-                    Button("Cancel") {
-                        dismiss()
-                    }
-                }
-
                 ToolbarItem(placement: .confirmationAction) {
                     Button(submitButtonTitle) {
                         Task {
@@ -235,7 +229,7 @@ struct MobilePlaceCreationView: View {
                         logoPlaceholder
                     }
                 }
-                .frame(height: 200)
+                .frame(width: 104, height: 104)
                 .clipShape(RoundedRectangle(cornerRadius: 22, style: .continuous))
                 .overlay(
                     RoundedRectangle(cornerRadius: 22, style: .continuous)

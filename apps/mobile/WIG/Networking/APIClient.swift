@@ -291,6 +291,17 @@ struct APIClient: Sendable {
         )
     }
 
+    static func mobileRemoveUserFromPlace(
+        slug: String,
+        userId: String
+    ) -> Endpoint<DeleteSuccessResponse> {
+        Endpoint(
+            path: "/api/mobile/places/\(slug)/members",
+            method: .delete,
+            queryItems: [URLQueryItem(name: "userId", value: userId)]
+        )
+    }
+
     static func mobileActivity(limit: Int = 40) -> Endpoint<ActivityFeedResponse> {
         Endpoint(
             path: "/api/mobile/activity",

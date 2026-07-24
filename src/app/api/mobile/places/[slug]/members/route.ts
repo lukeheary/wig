@@ -1,5 +1,5 @@
 import { auth } from "@clerk/nextjs/server";
-import { eq } from "drizzle-orm";
+import { and, eq } from "drizzle-orm";
 import { NextResponse } from "next/server";
 import { z } from "zod";
 
@@ -64,6 +64,10 @@ export async function GET(
 const addMemberSchema = z.object({
   userId: z.string().min(1),
   role: z.enum(["owner", "manager", "promoter", "staff"]),
+});
+
+const removeMemberSchema = z.object({
+  userId: z.string().min(1),
 });
 
 export async function POST(
@@ -131,6 +135,74 @@ export async function POST(
     console.error("POST /api/mobile/places/[slug]/members failed", error);
     return NextResponse.json(
       { error: "Failed to add user to place." },
+      { status: 500 }
+    );
+  }
+}
+
+export async function DELETE(
+  request: Request,
+  { params }: { params: Promise<{ slug: string }> }
+) {
+  try {
+    const { userId: currentUserId } = await auth();
+
+    if (!currentUserId) {
+      return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
+    }
+
+    const currentUser = await db.query.users.findFirst({
+      where: eq(users.id, currentUserId),
+      columns: { role: true },
+    });
+
+    if (currentUser?.role !== "admin") {
+      return NextResponse.json({ error: "Forbidden" }, { status: 403 });
+    }
+
+    const { slug } = await params;
+    const place = await db.query.places.findFirst({
+      where: eq(places.slug, slug),
+      columns: { id: true },
+    });
+
+    if (!place) {
+      return NextResponse.json({ error: "Place not found" }, { status: 404 });
+    }
+
+    const parsed = removeMemberSchema.safeParse({
+      userId: new URL(request.url).searchParams.get("userId"),
+    });
+
+    if (!parsed.success) {
+      return NextResponse.json(
+        { error: "Invalid request", details: parsed.error.flatten() },
+        { status: 400 }
+      );
+    }
+
+    const result = await db
+      .delete(placeMembers)
+      .where(
+        and(
+          eq(placeMembers.userId, parsed.data.userId),
+          eq(placeMembers.placeId, place.id)
+        )
+      )
+      .returning({ userId: placeMembers.userId });
+
+    if (result.length === 0) {
+      return NextResponse.json(
+        { error: "Place membership not found" },
+        { status: 404 }
+      );
+    }
+
+    return NextResponse.json({ success: true });
+  } catch (error) {
+    console.error("DELETE /api/mobile/places/[slug]/members failed", error);
+    return NextResponse.json(
+      { error: "Failed to remove member." },
       { status: 500 }
     );
   }
