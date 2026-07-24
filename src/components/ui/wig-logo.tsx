@@ -1,6 +1,6 @@
 import Link from "next/link";
+import Image from "next/image";
 import { type MouseEventHandler } from "react";
-import { truculenta } from "@/lib/fonts";
 
 interface WigLogoProps {
   asLink?: boolean;
@@ -14,14 +14,14 @@ export function WigLogo({
   onClick,
 }: WigLogoProps) {
   const inner = (
-    <span className={"flex items-baseline gap-1"}>
-      <span
-        className={`${truculenta.className} text-4xl font-black tracking-wide`}
-      >
-        WIG
-      </span>
-      <span className="text-sm font-light tracking-wide opacity-50">beta</span>
-    </span>
+    <Image
+      src="/wig-logo.svg"
+      alt="WIG"
+      width={1024}
+      height={1024}
+      priority
+      className="size-9 rounded-[0.28rem] md:size-10"
+    />
   );
 
   if (asLink) {

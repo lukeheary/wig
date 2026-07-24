@@ -18,8 +18,11 @@ const metadataBaseUrl =
 
 export const metadata: Metadata = {
   metadataBase: new URL(metadataBaseUrl),
-  title: "Who Is Going",
+  title: "WIG",
   description: "Discover local events and connect with your community",
+  icons: {
+    icon: "/wig-logo.svg",
+  },
 };
 
 export const viewport: Viewport = {

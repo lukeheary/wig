@@ -428,6 +428,7 @@ extension EventFeedItem {
         categories = try container.decodeIfPresent([String].self, forKey: .categories) ?? []
         categoryLabels = try container.decodeIfPresent([String: String].self, forKey: .categoryLabels) ?? [:]
         status = try container.decodeIfPresent(EventStatus.self, forKey: .status) ?? .active
+        createdAt = try container.decodeIfPresent(Date.self, forKey: .createdAt)
         updatedAt = try container.decodeIfPresent(Date.self, forKey: .updatedAt)
         canEdit = try container.decodeIfPresent(Bool.self, forKey: .canEdit) ?? false
         isFollowed = try container.decodeIfPresent(Bool.self, forKey: .isFollowed) ?? false
