@@ -36,6 +36,7 @@ struct MobilePlaceCreationView: View {
     @State private var alertMessage: String?
     @State private var isGooglePlacePickerPresented = false
     @State private var venueScraperRows: [EditablePlaceScraperRow] = []
+    @State private var savedVenueScraperRows: [EditablePlaceScraperRow] = []
 
     init(type: PlaceListItem.PlaceType, onCompleted: (() -> Void)? = nil) {
         self.init(mode: .create(type), onCompleted: onCompleted, onDeleted: nil)
@@ -720,28 +721,35 @@ struct MobilePlaceCreationView: View {
     private func loadVenueScrapersIfNeeded() async {
         guard case .edit(let place) = mode else {
             venueScraperRows = []
+            savedVenueScraperRows = []
             return
         }
 
         do {
             let response = try await apiClient.send(APIClient.mobilePlaceScrapers(slug: place.slug))
-            venueScraperRows = response.scrapers.map(EditablePlaceScraperRow.init)
+            let rows = response.scrapers.map(EditablePlaceScraperRow.init)
+            venueScraperRows = rows
+            savedVenueScraperRows = rows
         } catch {
             venueScraperRows = []
+            savedVenueScraperRows = []
         }
     }
 
     private func saveVenueScrapers(slug: String) async throws {
-        guard showsScrapersSection else {
+        guard showsScrapersSection, venueScraperRows != savedVenueScraperRows else {
             return
         }
 
-        _ = try await apiClient.send(
+        let response = try await apiClient.send(
             APIClient.replaceMobilePlaceScrapers(
                 slug: slug,
                 scrapers: venueScraperRows.compactMap(\.apiValue)
             )
         )
+        let rows = response.scrapers.map(EditablePlaceScraperRow.init)
+        venueScraperRows = rows
+        savedVenueScraperRows = rows
     }
 
     private func scraperBinding<Value>(

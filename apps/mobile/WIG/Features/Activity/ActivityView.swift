@@ -357,17 +357,15 @@ struct ActivityView: View {
     }
 
     private func activityHeader(response: ActivityFeedResponse) -> some View {
-        (
-            Text("Activity")
-                .font(.system(size: 20, weight: .bold))
-                .foregroundStyle(.white)
-            +
-            (headerLocationName(for: response).map { location in
-                Text(" in \(location)")
-                    .font(.system(size: 20, weight: .medium))
-                    .foregroundStyle(.white.opacity(0.5))
-            } ?? Text(""))
-        )
+        // Temporarily hidden; retain the city suffix for a future restore.
+        // + (headerLocationName(for: response).map { location in
+        //     Text(" in \(location)")
+        //         .font(.system(size: 20, weight: .medium))
+        //         .foregroundStyle(.white.opacity(0.5))
+        // } ?? Text(""))
+        Text("Activity")
+            .font(.system(size: 20, weight: .bold))
+            .foregroundStyle(.white)
     }
 
     private func headerLocationName(for response: ActivityFeedResponse) -> String? {
@@ -473,12 +471,13 @@ private struct ActivityLeadingControls: View {
                 useCombinedStyle: true
             )
 
-            ActivityCityFilterDropdown(
-                selection: $citySelection,
-                cities: cities,
-                hasActiveSelection: hasActiveCitySelection,
-                useCombinedStyle: true
-            )
+            // Temporarily hidden while the map/city menu is being revisited.
+            // ActivityCityFilterDropdown(
+            //     selection: $citySelection,
+            //     cities: cities,
+            //     hasActiveSelection: hasActiveCitySelection,
+            //     useCombinedStyle: true
+            // )
         }
         .frame(height: 46)
         .clipShape(Capsule())

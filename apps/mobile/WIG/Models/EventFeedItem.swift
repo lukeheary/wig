@@ -81,6 +81,12 @@ struct EventFeedItem: Codable, Identifiable, Hashable, Sendable {
     let updatedAt: Date?
     var canEdit = false
     var isFollowed = false
+    var venueFollowerCount = 0
+    var venueMemberCount = 0
+    var venueIsFollowed = false
+    var organizerFollowerCount = 0
+    var organizerMemberCount = 0
+    var organizerIsFollowed = false
     var isCreatedByCurrentUser = false
     var userRsvpStatus: EventRSVPStatus? = nil
     var userRsvpNotGoingReason: EventRSVPDeclineReason? = nil
@@ -121,6 +127,12 @@ struct EventFeedItem: Codable, Identifiable, Hashable, Sendable {
         case updatedAt
         case canEdit
         case isFollowed
+        case venueFollowerCount
+        case venueMemberCount
+        case venueIsFollowed
+        case organizerFollowerCount
+        case organizerMemberCount
+        case organizerIsFollowed
         case isCreatedByCurrentUser
         case userRsvpStatus
         case userRsvpNotGoingReason
@@ -432,6 +444,12 @@ extension EventFeedItem {
         updatedAt = try container.decodeIfPresent(Date.self, forKey: .updatedAt)
         canEdit = try container.decodeIfPresent(Bool.self, forKey: .canEdit) ?? false
         isFollowed = try container.decodeIfPresent(Bool.self, forKey: .isFollowed) ?? false
+        venueFollowerCount = try container.decodeIfPresent(Int.self, forKey: .venueFollowerCount) ?? 0
+        venueMemberCount = try container.decodeIfPresent(Int.self, forKey: .venueMemberCount) ?? 0
+        venueIsFollowed = try container.decodeIfPresent(Bool.self, forKey: .venueIsFollowed) ?? false
+        organizerFollowerCount = try container.decodeIfPresent(Int.self, forKey: .organizerFollowerCount) ?? 0
+        organizerMemberCount = try container.decodeIfPresent(Int.self, forKey: .organizerMemberCount) ?? 0
+        organizerIsFollowed = try container.decodeIfPresent(Bool.self, forKey: .organizerIsFollowed) ?? false
         isCreatedByCurrentUser = try container.decodeIfPresent(Bool.self, forKey: .isCreatedByCurrentUser) ?? false
         userRsvpStatus = try container.decodeIfPresent(EventRSVPStatus.self, forKey: .userRsvpStatus)
         userRsvpNotGoingReason = try container.decodeIfPresent(

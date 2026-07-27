@@ -25,27 +25,47 @@ enum ConfirmationHaptic {
 }
 
 struct AppRootView: View {
+    @Environment(\.accessibilityReduceMotion) private var reduceMotion
+
     @State private var isShowingLaunchScreen = true
+    @State private var launchOpacity = 1.0
+    @State private var isContentReady = false
 
     var body: some View {
         ZStack {
             AppTheme.background
                 .ignoresSafeArea()
 
-            AuthGate()
+            AuthGate {
+                isContentReady = true
+            }
 
             if isShowingLaunchScreen {
-                LaunchLoadingView()
-                    .transition(.opacity)
+                ZStack {
+                    AppTheme.background
+                        .ignoresSafeArea()
+
+                    LaunchLoadingView()
+                }
+                    .compositingGroup()
+                    .opacity(launchOpacity)
                     .zIndex(1)
             }
         }
-        .task {
-            try? await Task.sleep(for: .milliseconds(700))
+        .task(id: isContentReady) {
+            guard isContentReady else { return }
 
-            withAnimation(.easeOut(duration: 0.24)) {
-                isShowingLaunchScreen = false
+            // Let the destination render behind the splash before fading it away.
+            try? await Task.sleep(for: .milliseconds(50))
+            guard !Task.isCancelled else { return }
+
+            let fadeDuration = reduceMotion ? 0.2 : 0.34
+            withAnimation(.easeInOut(duration: fadeDuration)) {
+                launchOpacity = 0
             }
+
+            try? await Task.sleep(for: .seconds(fadeDuration))
+            isShowingLaunchScreen = false
         }
     }
 }

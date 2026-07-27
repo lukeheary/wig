@@ -27,6 +27,8 @@ enum MobileProfileFormMode {
 }
 
 struct AuthGate: View {
+    let onReady: () -> Void
+
     @Environment(Clerk.self) private var clerk
     @Environment(\.apiClient) private var apiClient
     @EnvironmentObject private var appSession: AppSession
@@ -65,19 +67,20 @@ struct AuthGate: View {
             }
         }
         .task(id: gateTaskID) {
-            guard requiresOnboardingGate else {
-                isHomePreloadReady = true
-                return
-            }
-
             isHomePreloadReady = false
             async let homePreload: Void = EventFeedViewModel.preload(
                 using: apiClient,
                 cacheIdentity: eventFeedCacheIdentity
             )
-            await viewModel.load(using: apiClient)
+
+            if requiresOnboardingGate {
+                await viewModel.load(using: apiClient)
+            }
+
             await homePreload
             isHomePreloadReady = true
+            await Task.yield()
+            onReady()
         }
         .onChange(of: requiresOnboardingGate) { _, requiresOnboardingGate in
             if !requiresOnboardingGate {

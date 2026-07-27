@@ -575,33 +575,20 @@ struct EventDetailView: View {
                     .font(.system(size: 15, weight: .medium))
                     .foregroundStyle(AppTheme.accentBlue)
 
-                if !relativeStartDayText.isEmpty {
-                    Text(relativeStartDayText)
-                        .font(.system(size: 11, weight: .semibold))
-                        .foregroundStyle(.white.opacity(0.66))
-                }
+                // Temporarily hidden; retain the relative-day label for a future restore.
+                // if !relativeStartDayText.isEmpty {
+                //     Text(relativeStartDayText)
+                //         .font(.system(size: 11, weight: .semibold))
+                //         .foregroundStyle(.white.opacity(0.66))
+                // }
             }
             .padding(.top, 6)
 
-            ViewThatFits(in: .horizontal) {
-                HStack(alignment: .center, spacing: 8) {
-                    venueLabel
-
-                    if !currentEvent.eventDetailCategoryLabels.isEmpty {
-                        categoryPills
-                    }
-                }
-
-                VStack(alignment: .leading, spacing: 8) {
-                    venueLabel
-
-                    if !currentEvent.eventDetailCategoryLabels.isEmpty {
-                        ScrollView(.horizontal, showsIndicators: false) {
-                            categoryPills
-                        }
-                    }
-                }
-            }
+            venueLabel
+            // Temporarily hidden; retain the event category tags for a future restore.
+            // if !currentEvent.eventDetailCategoryLabels.isEmpty {
+            //     categoryPills
+            // }
             .padding(.top, 7)
 
             if let organizerPlace {
@@ -681,8 +668,10 @@ struct EventDetailView: View {
                 website: nil,
                 instagram: nil,
                 upcomingEventCount: 0,
+                followerCount: currentEvent.venueFollowerCount,
+                memberCount: currentEvent.venueMemberCount,
                 updatedAt: currentEvent.updatedAt,
-                isFollowed: currentEvent.isFollowed
+                isFollowed: currentEvent.venueIsFollowed
             )
         }
 
@@ -710,8 +699,10 @@ struct EventDetailView: View {
                 website: nil,
                 instagram: nil,
                 upcomingEventCount: 0,
+                followerCount: currentEvent.organizerFollowerCount,
+                memberCount: currentEvent.organizerMemberCount,
                 updatedAt: currentEvent.updatedAt,
-                isFollowed: currentEvent.isFollowed
+                isFollowed: currentEvent.organizerIsFollowed
             )
         }
 
@@ -731,7 +722,7 @@ struct EventDetailView: View {
         let startText = compactTimeString(for: currentEvent.startAt, includeMeridiem: includeStartMeridiem)
         let endText = compactTimeString(for: endAt, includeMeridiem: true)
 
-        return "\(prefix) at \(startText) - \(endText)"
+        return "\(prefix) from \(startText) to \(endText)"
     }
 
     private func compactTimeString(for date: Date, includeMeridiem: Bool) -> String {
@@ -791,8 +782,10 @@ struct EventDetailView: View {
             website: nil,
             instagram: nil,
             upcomingEventCount: 0,
+            followerCount: currentEvent.organizerFollowerCount,
+            memberCount: currentEvent.organizerMemberCount,
             updatedAt: currentEvent.updatedAt,
-            isFollowed: currentEvent.isFollowed
+            isFollowed: currentEvent.organizerIsFollowed
         )
     }
 

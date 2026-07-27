@@ -921,12 +921,27 @@ struct HomeView: View {
         return filteredCurrentEvents.filter { event in
             let eventDay = visibleSectionDay(for: event)
             guard let weekEnd else {
-                return eventDay >= startDate
+                return eventDay >= startDate && !shouldHideEndedEventFromCurrentDay(event, eventDay: eventDay)
             }
 
             return eventDay >= startDate &&
-                eventDay < weekEnd
+                eventDay < weekEnd &&
+                !shouldHideEndedEventFromCurrentDay(event, eventDay: eventDay)
         }
+    }
+
+    private func shouldHideEndedEventFromCurrentDay(
+        _ event: EventFeedItem,
+        eventDay: Date
+    ) -> Bool {
+        guard isViewingCurrentWeek,
+              let endAt = event.endAt,
+              Self.weekCalendar.isDate(eventDay, inSameDayAs: .now)
+        else {
+            return false
+        }
+
+        return endAt <= .now
     }
 
     private var homeEventSearchQuery: String {
@@ -1360,11 +1375,12 @@ struct HomeView: View {
                 .font(.system(size: 20, weight: .bold))
                 .foregroundStyle(.white)
 
-            if let location = showsLocation ? headerLocationName : nil {
-                Text(" in \(location)")
-                    .font(.system(size: 20, weight: .medium))
-                    .foregroundStyle(.white.opacity(0.5))
-            }
+            // Temporarily hidden; retain the city suffix for a future restore.
+            // if let location = showsLocation ? headerLocationName : nil {
+            //     Text(" in \(location)")
+            //         .font(.system(size: 20, weight: .medium))
+            //         .foregroundStyle(.white.opacity(0.5))
+            // }
         }
     }
 

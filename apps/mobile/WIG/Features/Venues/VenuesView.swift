@@ -150,17 +150,15 @@ struct VenuesView: View {
     }
 
     private func placesHeader(locationName: String?) -> some View {
-        return (
-            Text(selectedPlaceFilter.headerTitle)
-                .font(.system(size: 20, weight: .bold))
-                .foregroundStyle(.white)
-            +
-            (locationName.map { location in
-                Text(" in \(location)")
-                    .font(.system(size: 20, weight: .medium))
-                    .foregroundStyle(.white.opacity(0.5))
-            } ?? Text(""))
-        )
+        // Temporarily hidden; retain the city suffix for a future restore.
+        // + (locationName.map { location in
+        //     Text(" in \(location)")
+        //         .font(.system(size: 20, weight: .medium))
+        //         .foregroundStyle(.white.opacity(0.5))
+        // } ?? Text(""))
+        Text(selectedPlaceFilter.headerTitle)
+            .font(.system(size: 20, weight: .bold))
+            .foregroundStyle(.white)
     }
 
     private func placesHeaderMenu(for response: MobilePlacesResponse) -> some View {
@@ -633,11 +631,12 @@ private struct PlaceLeadingControls: View {
             }
             .buttonStyle(.plain)
 
-            PlaceCityFilterMenu(
-                selection: $locationSelection,
-                locations: locations,
-                hasActiveSelection: hasActiveLocationSelection
-            )
+            // Temporarily hidden while the map/city menu is being revisited.
+            // PlaceCityFilterMenu(
+            //     selection: $locationSelection,
+            //     locations: locations,
+            //     hasActiveSelection: hasActiveLocationSelection
+            // )
         }
         .frame(height: 46)
         .clipShape(Capsule())

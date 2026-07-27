@@ -1,6 +1,6 @@
 import { auth } from "@clerk/nextjs/server";
 import { NextResponse } from "next/server";
-import { and, asc, eq, inArray, isNotNull, or } from "drizzle-orm";
+import { and, asc, eq, inArray, isNotNull, or, sql } from "drizzle-orm";
 import { z } from "zod";
 import { db } from "@/server/db";
 import {
@@ -8,6 +8,7 @@ import {
   eventRsvps,
   events,
   placeFollows,
+  placeMembers,
   userFriends,
   users,
 } from "@/server/db/schema";
@@ -169,6 +170,35 @@ export async function GET(
     }];
   });
   const followedPlaceIDs = new Set(follows.map((follow) => follow.placeId));
+  const relatedPlaceIDs = [mapped.venueId, mapped.organizerId].filter(
+    (placeID): placeID is string => Boolean(placeID)
+  );
+  const [followerCounts, memberCounts] = relatedPlaceIDs.length > 0
+    ? await Promise.all([
+        db
+          .select({
+            placeId: placeFollows.placeId,
+            count: sql<number>`count(*)::int`,
+          })
+          .from(placeFollows)
+          .where(inArray(placeFollows.placeId, relatedPlaceIDs))
+          .groupBy(placeFollows.placeId),
+        db
+          .select({
+            placeId: placeMembers.placeId,
+            count: sql<number>`count(*)::int`,
+          })
+          .from(placeMembers)
+          .where(inArray(placeMembers.placeId, relatedPlaceIDs))
+          .groupBy(placeMembers.placeId),
+      ])
+    : [[], []];
+  const followerCountByPlaceID = new Map(
+    followerCounts.map((row) => [row.placeId, row.count])
+  );
+  const memberCountByPlaceID = new Map(
+    memberCounts.map((row) => [row.placeId, row.count])
+  );
 
   return NextResponse.json({
     id: mapped.id,
@@ -200,6 +230,22 @@ export async function GET(
     isFollowed:
       (mapped.venueId ? followedPlaceIDs.has(mapped.venueId) : false) ||
       (mapped.organizerId ? followedPlaceIDs.has(mapped.organizerId) : false),
+    venueFollowerCount: mapped.venueId
+      ? followerCountByPlaceID.get(mapped.venueId) ?? 0
+      : 0,
+    venueMemberCount: mapped.venueId
+      ? memberCountByPlaceID.get(mapped.venueId) ?? 0
+      : 0,
+    venueIsFollowed: mapped.venueId ? followedPlaceIDs.has(mapped.venueId) : false,
+    organizerFollowerCount: mapped.organizerId
+      ? followerCountByPlaceID.get(mapped.organizerId) ?? 0
+      : 0,
+    organizerMemberCount: mapped.organizerId
+      ? memberCountByPlaceID.get(mapped.organizerId) ?? 0
+      : 0,
+    organizerIsFollowed: mapped.organizerId
+      ? followedPlaceIDs.has(mapped.organizerId)
+      : false,
     isCreatedByCurrentUser: Boolean(userId) && mapped.createdByUserId === userId,
     userRsvpStatus: currentRsvp?.status ?? null,
     userRsvpNotGoingReason: currentRsvp?.notGoingReason ?? null,
