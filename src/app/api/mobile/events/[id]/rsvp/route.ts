@@ -123,17 +123,21 @@ export async function POST(request: Request, context: RouteContext) {
   }
 
   const body = updateSchema.parse(await request.json());
-  const shouldNotifyFriends = body.notifyFriends !== false;
   const event = await db.query.events.findFirst({
     where: eq(events.id, eventId),
     columns: {
       id: true,
+      startAt: true,
+      endAt: true,
     },
   });
 
   if (!event) {
     return NextResponse.json({ error: "Event not found" }, { status: 404 });
   }
+
+  const eventHasEnded = (event.endAt ?? event.startAt) <= new Date();
+  const shouldNotifyFriends = body.notifyFriends !== false && !eventHasEnded;
 
   const existingUserRsvp = await db.query.eventRsvps.findFirst({
     where: and(eq(eventRsvps.userId, userId), eq(eventRsvps.eventId, eventId)),
@@ -160,6 +164,7 @@ export async function POST(request: Request, context: RouteContext) {
   // RSVP here so an undone or changed response never notifies friends.
   if (body.notificationOnly) {
     if (
+      eventHasEnded ||
       (body.status !== "going" && body.status !== "interested") ||
       existingUserRsvp?.status !== body.status
     ) {
@@ -203,7 +208,7 @@ export async function POST(request: Request, context: RouteContext) {
     return NextResponse.json({ notified: true });
   }
   const shouldMirrorPartnerRsvp =
-    Boolean(partnerUserId) && body.includePartner === true;
+    !eventHasEnded && Boolean(partnerUserId) && body.includePartner === true;
 
   const notGoingReason =
     body.status === "not_going"
@@ -295,17 +300,24 @@ export async function POST(request: Request, context: RouteContext) {
         ? "rsvp_interested"
         : "rsvp_not_going";
 
-  await upsertRsvpActivity({
-    actorUserId: userId,
-    entityId: eventId,
-    type: activityType,
-    metadata: {
-      status: body.status,
-      includePartner: includedPartnerInRsvp,
-      reason: notGoingReason,
-      notifyFriends: shouldNotifyFriends,
-    },
-  });
+  if (eventHasEnded) {
+    await clearRsvpActivity({
+      actorUserId: userId,
+      entityId: eventId,
+    });
+  } else {
+    await upsertRsvpActivity({
+      actorUserId: userId,
+      entityId: eventId,
+      type: activityType,
+      metadata: {
+        status: body.status,
+        includePartner: includedPartnerInRsvp,
+        reason: notGoingReason,
+        notifyFriends: shouldNotifyFriends,
+      },
+    });
+  }
 
   if (
     shouldNotifyFriends &&

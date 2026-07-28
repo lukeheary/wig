@@ -1372,7 +1372,7 @@ struct HomeView: View {
     private func sectionHeader(_ title: String, showsLocation: Bool) -> some View {
         HStack(spacing: 0) {
             Text(title)
-                .font(.system(size: 20, weight: .bold))
+                .font(AppTheme.contentHeaderFont)
                 .foregroundStyle(.white)
 
             // Temporarily hidden; retain the city suffix for a future restore.

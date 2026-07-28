@@ -5,6 +5,7 @@ enum AppTheme {
     static let background = Color.black
     static let accentBlue = Color(red: 0.5607843137, green: 0.8235294118, blue: 1.0)
     static let uiBackground = UIColor.black
+    static let contentHeaderFont = Font.system(size: 19, weight: .bold)
 }
 
 @MainActor

@@ -7,6 +7,7 @@ import {
   notifications,
   places,
   placeMembers,
+  publicHandles,
   scrapers,
   scraperLogs,
   supportTicketActivity,
@@ -322,8 +323,8 @@ export const adminRouter = router({
     )
     .mutation(async ({ ctx, input }) => {
       // Check if slug already exists
-      const existing = await ctx.db.query.places.findFirst({
-        where: eq(places.slug, input.slug),
+      const existing = await ctx.db.query.publicHandles.findFirst({
+        where: eq(publicHandles.handle, input.slug),
       });
 
       if (existing) {

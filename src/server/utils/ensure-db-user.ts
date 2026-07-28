@@ -1,7 +1,7 @@
 import { clerkClient } from "@clerk/nextjs/server";
 import { TRPCError } from "@trpc/server";
 import { eq } from "drizzle-orm";
-import { users } from "@/server/db/schema";
+import { publicHandles, users } from "@/server/db/schema";
 import type { db } from "@/server/db";
 
 type Database = typeof db;
@@ -44,8 +44,17 @@ export async function ensureDbUser(
     });
   }
 
-  const generatedUsername =
+  let generatedUsername =
     clerkUser.username?.toLowerCase().trim() || `user_${userId.slice(-8)}`;
+
+  const handleConflict = await database.query.publicHandles.findFirst({
+    where: eq(publicHandles.handle, generatedUsername),
+  });
+
+  if (handleConflict) {
+    const suffix = `_${userId.slice(-8).toLowerCase()}`;
+    generatedUsername = `${generatedUsername.slice(0, 50 - suffix.length)}${suffix}`;
+  }
 
   const [createdUser] = await database
     .insert(users)

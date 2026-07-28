@@ -10,6 +10,7 @@ import {
   placeFollows,
   placeMembers,
   places,
+  publicHandles,
 } from "../../db/schema";
 import {
   and,
@@ -174,8 +175,8 @@ export const placeRouter = router({
       if (slug.length < 3) slug = `${input.type}-${slug}`;
 
       // Check for collision
-      const existing = await ctx.db.query.places.findFirst({
-        where: eq(places.slug, slug),
+      const existing = await ctx.db.query.publicHandles.findFirst({
+        where: eq(publicHandles.handle, slug),
       });
 
       if (existing) {
@@ -863,14 +864,14 @@ export const placeRouter = router({
 
       // If slug is being updated, check if it's already taken
       if (input.slug) {
-        const existing = await ctx.db.query.places.findFirst({
-          where: and(
-            eq(places.slug, input.slug),
-            sql`${places.id} != ${input.placeId}`
-          ),
+        const existing = await ctx.db.query.publicHandles.findFirst({
+          where: eq(publicHandles.handle, input.slug),
         });
 
-        if (existing) {
+        if (
+          existing &&
+          !(existing.ownerKind === "place" && existing.ownerId === input.placeId)
+        ) {
           throw new TRPCError({
             code: "CONFLICT",
             message: "A place with this slug already exists",

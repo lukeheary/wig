@@ -4,6 +4,7 @@ import { router, protectedProcedure, publicProcedure } from "../init";
 import {
   eventRsvps,
   placeMembers,
+  publicHandles,
   userFriends,
   users,
   userSurfaceState,
@@ -99,6 +100,23 @@ export const userRouter = router({
       });
 
       if (existingUser) {
+        throw new TRPCError({
+          code: "BAD_REQUEST",
+          message: "Username is already taken",
+        });
+      }
+
+      const existingPublicHandle = await ctx.db.query.publicHandles.findFirst({
+        where: eq(publicHandles.handle, normalizedUsername),
+      });
+
+      if (
+        existingPublicHandle &&
+        !(
+          existingPublicHandle.ownerKind === "user" &&
+          existingPublicHandle.ownerId === userId
+        )
+      ) {
         throw new TRPCError({
           code: "BAD_REQUEST",
           message: "Username is already taken",
@@ -500,6 +518,23 @@ export const userRouter = router({
         });
 
         if (existingUser) {
+          throw new TRPCError({
+            code: "BAD_REQUEST",
+            message: "Username is already taken",
+          });
+        }
+
+        const existingPublicHandle = await ctx.db.query.publicHandles.findFirst({
+          where: eq(publicHandles.handle, normalizedUsername),
+        });
+
+        if (
+          existingPublicHandle &&
+          !(
+            existingPublicHandle.ownerKind === "user" &&
+            existingPublicHandle.ownerId === userId
+          )
+        ) {
           throw new TRPCError({
             code: "BAD_REQUEST",
             message: "Username is already taken",

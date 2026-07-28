@@ -2,7 +2,7 @@ import { auth, clerkClient } from "@clerk/nextjs/server";
 import { and, eq, ne } from "drizzle-orm";
 import { NextRequest, NextResponse } from "next/server";
 import { db } from "@/server/db";
-import { users } from "@/server/db/schema";
+import { publicHandles, users } from "@/server/db/schema";
 import { isReservedUsername } from "@/lib/reserved-usernames";
 
 const USERNAME_PATTERN = /^[a-zA-Z0-9_]{3,20}$/;
@@ -241,7 +241,18 @@ export async function POST(request: NextRequest) {
       where: and(eq(users.username, normalizedUsername), ne(users.id, userId)),
     });
 
-    if (existingUserWithUsername) {
+    const existingPublicHandle = await db.query.publicHandles.findFirst({
+      where: eq(publicHandles.handle, normalizedUsername),
+    });
+
+    if (
+      existingUserWithUsername ||
+      (existingPublicHandle &&
+        !(
+          existingPublicHandle.ownerKind === "user" &&
+          existingPublicHandle.ownerId === userId
+        ))
+    ) {
       return NextResponse.json({ error: "Username is already taken" }, { status: 400 });
     }
 

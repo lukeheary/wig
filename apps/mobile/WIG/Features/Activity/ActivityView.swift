@@ -364,7 +364,7 @@ struct ActivityView: View {
         //         .foregroundStyle(.white.opacity(0.5))
         // } ?? Text(""))
         Text("Activity")
-            .font(.system(size: 20, weight: .bold))
+            .font(AppTheme.contentHeaderFont)
             .foregroundStyle(.white)
     }
 

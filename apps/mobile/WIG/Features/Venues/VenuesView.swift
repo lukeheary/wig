@@ -157,7 +157,7 @@ struct VenuesView: View {
         //         .foregroundStyle(.white.opacity(0.5))
         // } ?? Text(""))
         Text(selectedPlaceFilter.headerTitle)
-            .font(.system(size: 20, weight: .bold))
+            .font(AppTheme.contentHeaderFont)
             .foregroundStyle(.white)
     }
 
@@ -753,7 +753,7 @@ struct CompactPlaceListView: View {
     var body: some View {
         // Keep eager layout here: LazyVStack previously caused NavigationLink hit
         // targets to drift onto adjacent rows as their final heights resolved.
-        VStack(alignment: .leading, spacing: 0) {
+        VStack(alignment: .leading, spacing: 2) {
             ForEach(sortedPlaces, id: \.listRowID) { place in
                 NavigationLink {
                     PlaceDetailView(place: place)
@@ -785,8 +785,8 @@ struct PlaceRowView: View {
     @State private var tint: Color?
 
     private var tintColor: Color { tint ?? fallbackTint }
-    private var logoSide: CGFloat { style == .plain ? 60 : 84 }
-    private var rowHeight: CGFloat { style == .plain ? 76 : 102 }
+    private var logoSide: CGFloat { style == .plain ? 42 : 84 }
+    private var rowHeight: CGFloat { style == .plain ? 52 : 102 }
 
     init(place: PlaceListItem, style: Style = .card) {
         self.place = place
@@ -831,8 +831,7 @@ struct PlaceRowView: View {
                 Text(place.name)
                     .font(.system(size: 14, weight: .medium))
                     .foregroundStyle(.white)
-                    .lineLimit(2)
-                    .minimumScaleFactor(0.88)
+                    .lineLimit(1)
 
                 Text(plainRowDetailText)
                     .font(.system(size: 10, weight: .medium))
@@ -841,8 +840,7 @@ struct PlaceRowView: View {
             }
             .frame(maxWidth: .infinity, alignment: .leading)
         }
-        .padding(.horizontal, 2)
-        .padding(.vertical, 8)
+        .padding(.vertical, 5)
         .frame(height: rowHeight)
     }
 
@@ -926,9 +924,9 @@ struct PlaceRowView: View {
             }
         }
         .frame(width: logoSide, height: logoSide)
-        .clipShape(RoundedRectangle(cornerRadius: style == .plain ? 12 : 15, style: .continuous))
+        .clipShape(RoundedRectangle(cornerRadius: style == .plain ? 10 : 15, style: .continuous))
         .overlay(
-            RoundedRectangle(cornerRadius: style == .plain ? 12 : 15, style: .continuous)
+            RoundedRectangle(cornerRadius: style == .plain ? 10 : 15, style: .continuous)
                 .strokeBorder(Color.white.opacity(0.14), lineWidth: 1)
         )
         .shadow(

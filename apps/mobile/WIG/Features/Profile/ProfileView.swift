@@ -317,6 +317,9 @@ struct ProfileView: View {
                                 }
                             )
                         }
+
+                        ProfileEventsPeriodFilterButton(selection: $selectedEventsTab)
+                            .padding(.top, 8)
                     }
                     .padding(.bottom, 8)
 
@@ -335,16 +338,8 @@ struct ProfileView: View {
             .overlay(alignment: .top) {
                 ZStack {
                     HStack {
-                        ProfileEventNavControls(
-                            selection: $selectedEventsTab,
-                            rsvpFilter: $selectedEventsRSVPFilter,
-                            showsFilter: canShowEventsFilter(for: response),
-                            username: response.profile?.username,
-                            showsShare: false,
-                            onShare: { username in
-                                profileShareURL = ProfileShareURL.url(for: username)
-                            }
-                        )
+                        Color.clear
+                            .frame(width: 46, height: 46)
 
                         Spacer()
 
@@ -390,7 +385,7 @@ struct ProfileView: View {
                         verticalSpacing: 14
                     ) {
                         Text(group.label)
-                            .font(.system(size: 20, weight: .bold))
+                            .font(AppTheme.contentHeaderFont)
                             .foregroundStyle(.white)
                     } card: { event in
                         EventDetailNavigationLink(event: event) {
@@ -1015,15 +1010,8 @@ struct UserProfileView: View {
                             UserRelationshipSummaryRow(response: response)
                         }
 
-                        if displaysFriendActions, let profile = response.profile {
-                            userFriendProfileAction(for: profile)
-                                .padding(.top, 8)
-                        }
-
-                        if displaysReceivedFriendRequestActions {
-                            receivedFriendRequestAction(response: response)
-                                .padding(.top, 8)
-                        }
+                        userProfileEventActions(response: response)
+                            .padding(.top, 8)
                     }
                     .padding(.bottom, 8)
 
@@ -1052,18 +1040,9 @@ struct UserProfileView: View {
                     }
 
                     if isCurrentUserProfile,
-                       case .loaded(let response) = viewModel.state,
-                       let profile = response.profile {
-                        ProfileEventNavControls(
-                            selection: $selectedEventsTab,
-                            rsvpFilter: $selectedEventsRSVPFilter,
-                            showsFilter: viewModel.canShowEventsFilter,
-                            username: nil,
-                            showsShare: false,
-                            onShare: { username in
-                                profileShareURL = ProfileShareURL.url(for: username)
-                            }
-                        )
+                       case .loaded = viewModel.state {
+                        Color.clear
+                            .frame(width: 46, height: 46)
                     } else if case .loaded(let response) = viewModel.state,
                               let username = response.profile?.username {
                         ProfileTopUsername(username: username, alignment: .leading)
@@ -1117,6 +1096,25 @@ struct UserProfileView: View {
 
     private var isCurrentUserProfile: Bool {
         userID == clerk.user?.id || userID == ProfileViewModel.currentUserSummary?.id
+    }
+
+    @ViewBuilder
+    private func userProfileEventActions(response: UserProfileResponse) -> some View {
+        if isCurrentUserProfile {
+            ProfileEventsPeriodFilterButton(selection: $selectedEventsTab)
+        } else if displaysReceivedFriendRequestActions {
+            VStack(spacing: 10) {
+                ProfileEventsPeriodFilterButton(selection: $selectedEventsTab)
+                receivedFriendRequestAction(response: response)
+            }
+        } else if displaysFriendActions, let profile = response.profile {
+            HStack(spacing: 10) {
+                ProfileEventsPeriodFilterButton(selection: $selectedEventsTab)
+                userFriendProfileAction(for: profile)
+            }
+        } else {
+            ProfileEventsPeriodFilterButton(selection: $selectedEventsTab)
+        }
     }
 
     private func currentUserMenu(for profile: FriendUserSummary) -> some View {
@@ -1199,7 +1197,7 @@ struct UserProfileView: View {
                 fillsAvailableWidth: true,
                 fontWeight: .semibold,
                 cornerRadius: 12,
-                fontSize: 15
+                fontSize: 14
             )
             .disabled(isSendingFriendRequest)
         case .pendingSent:
@@ -1209,7 +1207,7 @@ struct UserProfileView: View {
                     isDisabled: true,
                     fillsAvailableWidth: true,
                     cornerRadius: 12,
-                    fontSize: 15
+                    fontSize: 14
                 )
                 .disabled(true)
         case .accepted:
@@ -1228,7 +1226,7 @@ struct UserProfileView: View {
                 fillsAvailableWidth: true,
                 fontWeight: .semibold,
                 cornerRadius: 12,
-                fontSize: 15
+                fontSize: 14
             )
             .disabled(isRespondingToFriendRequest)
         case .pendingReceived:
@@ -1541,9 +1539,9 @@ private enum ProfileEventsTab: String, CaseIterable, Identifiable {
     var title: String {
         switch self {
         case .upcoming:
-            return "Upcoming Events"
+            return "Upcoming"
         case .past:
-            return "Past Events"
+            return "Past"
         }
     }
 
@@ -1554,6 +1552,46 @@ private enum ProfileEventsTab: String, CaseIterable, Identifiable {
         case .past:
             return "past"
         }
+    }
+}
+
+private struct ProfileEventsPeriodFilterButton: View {
+    @Binding var selection: ProfileEventsTab
+
+    var body: some View {
+        Menu {
+            ForEach(ProfileEventsTab.allCases) { tab in
+                Button {
+                    withAnimation(.snappy(duration: 0.22)) {
+                        selection = tab
+                    }
+                } label: {
+                    if tab == selection {
+                        Label(tab.title, systemImage: "checkmark")
+                    } else {
+                        Text(tab.title)
+                    }
+                }
+            }
+        } label: {
+            HStack(spacing: 6) {
+                Text(selection.title)
+                    .lineLimit(1)
+
+                Image(systemName: "chevron.down")
+                    .font(.system(size: 11, weight: .bold))
+            }
+            .frame(maxWidth: .infinity)
+            .frame(height: 40)
+            .contentShape(RoundedRectangle(cornerRadius: 12, style: .continuous))
+        }
+        .profileActionButtonStyle(
+            kind: .secondary,
+            fillsAvailableWidth: true,
+            fontWeight: .semibold,
+            cornerRadius: 12,
+            fontSize: 14
+        )
     }
 }
 
@@ -1889,7 +1927,7 @@ private struct ProfileHeader: View {
 
             if let profile {
                 VStack(alignment: .leading, spacing: 14) {
-                    VStack(alignment: .leading, spacing: 2) {
+                    VStack(alignment: .leading, spacing: 4) {
                         Text(profile.name)
                             .font(.system(size: 17, weight: .bold))
                             .foregroundStyle(.white)

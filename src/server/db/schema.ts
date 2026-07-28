@@ -34,6 +34,24 @@ export const eventStatusEnum = pgEnum("event_status", [
   "draft",
 ]);
 
+// Shared namespace for root-level user profile and place URLs. Database
+// triggers keep this table synchronized with users.username and places.slug.
+export const publicHandles = pgTable(
+  "public_handles",
+  {
+    handle: varchar("handle", { length: 100 }).primaryKey(),
+    ownerKind: varchar("owner_kind", { length: 20 }).notNull(),
+    ownerId: text("owner_id").notNull(),
+    createdAt: timestamp("created_at").defaultNow().notNull(),
+  },
+  (table) => ({
+    ownerIdx: uniqueIndex("public_handles_owner_idx").on(
+      table.ownerKind,
+      table.ownerId
+    ),
+  })
+);
+
 export const rsvpStatusEnum = pgEnum("rsvp_status", [
   "going",
   "interested",

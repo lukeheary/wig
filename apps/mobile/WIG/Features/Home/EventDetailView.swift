@@ -818,6 +818,11 @@ struct EventDetailView: View {
 
             UIImpactFeedbackGenerator(style: .light).impactOccurred()
 
+            if shouldOfferRetroactiveWent {
+                markPastEventAsWent()
+                return
+            }
+
             if shouldOfferReview {
                 withAnimation(.spring(response: 0.32, dampingFraction: 0.82)) {
                     isReviewSheetPresented = true
@@ -864,7 +869,7 @@ struct EventDetailView: View {
         }
         .buttonStyle(.plain)
         .disabled(isRSVPInteractionDisabled)
-        .opacity(currentEvent.hasEnded && !shouldOfferReview ? 0.62 : 1)
+        .opacity(isRSVPInteractionDisabled ? 0.62 : 1)
     }
 
     private var expandedRSVPMenu: some View {
@@ -1159,6 +1164,28 @@ struct EventDetailView: View {
         }
     }
 
+    private func markPastEventAsWent() {
+        cancelPendingRSVPNotification()
+        closeRSVPMenu()
+
+        Task {
+            if await rsvpViewModel.toggle(
+                .going,
+                eventID: currentEvent.id,
+                using: apiClient,
+                includePartner: false,
+                notifyFriends: false,
+                sendFriendNotifications: false,
+                forceUpdate: true
+            ) {
+                handleSuccessfulRSVPChange()
+                withAnimation(.spring(response: 0.32, dampingFraction: 0.82)) {
+                    isReviewSheetPresented = true
+                }
+            }
+        }
+    }
+
     private func closeRSVPMenu() {
         isRSVPMenuHitTestingEnabled = false
 
@@ -1327,6 +1354,10 @@ struct EventDetailView: View {
             return "How was it?"
         }
 
+        if shouldOfferRetroactiveWent {
+            return "I Went"
+        }
+
         switch rsvpViewModel.status {
         case .going:
             return currentEvent.hasEnded ? "Went" : "Going"
@@ -1348,6 +1379,10 @@ struct EventDetailView: View {
             return "bubble.left"
         }
 
+        if shouldOfferRetroactiveWent {
+            return "checkmark"
+        }
+
         switch rsvpViewModel.status {
         case .going:
             return "checkmark"
@@ -1361,7 +1396,7 @@ struct EventDetailView: View {
     }
 
     private var rsvpButtonColor: Color {
-        if shouldOfferReview {
+        if shouldOfferReview || shouldOfferRetroactiveWent {
             return AppTheme.accentBlue
         }
 
@@ -1369,7 +1404,11 @@ struct EventDetailView: View {
     }
 
     private var isRSVPInteractionDisabled: Bool {
-        rsvpViewModel.isSaving || (currentEvent.hasEnded && !shouldOfferReview)
+        rsvpViewModel.isSaving || (currentEvent.hasEnded && !shouldOfferReview && !shouldOfferRetroactiveWent)
+    }
+
+    private var shouldOfferRetroactiveWent: Bool {
+        isAuthenticated && currentEvent.hasEnded && rsvpViewModel.status != .going
     }
 
     private var shouldOfferReview: Bool {

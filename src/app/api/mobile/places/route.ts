@@ -10,6 +10,7 @@ import {
   placeFollows,
   placeMembers,
   places,
+  publicHandles,
   users,
 } from "@/server/db/schema";
 import {
@@ -335,18 +336,20 @@ export async function POST(request: Request) {
     const cleanedWebsite = body.website?.trim() || null;
     const cleanedInstagram = body.instagram?.trim() || null;
 
-    let slug = cleanedName
-      .toLowerCase()
-      .replace(/[^a-z0-9]+/g, "-")
-      .replace(/^-+|-+$/g, "");
+    let slug = cleanedInstagram
+      ? cleanedInstagram.toLowerCase()
+      : cleanedName
+          .toLowerCase()
+          .replace(/[^a-z0-9]+/g, "-")
+          .replace(/^-+|-+$/g, "");
 
     if (slug.length < 3) {
       slug = `${body.type}-${slug}`;
     }
 
-    const existing = await db.query.places.findFirst({
-      where: eq(places.slug, slug),
-      columns: { id: true },
+    const existing = await db.query.publicHandles.findFirst({
+      where: eq(publicHandles.handle, slug),
+      columns: { handle: true },
     });
 
     if (existing) {

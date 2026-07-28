@@ -17,7 +17,6 @@ struct PlaceDetailView: View {
     @State private var managePlaceDetail: PlaceDetail?
     @State private var isUnfollowConfirmationPresented = false
     @State private var isHideFromHomeConfirmationPresented = false
-    @State private var isLocationPopoverPresented = false
     @State private var presentedWebsite: PlaceWebsiteDestination?
     private let eventCardWidth: CGFloat = 220
 
@@ -34,17 +33,17 @@ struct PlaceDetailView: View {
                                 name: seededDetail.name,
                                 type: seededDetail.type,
                                 logoURL: seededDetail.displayLogoURL,
+                                addressText: seededDetail.address,
                                 cityStateText: seededDetail.cityStateText,
                                 followerCount: seededDetail.followerCount,
                                 memberCount: seededDetail.memberCount,
-                                upcomingEventCount: place.upcomingEventCount
+                                upcomingEventCount: place.upcomingEventCount,
+                                onOpenInMaps: { openInMaps($0) }
                             )
 
-                            if isAuthenticated {
-                                placeFollowProfileButton(for: seededDetail)
-                                    .padding(.top, 8)
-                                    .allowsHitTesting(false)
-                            }
+                            placeProfileActionRow(for: seededDetail)
+                                .padding(.top, 8)
+                                .allowsHitTesting(false)
                         }
                         .padding(.bottom, 8)
 
@@ -59,17 +58,17 @@ struct PlaceDetailView: View {
                                 name: seededDetail.name,
                                 type: seededDetail.type,
                                 logoURL: seededDetail.displayLogoURL,
+                                addressText: seededDetail.address,
                                 cityStateText: seededDetail.cityStateText,
                                 followerCount: seededDetail.followerCount,
                                 memberCount: seededDetail.memberCount,
-                                upcomingEventCount: place.upcomingEventCount
+                                upcomingEventCount: place.upcomingEventCount,
+                                onOpenInMaps: { openInMaps($0) }
                             )
 
-                            if isAuthenticated {
-                                placeFollowProfileButton(for: seededDetail)
-                                    .padding(.top, 8)
-                                    .allowsHitTesting(false)
-                            }
+                            placeProfileActionRow(for: seededDetail)
+                                .padding(.top, 8)
+                                .allowsHitTesting(false)
                         }
                         .padding(.bottom, 8)
 
@@ -96,16 +95,16 @@ struct PlaceDetailView: View {
                                 name: detail.name,
                                 type: detail.type,
                                 logoURL: detail.displayLogoURL,
+                                addressText: detail.address,
                                 cityStateText: detail.cityStateText,
                                 followerCount: detail.followerCount,
                                 memberCount: detail.memberCount,
-                                upcomingEventCount: detail.events.count
+                                upcomingEventCount: detail.events.count,
+                                onOpenInMaps: { openInMaps($0) }
                             )
 
-                            if isAuthenticated {
-                                placeFollowProfileButton(for: detail)
-                                    .padding(.top, 8)
-                            }
+                            placeProfileActionRow(for: detail)
+                                .padding(.top, 8)
                         }
                         .padding(.bottom, 8)
 
@@ -132,11 +131,9 @@ struct PlaceDetailView: View {
             leadingTopControls
         }
         .overlay(alignment: .topTrailing) {
-            if case .loaded(let detail) = viewModel.state {
-                placeActionsMenu(for: detail)
-                    .padding(.trailing, 16)
-                    .padding(.top, 0)
-            }
+            placeActionsMenu(for: displayedDetail)
+                .padding(.trailing, 16)
+                .padding(.top, 0)
         }
         .alert(unfollowAlertTitle, isPresented: $isUnfollowConfirmationPresented) {
             if case .loaded(let detail) = viewModel.state {
@@ -236,12 +233,22 @@ struct PlaceDetailView: View {
                 closePlaceDetail()
             }
 
-            if canShowEventFilter {
-                PlaceEventFilterDropdown(selection: $selectedTab)
-            }
+            PlaceTopSlug(slug: displayedSlug)
         }
         .padding(.leading, 16)
         .padding(.top, 0)
+    }
+
+    private var displayedSlug: String {
+        displayedDetail.slug
+    }
+
+    private var displayedDetail: PlaceDetail {
+        if case .loaded(let detail) = viewModel.state {
+            return detail
+        }
+
+        return seededDetailState
     }
 
     private func closePlaceDetail() {
@@ -258,14 +265,6 @@ struct PlaceDetailView: View {
         }
 
         return PlaceDetail(listItem: place)
-    }
-
-    private var canShowEventFilter: Bool {
-        guard case .loaded(let detail) = viewModel.state else {
-            return false
-        }
-
-        return !detail.pastEvents.isEmpty
     }
 
     private var isAuthenticated: Bool {
@@ -318,60 +317,7 @@ struct PlaceDetailView: View {
     }
 
     private func placeActionsMenu(for detail: PlaceDetail) -> some View {
-        let locationText = detail.locationText
-        let website = detail.website
-        let instagramURL = instagramURL(for: detail.instagram)
-
-        return HStack(spacing: 0) {
-            if detail.type == .venue {
-                Button {
-                    guard locationText != nil else { return }
-                    isLocationPopoverPresented = true
-                } label: {
-                    placeActionIcon("location", isAvailable: locationText != nil)
-                }
-                .buttonStyle(.plain)
-                .disabled(locationText == nil)
-                .accessibilityLabel("Show address")
-                .popover(
-                    isPresented: $isLocationPopoverPresented,
-                    attachmentAnchor: .rect(.bounds),
-                    arrowEdge: .top
-                ) {
-                    if let locationText {
-                        PlaceLocationPopover(location: locationText) {
-                            openInMaps(locationText)
-                            isLocationPopoverPresented = false
-                        }
-                    }
-                }
-            }
-
-            Button {
-                guard let website else { return }
-                presentedWebsite = PlaceWebsiteDestination(url: website)
-            } label: {
-                placeActionIcon("globe", isAvailable: website != nil)
-            }
-            .buttonStyle(.plain)
-            .disabled(website == nil)
-            .accessibilityLabel("Open website")
-
-            Button {
-                guard let instagramURL else { return }
-                UIApplication.shared.open(instagramURL)
-            } label: {
-                placeInstagramActionIcon(isAvailable: instagramURL != nil)
-            }
-            .buttonStyle(.plain)
-            .disabled(instagramURL == nil)
-            .accessibilityLabel("Open Instagram")
-
-            placeOverflowMenu(for: detail)
-        }
-        .frame(height: 46)
-        .clipShape(Capsule())
-        .placeDetailLiquidGlass(in: Capsule())
+        placeOverflowMenu(for: detail)
     }
 
     private func placeActionIcon(_ systemName: String, isAvailable: Bool) -> some View {
@@ -392,13 +338,36 @@ struct PlaceDetailView: View {
     }
 
     private func placeOverflowMenu(for detail: PlaceDetail) -> some View {
-        Menu {
+        let website = detail.website
+        let instagramURL = instagramURL(for: detail.instagram)
+
+        return Menu {
             if appSession.isAdmin {
                 Button {
                     managePlaceDetail = detail
                     isManagePlaceActive = true
                 } label: {
                     Label("Manage Place", systemImage: "slider.horizontal.3")
+                        .foregroundStyle(.white)
+                }
+                .tint(.white)
+            }
+
+            if let website {
+                Button {
+                    presentedWebsite = PlaceWebsiteDestination(url: website)
+                } label: {
+                    Label("Open Website", systemImage: "globe")
+                        .foregroundStyle(.white)
+                }
+                .tint(.white)
+            }
+
+            if let instagramURL {
+                Button {
+                    UIApplication.shared.open(instagramURL)
+                } label: {
+                    Label("Open Instagram", image: "InstagramMenuIcon")
                         .foregroundStyle(.white)
                 }
                 .tint(.white)
@@ -439,6 +408,7 @@ struct PlaceDetailView: View {
         .buttonStyle(.plain)
         .disabled(viewModel.isUpdatingFollow || viewModel.isUpdatingHomeVisibility)
         .accessibilityLabel("More place actions")
+        .placeDetailLiquidGlass(in: Circle())
     }
 
     private func openInMaps(_ location: String) {
@@ -489,7 +459,7 @@ struct PlaceDetailView: View {
         }
         label: {
             Text(detail.isFollowed ? "Following" : "Follow")
-                .font(.system(size: 15, weight: .semibold))
+                .font(.system(size: 14, weight: .semibold))
                 .foregroundStyle(detail.isFollowed ? .white : .black)
                 .frame(maxWidth: .infinity)
                 .frame(height: 40)
@@ -504,6 +474,16 @@ struct PlaceDetailView: View {
         }
         .buttonStyle(.plain)
         .disabled(viewModel.isUpdatingFollow)
+    }
+
+    private func placeProfileActionRow(for detail: PlaceDetail) -> some View {
+        HStack(spacing: 10) {
+            PlaceEventFilterDropdown(selection: $selectedTab)
+
+            if isAuthenticated {
+                placeFollowProfileButton(for: detail)
+            }
+        }
     }
 
     private struct PlaceEventFilterDropdown: View {
@@ -525,22 +505,27 @@ struct PlaceDetailView: View {
                     }
                 }
             } label: {
-                PlaceEventFilterIcon(isActive: selection != .upcoming)
+                HStack(spacing: 6) {
+                    Text(selection.title)
+                        .lineLimit(1)
+
+                    Image(systemName: "chevron.down")
+                        .font(.system(size: 11, weight: .bold))
+                }
+                .font(.system(size: 14, weight: .semibold))
+                .foregroundStyle(.white)
+                .frame(maxWidth: .infinity)
+                .frame(height: 40)
+                .background(
+                    RoundedRectangle(cornerRadius: 12, style: .continuous)
+                        .fill(Color.white.opacity(0.08))
+                )
+                .overlay(
+                    RoundedRectangle(cornerRadius: 12, style: .continuous)
+                        .strokeBorder(.white.opacity(0.08), lineWidth: 1)
+                )
             }
             .buttonStyle(.plain)
-        }
-    }
-
-    private struct PlaceEventFilterIcon: View {
-        let isActive: Bool
-
-        var body: some View {
-            Image(systemName: "line.3.horizontal.decrease")
-                .font(.system(size: 18, weight: .semibold))
-                .foregroundStyle(isActive ? AppTheme.accentBlue : .primary)
-                .frame(width: 46, height: 46)
-                .contentShape(Circle())
-                .placeDetailLiquidGlass(in: Circle())
         }
     }
 
@@ -567,7 +552,7 @@ struct PlaceDetailView: View {
                         verticalSpacing: 14
                     ) {
                         Text(group.label)
-                            .font(.system(size: 20, weight: .bold))
+                            .font(AppTheme.contentHeaderFont)
                             .foregroundStyle(.white)
                     } card: { event in
                         EventDetailNavigationLink(event: event) {
@@ -582,6 +567,21 @@ struct PlaceDetailView: View {
 
 }
 
+private struct PlaceTopSlug: View {
+    let slug: String
+
+    var body: some View {
+        Text(slug)
+            .font(.system(size: 17, weight: .bold))
+            .foregroundStyle(.white)
+            .lineLimit(1)
+            .minimumScaleFactor(0.72)
+            .frame(maxWidth: 150, alignment: .leading)
+            .allowsHitTesting(false)
+            .accessibilityAddTraits(.isHeader)
+    }
+}
+
 private struct PlaceDetailEventLoadingSection: View {
     var body: some View {
         NativeLoadingView()
@@ -594,10 +594,12 @@ private struct PlaceDetailHeader: View {
     let name: String
     let type: PlaceListItem.PlaceType
     let logoURL: URL?
+    let addressText: String?
     let cityStateText: String?
     let followerCount: Int
     let memberCount: Int
     let upcomingEventCount: Int
+    let onOpenInMaps: (String) -> Void
     @State private var isImageViewerPresented = false
 
     var body: some View {
@@ -605,7 +607,7 @@ private struct PlaceDetailHeader: View {
             logo
 
             VStack(alignment: .leading, spacing: 14) {
-                VStack(alignment: .leading, spacing: 2) {
+                VStack(alignment: .leading, spacing: 4) {
                     Text(name)
                         .font(.system(size: 17, weight: .bold))
                         .foregroundStyle(.white)
@@ -613,12 +615,24 @@ private struct PlaceDetailHeader: View {
                         .minimumScaleFactor(0.76)
                         .multilineTextAlignment(.leading)
 
-                    if let cityStateText {
-                        Text(cityStateText)
-                            .font(.system(size: 12, weight: .medium))
-                            .foregroundStyle(.white.opacity(0.58))
-                            .lineLimit(1)
-                            .minimumScaleFactor(0.78)
+                    if let locationText = displayLocationText {
+                        if type == .venue, cleanedAddressText != nil {
+                            Menu {
+                                Button {
+                                    onOpenInMaps(locationText)
+                                } label: {
+                                    Label("Open in Maps", systemImage: "map")
+                                        .foregroundStyle(.white)
+                                }
+                                .tint(.white)
+                            } label: {
+                                locationLabel(locationText)
+                            }
+                            .buttonStyle(.plain)
+                            .accessibilityLabel("Address options")
+                        } else {
+                            locationLabel(locationText)
+                        }
                     }
                 }
 
@@ -647,6 +661,36 @@ private struct PlaceDetailHeader: View {
             if let logoURL {
                 EventArtworkViewer(imageURL: logoURL)
             }
+        }
+    }
+
+    private func locationLabel(_ text: String) -> some View {
+        Text(text)
+            .font(.system(size: 12, weight: .medium))
+            .foregroundStyle(.white.opacity(0.58))
+            .lineLimit(1)
+            .minimumScaleFactor(0.78)
+    }
+
+    private var cleanedAddressText: String? {
+        guard let addressText else { return nil }
+        let trimmed = addressText.trimmingCharacters(in: .whitespacesAndNewlines)
+        return trimmed.isEmpty ? nil : trimmed
+    }
+
+    private var cleanedCityStateText: String? {
+        guard let cityStateText else { return nil }
+        let trimmed = cityStateText.trimmingCharacters(in: .whitespacesAndNewlines)
+        return trimmed.isEmpty ? nil : trimmed
+    }
+
+    private var displayLocationText: String? {
+        switch type {
+        case .venue:
+            let parts = [cleanedAddressText, cleanedCityStateText].compactMap { $0 }
+            return parts.isEmpty ? nil : parts.joined(separator: ", ")
+        case .organizer:
+            return cleanedCityStateText
         }
     }
 
@@ -756,9 +800,9 @@ private enum PlaceEventsTab: CaseIterable, Identifiable {
     var title: String {
         switch self {
         case .upcoming:
-            return "Upcoming Events"
+            return "Upcoming"
         case .past:
-            return "Past Events"
+            return "Past"
         }
     }
 

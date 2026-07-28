@@ -331,6 +331,12 @@
       "when": 1784642822000,
       "tag": "0053_add_place_home_hides",
       "breakpoints": true
+    },
+    {
+      "idx": 55,
+      "when": 1785168000000,
+      "tag": "0054_add_public_handle_namespace",
+      "breakpoints": true
     }
   ]
 }
