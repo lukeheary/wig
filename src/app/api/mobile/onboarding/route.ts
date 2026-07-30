@@ -456,13 +456,20 @@ export async function PATCH(request: NextRequest) {
       );
     }
 
-    const clerk = await clerkClient();
-    const clerkUser = await clerk.users.getUser(userId);
     const shouldUpdateClerkName =
-      clerkUser.firstName !== firstName || clerkUser.lastName !== lastName;
+      existingUser.firstName !== firstName || existingUser.lastName !== lastName;
+    const clerk = shouldUpdateClerkName ? await clerkClient() : null;
 
     if (shouldUpdateClerkName) {
-      await clerk.users.updateUser(userId, { firstName, lastName });
+      try {
+        await clerk!.users.updateUser(userId, { firstName, lastName });
+      } catch (error) {
+        console.error("Mobile profile Clerk name update error:", error);
+        return NextResponse.json(
+          { error: "Unable to sync your name. Please try again." },
+          { status: 502 }
+        );
+      }
     }
 
     try {
@@ -499,9 +506,9 @@ export async function PATCH(request: NextRequest) {
     } catch (error) {
       if (shouldUpdateClerkName) {
         try {
-          await clerk.users.updateUser(userId, {
-            firstName: clerkUser.firstName ?? "",
-            lastName: clerkUser.lastName ?? "",
+          await clerk!.users.updateUser(userId, {
+            firstName: existingUser.firstName ?? "",
+            lastName: existingUser.lastName ?? "",
           });
         } catch (rollbackError) {
           console.error("Mobile profile Clerk rollback error:", rollbackError);
