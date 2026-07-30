@@ -3,6 +3,11 @@ const nextConfig = {
   async redirects() {
     return [
       {
+        source: "/venues/:path*",
+        destination: "/venue/:path*",
+        permanent: true,
+      },
+      {
         source: "/venues-and-organizers",
         destination: "/places",
         permanent: true,

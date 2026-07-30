@@ -337,6 +337,12 @@
       "when": 1785168000000,
       "tag": "0054_add_public_handle_namespace",
       "breakpoints": true
+    },
+    {
+      "idx": 56,
+      "when": 1785427200000,
+      "tag": "0055_remove_public_handle_namespace",
+      "breakpoints": true
     }
   ]
 }

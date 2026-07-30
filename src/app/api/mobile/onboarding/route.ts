@@ -2,7 +2,7 @@ import { auth, clerkClient } from "@clerk/nextjs/server";
 import { and, eq, ne } from "drizzle-orm";
 import { NextRequest, NextResponse } from "next/server";
 import { db } from "@/server/db";
-import { publicHandles, users } from "@/server/db/schema";
+import { users } from "@/server/db/schema";
 import { isReservedUsername } from "@/lib/reserved-usernames";
 
 const USERNAME_PATTERN = /^[a-zA-Z0-9_]{3,20}$/;
@@ -241,18 +241,7 @@ export async function POST(request: NextRequest) {
       where: and(eq(users.username, normalizedUsername), ne(users.id, userId)),
     });
 
-    const existingPublicHandle = await db.query.publicHandles.findFirst({
-      where: eq(publicHandles.handle, normalizedUsername),
-    });
-
-    if (
-      existingUserWithUsername ||
-      (existingPublicHandle &&
-        !(
-          existingPublicHandle.ownerKind === "user" &&
-          existingPublicHandle.ownerId === userId
-        ))
-    ) {
+    if (existingUserWithUsername) {
       return NextResponse.json({ error: "Username is already taken" }, { status: 400 });
     }
 
@@ -438,18 +427,7 @@ export async function PATCH(request: NextRequest) {
     const existingUserWithUsername = await db.query.users.findFirst({
       where: and(eq(users.username, normalizedUsername), ne(users.id, userId)),
     });
-    const existingPublicHandle = await db.query.publicHandles.findFirst({
-      where: eq(publicHandles.handle, normalizedUsername),
-    });
-
-    if (
-      existingUserWithUsername ||
-      (existingPublicHandle &&
-        !(
-          existingPublicHandle.ownerKind === "user" &&
-          existingPublicHandle.ownerId === userId
-        ))
-    ) {
+    if (existingUserWithUsername) {
       return NextResponse.json(
         { error: "Username is already taken" },
         { status: 400 }
@@ -458,18 +436,10 @@ export async function PATCH(request: NextRequest) {
 
     const shouldUpdateClerkName =
       existingUser.firstName !== firstName || existingUser.lastName !== lastName;
-    const clerk = shouldUpdateClerkName ? await clerkClient() : null;
+    const clerk = await clerkClient();
 
     if (shouldUpdateClerkName) {
-      try {
-        await clerk!.users.updateUser(userId, { firstName, lastName });
-      } catch (error) {
-        console.error("Mobile profile Clerk name update error:", error);
-        return NextResponse.json(
-          { error: "Unable to sync your name. Please try again." },
-          { status: 502 }
-        );
-      }
+      await clerk.users.updateUser(userId, { firstName, lastName });
     }
 
     try {
@@ -506,7 +476,7 @@ export async function PATCH(request: NextRequest) {
     } catch (error) {
       if (shouldUpdateClerkName) {
         try {
-          await clerk!.users.updateUser(userId, {
+          await clerk.users.updateUser(userId, {
             firstName: existingUser.firstName ?? "",
             lastName: existingUser.lastName ?? "",
           });

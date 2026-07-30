@@ -15,6 +15,7 @@ export const RESERVED_USERNAMES = new Set([
   "sign-up",
   "support",
   "venue",
+  "venues",
   "venues-and-organizers",
   "www",
 ]);

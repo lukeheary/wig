@@ -28,7 +28,7 @@ export default function EditPlacePage() {
 
   // Fetch place data
   const { data: place, isLoading: placeLoading } =
-    trpc.place.getPlaceBySlug.useQuery({ slug });
+    trpc.place.getPlaceBySlug.useQuery({ slug, type: "venue" });
 
   // Check if user is admin
   const { data: adminCheck } = trpc.user.isAdmin.useQuery();

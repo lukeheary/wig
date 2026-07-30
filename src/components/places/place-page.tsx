@@ -44,6 +44,7 @@ export function PlacePage({ actionMenuType }: PlacePageProps) {
 
   const { data: place, isLoading } = trpc.place.getPlaceBySlug.useQuery({
     slug,
+    type: actionMenuType,
   });
 
   const { data: isFollowing } = trpc.place.isFollowingPlace.useQuery(

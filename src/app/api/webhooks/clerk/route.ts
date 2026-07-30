@@ -2,7 +2,7 @@ import { Webhook } from "svix";
 import { headers } from "next/headers";
 import { WebhookEvent, clerkClient } from "@clerk/nextjs/server";
 import { db } from "@/server/db";
-import { publicHandles, users } from "@/server/db/schema";
+import { users } from "@/server/db/schema";
 import { eq, sql } from "drizzle-orm";
 
 export async function POST(req: Request) {
@@ -95,11 +95,11 @@ export async function POST(req: Request) {
       let finalUsername = (username || `user_${id.slice(-8)}`)
         .toLowerCase()
         .trim();
-      const handleConflict = await tx.query.publicHandles.findFirst({
-        where: eq(publicHandles.handle, finalUsername),
+      const usernameConflict = await tx.query.users.findFirst({
+        where: eq(users.username, finalUsername),
       });
 
-      if (handleConflict) {
+      if (usernameConflict) {
         const suffix = `_${id.slice(-8).toLowerCase()}`;
         finalUsername = `${finalUsername.slice(0, 50 - suffix.length)}${suffix}`;
       }

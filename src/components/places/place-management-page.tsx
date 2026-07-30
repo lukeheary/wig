@@ -65,7 +65,7 @@ export function PlaceManagementPage({
 
   const { data: place, isLoading: isLoadingPlace } =
     trpc.place.getPlaceBySlug.useQuery(
-      { slug: resolvedSlug ?? "" },
+      { slug: resolvedSlug ?? "", type: expectedType },
       { enabled: !!resolvedSlug }
     );
 

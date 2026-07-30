@@ -10,7 +10,6 @@ import {
   placeFollows,
   placeMembers,
   places,
-  publicHandles,
   users,
 } from "@/server/db/schema";
 import {
@@ -360,9 +359,9 @@ export async function POST(request: Request) {
       slug = `${body.type}-${slug}`;
     }
 
-    const existing = await db.query.publicHandles.findFirst({
-      where: eq(publicHandles.handle, slug),
-      columns: { handle: true },
+    const existing = await db.query.places.findFirst({
+      where: eq(places.slug, slug),
+      columns: { slug: true },
     });
 
     if (existing) {

@@ -10,7 +10,6 @@ import {
   placeFollows,
   placeMembers,
   places,
-  publicHandles,
 } from "../../db/schema";
 import {
   and,
@@ -21,6 +20,7 @@ import {
   ilike,
   inArray,
   lt,
+  ne,
   or,
   sql,
 } from "drizzle-orm";
@@ -175,8 +175,8 @@ export const placeRouter = router({
       if (slug.length < 3) slug = `${input.type}-${slug}`;
 
       // Check for collision
-      const existing = await ctx.db.query.publicHandles.findFirst({
-        where: eq(publicHandles.handle, slug),
+      const existing = await ctx.db.query.places.findFirst({
+        where: eq(places.slug, slug),
       });
 
       if (existing) {
@@ -399,10 +399,12 @@ export const placeRouter = router({
     }),
 
   getPlaceBySlug: publicProcedure
-    .input(z.object({ slug: z.string() }))
+    .input(z.object({ slug: z.string(), type: placeTypeSchema.optional() }))
     .query(async ({ ctx, input }) => {
       const place = await ctx.db.query.places.findFirst({
-        where: eq(places.slug, input.slug),
+        where: input.type
+          ? and(eq(places.slug, input.slug), eq(places.type, input.type))
+          : eq(places.slug, input.slug),
         with: {
           follows: true,
           members: {
@@ -864,14 +866,14 @@ export const placeRouter = router({
 
       // If slug is being updated, check if it's already taken
       if (input.slug) {
-        const existing = await ctx.db.query.publicHandles.findFirst({
-          where: eq(publicHandles.handle, input.slug),
+        const existing = await ctx.db.query.places.findFirst({
+          where: and(
+            eq(places.slug, input.slug),
+            ne(places.id, input.placeId)
+          ),
         });
 
-        if (
-          existing &&
-          !(existing.ownerKind === "place" && existing.ownerId === input.placeId)
-        ) {
+        if (existing) {
           throw new TRPCError({
             code: "CONFLICT",
             message: "A place with this slug already exists",
