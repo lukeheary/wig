@@ -342,7 +342,7 @@ struct PlaceDetailView: View {
         let instagramURL = instagramURL(for: detail.instagram)
 
         return Menu {
-            if appSession.isAdmin {
+            if detail.canManage {
                 Button {
                     managePlaceDetail = detail
                     isManagePlaceActive = true

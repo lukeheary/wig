@@ -98,7 +98,7 @@ final class PlaceDetailViewModel: ObservableObject {
             applyFollowState(followState.isFollowed, to: &detail)
             Self.seedCache(with: detail)
             state = .loaded(detail)
-            postFollowChange(for: detail)
+            postFollowChange(for: detail, notifiesGlobalDataChange: true)
             if isFollowed {
                 NotificationCenter.default.post(name: .activationDidChange, object: nil)
             }
@@ -122,11 +122,18 @@ final class PlaceDetailViewModel: ObservableObject {
         detail.followerCount = max(0, detail.followerCount + (isFollowed ? 1 : -1))
     }
 
-    private func postFollowChange(for detail: PlaceDetail) {
+    private func postFollowChange(
+        for detail: PlaceDetail,
+        notifiesGlobalDataChange: Bool = false
+    ) {
         NotificationCenter.default.post(
             name: .placeFollowDidChange,
             object: PlaceFollowChange(slug: detail.slug, isFollowed: detail.isFollowed)
         )
+
+        if notifiesGlobalDataChange {
+            NotificationCenter.default.post(name: .appDataDidChange, object: nil)
+        }
     }
 
     func setHiddenFromHome(

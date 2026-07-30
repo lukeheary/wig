@@ -40,6 +40,7 @@ struct PlaceListItem: Decodable, Identifiable, Hashable, Sendable {
     var memberCount = 0
     let updatedAt: Date?
     var isFollowed = false
+    var isMember = false
     var categories: [String] = []
     var categoryLabels: [String: String] = [:]
 
@@ -62,6 +63,7 @@ struct PlaceListItem: Decodable, Identifiable, Hashable, Sendable {
         case memberCount
         case updatedAt
         case isFollowed
+        case isMember
         case categories
         case categoryLabels
     }
@@ -148,6 +150,7 @@ extension PlaceListItem {
 
         updatedAt = try container.decodeIfPresent(Date.self, forKey: .updatedAt)
         isFollowed = try container.decodeIfPresent(Bool.self, forKey: .isFollowed) ?? false
+        isMember = try container.decodeIfPresent(Bool.self, forKey: .isMember) ?? false
         categories = try container.decodeIfPresent([String].self, forKey: .categories) ?? []
         categoryLabels = try container.decodeIfPresent([String: String].self, forKey: .categoryLabels) ?? [:]
     }

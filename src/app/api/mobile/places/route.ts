@@ -181,22 +181,34 @@ export async function GET(request: Request) {
   }
 
   const placeIds = placesList.map((place) => place.id);
-  const followedPlaceIds =
-    authenticatedUserId && placeIds.length > 0
-      ? new Set(
-          (
-            await db.query.placeFollows.findMany({
-              where: and(
-                eq(placeFollows.userId, authenticatedUserId),
-                inArray(placeFollows.placeId, placeIds)
-              ),
-              columns: {
-                placeId: true,
-              },
-            })
-          ).map((follow) => follow.placeId)
-        )
-      : new Set<string>();
+  const [followedPlaceIds, memberPlaceIds] = authenticatedUserId
+    ? await Promise.all([
+        db.query.placeFollows
+          .findMany({
+            where: and(
+              eq(placeFollows.userId, authenticatedUserId),
+              inArray(placeFollows.placeId, placeIds)
+            ),
+            columns: {
+              placeId: true,
+            },
+          })
+          .then((follows) => new Set(follows.map((follow) => follow.placeId))),
+        db.query.placeMembers
+          .findMany({
+            where: and(
+              eq(placeMembers.userId, authenticatedUserId),
+              inArray(placeMembers.placeId, placeIds)
+            ),
+            columns: {
+              placeId: true,
+            },
+          })
+          .then((memberships) =>
+            new Set(memberships.map((membership) => membership.placeId))
+          ),
+      ])
+    : [new Set<string>(), new Set<string>()];
 
   const now = new Date();
 
@@ -306,6 +318,7 @@ export async function GET(request: Request) {
       memberCount: memberCountByPlaceId.get(mappedPlace.id) ?? 0,
       updatedAt: mappedPlace.updatedAt,
       isFollowed: followedPlaceIds.has(mappedPlace.id),
+      isMember: memberPlaceIds.has(mappedPlace.id),
       categories: mappedPlace.categories,
       categoryLabels: mappedPlace.categoryLabels,
     };

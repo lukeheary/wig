@@ -28,6 +28,7 @@ struct ProfileView: View {
     @State private var isSignOutConfirmationPresented = false
     @State private var profileShareURL: URL?
     @State private var handledAddPhotoTrigger = 0
+    @State private var headerVisibility = ScrollableHeaderVisibility()
 
     init(resetFiltersTrigger: Int = 0, addPhotoTrigger: Int = 0) {
         self.resetFiltersTrigger = resetFiltersTrigger
@@ -318,7 +319,10 @@ struct ProfileView: View {
                             )
                         }
 
-                        ProfileEventsPeriodFilterButton(selection: $selectedEventsTab)
+                        CurrentUserProfileEventsControls(
+                            selection: $selectedEventsTab,
+                            rsvpFilter: $selectedEventsRSVPFilter
+                        )
                             .padding(.top, 8)
                     }
                     .padding(.bottom, 8)
@@ -334,6 +338,7 @@ struct ProfileView: View {
                 .padding(.bottom, 32)
             }
             .scrollIndicators(.hidden)
+            .modifier(ScrollableHeaderVisibilityTrackingModifier(visibility: headerVisibility))
             .background(ProfileTheme.background)
             .overlay(alignment: .top) {
                 ZStack {
@@ -347,7 +352,10 @@ struct ProfileView: View {
                     }
 
                     if let username = response.profile?.username {
-                        ProfileTopUsername(username: username)
+                        ProfileFadingTopUsername(
+                            username: username,
+                            visibility: headerVisibility
+                        )
                     }
                 }
                 .padding(.horizontal, 16)
@@ -915,6 +923,7 @@ struct UserProfileView: View {
     @State private var isRespondingToFriendRequest = false
     @State private var pendingUnfriendProfile: FriendUserSummary?
     @State private var profileShareURL: URL?
+    @State private var headerVisibility = ScrollableHeaderVisibility()
 
     var body: some View {
         content
@@ -1027,6 +1036,7 @@ struct UserProfileView: View {
                 .padding(.bottom, 32)
             }
             .scrollIndicators(.hidden)
+            .modifier(ScrollableHeaderVisibilityTrackingModifier(visibility: headerVisibility))
             .background(ProfileTheme.background)
         }
     }
@@ -1045,7 +1055,11 @@ struct UserProfileView: View {
                             .frame(width: 46, height: 46)
                     } else if case .loaded(let response) = viewModel.state,
                               let username = response.profile?.username {
-                        ProfileTopUsername(username: username, alignment: .leading)
+                        ProfileFadingTopUsername(
+                            username: username,
+                            alignment: .leading,
+                            visibility: headerVisibility
+                        )
                     }
                 }
 
@@ -1069,7 +1083,10 @@ struct UserProfileView: View {
                case .loaded(let response) = viewModel.state,
                let username = response.profile?.username
             {
-                ProfileTopUsername(username: username)
+                ProfileFadingTopUsername(
+                    username: username,
+                    visibility: headerVisibility
+                )
             }
         }
         .padding(.horizontal, 16)
@@ -1101,20 +1118,51 @@ struct UserProfileView: View {
     @ViewBuilder
     private func userProfileEventActions(response: UserProfileResponse) -> some View {
         if isCurrentUserProfile {
-            ProfileEventsPeriodFilterButton(selection: $selectedEventsTab)
+            CurrentUserProfileEventsControls(
+                selection: $selectedEventsTab,
+                rsvpFilter: $selectedEventsRSVPFilter
+            )
         } else if displaysReceivedFriendRequestActions {
             VStack(spacing: 10) {
-                ProfileEventsPeriodFilterButton(selection: $selectedEventsTab)
+                ProfileEventsPeriodFilterButton(
+                    selection: $selectedEventsTab,
+                    rsvpFilter: $selectedEventsRSVPFilter
+                )
                 receivedFriendRequestAction(response: response)
             }
         } else if displaysFriendActions, let profile = response.profile {
-            HStack(spacing: 10) {
-                ProfileEventsPeriodFilterButton(selection: $selectedEventsTab)
-                userFriendProfileAction(for: profile)
+            if profile.friendStatus == .accepted, selectedEventsTab == .past {
+                HStack(spacing: 10) {
+                    ProfileEventsPeriodFilterButton(
+                        selection: $selectedEventsTab,
+                        rsvpFilter: $selectedEventsRSVPFilter
+                    )
+                    ProfilePastEventsFilterButton(rsvpFilter: $selectedEventsRSVPFilter)
+                }
+                .id("friend-past-event-controls")
+                .transaction(disablingProfileEventControlAnimations)
+            } else {
+                HStack(spacing: 10) {
+                    ProfileEventsPeriodFilterButton(
+                        selection: $selectedEventsTab,
+                        rsvpFilter: $selectedEventsRSVPFilter
+                    )
+                    userFriendProfileAction(for: profile)
+                }
+                .id("friend-upcoming-event-controls")
+                .transaction(disablingProfileEventControlAnimations)
             }
         } else {
-            ProfileEventsPeriodFilterButton(selection: $selectedEventsTab)
+            ProfileEventsPeriodFilterButton(
+                selection: $selectedEventsTab,
+                rsvpFilter: $selectedEventsRSVPFilter
+            )
         }
+    }
+
+    private func disablingProfileEventControlAnimations(_ transaction: inout Transaction) {
+        transaction.animation = nil
+        transaction.disablesAnimations = true
     }
 
     private func currentUserMenu(for profile: FriendUserSummary) -> some View {
@@ -1555,24 +1603,46 @@ private enum ProfileEventsTab: String, CaseIterable, Identifiable {
     }
 }
 
+private struct CurrentUserProfileEventsControls: View {
+    @Binding var selection: ProfileEventsTab
+    @Binding var rsvpFilter: ProfileEventsRSVPFilter
+
+    var body: some View {
+        if selection == .past {
+            HStack(spacing: 10) {
+                ProfileEventsPeriodFilterButton(
+                    selection: $selection,
+                    rsvpFilter: $rsvpFilter
+                )
+
+                ProfilePastEventsFilterButton(rsvpFilter: $rsvpFilter)
+            }
+            .id("past-event-controls")
+            .transaction(disablingAnimations)
+        } else {
+            ProfileEventsPeriodFilterButton(
+                selection: $selection,
+                rsvpFilter: $rsvpFilter
+            )
+            .id("upcoming-event-controls")
+            .transaction(disablingAnimations)
+        }
+    }
+
+    private func disablingAnimations(_ transaction: inout Transaction) {
+        transaction.animation = nil
+        transaction.disablesAnimations = true
+    }
+}
+
 private struct ProfileEventsPeriodFilterButton: View {
     @Binding var selection: ProfileEventsTab
+    @Binding var rsvpFilter: ProfileEventsRSVPFilter
 
     var body: some View {
         Menu {
-            ForEach(ProfileEventsTab.allCases) { tab in
-                Button {
-                    withAnimation(.snappy(duration: 0.22)) {
-                        selection = tab
-                    }
-                } label: {
-                    if tab == selection {
-                        Label(tab.title, systemImage: "checkmark")
-                    } else {
-                        Text(tab.title)
-                    }
-                }
-            }
+            filterButton(title: "Upcoming", tab: .upcoming, filter: .all)
+            filterButton(title: "Past", tab: .past, filter: .going)
         } label: {
             HStack(spacing: 6) {
                 Text(selection.title)
@@ -1585,6 +1655,8 @@ private struct ProfileEventsPeriodFilterButton: View {
             .frame(height: 40)
             .contentShape(RoundedRectangle(cornerRadius: 12, style: .continuous))
         }
+        .accessibilityLabel("Event filter")
+        .accessibilityValue("\(selection.title), \(rsvpFilter.title(for: selection))")
         .profileActionButtonStyle(
             kind: .secondary,
             fillsAvailableWidth: true,
@@ -1592,6 +1664,77 @@ private struct ProfileEventsPeriodFilterButton: View {
             cornerRadius: 12,
             fontSize: 14
         )
+    }
+
+    @ViewBuilder
+    private func filterButton(
+        title: String,
+        tab: ProfileEventsTab,
+        filter: ProfileEventsRSVPFilter
+    ) -> some View {
+        Button {
+            var transaction = Transaction(animation: nil)
+            transaction.disablesAnimations = true
+
+            withTransaction(transaction) {
+                selection = tab
+                rsvpFilter = filter
+            }
+        } label: {
+            if tab == selection, filter == rsvpFilter {
+                Label(title, systemImage: "checkmark")
+            } else {
+                Text(title)
+            }
+        }
+    }
+}
+
+private struct ProfilePastEventsFilterButton: View {
+    @Binding var rsvpFilter: ProfileEventsRSVPFilter
+
+    var body: some View {
+        Menu {
+            filterButton(title: "Attended", filter: .going)
+            filterButton(title: "Interested", filter: .interested)
+        } label: {
+            HStack(spacing: 6) {
+                Text(rsvpFilter == .interested ? "Interested" : "Attended")
+                    .lineLimit(1)
+
+                Image(systemName: "chevron.down")
+                    .font(.system(size: 11, weight: .bold))
+            }
+            .frame(maxWidth: .infinity)
+            .frame(height: 40)
+            .contentShape(RoundedRectangle(cornerRadius: 12, style: .continuous))
+        }
+        .accessibilityLabel("Past event filter")
+        .profileActionButtonStyle(
+            kind: .secondary,
+            fillsAvailableWidth: true,
+            fontWeight: .semibold,
+            cornerRadius: 12,
+            fontSize: 14
+        )
+    }
+
+    @ViewBuilder
+    private func filterButton(title: String, filter: ProfileEventsRSVPFilter) -> some View {
+        Button {
+            var transaction = Transaction(animation: nil)
+            transaction.disablesAnimations = true
+
+            withTransaction(transaction) {
+                rsvpFilter = filter
+            }
+        } label: {
+            if filter == rsvpFilter {
+                Label(title, systemImage: "checkmark")
+            } else {
+                Text(title)
+            }
+        }
     }
 }
 
@@ -1638,6 +1781,17 @@ private struct ProfileTopUsername: View {
             .frame(maxWidth: 150, alignment: alignment)
             .allowsHitTesting(false)
             .accessibilityAddTraits(.isHeader)
+    }
+}
+
+private struct ProfileFadingTopUsername: View {
+    let username: String
+    var alignment: Alignment = .center
+    let visibility: ScrollableHeaderVisibility
+
+    var body: some View {
+        ProfileTopUsername(username: username, alignment: alignment)
+            .opacity(visibility.isVisible ? 1 : 0)
     }
 }
 

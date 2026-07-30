@@ -10,6 +10,10 @@ struct MainTabView: View {
     @State private var selectedTab: AppTab = .home
     @State private var previousNonSearchTab: AppTab = .home
     @State private var isAuthSheetPresented = false
+    @State private var isGuestIntroPresented = true
+    @State private var hasLoadedGuestHomeContent = false
+    @State private var guestIntroSheetHeight: CGFloat = 400
+    @State private var guestIntroSelectedDetent: PresentationDetent = .height(400)
     @State private var homeResetTrigger = 0
     @State private var venuesResetTrigger = 0
     @State private var activityResetTrigger = 0
@@ -18,6 +22,9 @@ struct MainTabView: View {
     @State private var pendingFriendRequestCount = 0
     @State private var isEventCreationSheetPresented = false
     @State private var presentedPlaceCreationType: PlaceListItem.PlaceType?
+    @State private var searchFilter: GlobalSearchFilter = .all
+    @State private var searchFilterTrigger = 0
+    @State private var searchSourceTab: AppTab?
     @Namespace private var eventDetailTransitionNamespace
 
     private let floatingCreationButtonSize: CGFloat = 52
@@ -69,17 +76,22 @@ struct MainTabView: View {
                         onShowActivity: {
                             showActivityOrAuth()
                         },
-                        onFindFriends: { selectedTab = .search },
+                        onFindFriends: { openSearch(filter: .people, from: .home) },
                         onExplorePlaces: { selectedTab = .venues },
                         onAddProfilePhoto: {
                             profileAddPhotoTrigger += 1
                             selectedTab = .profile
-                        }
+                        },
+                        onSearchEvents: { openSearch(filter: .events, from: .home) },
+                        onInitialContentReady: markGuestHomeContentReady
                     )
                 }
 
                 Tab("", systemImage: "building.2", value: AppTab.venues) {
-                    VenuesView(resetFiltersTrigger: venuesResetTrigger)
+                    VenuesView(
+                        resetFiltersTrigger: venuesResetTrigger,
+                        onSearch: { openSearch(filter: .places, from: .venues) }
+                    )
                 }
 
                 if isAuthenticated {
@@ -162,6 +174,9 @@ struct MainTabView: View {
                 .presentationDetents([.large])
                 .presentationDragIndicator(.visible)
         }
+        .sheet(isPresented: guestIntroSheetPresentation) {
+            guestIntroSheetContent
+        }
         .sheet(isPresented: $isEventCreationSheetPresented) {
             MobileEventCreationView()
                 .presentationDetents([.large])
@@ -185,19 +200,24 @@ struct MainTabView: View {
                     onShowActivity: {
                         showActivityOrAuth()
                     },
-                    onFindFriends: { selectedTab = .search },
+                    onFindFriends: { openSearch(filter: .people, from: .home) },
                     onExplorePlaces: { selectedTab = .venues },
                     onAddProfilePhoto: {
                         profileAddPhotoTrigger += 1
                         selectedTab = .profile
-                    }
+                    },
+                    onSearchEvents: { openSearch(filter: .events, from: .home) },
+                    onInitialContentReady: markGuestHomeContentReady
                 )
                     .tabItem {
                         Image(systemName: "house")
                     }
                     .tag(AppTab.home)
 
-                VenuesView(resetFiltersTrigger: venuesResetTrigger)
+                VenuesView(
+                    resetFiltersTrigger: venuesResetTrigger,
+                    onSearch: { openSearch(filter: .places, from: .venues) }
+                )
                     .tabItem {
                         Image(systemName: "building.2")
                     }
@@ -286,6 +306,9 @@ struct MainTabView: View {
                 .presentationDetents([.large])
                 .presentationDragIndicator(.visible)
         }
+        .sheet(isPresented: guestIntroSheetPresentation) {
+            guestIntroSheetContent
+        }
         .sheet(isPresented: $isEventCreationSheetPresented) {
             MobileEventCreationView()
                 .presentationDetents([.large])
@@ -305,10 +328,16 @@ struct MainTabView: View {
                 showActivityOrAuth()
             },
             onSearchDismiss: {
+                searchSourceTab = nil
                 selectedTab = previousNonSearchTab.requiresAuthentication && !isAuthenticated
                     ? .home
                     : previousNonSearchTab
-            }
+            },
+            initialSearchFilter: searchFilter,
+            searchFilterTrigger: searchFilterTrigger,
+            showsSearchBackButton: searchSourceTab == .home || searchSourceTab == .venues,
+            onSearchBack: returnFromContextualSearch,
+            shouldAutoFocusSearch: searchSourceTab == .home || searchSourceTab == .venues
         )
     }
 
@@ -328,9 +357,28 @@ struct MainTabView: View {
                     homeResetTrigger += 1
                 }
 
+                if newValue == .search && selectedTab != .search {
+                    searchFilter = .all
+                    searchSourceTab = nil
+                    searchFilterTrigger += 1
+                }
+
                 selectedTab = newValue
             }
         )
+    }
+
+    private func openSearch(filter: GlobalSearchFilter, from sourceTab: AppTab) {
+        searchFilter = filter
+        searchSourceTab = sourceTab
+        searchFilterTrigger += 1
+        selectedTab = .search
+    }
+
+    private func returnFromContextualSearch() {
+        guard let searchSourceTab else { return }
+        self.searchSourceTab = nil
+        selectedTab = searchSourceTab
     }
 
     private func resetFilters(for oldValue: AppTab, whenSwitchingTo newValue: AppTab) {
@@ -354,7 +402,7 @@ struct MainTabView: View {
 
     @ViewBuilder
     private var guestAuthButton: some View {
-        if !isAuthenticated {
+        if !isAuthenticated && (selectedTab != .home || !isGuestIntroPresented) {
             VStack {
                 Spacer()
 
@@ -376,6 +424,65 @@ struct MainTabView: View {
             .frame(maxWidth: .infinity, maxHeight: .infinity)
             .allowsHitTesting(true)
             .transition(.move(edge: .bottom).combined(with: .opacity))
+        }
+    }
+
+    private var guestIntroSheetPresentation: Binding<Bool> {
+        Binding(
+            get: {
+                !isAuthenticated &&
+                    selectedTab == .home &&
+                    isGuestIntroPresented &&
+                    hasLoadedGuestHomeContent
+            },
+            set: { isPresented in
+                if !isPresented {
+                    isGuestIntroPresented = false
+                }
+            }
+        )
+    }
+
+    @ViewBuilder
+    private var guestIntroSheetContent: some View {
+        GuestWigIntroductionSheet(
+            onAuthenticate: presentAuthenticationFromGuestIntro,
+            onHeightChange: updateGuestIntroSheetHeight
+        )
+        .presentationDetents(
+            [.height(guestIntroSheetHeight), .large],
+            selection: $guestIntroSelectedDetent
+        )
+        .presentationDragIndicator(.visible)
+    }
+
+    private func markGuestHomeContentReady() {
+        guard !isAuthenticated, !hasLoadedGuestHomeContent else { return }
+
+        Task { @MainActor in
+            try? await Task.sleep(for: .milliseconds(500))
+            guard !isAuthenticated else { return }
+            hasLoadedGuestHomeContent = true
+        }
+    }
+
+    private func updateGuestIntroSheetHeight(_ measuredHeight: CGFloat) {
+        let fittedHeight = ceil(measuredHeight)
+        guard fittedHeight > 0, abs(fittedHeight - guestIntroSheetHeight) >= 1 else {
+            return
+        }
+
+        guestIntroSheetHeight = fittedHeight
+        guestIntroSelectedDetent = .height(fittedHeight)
+    }
+
+    private func presentAuthenticationFromGuestIntro() {
+        isGuestIntroPresented = false
+
+        Task { @MainActor in
+            try? await Task.sleep(for: .milliseconds(350))
+            guard !isAuthenticated else { return }
+            isAuthSheetPresented = true
         }
     }
 
@@ -492,6 +599,80 @@ struct MainTabView: View {
             selectedTab = .activity
         } else {
             isAuthSheetPresented = true
+        }
+    }
+}
+
+private struct GuestWigIntroductionSheet: View {
+    let onAuthenticate: () -> Void
+    let onHeightChange: (CGFloat) -> Void
+    @Environment(\.dismiss) private var dismiss
+
+    private let benefits = [
+        "Discover events and see where your friends are going.",
+        "Keep track of what you’re attending and where you’ve been.",
+        "Follow venues and organizers to stay up to date.",
+    ]
+
+    var body: some View {
+        VStack(alignment: .leading, spacing: 24) {
+                VStack(alignment: .leading, spacing: 7) {
+                    Text("Welcome to WIG")
+                        .font(.system(size: 24, weight: .bold))
+                        .foregroundStyle(.white)
+
+                    Text("WIG makes it easy to discover events, see where your friends are going, and keep track of your plans.")
+                        .font(.system(size: 15, weight: .medium))
+                        .foregroundStyle(.white.opacity(0.68))
+                        .fixedSize(horizontal: false, vertical: true)
+                }
+                .padding(.trailing, 58)
+
+                VStack(alignment: .leading, spacing: 13) {
+                    ForEach(benefits, id: \.self) { benefit in
+                        HStack(alignment: .top, spacing: 10) {
+                            Image(systemName: "checkmark.circle.fill")
+                                .font(.system(size: 15, weight: .semibold))
+                                .foregroundStyle(AppTheme.accentBlue)
+                                .padding(.top, 1)
+
+                            Text(benefit)
+                                .font(.system(size: 15, weight: .medium))
+                                .foregroundStyle(.white.opacity(0.88))
+                                .fixedSize(horizontal: false, vertical: true)
+                        }
+                    }
+                }
+
+                Button(action: onAuthenticate) {
+                    Text("Sign up or log in")
+                        .font(.system(size: 17, weight: .bold))
+                        .foregroundStyle(.black.opacity(0.86))
+                        .frame(maxWidth: .infinity, minHeight: 58)
+                        .background(AppTheme.accentBlue, in: RoundedRectangle(cornerRadius: 18, style: .continuous))
+                }
+                .buttonStyle(.plain)
+        }
+        .padding(20)
+        .padding(.top, 8)
+        .fixedSize(horizontal: false, vertical: true)
+        .overlay(alignment: .topTrailing) {
+            Button(action: dismiss.callAsFunction) {
+                Image(systemName: "xmark")
+                    .font(.system(size: 16, weight: .semibold))
+                    .foregroundStyle(.white.opacity(0.80))
+                    .frame(width: 42, height: 42)
+                    .background(.white.opacity(0.08), in: Circle())
+            }
+            .buttonStyle(.plain)
+            .accessibilityLabel("Close")
+            .padding(.top, 20)
+            .padding(.trailing, 20)
+        }
+        .onGeometryChange(for: CGFloat.self) { geometry in
+            geometry.size.height
+        } action: { height in
+            onHeightChange(height)
         }
     }
 }

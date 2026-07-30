@@ -2,6 +2,16 @@ import ClerkKit
 import SwiftUI
 import UIKit
 
+enum GlobalSearchFilter: String, CaseIterable, Identifiable {
+    case all
+    case people
+    case places
+    case events
+
+    var id: String { rawValue }
+    var title: String { rawValue.capitalized }
+}
+
 @MainActor
 private final class HomeActivationViewModel: ObservableObject {
     @Published private(set) var state: MobileActivationState?
@@ -97,6 +107,13 @@ struct HomeView: View {
     let onFindFriends: () -> Void
     let onExplorePlaces: () -> Void
     let onAddProfilePhoto: () -> Void
+    let initialSearchFilter: GlobalSearchFilter
+    let searchFilterTrigger: Int
+    let onSearchEvents: () -> Void
+    let showsSearchBackButton: Bool
+    let onSearchBack: () -> Void
+    let shouldAutoFocusSearch: Bool
+    let onInitialContentReady: () -> Void
 
     @Environment(Clerk.self) private var clerk
     @Environment(\.apiClient) private var apiClient
@@ -122,6 +139,8 @@ struct HomeView: View {
     @State private var postEventFeedbackPrompt: MobileEventReviewPrompt?
     @State private var pendingPostEventDetail: EventFeedItem?
     @State private var completedPostEventFeedbackIDs = Set<String>()
+    @State private var selectedSearchFilter: GlobalSearchFilter
+    @AppStorage("globalSearchRecentQueries") private var recentSearchQueriesData = "[]"
 
     private static let sectionTitleFormatter: DateFormatter = {
         let formatter = DateFormatter()
@@ -148,7 +167,14 @@ struct HomeView: View {
         onSearchDismiss: @escaping () -> Void = {},
         onFindFriends: @escaping () -> Void = {},
         onExplorePlaces: @escaping () -> Void = {},
-        onAddProfilePhoto: @escaping () -> Void = {}
+        onAddProfilePhoto: @escaping () -> Void = {},
+        initialSearchFilter: GlobalSearchFilter = .all,
+        searchFilterTrigger: Int = 0,
+        onSearchEvents: @escaping () -> Void = {},
+        showsSearchBackButton: Bool = false,
+        onSearchBack: @escaping () -> Void = {},
+        shouldAutoFocusSearch: Bool = false,
+        onInitialContentReady: @escaping () -> Void = {}
     ) {
         self.showsNativeSearch = showsNativeSearch
         self.resetToCurrentWeekTrigger = resetToCurrentWeekTrigger
@@ -157,6 +183,14 @@ struct HomeView: View {
         self.onFindFriends = onFindFriends
         self.onExplorePlaces = onExplorePlaces
         self.onAddProfilePhoto = onAddProfilePhoto
+        self.initialSearchFilter = initialSearchFilter
+        self.searchFilterTrigger = searchFilterTrigger
+        self.onSearchEvents = onSearchEvents
+        self.showsSearchBackButton = showsSearchBackButton
+        self.onSearchBack = onSearchBack
+        self.shouldAutoFocusSearch = shouldAutoFocusSearch
+        self.onInitialContentReady = onInitialContentReady
+        _selectedSearchFilter = State(initialValue: initialSearchFilter)
     }
 
     var body: some View {
@@ -180,6 +214,10 @@ struct HomeView: View {
                     }
 
                     await activationTask.value
+
+                    if case .loaded = viewModel.state {
+                        onInitialContentReady()
+                    }
                 }
                 .onReceive(NotificationCenter.default.publisher(for: .activationDidChange)) { _ in
                     guard shouldLoadActivation else { return }
@@ -188,7 +226,9 @@ struct HomeView: View {
                 .onAppear {
                     if showsNativeSearch {
                         isSearchPresented = true
-                        isSearchFieldFocused = false
+                        if shouldAutoFocusSearch {
+                            focusUnifiedSearchField()
+                        }
                     }
                 }
                 .onReceive(NotificationCenter.default.publisher(for: .eventRSVPDidChange)) { _ in
@@ -223,6 +263,8 @@ struct HomeView: View {
                     }
                 }
                 .onReceive(NotificationCenter.default.publisher(for: .appDataDidChange)) { _ in
+                    HomeSearchDirectoryViewModel.invalidateCache()
+
                     Task {
                         await loadHome(for: selectedWeekStart, using: apiClient, forceRefresh: true)
 
@@ -276,6 +318,25 @@ struct HomeView: View {
                 .onChange(of: resetToCurrentWeekTrigger) { _, _ in
                     resetToCurrentWeek()
                 }
+                .onChange(of: searchFilterTrigger) { _, _ in
+                    selectedSearchFilter = initialSearchFilter
+                    searchText = ""
+                    isSearchPresented = showsNativeSearch
+
+                    if showsNativeSearch {
+                        Task {
+                            await searchViewModel.load(
+                                query: "",
+                                using: apiClient,
+                                forceRefresh: true
+                            )
+                        }
+                    }
+
+                    if shouldAutoFocusSearch {
+                        focusUnifiedSearchField()
+                    }
+                }
                 .onChange(of: selectedLocationFilter) { _, newValue in
                     appSession.selectedCityContext = newValue?.selectedCityContext
                 }
@@ -322,10 +383,26 @@ struct HomeView: View {
             return
         }
 
+        if !normalizedSearchQuery.isEmpty {
+            try? await Task.sleep(for: .milliseconds(300))
+            guard !Task.isCancelled else { return }
+        }
+
         await searchViewModel.load(
             query: normalizedSearchQuery,
             using: apiClient
         )
+    }
+
+    private func focusUnifiedSearchField() {
+        guard showsNativeSearch else { return }
+
+        Task { @MainActor in
+            try? await Task.sleep(for: .milliseconds(150))
+
+            guard !Task.isCancelled, showsNativeSearch else { return }
+            isSearchFieldFocused = true
+        }
     }
 
     private func loadHomeEventSearchResults() async {
@@ -476,12 +553,17 @@ struct HomeView: View {
                                 default:
                                     return
                                 }
-                                await recentActivityViewModel.load(using: apiClient)
+                                await recentActivityViewModel.load(
+                                    using: apiClient,
+                                    cacheIdentity: eventFeedCacheIdentity,
+                                    forceRefresh: true
+                                )
                             } catch {
                                 // silently ignore — user can retry via activity tab
                             }
                         }
                     )
+                    .padding(.bottom, -8)
                 }
 
                 ForEach(Array(groupedEvents.enumerated()), id: \.element.day) { index, section in
@@ -512,49 +594,31 @@ struct HomeView: View {
     }
 
     private var searchResultsContent: some View {
-        ZStack {
+        ZStack(alignment: .top) {
             ScrollView {
-                LazyVStack(alignment: .leading, spacing: 7) {
-                    searchInputBar
+                LazyVStack(alignment: .leading, spacing: 14) {
+                    searchFilterBar
+                        .scrollingPillFade()
                         .padding(.horizontal, 16)
 
                     if normalizedSearchQuery.isEmpty {
-                        if !emptyStateRecentUsers.isEmpty {
-                            SearchSectionHeader(title: "People")
-                                .padding(.horizontal, 16)
-                                .padding(.top, 21)
-
-                            SearchUsersList(users: emptyStateRecentUsers)
-                                .padding(.horizontal, 16)
-                        } else if !searchViewModel.isLoading {
-                            ContentUnavailableView {
-                                Label("Search Users", systemImage: "person.2")
-                            } description: {
-                                Text("Search by name or username.")
-                            }
-                            .foregroundStyle(.white)
-                            .frame(maxWidth: .infinity)
-                            .padding(.top, 48)
-                        }
-                    } else if !searchViewModel.isLoading && searchUserResults.isEmpty {
+                        recentSearchesSection
+                        discoverySearchContent
+                    } else if !searchViewModel.isLoading && !hasResultsForSelectedSearchFilter {
                         ContentUnavailableView {
-                            Label("No Users Found", systemImage: "person.2")
+                            Label("No Results Found", systemImage: "magnifyingglass")
                         } description: {
-                            Text("Try a different name or username.")
+                            Text("Try a different search or filter.")
                         }
                         .foregroundStyle(.white)
                         .frame(maxWidth: .infinity)
                         .padding(.top, 48)
-                    } else if !searchUserResults.isEmpty {
-                        SearchSectionHeader(title: "People")
-                            .padding(.horizontal, 16)
-                            .padding(.top, 21)
-
-                        SearchUsersList(users: searchUserResults)
-                            .padding(.horizontal, 16)
+                    } else {
+                        populatedSearchContent
                     }
                 }
                 .frame(maxWidth: .infinity)
+                .padding(.top, 60)
                 .padding(.bottom, 32)
             }
             .scrollIndicators(.hidden)
@@ -564,9 +628,153 @@ struct HomeView: View {
                 NativeLoadingView()
                     .tint(.white)
                     .foregroundStyle(.white)
+                    .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .center)
                     .allowsHitTesting(false)
             }
+
+            searchInputBar
+                .padding(.horizontal, 16)
         }
+    }
+
+    private var searchFilterBar: some View {
+        ScopePillBar {
+            ForEach(GlobalSearchFilter.allCases) { filter in
+                ScopePill(
+                    title: filter.title,
+                    isSelected: selectedSearchFilter == filter
+                ) {
+                    selectedSearchFilter = filter
+                }
+            }
+        }
+    }
+
+    @ViewBuilder
+    private var recentSearchesSection: some View {
+        if !recentSearchQueries.isEmpty {
+            VStack(alignment: .leading, spacing: 9) {
+                HStack {
+                    SearchSectionHeader(title: "Recent")
+                    Spacer()
+                    Button("Clear") { recentSearchQueriesData = "[]" }
+                        .font(.system(size: 13, weight: .semibold))
+                        .foregroundStyle(.white.opacity(0.58))
+                }
+
+                ScrollView(.horizontal) {
+                    HStack(spacing: 8) {
+                        ForEach(recentSearchQueries, id: \.self) { query in
+                            Button {
+                                searchText = query
+                                isSearchFieldFocused = true
+                            } label: {
+                                Label(query, systemImage: "clock.arrow.circlepath")
+                                    .font(.system(size: 14, weight: .medium))
+                                    .foregroundStyle(.white.opacity(0.84))
+                                    .padding(.horizontal, 12)
+                                    .frame(height: 34)
+                                    .background(.white.opacity(0.08), in: Capsule())
+                            }
+                            .buttonStyle(.plain)
+                        }
+                    }
+                }
+                .scrollIndicators(.hidden)
+            }
+            .padding(.horizontal, 16)
+            .padding(.top, 6)
+        }
+    }
+
+    @ViewBuilder
+    private var discoverySearchContent: some View {
+        if selectedSearchFilter == .all || selectedSearchFilter == .people {
+            searchPeopleSection(users: Array(emptyStateRecentUsers.prefix(selectedSearchFilter == .people ? 20 : 8)), title: "People")
+        }
+        if selectedSearchFilter == .all || selectedSearchFilter == .places {
+            searchPlacesSection(
+                places: Array(
+                    searchViewModel.suggestedPlaces
+                        .sorted(by: sortSearchPlacesAlphabetically)
+                        .prefix(selectedSearchFilter == .places ? 200 : 5)
+                ),
+                title: "Places"
+            )
+        }
+        if selectedSearchFilter == .all || selectedSearchFilter == .events {
+            searchEventsSection(events: Array(searchViewModel.upcomingEvents.prefix(selectedSearchFilter == .events ? 10 : 8)), title: "Events")
+        }
+    }
+
+    @ViewBuilder
+    private var populatedSearchContent: some View {
+        if selectedSearchFilter == .all || selectedSearchFilter == .people {
+            searchPeopleSection(users: Array(searchUserResults.prefix(selectedSearchFilter == .people ? 20 : 5)), title: "People")
+        }
+        if selectedSearchFilter == .all || selectedSearchFilter == .places {
+            searchPlacesSection(
+                places: Array(
+                    searchViewModel.places
+                        .sorted(by: sortSearchPlacesAlphabetically)
+                        .prefix(selectedSearchFilter == .places ? 20 : 5)
+                ),
+                title: "Places"
+            )
+        }
+        if selectedSearchFilter == .all || selectedSearchFilter == .events {
+            searchEventsSection(events: Array(searchViewModel.events.prefix(selectedSearchFilter == .events ? 20 : 8)), title: "Events")
+        }
+    }
+
+    @ViewBuilder
+    private func searchPeopleSection(users: [FriendUserSummary], title: String) -> some View {
+        if !users.isEmpty {
+            VStack(alignment: .leading, spacing: 8) {
+                SearchSectionHeader(title: title)
+                SearchUsersList(users: users)
+            }
+            .padding(.horizontal, 16)
+        }
+    }
+
+    @ViewBuilder
+    private func searchEventsSection(events: [EventFeedItem], title: String) -> some View {
+        if !events.isEmpty {
+            VStack(alignment: .leading, spacing: 10) {
+                SearchSectionHeader(title: title)
+                LazyVGrid(columns: [GridItem(.flexible(), spacing: 12), GridItem(.flexible(), spacing: 12)], spacing: 12) {
+                    ForEach(events) { event in
+                        EventDetailNavigationLink(event: event) {
+                            EventCardView(event: event, cardHeight: 238)
+                                .frame(maxWidth: .infinity)
+                        }
+                    }
+                }
+            }
+            .padding(.horizontal, 16)
+        }
+    }
+
+    @ViewBuilder
+    private func searchPlacesSection(places: [PlaceListItem], title: String) -> some View {
+        if !places.isEmpty {
+            VStack(alignment: .leading, spacing: 8) {
+                SearchSectionHeader(title: title)
+                CompactPlaceListView(places: places)
+            }
+            .padding(.horizontal, 16)
+        }
+    }
+
+    private func sortSearchPlacesAlphabetically(_ lhs: PlaceListItem, _ rhs: PlaceListItem) -> Bool {
+        let comparison = lhs.name.localizedCaseInsensitiveCompare(rhs.name)
+
+        if comparison != .orderedSame {
+            return comparison == .orderedAscending
+        }
+
+        return lhs.listRowID < rhs.listRowID
     }
 
     private var showsCenteredSearchLoadingState: Bool {
@@ -575,8 +783,8 @@ struct HomeView: View {
         }
 
         return normalizedSearchQuery.isEmpty
-            ? emptyStateRecentUsers.isEmpty
-            : searchUserResults.isEmpty
+            ? !hasDiscoveryResultsForSelectedSearchFilter
+            : !hasResultsForSelectedSearchFilter
     }
 
     private var homeEventSearchBar: some View {
@@ -695,18 +903,28 @@ struct HomeView: View {
 
     private var searchInputBar: some View {
         HStack(spacing: 12) {
+            if showsSearchBackButton {
+                FloatingGlassIconButton(systemImage: "chevron.left") {
+                    onSearchBack()
+                }
+            }
+
             HStack(spacing: 10) {
                 Image(systemName: "magnifyingglass")
                     .font(.system(size: 20, weight: .medium))
                     .foregroundStyle(.white.opacity(0.92))
 
-                TextField("", text: $searchText, prompt: Text("Search people...").foregroundStyle(.white.opacity(0.42)))
+                TextField("", text: $searchText, prompt: Text("Search...").foregroundStyle(.white.opacity(0.42)))
                     .font(.system(size: 17, weight: .medium))
                     .foregroundStyle(.white)
                     .textInputAutocapitalization(.never)
                     .autocorrectionDisabled()
                     .submitLabel(.search)
                     .focused($isSearchFieldFocused)
+                    .onSubmit {
+                        guard !normalizedSearchQuery.isEmpty else { return }
+                        rememberSearch(normalizedSearchQuery)
+                    }
 
                 if !searchText.isEmpty {
                     Button {
@@ -744,7 +962,7 @@ struct HomeView: View {
                         onSelectCategory: { filterID in
                             selectedCategoryFilterID = filterID
                         },
-                        onSearch: presentHomeEventSearch
+                        onSearch: onSearchEvents
                     )
                 }
 
@@ -1151,6 +1369,61 @@ struct HomeView: View {
         searchText.trimmingCharacters(in: .whitespacesAndNewlines)
     }
 
+    private var recentSearchQueries: [String] {
+        let searches = (try? JSONDecoder().decode([String].self, from: Data(recentSearchQueriesData.utf8))) ?? []
+
+        return searches.filter { candidate in
+            !searches.contains { other in
+                other.count > candidate.count &&
+                    other.range(of: candidate, options: [.anchored, .caseInsensitive]) != nil
+            }
+        }
+    }
+
+    private var hasResultsForSelectedSearchFilter: Bool {
+        switch selectedSearchFilter {
+        case .all:
+            return !searchUserResults.isEmpty ||
+                !searchViewModel.events.isEmpty ||
+                !searchViewModel.places.isEmpty
+        case .people:
+            return !searchUserResults.isEmpty
+        case .events:
+            return !searchViewModel.events.isEmpty
+        case .places:
+            return !searchViewModel.places.isEmpty
+        }
+    }
+
+    private var hasDiscoveryResultsForSelectedSearchFilter: Bool {
+        switch selectedSearchFilter {
+        case .all:
+            return !emptyStateRecentUsers.isEmpty ||
+                !searchViewModel.upcomingEvents.isEmpty ||
+                !searchViewModel.suggestedPlaces.isEmpty
+        case .people:
+            return !emptyStateRecentUsers.isEmpty
+        case .events:
+            return !searchViewModel.upcomingEvents.isEmpty
+        case .places:
+            return !searchViewModel.suggestedPlaces.isEmpty
+        }
+    }
+
+    private func rememberSearch(_ query: String) {
+        var searches = recentSearchQueries.filter {
+            $0.localizedCaseInsensitiveCompare(query) != .orderedSame &&
+                query.range(of: $0, options: [.anchored, .caseInsensitive]) == nil
+        }
+        searches.insert(query, at: 0)
+        searches = Array(searches.prefix(8))
+
+        if let data = try? JSONEncoder().encode(searches),
+           let encoded = String(data: data, encoding: .utf8) {
+            recentSearchQueriesData = encoded
+        }
+    }
+
     private func moveWeek(by offset: Int) {
         guard let weekStart = Self.weekCalendar.date(byAdding: .day, value: offset * 7, to: selectedWeekStart) else {
             return
@@ -1186,16 +1459,28 @@ struct HomeView: View {
             forceRefresh: forceRefresh
         )
         async let reviewPromptLoad: Void = loadPostEventFeedbackPrompt(using: apiClient)
+        async let recentActivityLoad: Void = loadRecentActivity(
+            using: apiClient,
+            forceRefresh: forceRefresh
+        )
 
-        await eventLoad
-        await reviewPromptLoad
+        _ = await (eventLoad, reviewPromptLoad, recentActivityLoad)
+    }
 
+    private func loadRecentActivity(
+        using apiClient: APIClient,
+        forceRefresh: Bool = false
+    ) async {
         guard isAuthenticated else {
             recentActivityViewModel.clear()
             return
         }
 
-        await recentActivityViewModel.load(using: apiClient)
+        await recentActivityViewModel.load(
+            using: apiClient,
+            cacheIdentity: eventFeedCacheIdentity,
+            forceRefresh: forceRefresh
+        )
     }
 
     private func loadPostEventFeedbackPrompt(using apiClient: APIClient) async {
@@ -1344,7 +1629,15 @@ struct HomeView: View {
     }
 
     private func visibleSectionDay(for event: EventFeedItem) -> Date {
-        Self.weekCalendar.startOfDay(for: event.startAt)
+        var eventCalendar = Self.weekCalendar
+        eventCalendar.timeZone = event.displayTimeZone
+        let eventDateComponents = eventCalendar.dateComponents(
+            [.year, .month, .day],
+            from: event.startAt
+        )
+
+        return Self.weekCalendar.date(from: eventDateComponents)
+            ?? Self.weekCalendar.startOfDay(for: event.startAt)
     }
 
     private func sectionTitle(for day: Date) -> String {
@@ -1421,7 +1714,7 @@ private struct HomeActivationSection: View {
         VStack(alignment: .leading, spacing: 12) {
             HStack {
                 Text("Get Started")
-                    .font(.system(size: 20, weight: .bold))
+                    .font(AppTheme.contentHeaderFont)
                     .foregroundStyle(.white)
             }
             .padding(.horizontal, 16)
@@ -2200,29 +2493,6 @@ private struct HomeStandaloneControlStyle: ViewModifier {
     }
 }
 
-private struct HomeMenuPillLabel: View {
-    let title: String
-
-    var body: some View {
-        HStack(spacing: 10) {
-            Text(title)
-                .font(.system(size: 15, weight: .semibold))
-                .foregroundStyle(.primary)
-                .lineLimit(1)
-                .minimumScaleFactor(0.78)
-
-            Image(systemName: "chevron.down")
-                .font(.system(size: 12, weight: .semibold))
-                .foregroundStyle(.primary.opacity(0.58))
-        }
-        .padding(.horizontal, 15)
-        .frame(height: 46)
-        .fixedSize(horizontal: true, vertical: false)
-        .contentShape(Capsule())
-        .homeLiquidGlass(in: Capsule())
-    }
-}
-
 private struct HomeRecentActivitySection: View {
     let activities: [ActivityFeedItem]
     let onShowActivity: () -> Void
@@ -2243,12 +2513,12 @@ private struct HomeRecentActivitySection: View {
                 Button(action: onShowActivity) {
                     HStack(spacing: 6) {
                         Text("Recent Activity")
-                            .font(.system(size: 20, weight: .bold))
+                            .font(AppTheme.contentHeaderFont)
                             .foregroundStyle(.white)
 
                         Image(systemName: "chevron.right")
-                            .font(.system(size: 16, weight: .bold))
-                            .foregroundStyle(.white.opacity(0.78))
+                            .font(.system(size: 14, weight: .bold))
+                            .foregroundStyle(.white.opacity(0.52))
                     }
                 }
                 .buttonStyle(.plain)
@@ -2290,7 +2560,7 @@ private struct HomeRecentActivityRow: View {
 
             if activity.type.isRequest {
                 requestContent
-                    .padding(.top, 4)
+                    .offset(y: -2)
             } else {
                 VStack(alignment: .leading, spacing: 4) {
                     InlineLinkedActivityText(
@@ -2318,7 +2588,7 @@ private struct HomeRecentActivityRow: View {
                     .foregroundStyle(.white.opacity(0.42))
                 }
                 .frame(maxWidth: .infinity, alignment: .leading)
-                .padding(.top, 4)
+                .offset(y: -2)
             }
         }
         .navigationDestination(item: $selectedVenue) { venue in
@@ -2435,16 +2705,57 @@ private struct SearchUsersList: View {
 }
 
 @MainActor
-private final class HomeRecentActivityViewModel: ObservableObject {
+final class HomeRecentActivityViewModel: ObservableObject {
     @Published private(set) var activities: [ActivityFeedItem] = []
+    private static var cachedActivities = [String: [ActivityFeedItem]]()
+    private static var inFlightLoads = [String: Task<ActivityFeedResponse, Error>]()
+    private static var inFlightTokens = [String: UUID]()
 
-    func load(using apiClient: APIClient) async {
+    func load(
+        using apiClient: APIClient,
+        cacheIdentity: String,
+        forceRefresh: Bool = false
+    ) async {
+        if !forceRefresh, let cached = Self.cachedActivities[cacheIdentity] {
+            activities = cached
+            return
+        }
+
+        if !forceRefresh, let inFlightLoad = Self.inFlightLoads[cacheIdentity] {
+            do {
+                let response = try await inFlightLoad.value
+                Self.cachedActivities[cacheIdentity] = response.activities
+                activities = response.activities
+            } catch {
+                // The active screen can retry without discarding existing items.
+            }
+            return
+        }
+
+        let token = UUID()
+        let loadTask = Task {
+            try await apiClient.send(APIClient.mobileHomeActivity(limit: 3))
+        }
+        Self.inFlightLoads[cacheIdentity] = loadTask
+        Self.inFlightTokens[cacheIdentity] = token
+
         do {
-            let response = try await apiClient.send(APIClient.mobileHomeActivity(limit: 3))
+            let response = try await loadTask.value
+            Self.cachedActivities[cacheIdentity] = response.activities
             activities = response.activities
         } catch {
             // Keep any existing items visible during refresh failures.
         }
+
+        if Self.inFlightTokens[cacheIdentity] == token {
+            Self.inFlightLoads[cacheIdentity] = nil
+            Self.inFlightTokens[cacheIdentity] = nil
+        }
+    }
+
+    static func preload(using apiClient: APIClient, cacheIdentity: String) async {
+        let viewModel = HomeRecentActivityViewModel()
+        await viewModel.load(using: apiClient, cacheIdentity: cacheIdentity)
     }
 
     func clear() {
@@ -2481,6 +2792,10 @@ final class HomeSearchDirectoryViewModel: ObservableObject {
         }
 
         return false
+    }
+
+    var hasAnyResults: Bool {
+        !users.isEmpty || !events.isEmpty || !places.isEmpty
     }
 
     private func apply(_ response: MobileSearchResponse) {
@@ -2637,6 +2952,12 @@ final class HomeSearchDirectoryViewModel: ObservableObject {
             // Ignore preload failures; the search screen can still load normally later.
         }
 
+        inFlightLoad = nil
+    }
+
+    static func invalidateCache() {
+        cachedResponse = nil
+        inFlightLoad?.cancel()
         inFlightLoad = nil
     }
 

@@ -398,20 +398,21 @@ struct EventDetailView: View {
         comment: String?
     ) async -> Bool {
         if response == .didNotAttend {
-            do {
-                let endpoint = try APIClient.updateMobileEventRSVP(
-                    eventID: currentEvent.id,
-                    status: .notGoing,
-                    notifyFriends: false
-                )
-                _ = try await apiClient.send(endpoint)
-                await rsvpViewModel.load(eventID: currentEvent.id, using: apiClient)
+            if await rsvpViewModel.toggle(
+                .notGoing,
+                eventID: currentEvent.id,
+                using: apiClient,
+                includePartner: false,
+                notifyFriends: false,
+                sendFriendNotifications: false,
+                forceUpdate: true
+            ) {
                 isReviewSheetPresented = false
-                NotificationCenter.default.post(name: .eventRSVPDidChange, object: nil)
-            } catch {
-                return false
+                handleSuccessfulRSVPChange()
+                return true
             }
-            return true
+
+            return false
         }
 
         guard let rating = response.rating else { return false }
@@ -818,11 +819,6 @@ struct EventDetailView: View {
 
             UIImpactFeedbackGenerator(style: .light).impactOccurred()
 
-            if shouldOfferRetroactiveWent {
-                markPastEventAsWent()
-                return
-            }
-
             if shouldOfferReview {
                 withAnimation(.spring(response: 0.32, dampingFraction: 0.82)) {
                     isReviewSheetPresented = true
@@ -854,7 +850,7 @@ struct EventDetailView: View {
                     .font(.system(size: 17, weight: .bold))
                     .lineLimit(1)
 
-                if shouldOfferReview || !currentEvent.hasEnded {
+                if shouldOfferReview || shouldOfferRetroactiveWent || !currentEvent.hasEnded {
                     Image(systemName: isRSVPChevronExpanded ? "chevron.down" : "chevron.up")
                         .font(.system(size: 12, weight: .bold))
                         .opacity(0.72)
@@ -876,7 +872,11 @@ struct EventDetailView: View {
         VStack(alignment: .leading, spacing: 0) {
             switch rsvpMenuMode {
             case .rsvp:
-                primaryRSVPMenuContent
+                if shouldOfferRetroactiveWent {
+                    retroactiveWentMenuContent
+                } else {
+                    primaryRSVPMenuContent
+                }
             case .declineReason:
                 declineReasonMenuContent
             case .more:
@@ -885,6 +885,51 @@ struct EventDetailView: View {
         }
         .padding(.horizontal, 10)
         .padding(.vertical, 12)
+    }
+
+    private var retroactiveWentMenuContent: some View {
+        VStack(alignment: .leading, spacing: 0) {
+            VStack(alignment: .leading, spacing: 5) {
+                Text("Did you go to this event?")
+                    .font(.system(size: 16, weight: .bold))
+                    .foregroundStyle(.white)
+
+                Text("Add it to your past events and leave a rating whenever you’re ready. Your friends won’t be notified.")
+                    .font(.system(size: 13, weight: .medium))
+                    .foregroundStyle(.white.opacity(0.58))
+                    .fixedSize(horizontal: false, vertical: true)
+            }
+            .padding(.horizontal, 14)
+            .padding(.vertical, 10)
+
+            Divider()
+                .overlay(.white.opacity(0.08))
+                .padding(.horizontal, 14)
+                .padding(.vertical, 6)
+
+            Button {
+                UISelectionFeedbackGenerator().selectionChanged()
+                markPastEventAsWent()
+            } label: {
+                HStack(spacing: 12) {
+                    Image(systemName: "checkmark")
+                        .font(.system(size: 15, weight: .bold))
+                        .frame(width: 22)
+                        .foregroundStyle(AppTheme.accentBlue)
+
+                    Text("Mark as Went")
+                        .font(.system(size: 15, weight: .bold))
+                        .foregroundStyle(.white)
+
+                    Spacer(minLength: 8)
+                }
+                .padding(.horizontal, 14)
+                .frame(height: 58)
+                .contentShape(Rectangle())
+            }
+            .buttonStyle(.plain)
+            .disabled(rsvpViewModel.isSaving)
+        }
     }
 
     private var primaryRSVPMenuContent: some View {
@@ -1355,7 +1400,7 @@ struct EventDetailView: View {
         }
 
         if shouldOfferRetroactiveWent {
-            return "I Went"
+            return "Event Ended"
         }
 
         switch rsvpViewModel.status {
@@ -1376,11 +1421,11 @@ struct EventDetailView: View {
 
     private var rsvpButtonSystemImage: String? {
         if shouldOfferReview {
-            return "bubble.left"
+            return nil
         }
 
         if shouldOfferRetroactiveWent {
-            return "checkmark"
+            return nil
         }
 
         switch rsvpViewModel.status {
@@ -1396,7 +1441,11 @@ struct EventDetailView: View {
     }
 
     private var rsvpButtonColor: Color {
-        if shouldOfferReview || shouldOfferRetroactiveWent {
+        if shouldOfferRetroactiveWent {
+            return .white
+        }
+
+        if shouldOfferReview {
             return AppTheme.accentBlue
         }
 
@@ -1548,7 +1597,7 @@ struct EventDetailView: View {
     }
 
     private var goingRSVPLabel: String {
-        currentEvent.hasEnded ? "Went" : "Going"
+        currentEvent.hasEnded ? "Attended" : "Going"
     }
 
     // Captures the signed-in user's identity (once, before any RSVP invalidates the
@@ -1951,7 +2000,7 @@ private struct EventRSVPListView: View {
             VStack(alignment: .leading, spacing: 18) {
                 if !goingAttendees.isEmpty {
                     EventAttendeeSection(
-                        title: isPastEvent ? "Went" : "Going",
+                        title: isPastEvent ? "Attended" : "Going",
                         attendees: goingAttendees,
                         attendeeReviewRatings: reviewRatings
                     )

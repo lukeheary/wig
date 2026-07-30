@@ -12,6 +12,7 @@ struct ActivityView: View {
     @State private var selectedCityFilter: ActivityCityFilter?
     @State private var activityActionErrorMessage: String?
     @State private var visibleActivityCount = ActivityView.activityPageSize
+    @State private var headerVisibility = ScrollableHeaderVisibility()
 
     private let background = AppTheme.background
     private static let activityPageSize = 20
@@ -26,32 +27,8 @@ struct ActivityView: View {
                 .background(background.ignoresSafeArea())
                 .topStatusBarScrim()
                 .toolbar(.hidden, for: .navigationBar)
-                .overlay(alignment: .topLeading) {
-                    HStack(spacing: 10) {
-                        if case .loaded(let response) = viewModel.state {
-                            ActivityLeadingControls(
-                                citySelection: Binding(
-                                    get: { effectiveCityFilter(for: response) },
-                                    set: { selectedCityFilter = $0 }
-                                ),
-                                cities: availableCityFilters,
-                                hasActiveCitySelection: effectiveCityFilter(for: response) != defaultCityFilter(for: response),
-                                selection: $selectedFilter
-                            )
-                        } else {
-                            ActivityLeadingControls(
-                                citySelection: Binding(
-                                    get: { .city(city: "Boston", state: "MA") },
-                                    set: { selectedCityFilter = $0 }
-                                ),
-                                cities: [.city(city: "Boston", state: "MA")],
-                                hasActiveCitySelection: false,
-                                selection: $selectedFilter
-                            )
-                        }
-                    }
-                        .padding(.leading, 16)
-                        .padding(.top, 0)
+                .overlay(alignment: .top) {
+                    ActivityNavigationTitle(visibility: headerVisibility)
                 }
                 .onAppear {
                     Task {
@@ -142,28 +119,31 @@ struct ActivityView: View {
             )
             let visibleActivities = Array(activities.prefix(visibleActivityCount))
 
-            if response.activities.isEmpty {
-                ContentUnavailableView {
-                    Label("No Recent Activity", systemImage: "bolt")
-                } description: {
-                    Text("Recent friend activity will show up here.")
-                }
-                .background(background)
-            } else if activities.isEmpty {
-                ContentUnavailableView {
-                    Label(selectedFilter.emptyTitle, systemImage: "bolt")
-                } description: {
-                    Text(selectedFilter.emptyMessage)
-                }
-                .foregroundStyle(.white)
-                .padding(.top, 60)
-                .background(background)
-            } else {
-                ScrollView {
-                    LazyVStack(alignment: .leading, spacing: 7) {
-                        activityHeader(response: response)
-                            .padding(.horizontal, 16)
+            ScrollView {
+                LazyVStack(alignment: .leading, spacing: 14) {
+                    activityFilterBar
+                        .scrollingPillFade()
+                        .padding(.horizontal, 16)
 
+                    if response.activities.isEmpty {
+                        ContentUnavailableView {
+                            Label("No Recent Activity", systemImage: "bolt")
+                        } description: {
+                            Text("Recent friend activity will show up here.")
+                        }
+                        .foregroundStyle(.white)
+                        .frame(maxWidth: .infinity)
+                        .padding(.top, 48)
+                    } else if activities.isEmpty {
+                        ContentUnavailableView {
+                            Label(selectedFilter.emptyTitle, systemImage: "bolt")
+                        } description: {
+                            Text(selectedFilter.emptyMessage)
+                        }
+                        .foregroundStyle(.white)
+                        .frame(maxWidth: .infinity)
+                        .padding(.top, 48)
+                    } else {
                         ForEach(groupedActivities(visibleActivities)) { section in
                             ActivitySectionView(
                                 section: section,
@@ -181,11 +161,25 @@ struct ActivityView: View {
                                 }
                         }
                     }
-                    .padding(.top, 74)
-                    .padding(.bottom, 32)
                 }
-                .scrollIndicators(.hidden)
-                .background(background)
+                .padding(.top, 56)
+                .padding(.bottom, 32)
+            }
+            .scrollIndicators(.hidden)
+            .modifier(ScrollableHeaderVisibilityTrackingModifier(visibility: headerVisibility))
+            .background(background)
+        }
+    }
+
+    private var activityFilterBar: some View {
+        ScopePillBar {
+            ForEach(ActivityFeedFilter.allCases) { filter in
+                ScopePill(
+                    title: filter.title,
+                    isSelected: selectedFilter == filter
+                ) {
+                    selectedFilter = filter
+                }
             }
         }
     }
@@ -356,25 +350,19 @@ struct ActivityView: View {
         visibleActivityCount = min(visibleActivityCount + Self.activityPageSize, totalCount)
     }
 
-    private func activityHeader(response: ActivityFeedResponse) -> some View {
-        // Temporarily hidden; retain the city suffix for a future restore.
-        // + (headerLocationName(for: response).map { location in
-        //     Text(" in \(location)")
-        //         .font(.system(size: 20, weight: .medium))
-        //         .foregroundStyle(.white.opacity(0.5))
-        // } ?? Text(""))
-        Text("Activity")
-            .font(AppTheme.contentHeaderFont)
-            .foregroundStyle(.white)
-    }
+}
 
-    private func headerLocationName(for response: ActivityFeedResponse) -> String? {
-        switch effectiveCityFilter(for: response) {
-        case .city(let city, _):
-            return city
-        case .all:
-            return nil
-        }
+private struct ActivityNavigationTitle: View {
+    let visibility: ScrollableHeaderVisibility
+
+    var body: some View {
+        Text("Activity")
+            .font(.system(size: 17, weight: .semibold))
+            .foregroundStyle(.white)
+            .frame(maxWidth: .infinity)
+            .frame(height: 46)
+            .opacity(visibility.isVisible ? 1 : 0)
+            .allowsHitTesting(false)
     }
 }
 
@@ -525,7 +513,6 @@ private struct ActivityFilterPill: View {
 private enum ActivityFeedFilter: String, CaseIterable, Identifiable {
     case upcoming
     case past
-    case all
 
     var id: String { rawValue }
 
@@ -535,8 +522,6 @@ private enum ActivityFeedFilter: String, CaseIterable, Identifiable {
             return "Upcoming"
         case .past:
             return "Past"
-        case .all:
-            return "All"
         }
     }
 
@@ -546,8 +531,6 @@ private enum ActivityFeedFilter: String, CaseIterable, Identifiable {
             return "No Upcoming Activity"
         case .past:
             return "No Past Activity"
-        case .all:
-            return "No Activity"
         }
     }
 
@@ -557,8 +540,6 @@ private enum ActivityFeedFilter: String, CaseIterable, Identifiable {
             return "Upcoming friend activity will show up here."
         case .past:
             return "Past friend activity will show up here."
-        case .all:
-            return "Friend activity will show up here."
         }
     }
 
@@ -582,8 +563,6 @@ private enum ActivityFeedFilter: String, CaseIterable, Identifiable {
                 guard let event = activity.event else { return false }
                 return event.startAt < .now
             }
-        case .all:
-            return activities
         }
     }
 }
@@ -709,7 +688,7 @@ private struct ActivityRowView: View {
 
             if activity.type.isRequest {
                 requestContent
-                    .padding(.top, 4)
+                    .offset(y: -2)
             } else {
                 VStack(alignment: .leading, spacing: 4) {
                     InlineLinkedActivityText(
@@ -737,7 +716,7 @@ private struct ActivityRowView: View {
                     .foregroundStyle(.white.opacity(0.42))
                 }
                 .frame(maxWidth: .infinity, alignment: .leading)
-                .padding(.top, 4)
+                .offset(y: -2)
             }
         }
         .navigationDestination(item: $selectedVenue) { venue in
@@ -1189,7 +1168,7 @@ struct ActivityAvatarView: View {
         case .rsvpNotGoing:
             return Color.red
         case .friendRequestReceived, .friendRequestAccepted:
-            return .white
+            return AppTheme.accentBlue
         case .partnerRequestReceived:
             return Color(red: 1.0, green: 0.43, blue: 0.66)
         case .partnerRequestAccepted:

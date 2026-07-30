@@ -1,10 +1,22 @@
 import { auth } from "@clerk/nextjs/server";
-import { and, asc, eq, gte, inArray, ne, notInArray, or, sql } from "drizzle-orm";
+import {
+  and,
+  asc,
+  eq,
+  gte,
+  inArray,
+  ne,
+  notInArray,
+  or,
+  sql,
+} from "drizzle-orm";
 import { NextResponse } from "next/server";
 import { db } from "@/server/db";
 import {
   eventRsvps,
   events,
+  cities,
+  metroAreas,
   placeFollows,
   places,
   userFriends,
@@ -17,6 +29,7 @@ import {
 import { mapEventCategoryData } from "@/server/utils/categories";
 import { goingRsvpCountsForEventIds } from "@/app/api/mobile/event-rsvp-counts";
 import { accentInsensitiveLike } from "@/server/db/search";
+import { createMobileMetroResolver } from "@/app/api/mobile/metro";
 
 function searchQueryVariants(query: string) {
   const trimmed = query.trim();
@@ -29,7 +42,10 @@ function searchQueryVariants(query: string) {
   const andVariant = normalizedWhitespace.replace(/\s*&\s*/g, " and ");
   // Match the connector whether it is between words or the last complete token
   // being typed. This keeps "Above and" matched to "Above & Beyond".
-  const swappedAmpersandVariant = normalizedWhitespace.replace(/\s+and\b/gi, " &");
+  const swappedAmpersandVariant = normalizedWhitespace.replace(
+    /\s+and\b/gi,
+    " &"
+  );
   const swappedAndVariant = normalizedWhitespace.replace(/\s+and\b/gi, " and");
   // Treat a trailing partial "and" connector as an ampersand as the user types.
   // This lets queries such as "Above a" find "Above & Beyond".
@@ -40,14 +56,20 @@ function searchQueryVariants(query: string) {
       ]
     : [];
 
-  return [...new Set([
-    normalizedWhitespace,
-    ampersandVariant,
-    andVariant,
-    swappedAmpersandVariant,
-    swappedAndVariant,
-    ...partialConnectorVariants,
-  ].map((value) => value.replace(/\s+/g, " ").trim()).filter(Boolean))];
+  return [
+    ...new Set(
+      [
+        normalizedWhitespace,
+        ampersandVariant,
+        andVariant,
+        swappedAmpersandVariant,
+        swappedAndVariant,
+        ...partialConnectorVariants,
+      ]
+        .map((value) => value.replace(/\s+/g, " ").trim())
+        .filter(Boolean)
+    ),
+  ];
 }
 
 export async function GET(request: Request) {
@@ -61,6 +83,44 @@ export async function GET(request: Request) {
       : 12;
 
     const { userId } = await auth();
+    const [searchUser, availableMetroAreas, cityCoordinates] =
+      await Promise.all([
+        userId
+          ? db.query.users.findFirst({
+              where: eq(users.id, userId),
+              columns: { city: true, state: true },
+            })
+          : db.query.users.findFirst({
+              where: eq(users.isOnboarding, false),
+              orderBy: [asc(users.createdAt)],
+              columns: { city: true, state: true },
+            }),
+        db
+          .select({
+            name: metroAreas.name,
+            state: metroAreas.state,
+            latitude: metroAreas.latitude,
+            longitude: metroAreas.longitude,
+            radiusMiles: metroAreas.radiusMiles,
+          })
+          .from(metroAreas),
+        db
+          .select({
+            name: cities.name,
+            state: cities.state,
+            latitude: cities.latitude,
+            longitude: cities.longitude,
+          })
+          .from(cities),
+      ]);
+    const resolveMetroArea = createMobileMetroResolver(
+      availableMetroAreas,
+      cityCoordinates
+    );
+    const currentMetroArea =
+      searchUser?.city && searchUser?.state
+        ? resolveMetroArea({ city: searchUser.city, state: searchUser.state })
+        : null;
     const matchedUsers = userId
       ? await db.query.userFriends.findMany({
           where: or(
@@ -125,28 +185,38 @@ export async function GET(request: Request) {
             );
 
           if (userId && acceptedFriendIds.length > 0) {
-            const secondDegreeConnections = await db.query.userFriends.findMany({
-              where: and(
-                eq(userFriends.status, "accepted"),
-                or(
-                  inArray(userFriends.userId, acceptedFriendIds),
-                  inArray(userFriends.friendUserId, acceptedFriendIds)
-                )
+            const secondDegreeConnections = await db.query.userFriends.findMany(
+              {
+                where: and(
+                  eq(userFriends.status, "accepted"),
+                  or(
+                    inArray(userFriends.userId, acceptedFriendIds),
+                    inArray(userFriends.friendUserId, acceptedFriendIds)
+                  )
+                ),
+                columns: {
+                  userId: true,
+                  friendUserId: true,
+                },
+              }
+            );
+            const friendOfFriendIds = [
+              ...new Set(
+                secondDegreeConnections
+                  .flatMap((friendship) => [
+                    friendship.userId,
+                    friendship.friendUserId,
+                  ])
+                  .filter((id) => id !== userId && !directConnectionIds.has(id))
               ),
-              columns: {
-                userId: true,
-                friendUserId: true,
-              },
-            });
-            const friendOfFriendIds = [...new Set(
-              secondDegreeConnections
-                .flatMap((friendship) => [friendship.userId, friendship.friendUserId])
-                .filter((id) => id !== userId && !directConnectionIds.has(id))
-            )];
+            ];
 
             if (friendOfFriendIds.length > 0) {
               return db.query.users.findMany({
-                where: and(...userBaseConditions, inArray(users.id, friendOfFriendIds)),
+                where: and(
+                  ...userBaseConditions,
+                  inArray(users.id, friendOfFriendIds)
+                ),
                 columns: {
                   id: true,
                   username: true,
@@ -188,11 +258,16 @@ export async function GET(request: Request) {
         })()
       : [];
 
-    const friendStatusByUserId = new Map<string, "accepted" | "pending_sent" | "pending_received">();
+    const friendStatusByUserId = new Map<
+      string,
+      "accepted" | "pending_sent" | "pending_received"
+    >();
 
     for (const friendship of matchedUsers) {
       const otherUserId =
-        friendship.userId === userId ? friendship.friendUserId : friendship.userId;
+        friendship.userId === userId
+          ? friendship.friendUserId
+          : friendship.userId;
 
       if (friendship.status === "accepted") {
         friendStatusByUserId.set(otherUserId, "accepted");
@@ -225,7 +300,9 @@ export async function GET(request: Request) {
       0
     );
     const recentPendingUsers =
-      !query && remainingPendingUserSlots > 0 && pendingRequestUserIds.length > 0
+      !query &&
+      remainingPendingUserSlots > 0 &&
+      pendingRequestUserIds.length > 0
         ? await db.query.users.findMany({
             where: and(
               ...userBaseConditions,
@@ -266,39 +343,48 @@ export async function GET(request: Request) {
         : [];
 
     const matchingPlaces = query
-      ? await db.query.places.findMany({
-          where: or(
-            ...queryVariants.flatMap((variant) => [
-              accentInsensitiveLike(places.name, variant),
-              accentInsensitiveLike(places.slug, variant),
-              accentInsensitiveLike(places.city, variant, {
-                coalesceToEmpty: true,
-              }),
-              accentInsensitiveLike(places.state, variant, {
-                coalesceToEmpty: true,
-              }),
-            ])
-          ),
-          orderBy: [asc(places.name)],
-          limit,
-        })
+      ? (
+          await db.query.places.findMany({
+            where: and(
+              eq(places.isEnabled, true),
+              or(
+                ...queryVariants.flatMap((variant) => [
+                  accentInsensitiveLike(places.name, variant),
+                  accentInsensitiveLike(places.slug, variant),
+                  accentInsensitiveLike(places.city, variant, {
+                    coalesceToEmpty: true,
+                  }),
+                  accentInsensitiveLike(places.state, variant, {
+                    coalesceToEmpty: true,
+                  }),
+                ])
+              )
+            ),
+            orderBy: [asc(places.name)],
+            limit: 200,
+          })
+        )
+          .filter((place) => {
+            const metroArea = resolveMetroArea({
+              city: place.city,
+              state: place.state,
+            });
+
+            return (
+              metroArea?.city === currentMetroArea?.city &&
+              metroArea?.state === currentMetroArea?.state
+            );
+          })
+          .slice(0, limit)
       : [];
-    const suggestedPlaceEvents = !query
-      ? await db.query.events.findMany({
-          where: and(
-            eq(events.visibility, "public"),
-            eq(events.status, "active"),
-            gte(events.startAt, new Date()),
-            or(sql`${events.venueId} is not null`, sql`${events.organizerId} is not null`)
-          ),
-          orderBy: [sql`random()`],
-          limit: 50,
-          columns: {
-            venueId: true,
-            organizerId: true,
-          },
-        })
-      : [];
+    const metroPlaces =
+      !query && currentMetroArea
+        ? await db.query.places.findMany({
+            where: eq(places.isEnabled, true),
+            orderBy: [asc(places.name)],
+            limit: 200,
+          })
+        : [];
     const matchingEvents = query
       ? await db.query.events.findMany({
           where: and(
@@ -353,22 +439,17 @@ export async function GET(request: Request) {
           },
         })
       : [];
-    const suggestedPlaceIds = !query
-      ? [
-          ...new Set(
-            suggestedPlaceEvents.flatMap((event) =>
-              [event.venueId, event.organizerId].filter(
-                (value): value is string => Boolean(value)
-              )
-            )
-          ),
-        ].slice(0, 10)
-      : [];
-    const suggestedPlaces = suggestedPlaceIds.length > 0
-      ? await db.query.places.findMany({
-          where: inArray(places.id, suggestedPlaceIds),
-        })
-      : [];
+    const suggestedPlaces = metroPlaces.filter((place) => {
+      const metroArea = resolveMetroArea({
+        city: place.city,
+        state: place.state,
+      });
+
+      return (
+        metroArea?.city === currentMetroArea?.city &&
+        metroArea?.state === currentMetroArea?.state
+      );
+    });
     const eventsToMap = query ? matchingEvents : upcomingEvents;
     const eventIds = eventsToMap.map((event) => event.id);
     const goingRsvpCounts = await goingRsvpCountsForEventIds(eventIds);
@@ -381,56 +462,59 @@ export async function GET(request: Request) {
     ];
     const now = new Date();
 
-    const [followedPlaceIds, venueCounts, organizerCounts, editPermissions] = await Promise.all([
-      userId && placeIds.length > 0
-        ? db.query.placeFollows.findMany({
-            where: and(
-              eq(placeFollows.userId, userId),
-              inArray(placeFollows.placeId, placeIds)
-            ),
-            columns: {
-              placeId: true,
-            },
-          })
-        : Promise.resolve([]),
-      placeIds.length > 0
-        ? db
-            .select({
-              placeId: events.venueId,
-              count: sql<number>`count(*)::int`,
+    const [followedPlaceIds, venueCounts, organizerCounts, editPermissions] =
+      await Promise.all([
+        userId && placeIds.length > 0
+          ? db.query.placeFollows.findMany({
+              where: and(
+                eq(placeFollows.userId, userId),
+                inArray(placeFollows.placeId, placeIds)
+              ),
+              columns: {
+                placeId: true,
+              },
             })
-            .from(events)
-            .where(
-              and(
-                inArray(events.venueId, placeIds),
-                eq(events.visibility, "public"),
-                eq(events.status, "active"),
-                gte(events.startAt, now)
+          : Promise.resolve([]),
+        placeIds.length > 0
+          ? db
+              .select({
+                placeId: events.venueId,
+                count: sql<number>`count(*)::int`,
+              })
+              .from(events)
+              .where(
+                and(
+                  inArray(events.venueId, placeIds),
+                  eq(events.visibility, "public"),
+                  eq(events.status, "active"),
+                  gte(events.startAt, now)
+                )
               )
-            )
-            .groupBy(events.venueId)
-        : Promise.resolve([]),
-      placeIds.length > 0
-        ? db
-            .select({
-              placeId: events.organizerId,
-              count: sql<number>`count(*)::int`,
-            })
-            .from(events)
-            .where(
-              and(
-                inArray(events.organizerId, placeIds),
-                eq(events.visibility, "public"),
-                eq(events.status, "active"),
-                gte(events.startAt, now)
+              .groupBy(events.venueId)
+          : Promise.resolve([]),
+        placeIds.length > 0
+          ? db
+              .select({
+                placeId: events.organizerId,
+                count: sql<number>`count(*)::int`,
+              })
+              .from(events)
+              .where(
+                and(
+                  inArray(events.organizerId, placeIds),
+                  eq(events.visibility, "public"),
+                  eq(events.status, "active"),
+                  gte(events.startAt, now)
+                )
               )
-            )
-            .groupBy(events.organizerId)
-        : Promise.resolve([]),
-      resolveMobileEventEditPermissions(userId),
-    ]);
+              .groupBy(events.organizerId)
+          : Promise.resolve([]),
+        resolveMobileEventEditPermissions(userId),
+      ]);
 
-    const followedPlaceIdSet = new Set(followedPlaceIds.map((follow) => follow.placeId));
+    const followedPlaceIdSet = new Set(
+      followedPlaceIds.map((follow) => follow.placeId)
+    );
     const placeCountMap = new Map<string, number>();
     const currentUserRsvpMap = new Map<
       string,
@@ -456,61 +540,77 @@ export async function GET(request: Request) {
 
     for (const row of venueCounts) {
       if (row.placeId) {
-        placeCountMap.set(row.placeId, (placeCountMap.get(row.placeId) ?? 0) + row.count);
+        placeCountMap.set(
+          row.placeId,
+          (placeCountMap.get(row.placeId) ?? 0) + row.count
+        );
       }
     }
 
     for (const row of organizerCounts) {
       if (row.placeId) {
-        placeCountMap.set(row.placeId, (placeCountMap.get(row.placeId) ?? 0) + row.count);
+        placeCountMap.set(
+          row.placeId,
+          (placeCountMap.get(row.placeId) ?? 0) + row.count
+        );
       }
     }
 
     if (userId && eventIds.length > 0) {
       const friendConnections = await db.query.userFriends.findMany({
         where: and(
-          or(eq(userFriends.userId, userId), eq(userFriends.friendUserId, userId)),
+          or(
+            eq(userFriends.userId, userId),
+            eq(userFriends.friendUserId, userId)
+          ),
           eq(userFriends.status, "accepted")
         ),
       });
       const friendIds = friendConnections.map((friendship) =>
-        friendship.userId === userId ? friendship.friendUserId : friendship.userId
+        friendship.userId === userId
+          ? friendship.friendUserId
+          : friendship.userId
       );
       const friendIdSet = new Set(friendIds);
 
-      const [currentUserRsvps, mirroredPartnerRsvps, friendRsvps] = await Promise.all([
-        db.query.eventRsvps.findMany({
-          where: and(
-            inArray(eventRsvps.eventId, eventIds),
-            eq(eventRsvps.userId, userId)
-          ),
-          with: {
-            user: true,
-          },
-        }),
-        db.query.eventRsvps.findMany({
-          where: and(
-            inArray(eventRsvps.eventId, eventIds),
-            eq(eventRsvps.partnerRsvpByUserId, userId),
-            inArray(eventRsvps.status, ["going", "interested", "not_going"])
-          ),
-          with: {
-            user: true,
-          },
-        }),
-        friendIds.length > 0
-          ? db.query.eventRsvps.findMany({
-              where: and(
-                inArray(eventRsvps.eventId, eventIds),
-                inArray(eventRsvps.userId, friendIds),
-                inArray(eventRsvps.status, ["going", "interested", "not_going"])
-              ),
-              with: {
-                user: true,
-              },
-            })
-          : Promise.resolve([]),
-      ]);
+      const [currentUserRsvps, mirroredPartnerRsvps, friendRsvps] =
+        await Promise.all([
+          db.query.eventRsvps.findMany({
+            where: and(
+              inArray(eventRsvps.eventId, eventIds),
+              eq(eventRsvps.userId, userId)
+            ),
+            with: {
+              user: true,
+            },
+          }),
+          db.query.eventRsvps.findMany({
+            where: and(
+              inArray(eventRsvps.eventId, eventIds),
+              eq(eventRsvps.partnerRsvpByUserId, userId),
+              inArray(eventRsvps.status, ["going", "interested", "not_going"])
+            ),
+            with: {
+              user: true,
+            },
+          }),
+          friendIds.length > 0
+            ? db.query.eventRsvps.findMany({
+                where: and(
+                  inArray(eventRsvps.eventId, eventIds),
+                  inArray(eventRsvps.userId, friendIds),
+                  inArray(eventRsvps.status, [
+                    "going",
+                    "interested",
+                    "not_going",
+                  ])
+                ),
+                with: {
+                  user: true,
+                },
+              })
+            : Promise.resolve([]),
+        ]);
 
       for (const rsvp of currentUserRsvps) {
         currentUserRsvpMap.set(rsvp.eventId, {
@@ -519,8 +619,17 @@ export async function GET(request: Request) {
         });
       }
 
-      for (const rsvp of [...currentUserRsvps, ...mirroredPartnerRsvps, ...friendRsvps]) {
-        if (!rsvp.user || (rsvp.status !== "going" && rsvp.status !== "interested" && rsvp.status !== "not_going")) {
+      for (const rsvp of [
+        ...currentUserRsvps,
+        ...mirroredPartnerRsvps,
+        ...friendRsvps,
+      ]) {
+        if (
+          !rsvp.user ||
+          (rsvp.status !== "going" &&
+            rsvp.status !== "interested" &&
+            rsvp.status !== "not_going")
+        ) {
           continue;
         }
 
@@ -597,14 +706,21 @@ export async function GET(request: Request) {
             }),
           isFollowed:
             (mapped.venueId ? followedPlaceIdSet.has(mapped.venueId) : false) ||
-            (mapped.organizerId ? followedPlaceIdSet.has(mapped.organizerId) : false),
-          isCreatedByCurrentUser: Boolean(userId) && mapped.createdByUserId === userId,
+            (mapped.organizerId
+              ? followedPlaceIdSet.has(mapped.organizerId)
+              : false),
+          isCreatedByCurrentUser:
+            Boolean(userId) && mapped.createdByUserId === userId,
           userRsvpStatus: currentUserRsvp?.status ?? null,
           userRsvpNotGoingReason: currentUserRsvp?.notGoingReason ?? null,
           goingCount: goingRsvpCounts.get(mapped.id) ?? 0,
           friendsGoing: socialRsvps.filter((rsvp) => rsvp.status === "going"),
-          friendsInterested: socialRsvps.filter((rsvp) => rsvp.status === "interested"),
-          friendsNotGoing: socialRsvps.filter((rsvp) => rsvp.status === "not_going"),
+          friendsInterested: socialRsvps.filter(
+            (rsvp) => rsvp.status === "interested"
+          ),
+          friendsNotGoing: socialRsvps.filter(
+            (rsvp) => rsvp.status === "not_going"
+          ),
         };
       }),
       upcomingEvents: upcomingEvents.map((event) => {
@@ -648,14 +764,21 @@ export async function GET(request: Request) {
             }),
           isFollowed:
             (mapped.venueId ? followedPlaceIdSet.has(mapped.venueId) : false) ||
-            (mapped.organizerId ? followedPlaceIdSet.has(mapped.organizerId) : false),
-          isCreatedByCurrentUser: Boolean(userId) && mapped.createdByUserId === userId,
+            (mapped.organizerId
+              ? followedPlaceIdSet.has(mapped.organizerId)
+              : false),
+          isCreatedByCurrentUser:
+            Boolean(userId) && mapped.createdByUserId === userId,
           userRsvpStatus: currentUserRsvp?.status ?? null,
           userRsvpNotGoingReason: currentUserRsvp?.notGoingReason ?? null,
           goingCount: goingRsvpCounts.get(mapped.id) ?? 0,
           friendsGoing: socialRsvps.filter((rsvp) => rsvp.status === "going"),
-          friendsInterested: socialRsvps.filter((rsvp) => rsvp.status === "interested"),
-          friendsNotGoing: socialRsvps.filter((rsvp) => rsvp.status === "not_going"),
+          friendsInterested: socialRsvps.filter(
+            (rsvp) => rsvp.status === "interested"
+          ),
+          friendsNotGoing: socialRsvps.filter(
+            (rsvp) => rsvp.status === "not_going"
+          ),
         };
       }),
       users: matchingUsers.map((user) => ({
@@ -684,10 +807,13 @@ export async function GET(request: Request) {
           avatarImageUrl: user.avatarImageUrl,
           friendStatus: friendStatusByUserId.get(user.id) ?? "none",
         })),
-      suggestedPlaces: suggestedPlaceIds
-        .map((placeId) => suggestedPlaces.find((place) => place.id === placeId))
-        .filter((place): place is NonNullable<typeof place> => Boolean(place))
-        .map((place) => ({
+      suggestedPlaces: suggestedPlaces.map((place) => {
+        const metroArea = resolveMetroArea({
+          city: place.city,
+          state: place.state,
+        });
+
+        return {
           id: place.id,
           type: place.type,
           slug: place.slug,
@@ -695,22 +821,34 @@ export async function GET(request: Request) {
           logoImageUrl: place.logoImageUrl,
           city: place.city,
           state: place.state,
+          metroAreaCity: metroArea?.city ?? null,
+          metroAreaState: metroArea?.state ?? null,
           upcomingEventCount: placeCountMap.get(place.id) ?? 0,
           updatedAt: place.updatedAt,
           isFollowed: followedPlaceIdSet.has(place.id),
-        })),
-      places: matchingPlaces.map((place) => ({
-        id: place.id,
-        type: place.type,
-        slug: place.slug,
-        name: place.name,
-        logoImageUrl: place.logoImageUrl,
-        city: place.city,
-        state: place.state,
-        upcomingEventCount: placeCountMap.get(place.id) ?? 0,
-        updatedAt: place.updatedAt,
-        isFollowed: followedPlaceIdSet.has(place.id),
-      })),
+        };
+      }),
+      places: matchingPlaces.map((place) => {
+        const metroArea = resolveMetroArea({
+          city: place.city,
+          state: place.state,
+        });
+
+        return {
+          id: place.id,
+          type: place.type,
+          slug: place.slug,
+          name: place.name,
+          logoImageUrl: place.logoImageUrl,
+          city: place.city,
+          state: place.state,
+          metroAreaCity: metroArea?.city ?? null,
+          metroAreaState: metroArea?.state ?? null,
+          upcomingEventCount: placeCountMap.get(place.id) ?? 0,
+          updatedAt: place.updatedAt,
+          isFollowed: followedPlaceIdSet.has(place.id),
+        };
+      }),
     });
   } catch (error) {
     console.error("Mobile search error:", error);

@@ -429,7 +429,8 @@ struct APIClient: Sendable {
                 MobilePushTokenRequest(token: token, platform: platform)
             ),
             requiresAuthentication: false,
-            includesAuthenticationIfAvailable: true
+            includesAuthenticationIfAvailable: true,
+            notifiesDataChange: false
         )
     }
 
@@ -468,7 +469,8 @@ struct APIClient: Sendable {
                 ]
             ),
             requiresAuthentication: false,
-            includesAuthenticationIfAvailable: true
+            includesAuthenticationIfAvailable: true,
+            notifiesDataChange: false
         )
     }
 

@@ -6,6 +6,7 @@ import UIKit
 
 struct VenuesView: View {
     let resetFiltersTrigger: Int
+    let onSearch: () -> Void
 
     @Environment(\.apiClient) private var apiClient
     @EnvironmentObject private var appSession: AppSession
@@ -15,10 +16,12 @@ struct VenuesView: View {
     @State private var selectedCategoryID: String?
     @State private var isPlaceSearchPresented = false
     @State private var placeSearchText = ""
+    @State private var headerOpacity: CGFloat = 1
     @FocusState private var isPlaceSearchFocused: Bool
 
-    init(resetFiltersTrigger: Int = 0) {
+    init(resetFiltersTrigger: Int = 0, onSearch: @escaping () -> Void = {}) {
         self.resetFiltersTrigger = resetFiltersTrigger
+        self.onSearch = onSearch
     }
 
     var body: some View {
@@ -66,23 +69,31 @@ struct VenuesView: View {
         switch viewModel.state {
         case .idle, .loading:
             ScrollView {
-                LazyVStack(alignment: .leading, spacing: 12) {
-                    placesHeader(locationName: selectedLocationName)
+                LazyVStack(alignment: .leading, spacing: 14) {
+                    placeFilterBar
+                        .scrollingPillFade()
+                        .background {
+                            placesHeaderScrollMarker
+                        }
 
                     NativeLoadingView()
                         .frame(minHeight: 360)
                 }
                 .padding(.horizontal, 16)
-                .padding(.top, 74)
+                .padding(.top, 60)
                 .padding(.bottom, 32)
             }
-            .overlay(alignment: .topLeading) {
-                topControls(for: nil)
+            .overlay(alignment: .top) {
+                placesTopNavigation(for: nil)
                     .padding(.horizontal, 16)
-                    .padding(.top, 0)
             }
             .scrollIndicators(.hidden)
             .scrollDismissesKeyboard(.interactively)
+            .modifier(ScrollableHeaderFadeTrackingModifier(opacity: $headerOpacity))
+            .coordinateSpace(name: "places-scroll")
+            .onPreferenceChange(ScrollableHeaderMinYPreferenceKey.self) { minY in
+                headerOpacity = scrollableHeaderOpacity(for: minY)
+            }
             .background(venuesBackground)
 
         case .failed(let message):
@@ -113,8 +124,12 @@ struct VenuesView: View {
                 let places = filteredPlaces(in: response)
 
                 ScrollView {
-                    VStack(alignment: .leading, spacing: 4) {
-                        placesHeaderMenu(for: response)
+                    LazyVStack(alignment: .leading, spacing: 14) {
+                        placeFilterBar
+                            .scrollingPillFade()
+                            .background {
+                                placesHeaderScrollMarker
+                            }
 
                         if places.isEmpty {
                             ContentUnavailableView {
@@ -123,22 +138,27 @@ struct VenuesView: View {
                                 Text("Try adjusting your city or place filter.")
                             }
                             .foregroundStyle(.white)
-                            .padding(.top, 48)
+                            .frame(maxWidth: .infinity)
+                            .padding(.top, 40)
+                        } else {
+                            CompactPlaceListView(places: places)
                         }
-
-                        CompactPlaceListView(places: places)
                     }
                     .padding(.horizontal, 16)
-                    .padding(.top, 74)
+                    .padding(.top, 60)
                     .padding(.bottom, 32)
                 }
-                .overlay(alignment: .topLeading) {
-                    topControls(for: response)
+                .overlay(alignment: .top) {
+                    placesTopNavigation(for: response)
                         .padding(.horizontal, 16)
-                        .padding(.top, 0)
                 }
                 .scrollIndicators(.hidden)
                 .scrollDismissesKeyboard(.interactively)
+                .modifier(ScrollableHeaderFadeTrackingModifier(opacity: $headerOpacity))
+                .coordinateSpace(name: "places-scroll")
+                .onPreferenceChange(ScrollableHeaderMinYPreferenceKey.self) { minY in
+                    headerOpacity = scrollableHeaderOpacity(for: minY)
+                }
                 .background(venuesBackground)
             }
         }
@@ -149,52 +169,37 @@ struct VenuesView: View {
             .ignoresSafeArea()
     }
 
-    private func placesHeader(locationName: String?) -> some View {
-        // Temporarily hidden; retain the city suffix for a future restore.
-        // + (locationName.map { location in
-        //     Text(" in \(location)")
-        //         .font(.system(size: 20, weight: .medium))
-        //         .foregroundStyle(.white.opacity(0.5))
-        // } ?? Text(""))
-        Text(selectedPlaceFilter.headerTitle)
-            .font(AppTheme.contentHeaderFont)
-            .foregroundStyle(.white)
-    }
-
-    private func placesHeaderMenu(for response: MobilePlacesResponse) -> some View {
-        Menu {
-            ForEach(availableLocationFilters(for: response)) { location in
-                Button {
-                    selectedLocationFilter = location
-                } label: {
-                    if location == effectiveLocationFilter(for: response) {
-                        Label(location.title, systemImage: "checkmark")
-                    } else {
-                        Text(location.title)
-                    }
+    private var placeFilterBar: some View {
+        ScopePillBar {
+            ForEach(availablePlaceFilters) { filter in
+                ScopePill(
+                    title: filter.title,
+                    isSelected: selectedPlaceFilter == filter
+                ) {
+                    selectedPlaceFilter = filter
                 }
             }
-        } label: {
-            placesHeader(locationName: headerLocationName(for: response))
-        }
-        .buttonStyle(.plain)
-    }
-
-    private var selectedLocationName: String? {
-        switch selectedLocationFilter {
-        case .city(let city, _):
-            return city
-        default:
-            return nil
         }
     }
 
-    private func headerLocationName(for response: MobilePlacesResponse) -> String? {
-        switch effectiveLocationFilter(for: response) {
-        case .city(let city, _):
-            return city
-        case .all:
-            return nil
+    private var availablePlaceFilters: [PlaceKindFilter] {
+        let hasMyPlaces: Bool
+
+        if case .loaded(let response) = viewModel.state {
+            hasMyPlaces = response.places.contains(where: \.isMember)
+        } else {
+            hasMyPlaces = false
+        }
+
+        return PlaceKindFilter.filters(hasMyPlaces: hasMyPlaces)
+    }
+
+    private var placesHeaderScrollMarker: some View {
+        GeometryReader { proxy in
+            Color.clear.preference(
+                key: ScrollableHeaderMinYPreferenceKey.self,
+                value: proxy.frame(in: .named("places-scroll")).minY
+            )
         }
     }
 
@@ -205,7 +210,7 @@ struct VenuesView: View {
                 categories: availableCategoryFilters(for: response),
                 selectedCategoryID: selectedCategoryID,
                 onSelectCategory: { selectedCategoryID = $0 },
-                onSearch: presentPlaceSearch,
+                onSearch: onSearch,
                 locationSelection: Binding(
                     get: { effectiveLocationFilter(for: response) },
                     set: { selectedLocationFilter = $0 }
@@ -215,7 +220,6 @@ struct VenuesView: View {
             )
         }
         .frame(maxWidth: .infinity, alignment: .leading)
-        .padding(.bottom, 4)
     }
 
     private var loadingFilterControls: some View {
@@ -225,14 +229,13 @@ struct VenuesView: View {
                 categories: [],
                 selectedCategoryID: nil,
                 onSelectCategory: { _ in },
-                onSearch: presentPlaceSearch,
+                onSearch: onSearch,
                 locationSelection: .constant(.city(city: "Boston", state: "MA")),
                 locations: [.city(city: "Boston", state: "MA")],
                 hasActiveLocationSelection: false
             )
         }
         .frame(maxWidth: .infinity, alignment: .leading)
-        .padding(.bottom, 4)
     }
 
     @ViewBuilder
@@ -244,6 +247,21 @@ struct VenuesView: View {
         } else {
             loadingFilterControls
         }
+    }
+
+    private func placesTopNavigation(for response: MobilePlacesResponse?) -> some View {
+        ZStack {
+            topControls(for: response)
+                .frame(maxWidth: .infinity, alignment: .leading)
+
+            Text("Places")
+                .font(.system(size: 17, weight: .semibold))
+                .foregroundStyle(.white)
+                .frame(height: 46)
+                .opacity(headerOpacity)
+                .allowsHitTesting(false)
+        }
+        .frame(height: 46)
     }
 
     private var placeSearchControls: some View {
@@ -282,7 +300,6 @@ struct VenuesView: View {
                 dismissPlaceSearch()
             }
         }
-        .padding(.bottom, 4)
     }
 
     private func filteredPlaces(in response: MobilePlacesResponse) -> [PlaceListItem] {
@@ -492,9 +509,10 @@ private enum PlaceLocationFilter: Hashable, Identifiable {
 
 private enum PlaceKindFilter: String, CaseIterable, Identifiable {
     case all
+    case following
+    case myPlaces
     case venues
     case organizers
-    case following
 
     var id: String { rawValue }
 
@@ -508,6 +526,8 @@ private enum PlaceKindFilter: String, CaseIterable, Identifiable {
             return "Organizers"
         case .following:
             return "Following"
+        case .myPlaces:
+            return "My Places"
         }
     }
 
@@ -521,7 +541,20 @@ private enum PlaceKindFilter: String, CaseIterable, Identifiable {
             return "Organizers"
         case .following:
             return "Following"
+        case .myPlaces:
+            return "My Places"
         }
+    }
+
+    static func filters(hasMyPlaces: Bool) -> [PlaceKindFilter] {
+        var filters: [PlaceKindFilter] = [.all, .following]
+
+        if hasMyPlaces {
+            filters.append(.myPlaces)
+        }
+
+        filters.append(contentsOf: [.venues, .organizers])
+        return filters
     }
 
     func includes(_ place: PlaceListItem) -> Bool {
@@ -534,6 +567,8 @@ private enum PlaceKindFilter: String, CaseIterable, Identifiable {
             return place.type == .organizer
         case .following:
             return place.isFollowed
+        case .myPlaces:
+            return place.isMember
         }
     }
 }
@@ -546,25 +581,11 @@ private struct PlaceKindFilterMenu: View {
     var useCombinedStyle = false
 
     private var hasActiveFilters: Bool {
-        selection != .all || selectedCategoryID != nil
+        selectedCategoryID != nil
     }
 
     var body: some View {
         Menu {
-            Section("Places") {
-                ForEach(PlaceKindFilter.allCases) { filter in
-                    Button {
-                        selection = filter
-                    } label: {
-                        if filter == selection {
-                            Label(filter.title, systemImage: "checkmark")
-                        } else {
-                            Text(filter.title)
-                        }
-                    }
-                }
-            }
-
             if !categories.isEmpty {
                 Section("Categories") {
                     Button {

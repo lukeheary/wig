@@ -72,12 +72,13 @@ struct AuthGate: View {
                 using: apiClient,
                 cacheIdentity: eventFeedCacheIdentity
             )
+            async let recentActivityPreload: Void = preloadRecentActivity()
 
             if requiresOnboardingGate {
                 await viewModel.load(using: apiClient)
             }
 
-            await homePreload
+            _ = await (homePreload, recentActivityPreload)
             isHomePreloadReady = true
             await Task.yield()
             onReady()
@@ -107,6 +108,17 @@ struct AuthGate: View {
 
     private var eventFeedCacheIdentity: String {
         appSession.isAuthBypassed ? "bypass" : clerk.user?.id ?? "guest"
+    }
+
+    private func preloadRecentActivity() async {
+        guard clerk.user != nil || appSession.isAuthBypassed else {
+            return
+        }
+
+        await HomeRecentActivityViewModel.preload(
+            using: apiClient,
+            cacheIdentity: eventFeedCacheIdentity
+        )
     }
 }
 

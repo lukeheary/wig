@@ -1,4 +1,121 @@
 import SwiftUI
+import UIKit
+import Observation
+
+struct ScrollableHeaderMinYPreferenceKey: PreferenceKey {
+    static var defaultValue: CGFloat = 60
+
+    static func reduce(value: inout CGFloat, nextValue: () -> CGFloat) {
+        value = nextValue()
+    }
+}
+
+func scrollableHeaderOpacity(for minY: CGFloat) -> CGFloat {
+    min(max((minY - 16) / 36, 0), 1)
+}
+
+extension View {
+    func scrollingPillFade() -> some View {
+        visualEffect { content, geometry in
+            content.opacity(
+                scrollableHeaderOpacity(
+                    for: geometry.frame(in: .scrollView).minY
+                )
+            )
+        }
+    }
+}
+
+private func scrollableHeaderOpacity(forScrollOffset offset: CGFloat) -> CGFloat {
+    min(max(1 - max(offset, 0) / 36, 0), 1)
+}
+
+struct ScrollableHeaderFadeTrackingModifier: ViewModifier {
+    @Binding var opacity: CGFloat
+
+    @ViewBuilder
+    func body(content: Content) -> some View {
+        if #available(iOS 18.0, *) {
+            content.onScrollGeometryChange(for: CGFloat.self) { geometry in
+                geometry.contentOffset.y + geometry.contentInsets.top
+            } action: { _, offset in
+                opacity = scrollableHeaderOpacity(forScrollOffset: offset)
+            }
+        } else {
+            content
+        }
+    }
+}
+
+@Observable
+final class ScrollableHeaderVisibility {
+    var isVisible = true
+}
+
+struct ScrollableHeaderVisibilityTrackingModifier: ViewModifier {
+    let visibility: ScrollableHeaderVisibility
+
+    @ViewBuilder
+    func body(content: Content) -> some View {
+        if #available(iOS 18.0, *) {
+            content.onScrollGeometryChange(for: Bool.self) { geometry in
+                let offset = geometry.contentOffset.y + geometry.contentInsets.top
+                return offset < 18
+            } action: { _, newValue in
+                guard visibility.isVisible != newValue else { return }
+                withAnimation(.easeOut(duration: 0.18)) {
+                    visibility.isVisible = newValue
+                }
+            }
+        } else {
+            content
+        }
+    }
+}
+
+struct ScopePillBar<Content: View>: View {
+    @ViewBuilder let content: () -> Content
+
+    var body: some View {
+        ScrollView(.horizontal) {
+            HStack(spacing: 8) {
+                content()
+            }
+            .padding(.horizontal, 16)
+        }
+        // Keep the resting content aligned to the app's standard inset while
+        // extending the scroll viewport to the screen edges. Once scrolled,
+        // pills can move cleanly past either edge of the display.
+        .padding(.horizontal, -16)
+        .scrollIndicators(.hidden)
+    }
+}
+
+struct ScopePill: View {
+    let title: String
+    let isSelected: Bool
+    var canDeselect = false
+    let action: () -> Void
+
+    var body: some View {
+        Button {
+            guard !isSelected || canDeselect else { return }
+            UISelectionFeedbackGenerator().selectionChanged()
+            action()
+        } label: {
+            Text(title)
+                .font(.system(size: 12, weight: .medium))
+                .foregroundStyle(isSelected ? .black : .white)
+                .padding(.horizontal, 15)
+                .frame(height: 34)
+                .background(
+                    isSelected ? AppTheme.accentBlue : Color.white.opacity(0.09),
+                    in: Capsule()
+                )
+        }
+        .buttonStyle(.plain)
+    }
+}
 
 enum UserAvatarFallbackPalette {
     static let colors = [

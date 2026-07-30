@@ -256,6 +256,71 @@ export async function POST(request: NextRequest) {
       return NextResponse.json({ error: "Username is already taken" }, { status: 400 });
     }
 
+    const existingUser = await db.query.users.findFirst({
+      where: eq(users.id, userId),
+    });
+
+    if (existingUser && !existingUser.isOnboarding) {
+      const clerk = await clerkClient();
+      const clerkUser = await clerk.users.getUser(userId);
+      const shouldUpdateClerkName =
+        clerkUser.firstName !== firstName || clerkUser.lastName !== lastName;
+
+      try {
+        if (shouldUpdateClerkName) {
+          await clerk.users.updateUser(userId, { firstName, lastName });
+        }
+
+        const [updatedUser] = await db
+          .update(users)
+          .set({
+            firstName,
+            lastName,
+            username: normalizedUsername,
+            city,
+            state,
+            gender,
+            dateOfBirth,
+            updatedAt: new Date(),
+          })
+          .where(eq(users.id, userId))
+          .returning();
+
+        if (!updatedUser || !hasCompletedMobileProfile(updatedUser)) {
+          throw new Error("Mobile profile persistence verification failed");
+        }
+
+        return NextResponse.json({
+          isOnboarding: false,
+          firstName: updatedUser.firstName ?? "",
+          lastName: updatedUser.lastName ?? "",
+          username: updatedUser.username,
+          city: updatedUser.city ?? "",
+          state: updatedUser.state ?? "",
+          gender: updatedUser.gender,
+          dateOfBirth: updatedUser.dateOfBirth,
+          avatarImageUrl: updatedUser.avatarImageUrl,
+        });
+      } catch (error) {
+        if (shouldUpdateClerkName) {
+          try {
+            await clerk.users.updateUser(userId, {
+              firstName: clerkUser.firstName ?? "",
+              lastName: clerkUser.lastName ?? "",
+            });
+          } catch (rollbackError) {
+            console.error("Mobile profile Clerk rollback error:", rollbackError);
+          }
+        }
+
+        console.error("Mobile profile update error:", error);
+        return NextResponse.json(
+          { error: "Failed to update profile" },
+          { status: 500 }
+        );
+      }
+    }
+
     const clerk = await clerkClient();
     const clerkUser = await clerk.users.getUser(userId);
     const primaryEmail =
@@ -271,9 +336,6 @@ export async function POST(request: NextRequest) {
     }
 
     const normalizedEmail = primaryEmail.toLowerCase().trim();
-    const existingUser = await db.query.users.findFirst({
-      where: eq(users.id, userId),
-    });
 
     const savedUsers = !existingUser
       ? await db
