@@ -270,7 +270,9 @@ struct MobileOnboardingView: View {
     var body: some View {
         ScrollView {
             VStack(alignment: .leading, spacing: 24) {
-                header
+                if mode == .onboarding {
+                    header
+                }
                 nameSection
                 usernameSection
                 citySection
@@ -355,46 +357,54 @@ struct MobileOnboardingView: View {
     }
 
     private var editNavigationBar: some View {
-        HStack {
-            Button {
-                dismiss()
-            } label: {
-                Image(systemName: "chevron.left")
-                    .font(.system(size: 17, weight: .bold))
-                    .foregroundStyle(.white)
-                    .frame(width: 46, height: 46)
-                    .contentShape(Circle())
-                    .profileFormLiquidGlass(in: Circle())
-            }
-            .buttonStyle(.plain)
-
-            Spacer()
-
-            Button {
-                focusedInput = nil
-                submit()
-            } label: {
-                HStack(spacing: 8) {
-                    if viewModel.isSubmitting {
-                        ProgressView()
-                            .tint(.black)
-                    }
-
-                    Text("Save")
-                        .font(.system(size: 15, weight: .bold))
-                }
-                .foregroundStyle(.black)
-                .padding(.horizontal, 18)
+        ZStack {
+            Text("Edit Profile")
+                .font(.system(size: 17, weight: .semibold))
+                .foregroundStyle(.white)
                 .frame(height: 46)
-                .background(
-                    Capsule()
-                        .fill(.white)
-                )
-                .contentShape(Capsule())
+                .allowsHitTesting(false)
+
+            HStack {
+                Button {
+                    dismiss()
+                } label: {
+                    Image(systemName: "chevron.left")
+                        .font(.system(size: 17, weight: .bold))
+                        .foregroundStyle(.white)
+                        .frame(width: 46, height: 46)
+                        .contentShape(Circle())
+                        .profileFormLiquidGlass(in: Circle())
+                }
+                .buttonStyle(.plain)
+
+                Spacer()
+
+                Button {
+                    focusedInput = nil
+                    submit()
+                } label: {
+                    HStack(spacing: 8) {
+                        if viewModel.isSubmitting {
+                            ProgressView()
+                                .tint(.black)
+                        }
+
+                        Text("Save")
+                            .font(.system(size: 15, weight: .bold))
+                    }
+                    .foregroundStyle(.black)
+                    .padding(.horizontal, 18)
+                    .frame(height: 46)
+                    .background(
+                        Capsule()
+                            .fill(.white)
+                    )
+                    .contentShape(Capsule())
+                }
+                .buttonStyle(.plain)
+                .disabled(!canSubmit)
+                .opacity(canSubmit ? 1 : 0.36)
             }
-            .buttonStyle(.plain)
-            .disabled(!canSubmit)
-            .opacity(canSubmit ? 1 : 0.36)
         }
         .padding(.horizontal, 16)
         .padding(.top, 0)
@@ -714,7 +724,8 @@ struct MobileOnboardingView: View {
 
         Task {
             do {
-                _ = try await viewModel.complete(
+                _ = try await viewModel.save(
+                    mode: mode,
                     firstName: normalizedFirstName,
                     lastName: normalizedLastName,
                     username: normalizedUsername,
@@ -769,7 +780,8 @@ struct MobileOnboardingView: View {
 private final class MobileOnboardingViewModel: ObservableObject {
     @Published private(set) var isSubmitting = false
 
-    func complete(
+    func save(
+        mode: MobileProfileFormMode,
         firstName: String,
         lastName: String,
         username: String,
@@ -786,15 +798,28 @@ private final class MobileOnboardingViewModel: ObservableObject {
         isSubmitting = true
         defer { isSubmitting = false }
 
-        let endpoint = try APIClient.completeMobileOnboarding(
-            firstName: firstName,
-            lastName: lastName,
-            username: username,
-            city: city,
-            state: state,
-            gender: gender,
-            dateOfBirth: dateOfBirth
-        )
+        let endpoint = try switch mode {
+        case .onboarding:
+            APIClient.completeMobileOnboarding(
+                firstName: firstName,
+                lastName: lastName,
+                username: username,
+                city: city,
+                state: state,
+                gender: gender,
+                dateOfBirth: dateOfBirth
+            )
+        case .editing:
+            APIClient.updateMobileProfile(
+                firstName: firstName,
+                lastName: lastName,
+                username: username,
+                city: city,
+                state: state,
+                gender: gender,
+                dateOfBirth: dateOfBirth
+            )
+        }
         return try await apiClient.send(endpoint)
     }
 }

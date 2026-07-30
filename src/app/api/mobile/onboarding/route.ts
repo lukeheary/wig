@@ -259,68 +259,6 @@ export async function POST(request: NextRequest) {
     const existingUser = await db.query.users.findFirst({
       where: eq(users.id, userId),
     });
-
-    if (existingUser && !existingUser.isOnboarding) {
-      const clerk = await clerkClient();
-      const clerkUser = await clerk.users.getUser(userId);
-      const shouldUpdateClerkName =
-        clerkUser.firstName !== firstName || clerkUser.lastName !== lastName;
-
-      try {
-        if (shouldUpdateClerkName) {
-          await clerk.users.updateUser(userId, { firstName, lastName });
-        }
-
-        const [updatedUser] = await db
-          .update(users)
-          .set({
-            firstName,
-            lastName,
-            username: normalizedUsername,
-            city,
-            state,
-            gender,
-            dateOfBirth,
-            updatedAt: new Date(),
-          })
-          .where(eq(users.id, userId))
-          .returning();
-
-        if (!updatedUser || !hasCompletedMobileProfile(updatedUser)) {
-          throw new Error("Mobile profile persistence verification failed");
-        }
-
-        return NextResponse.json({
-          isOnboarding: false,
-          firstName: updatedUser.firstName ?? "",
-          lastName: updatedUser.lastName ?? "",
-          username: updatedUser.username,
-          city: updatedUser.city ?? "",
-          state: updatedUser.state ?? "",
-          gender: updatedUser.gender,
-          dateOfBirth: updatedUser.dateOfBirth,
-          avatarImageUrl: updatedUser.avatarImageUrl,
-        });
-      } catch (error) {
-        if (shouldUpdateClerkName) {
-          try {
-            await clerk.users.updateUser(userId, {
-              firstName: clerkUser.firstName ?? "",
-              lastName: clerkUser.lastName ?? "",
-            });
-          } catch (rollbackError) {
-            console.error("Mobile profile Clerk rollback error:", rollbackError);
-          }
-        }
-
-        console.error("Mobile profile update error:", error);
-        return NextResponse.json(
-          { error: "Failed to update profile" },
-          { status: 500 }
-        );
-      }
-    }
-
     const clerk = await clerkClient();
     const clerkUser = await clerk.users.getUser(userId);
     const primaryEmail =
@@ -408,6 +346,174 @@ export async function POST(request: NextRequest) {
     console.error("Mobile onboarding submit error:", error);
     return NextResponse.json(
       { error: "Failed to complete onboarding" },
+      { status: 500 }
+    );
+  }
+}
+
+export async function PATCH(request: NextRequest) {
+  try {
+    const { userId } = await auth();
+
+    if (!userId) {
+      return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
+    }
+
+    const body = (await request.json()) as {
+      firstName?: string;
+      lastName?: string;
+      username?: string;
+      city?: string;
+      state?: string;
+      gender?: "male" | "female" | "other";
+      dateOfBirth?: string;
+    };
+
+    const firstName = body.firstName?.trim() ?? "";
+    const lastName = body.lastName?.trim() ?? "";
+    const normalizedUsername = body.username?.trim().toLowerCase() ?? "";
+    const city = body.city?.trim() ?? "";
+    const state = body.state?.trim().toUpperCase() ?? "";
+    const gender = body.gender;
+    const dateOfBirth = body.dateOfBirth?.trim() ?? "";
+
+    if (
+      !firstName ||
+      !lastName ||
+      firstName.length > 100 ||
+      lastName.length > 100
+    ) {
+      return NextResponse.json(
+        { error: "Please enter your first and last name" },
+        { status: 400 }
+      );
+    }
+
+    if (!USERNAME_PATTERN.test(normalizedUsername)) {
+      return NextResponse.json(
+        {
+          error:
+            "Username must be 3-20 characters and contain only letters, numbers, and underscores",
+        },
+        { status: 400 }
+      );
+    }
+
+    if (isReservedUsername(normalizedUsername)) {
+      return NextResponse.json(
+        { error: "Username is already taken" },
+        { status: 400 }
+      );
+    }
+
+    if (!city || city.length > 100 || state.length !== 2) {
+      return NextResponse.json(
+        { error: "Please select your city" },
+        { status: 400 }
+      );
+    }
+
+    if (!gender || !["male", "female", "other"].includes(gender)) {
+      return NextResponse.json(
+        { error: "Please select your gender" },
+        { status: 400 }
+      );
+    }
+
+    if (!isValidDateOfBirth(dateOfBirth)) {
+      return NextResponse.json(
+        { error: "Please enter a valid date of birth" },
+        { status: 400 }
+      );
+    }
+
+    const existingUser = await db.query.users.findFirst({
+      where: eq(users.id, userId),
+    });
+
+    if (!existingUser) {
+      return NextResponse.json({ error: "User not found" }, { status: 404 });
+    }
+
+    const existingUserWithUsername = await db.query.users.findFirst({
+      where: and(eq(users.username, normalizedUsername), ne(users.id, userId)),
+    });
+    const existingPublicHandle = await db.query.publicHandles.findFirst({
+      where: eq(publicHandles.handle, normalizedUsername),
+    });
+
+    if (
+      existingUserWithUsername ||
+      (existingPublicHandle &&
+        !(
+          existingPublicHandle.ownerKind === "user" &&
+          existingPublicHandle.ownerId === userId
+        ))
+    ) {
+      return NextResponse.json(
+        { error: "Username is already taken" },
+        { status: 400 }
+      );
+    }
+
+    const clerk = await clerkClient();
+    const clerkUser = await clerk.users.getUser(userId);
+    const shouldUpdateClerkName =
+      clerkUser.firstName !== firstName || clerkUser.lastName !== lastName;
+
+    if (shouldUpdateClerkName) {
+      await clerk.users.updateUser(userId, { firstName, lastName });
+    }
+
+    try {
+      const [updatedUser] = await db
+        .update(users)
+        .set({
+          firstName,
+          lastName,
+          username: normalizedUsername,
+          city,
+          state,
+          gender,
+          dateOfBirth,
+          updatedAt: new Date(),
+        })
+        .where(eq(users.id, userId))
+        .returning();
+
+      if (!updatedUser || !hasCompletedMobileProfile(updatedUser)) {
+        throw new Error("Mobile profile persistence verification failed");
+      }
+
+      return NextResponse.json({
+        isOnboarding: false,
+        firstName: updatedUser.firstName ?? "",
+        lastName: updatedUser.lastName ?? "",
+        username: updatedUser.username,
+        city: updatedUser.city ?? "",
+        state: updatedUser.state ?? "",
+        gender: updatedUser.gender,
+        dateOfBirth: updatedUser.dateOfBirth,
+        avatarImageUrl: updatedUser.avatarImageUrl,
+      });
+    } catch (error) {
+      if (shouldUpdateClerkName) {
+        try {
+          await clerk.users.updateUser(userId, {
+            firstName: clerkUser.firstName ?? "",
+            lastName: clerkUser.lastName ?? "",
+          });
+        } catch (rollbackError) {
+          console.error("Mobile profile Clerk rollback error:", rollbackError);
+        }
+      }
+
+      throw error;
+    }
+  } catch (error) {
+    console.error("Mobile profile update error:", error);
+    return NextResponse.json(
+      { error: "Failed to update profile" },
       { status: 500 }
     );
   }

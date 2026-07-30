@@ -852,6 +852,34 @@ struct APIClient: Sendable {
         )
     }
 
+    static func updateMobileProfile(
+        firstName: String,
+        lastName: String,
+        username: String,
+        city: String,
+        state: String,
+        gender: UserGender,
+        dateOfBirth: String
+    ) throws -> Endpoint<MobileOnboardingState> {
+        Endpoint(
+            path: "/api/mobile/onboarding",
+            method: .patch,
+            body: try JSONEncoder().encode(
+                MobileOnboardingUpdateRequest(
+                    firstName: firstName,
+                    lastName: lastName,
+                    username: username,
+                    city: city,
+                    state: state,
+                    gender: gender,
+                    dateOfBirth: dateOfBirth
+                )
+            ),
+            requiresAuthentication: false,
+            includesAuthenticationIfAvailable: true
+        )
+    }
+
     static func mobileEventRSVP(eventID: UUID) -> Endpoint<EventRSVPState> {
         Endpoint(
             path: "/api/mobile/events/\(eventID.uuidString)/rsvp",
