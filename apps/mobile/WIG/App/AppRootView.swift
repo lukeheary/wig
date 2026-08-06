@@ -56,11 +56,11 @@ struct AppRootView: View {
         .task(id: isContentReady) {
             guard isContentReady else { return }
 
-            // Let the destination render behind the splash before fading it away.
-            try? await Task.sleep(for: .milliseconds(50))
+            // Give the destination one render frame behind the splash before fading.
+            try? await Task.sleep(for: .milliseconds(16))
             guard !Task.isCancelled else { return }
 
-            let fadeDuration = reduceMotion ? 0.2 : 0.34
+            let fadeDuration = reduceMotion ? 0.12 : 0.22
             withAnimation(.easeInOut(duration: fadeDuration)) {
                 launchOpacity = 0
             }

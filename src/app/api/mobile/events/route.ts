@@ -3,8 +3,10 @@ import { NextResponse } from "next/server";
 import {
   and,
   asc,
+  desc,
   eq,
   gte,
+  gt,
   inArray,
   isNotNull,
   isNull,
@@ -260,13 +262,17 @@ export async function GET(request: Request) {
       ? new Date(today.getTime() - 24 * 60 * 60 * 1000)
       : today;
   const requestedStartDate = parseDateParam(searchParams.get("startDate"));
+  const bufferedRequestedStartDate = requestedStartDate
+    ? new Date(requestedStartDate.getTime() - 24 * 60 * 60 * 1000)
+    : null;
   const startDate =
-    requestedStartDate && requestedStartDate > feedStartFloor
-      ? requestedStartDate
+    bufferedRequestedStartDate && bufferedRequestedStartDate > feedStartFloor
+      ? bufferedRequestedStartDate
       : feedStartFloor;
-  const endDate =
-    parseDateParam(searchParams.get("endDate")) ??
-    new Date(startDate.getTime() + 7 * 24 * 60 * 60 * 1000);
+  const requestedEndDate = parseDateParam(searchParams.get("endDate"));
+  const endDate = requestedEndDate
+    ? new Date(requestedEndDate.getTime() + 24 * 60 * 60 * 1000)
+    : new Date(startDate.getTime() + 8 * 24 * 60 * 60 * 1000);
   const hiddenPlaceIds = hiddenPlaces.map((hiddenPlace) => hiddenPlace.placeId);
   const visiblePlaceCondition =
     hiddenPlaceIds.length > 0
@@ -303,11 +309,73 @@ export async function GET(request: Request) {
     },
   });
 
+  const followedPlaceIdList = userId
+    ? (
+        await db.query.placeFollows.findMany({
+          where: eq(placeFollows.userId, userId),
+          columns: {
+            placeId: true,
+          },
+        })
+      ).map((follow) => follow.placeId)
+    : [];
+  const followedPlaceIds = new Set(followedPlaceIdList);
+  const latestFromFollowsCutoff = new Date(
+    now.getTime() - 14 * 24 * 60 * 60 * 1000
+  );
+  const latestFromFollowsCandidates =
+    followedPlaceIdList.length > 0
+      ? await db.query.events.findMany({
+          where: and(
+            eq(events.visibility, "public"),
+            eq(events.status, "active"),
+            gte(events.startAt, feedStartFloor),
+            or(
+              inArray(events.venueId, followedPlaceIdList),
+              inArray(events.organizerId, followedPlaceIdList)
+            ),
+            or(
+              and(
+                isNull(events.seriesId),
+                or(
+                  gte(events.createdAt, latestFromFollowsCutoff),
+                  gte(events.updatedAt, latestFromFollowsCutoff)
+                )
+              ),
+              and(
+                isNotNull(events.seriesId),
+                gte(events.updatedAt, latestFromFollowsCutoff),
+                gt(events.updatedAt, events.createdAt)
+              )
+            ),
+            visiblePlaceCondition
+          ),
+          orderBy: [desc(events.updatedAt), desc(events.createdAt)],
+          with: {
+            venue: true,
+            organizer: true,
+            categoryLinks: {
+              with: {
+                category: true,
+              },
+            },
+          },
+        })
+      : [];
 
-  const eventIds = eventList.map((event) => event.id);
+  const allEventList = Array.from(
+    new Map(
+      [...eventList, ...latestFromFollowsCandidates].map((event) => [
+        event.id,
+        event,
+      ])
+    ).values()
+  );
+
+  const eventIds = allEventList.map((event) => event.id);
   const relatedPlaceIds = Array.from(
     new Set(
-      eventList
+      allEventList
         .flatMap((event) => [event.venueId, event.organizerId])
         .filter((placeID): placeID is string => Boolean(placeID))
     )
@@ -507,22 +575,9 @@ export async function GET(request: Request) {
     }
   }
 
-  const followedPlaceIds =
-    userId && eventIds.length > 0
-      ? new Set(
-          (
-            await db.query.placeFollows.findMany({
-              where: eq(placeFollows.userId, userId),
-              columns: {
-                placeId: true,
-              },
-            })
-          ).map((follow) => follow.placeId)
-        )
-      : new Set<string>();
   const editPermissions = await resolveMobileEventEditPermissions(userId);
 
-  const payload = eventList.map((event) => {
+  const allPayload = allEventList.map((event) => {
     const mapped = mapEventCategoryData(event);
     const socialRsvps = socialRsvpsMap.get(mapped.id) ?? [];
     const currentUserRsvp = currentUserRsvpMap.get(mapped.id) ?? null;
@@ -596,10 +651,22 @@ export async function GET(request: Request) {
     };
   });
 
+  const payloadByID = new Map(allPayload.map((event) => [event.id, event]));
+  const payload = eventList.flatMap((event) => {
+    const mapped = payloadByID.get(event.id);
+    return mapped ? [mapped] : [];
+  });
+  const latestFromFollows = latestFromFollowsCandidates.flatMap((event) => {
+    const mapped = payloadByID.get(event.id);
+    return mapped ? [mapped] : [];
+  });
+
   return NextResponse.json({
     events: payload,
+    latestFromFollows,
     availableCities,
     currentUserLocation: currentUserMetroArea,
+    feedTimeZone,
   });
 }
 

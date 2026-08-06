@@ -32,6 +32,7 @@ final class EventFeedViewModel: ObservableObject {
     @Published private(set) var responsesByWeek = [Date: MobileEventsResponse]()
     @Published private(set) var loadingWeekStarts = Set<Date>()
     @Published private(set) var currentUserLocation: EventCity?
+    @Published private(set) var feedTimeZoneIdentifier: String?
 
     init() {
         state = .idle
@@ -39,11 +40,21 @@ final class EventFeedViewModel: ObservableObject {
 
     static func preload(using apiClient: APIClient, cacheIdentity: String) async {
         let viewModel = EventFeedViewModel()
+        let weekStart = Self.startOfWeek(for: .now)
         await viewModel.load(
-            weekStart: Self.startOfWeek(for: .now),
+            weekStart: weekStart,
             using: apiClient,
             cacheIdentity: cacheIdentity
         )
+
+        // Current-week artwork is naturally warmed by the regular Home rows, but
+        // future events can appear only in What's New. Warm the initially visible
+        // carousel artwork before the launch screen is dismissed so those cards do
+        // not reveal their images later than the rest of Home. Keep this bounded so
+        // a large update feed cannot materially extend launch time.
+        if let updates = viewModel.response(for: weekStart)?.latestFromFollows {
+            await EventArtworkPrefetcher.prefetch(events: Array(updates.prefix(4)))
+        }
     }
 
     static func invalidateSharedCache() {
@@ -80,6 +91,7 @@ final class EventFeedViewModel: ObservableObject {
         weekStart: Date,
         using apiClient: APIClient,
         cacheIdentity: String = "guest",
+        timeZone: TimeZone = .autoupdatingCurrent,
         forceRefresh: Bool = false
     ) async {
         let cacheKey = Self.cacheKey(for: weekStart)
@@ -133,8 +145,8 @@ final class EventFeedViewModel: ObservableObject {
                 state = .loading
             }
 
-            let requestStartDate = Self.displayRangeStartDate(for: cacheKey)
-            guard let weekEnd = Self.weekEndDate(for: cacheKey) else {
+            let requestStartDate = Self.displayRangeStartDate(for: cacheKey, timeZone: timeZone)
+            guard let weekEnd = Self.weekEndDate(for: cacheKey, timeZone: timeZone) else {
                 throw EventFeedError.invalidWeekRange
             }
 
@@ -178,6 +190,8 @@ final class EventFeedViewModel: ObservableObject {
     }
 
     private func rememberCurrentUserLocation(from response: MobileEventsResponse) {
+        feedTimeZoneIdentifier = response.feedTimeZone
+
         guard let location = response.currentUserLocation else {
             return
         }
@@ -189,31 +203,57 @@ final class EventFeedViewModel: ObservableObject {
         weekCalendar.startOfDay(for: date)
     }
 
-    static func displayRangeStartDate(for weekStart: Date, now: Date = .now) -> Date {
-        let currentWeekStart = startOfWeek(for: now)
-        let startOfToday = weekCalendar.startOfDay(for: now)
+    static func displayRangeStartDate(
+        for weekStart: Date,
+        now: Date = .now,
+        timeZone: TimeZone = .autoupdatingCurrent
+    ) -> Date {
+        let calendar = calendar(timeZone: timeZone)
+        let currentWeekStart = startOfWeek(for: now, timeZone: timeZone)
+        let startOfToday = calendar.startOfDay(for: now)
+        let requestedWeekStart = date(placingLogicalDay: weekStart, in: calendar)
 
-        if weekStart > currentWeekStart {
-            return cacheKey(for: weekStart)
+        if requestedWeekStart > currentWeekStart {
+            return requestedWeekStart
         }
 
-        if weekCalendar.component(.hour, from: now) < 6 {
-            return weekCalendar.date(byAdding: .day, value: -1, to: startOfToday) ?? startOfToday
+        if calendar.component(.hour, from: now) < 6 {
+            return calendar.date(byAdding: .day, value: -1, to: startOfToday) ?? startOfToday
         }
 
         return startOfToday
     }
 
-    static func weekEndDate(for weekStart: Date) -> Date? {
-        weekCalendar.date(byAdding: .day, value: 7, to: cacheKey(for: weekStart))
+    static func weekEndDate(
+        for weekStart: Date,
+        timeZone: TimeZone = .autoupdatingCurrent
+    ) -> Date? {
+        let calendar = calendar(timeZone: timeZone)
+        let requestedWeekStart = date(placingLogicalDay: weekStart, in: calendar)
+        return calendar.date(byAdding: .day, value: 7, to: requestedWeekStart)
     }
 
-    static func startOfWeek(for date: Date) -> Date {
-        let startOfDay = weekCalendar.startOfDay(for: date)
-        let weekday = weekCalendar.component(.weekday, from: startOfDay)
-        let daysFromMonday = (weekday - weekCalendar.firstWeekday + 7) % 7
+    static func startOfWeek(
+        for date: Date,
+        timeZone: TimeZone = .autoupdatingCurrent
+    ) -> Date {
+        let calendar = calendar(timeZone: timeZone)
+        let startOfDay = calendar.startOfDay(for: date)
+        let weekday = calendar.component(.weekday, from: startOfDay)
+        let daysFromMonday = (weekday - calendar.firstWeekday + 7) % 7
 
-        return weekCalendar.date(byAdding: .day, value: -daysFromMonday, to: startOfDay) ?? startOfDay
+        return calendar.date(byAdding: .day, value: -daysFromMonday, to: startOfDay) ?? startOfDay
+    }
+
+    private static func date(placingLogicalDay date: Date, in calendar: Calendar) -> Date {
+        let components = weekCalendar.dateComponents([.year, .month, .day], from: date)
+        return calendar.date(from: components) ?? calendar.startOfDay(for: date)
+    }
+
+    private static func calendar(timeZone: TimeZone) -> Calendar {
+        var calendar = weekCalendar
+        calendar.timeZone = timeZone
+        return calendar
     }
 
     private static var weekCalendar: Calendar {

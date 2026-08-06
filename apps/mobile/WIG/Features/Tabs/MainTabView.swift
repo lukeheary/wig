@@ -11,6 +11,7 @@ struct MainTabView: View {
     @State private var previousNonSearchTab: AppTab = .home
     @State private var isAuthSheetPresented = false
     @State private var isGuestIntroPresented = true
+    @State private var hasLoadedHomeContent = false
     @State private var hasLoadedGuestHomeContent = false
     @State private var guestIntroSheetHeight: CGFloat = 400
     @State private var guestIntroSelectedDetent: PresentationDetent = .height(400)
@@ -83,7 +84,7 @@ struct MainTabView: View {
                             selectedTab = .profile
                         },
                         onSearchEvents: { openSearch(filter: .events, from: .home) },
-                        onInitialContentReady: markGuestHomeContentReady
+                        onInitialContentReady: markHomeContentReady
                     )
                 }
 
@@ -159,6 +160,7 @@ struct MainTabView: View {
                 return
             }
 
+            guard hasLoadedHomeContent else { return }
             await preloadAuthenticatedTabs()
         }
         .onReceive(NotificationCenter.default.publisher(for: .friendRequestDidChange)) { notification in
@@ -207,7 +209,7 @@ struct MainTabView: View {
                         selectedTab = .profile
                     },
                     onSearchEvents: { openSearch(filter: .events, from: .home) },
-                    onInitialContentReady: markGuestHomeContentReady
+                    onInitialContentReady: markHomeContentReady
                 )
                     .tabItem {
                         Image(systemName: "house")
@@ -296,6 +298,7 @@ struct MainTabView: View {
                 return
             }
 
+            guard hasLoadedHomeContent else { return }
             await preloadAuthenticatedTabs()
         }
         .onReceive(NotificationCenter.default.publisher(for: .friendRequestDidChange)) { notification in
@@ -346,7 +349,7 @@ struct MainTabView: View {
     }
 
     private var preloadTaskID: String {
-        "\(clerk.user?.id ?? "guest")-\(appSession.isAuthBypassed)"
+        "\(clerk.user?.id ?? "guest")-\(appSession.isAuthBypassed)-\(hasLoadedHomeContent)"
     }
 
     private var tabSelection: Binding<AppTab> {
@@ -456,7 +459,9 @@ struct MainTabView: View {
         .presentationDragIndicator(.visible)
     }
 
-    private func markGuestHomeContentReady() {
+    private func markHomeContentReady() {
+        hasLoadedHomeContent = true
+
         guard !isAuthenticated, !hasLoadedGuestHomeContent else { return }
 
         Task { @MainActor in

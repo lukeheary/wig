@@ -18,6 +18,7 @@ struct PlaceDetailView: View {
     @State private var isUnfollowConfirmationPresented = false
     @State private var isHideFromHomeConfirmationPresented = false
     @State private var presentedWebsite: PlaceWebsiteDestination?
+    @State private var creationDestination: PlaceEventCreationDestination?
     private let eventCardWidth: CGFloat = 220
 
     var body: some View {
@@ -192,6 +193,23 @@ struct PlaceDetailView: View {
             PlaceWebsiteBrowser(url: destination.url)
                 .ignoresSafeArea()
         }
+        .sheet(item: $creationDestination) { destination in
+            switch destination {
+            case .event:
+                MobileEventCreationView(
+                    mode: .create,
+                    preselectedPlace: displayedDetail,
+                    onCompleted: { _ in refreshPlaceDetail() }
+                )
+            case .series:
+                MobileEventCreationView(
+                    mode: .create,
+                    creationKind: .eventSeries,
+                    preselectedPlace: displayedDetail,
+                    onSeriesCompleted: refreshPlaceDetail
+                )
+            }
+        }
         .task {
             if case .idle = viewModel.state {
                 await viewModel.load(
@@ -317,7 +335,16 @@ struct PlaceDetailView: View {
     }
 
     private func placeActionsMenu(for detail: PlaceDetail) -> some View {
-        placeOverflowMenu(for: detail)
+        HStack(spacing: 10) {
+            if detail.canManage {
+                PlaceEventCreationMenu(
+                    onAddEvent: { creationDestination = .event },
+                    onAddSeries: { creationDestination = .series }
+                )
+            }
+
+            placeOverflowMenu(for: detail)
+        }
     }
 
     private func placeActionIcon(_ systemName: String, isAvailable: Bool) -> some View {
@@ -419,6 +446,13 @@ struct PlaceDetailView: View {
         }
 
         UIApplication.shared.open(url)
+    }
+
+    private func refreshPlaceDetail() {
+        Task {
+            PlaceDetailViewModel.invalidateCache(for: place.slug)
+            await viewModel.load(slug: place.slug, using: apiClient, forceRefresh: true)
+        }
     }
 
     private func instagramURL(for handle: String?) -> URL? {

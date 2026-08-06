@@ -30,6 +30,65 @@ private final class HomeActivationViewModel: ObservableObject {
 }
 
 @MainActor
+private final class LatestFromFollowsViewModel: ObservableObject {
+    @Published private(set) var events = [EventFeedItem]()
+
+    private var loadedCacheIdentity: String?
+    private var loadToken: UUID?
+
+    func load(
+        using apiClient: APIClient,
+        cacheIdentity: String,
+        forceRefresh: Bool = false
+    ) async {
+        guard forceRefresh || loadedCacheIdentity != cacheIdentity || events.isEmpty else {
+            return
+        }
+
+        let token = UUID()
+        loadToken = token
+
+        var calendar = Calendar(identifier: .gregorian)
+        calendar.timeZone = .autoupdatingCurrent
+        guard let rangeEnd = calendar.date(byAdding: .day, value: 31, to: .now) else {
+            return
+        }
+
+        do {
+            let response = try await apiClient.send(
+                APIClient.mobileEventsPreview(
+                    startDate: .now,
+                    endDate: rangeEnd,
+                    limit: 500
+                )
+            )
+
+            guard !Task.isCancelled, loadToken == token else {
+                return
+            }
+
+            // Newer API versions return an unbounded latest feed. Merge it with
+            // this 31-day event range so the section also stays independent from
+            // Home's weekly request while older API environments are still in use.
+            var seenEventIDs = Set<UUID>()
+            events = ((response.latestFromFollows ?? []) + response.events)
+                .filter { seenEventIDs.insert($0.id).inserted }
+            loadedCacheIdentity = cacheIdentity
+        } catch is CancellationError {
+            return
+        } catch {
+            // Keep the last successful result during a transient refresh failure.
+        }
+    }
+
+    func clear() {
+        loadToken = nil
+        loadedCacheIdentity = nil
+        events = []
+    }
+}
+
+@MainActor
 private final class HomeForegroundRefreshCoordinator: ObservableObject {
     private var needsRefresh = false
     private var refreshTask: Task<Void, Never>?
@@ -121,6 +180,7 @@ struct HomeView: View {
     @EnvironmentObject private var appSession: AppSession
     @StateObject private var foregroundRefreshCoordinator = HomeForegroundRefreshCoordinator()
     @StateObject private var viewModel = EventFeedViewModel()
+    @StateObject private var latestFromFollowsViewModel = LatestFromFollowsViewModel()
     @StateObject private var recentActivityViewModel = HomeRecentActivityViewModel()
     @StateObject private var searchViewModel = HomeSearchDirectoryViewModel()
     @StateObject private var homeEventSearchViewModel = HomeSearchDirectoryViewModel()
@@ -281,6 +341,20 @@ struct HomeView: View {
                 .onChange(of: selectedWeekStart) { _, weekStart in
                     Task {
                         await loadHome(for: weekStart, using: apiClient)
+                    }
+                }
+                .onChange(of: viewModel.feedTimeZoneIdentifier) { oldIdentifier, newIdentifier in
+                    guard let newIdentifier,
+                          let newTimeZone = TimeZone(identifier: newIdentifier)
+                    else {
+                        return
+                    }
+
+                    let oldTimeZone = oldIdentifier.flatMap(TimeZone.init(identifier:)) ?? .autoupdatingCurrent
+                    let oldCurrentWeekStart = logicalStartOfWeek(for: .now, timeZone: oldTimeZone)
+
+                    if selectedWeekStart == oldCurrentWeekStart {
+                        selectedWeekStart = logicalStartOfWeek(for: .now, timeZone: newTimeZone)
                     }
                 }
                 .onChange(of: scenePhase) { _, phase in
@@ -575,6 +649,10 @@ struct HomeView: View {
                             section.title,
                             showsLocation: index == 0 && isViewingCurrentWeek
                         )
+                    }
+                    if index == 0, shouldShowLatestFromFollows {
+                        LatestFromFollowsSection(updates: latestFromFollows)
+                            .padding(.bottom, 8)
                     }
                 }
             }
@@ -1085,8 +1163,8 @@ struct HomeView: View {
     }
 
     private var visibleWeekDays: [Date] {
-        let startDate = EventFeedViewModel.displayRangeStartDate(for: selectedWeekStart)
-        let weekEnd = EventFeedViewModel.weekEndDate(for: selectedWeekStart) ?? startDate
+        let startDate = logicalDisplayRangeStartDate
+        let weekEnd = logicalWeekEnd ?? startDate
         let dayCount = max(
             Self.weekCalendar.dateComponents([.day], from: startDate, to: weekEnd).day ?? 0,
             0
@@ -1102,15 +1180,15 @@ struct HomeView: View {
     }
 
     private var visibleWeekRangeTitle: String {
-        let startDate = EventFeedViewModel.displayRangeStartDate(for: selectedWeekStart)
-        let weekEnd = EventFeedViewModel.weekEndDate(for: selectedWeekStart) ?? startDate
+        let startDate = logicalDisplayRangeStartDate
+        let weekEnd = logicalWeekEnd ?? startDate
         let inclusiveEndDate = Self.weekCalendar.date(byAdding: .day, value: -1, to: weekEnd) ?? startDate
 
         return "\(Self.weekRangeMonthFormatter.string(from: startDate)) - \(Self.weekRangeMonthFormatter.string(from: inclusiveEndDate))"
     }
 
     private var visibleWeekRelativeTitle: String {
-        let currentWeekStart = Self.startOfWeek(for: .now)
+        let currentWeekStart = currentFeedWeekStart
         let weeksFromCurrent = Self.weekCalendar.dateComponents(
             [.weekOfYear],
             from: currentWeekStart,
@@ -1123,7 +1201,7 @@ struct HomeView: View {
         case -1:
             return "Last Week"
         case 0:
-            let weekday = Self.weekCalendar.component(.weekday, from: .now)
+            let weekday = Self.weekCalendar.component(.weekday, from: logicalFeedToday)
             return [6, 7, 1].contains(weekday) ? "This Weekend" : "This Week"
         case 1:
             return "Next Week"
@@ -1133,8 +1211,8 @@ struct HomeView: View {
     }
 
     private var eventsForSelectedWeek: [EventFeedItem] {
-        let startDate = EventFeedViewModel.displayRangeStartDate(for: selectedWeekStart)
-        let weekEnd = EventFeedViewModel.weekEndDate(for: selectedWeekStart)
+        let startDate = logicalDisplayRangeStartDate
+        let weekEnd = logicalWeekEnd
 
         return filteredCurrentEvents.filter { event in
             let eventDay = visibleSectionDay(for: event)
@@ -1154,7 +1232,7 @@ struct HomeView: View {
     ) -> Bool {
         guard isViewingCurrentWeek,
               let endAt = event.endAt,
-              Self.weekCalendar.isDate(eventDay, inSameDayAs: .now)
+              Self.weekCalendar.isDate(eventDay, inSameDayAs: logicalFeedToday)
         else {
             return false
         }
@@ -1343,7 +1421,7 @@ struct HomeView: View {
     }
 
     private var isViewingFutureWeek: Bool {
-        selectedWeekStart > Self.startOfWeek(for: .now)
+        selectedWeekStart > currentFeedWeekStart
     }
 
     private func categoryTitle(for category: String) -> String {
@@ -1359,6 +1437,72 @@ struct HomeView: View {
             effectiveCategoryFilterID == nil &&
             !isViewingFutureWeek &&
             !recentActivityViewModel.activities.isEmpty
+    }
+
+    private var shouldShowLatestFromFollows: Bool {
+        isAuthenticated &&
+            selectedEventFilter == .all &&
+            effectiveCategoryFilterID == nil &&
+            isViewingCurrentWeek &&
+            hasFollowedPlaces &&
+            !latestFromFollows.isEmpty
+    }
+
+    private var hasFollowedPlaces: Bool {
+        latestFromFollowsSourceEvents.contains { event in
+            event.isFollowed || event.venueIsFollowed || event.organizerIsFollowed
+        }
+    }
+
+    private var latestFromFollowsSourceEvents: [EventFeedItem] {
+        latestFromFollowsViewModel.events +
+            (currentResponse?.latestFromFollows ?? []) +
+            currentEvents
+    }
+
+    private var latestFromFollows: [FollowedEventUpdate] {
+        let cutoff = Date.now.addingTimeInterval(-14 * 24 * 60 * 60)
+        var seenEventIDs = Set<UUID>()
+        let sourceEvents = latestFromFollowsSourceEvents
+            .filter { seenEventIDs.insert($0.id).inserted }
+        let updates = sourceEvents.compactMap { event -> FollowedEventUpdate? in
+            guard effectiveLocationFilter.includes(event),
+                  event.isFollowed || event.venueIsFollowed || event.organizerIsFollowed
+            else {
+                return nil
+            }
+
+            let wasRecentlyCreated = event.createdAt.map { $0 >= cutoff } ?? false
+            let wasRecentlyUpdated = event.updatedAt.map { updatedAt in
+                let createdAt = event.createdAt ?? .distantPast
+                return updatedAt >= cutoff && updatedAt > createdAt
+            } ?? false
+            let isSeriesOccurrence = event.seriesID != nil
+            let qualifiesForLatest = isSeriesOccurrence
+                ? wasRecentlyUpdated
+                : (wasRecentlyCreated || wasRecentlyUpdated)
+
+            guard qualifiesForLatest else { return nil }
+
+            let kind: FollowedEventUpdate.Kind = isSeriesOccurrence ||
+                (wasRecentlyUpdated && !wasRecentlyCreated)
+                ? .seriesUpdated
+                : .newEvent
+            let activityDate = kind == .seriesUpdated
+                ? (event.updatedAt ?? event.createdAt ?? .distantPast)
+                : (event.createdAt ?? .distantPast)
+
+            return FollowedEventUpdate(event: event, kind: kind, activityDate: activityDate)
+        }
+        .sorted { lhs, rhs in
+            if lhs.activityDate == rhs.activityDate {
+                return lhs.event.startAt < rhs.event.startAt
+            }
+
+            return lhs.activityDate > rhs.activityDate
+        }
+
+        return updates
     }
 
     private var isShowingSearchResults: Bool {
@@ -1429,7 +1573,7 @@ struct HomeView: View {
             return
         }
 
-        selectedWeekStart = max(weekStart, Self.startOfWeek(for: .now))
+        selectedWeekStart = max(weekStart, currentFeedWeekStart)
     }
 
     private func categoryFilterIncludes(_ event: EventFeedItem) -> Bool {
@@ -1441,7 +1585,7 @@ struct HomeView: View {
     }
 
     private func resetToCurrentWeek() {
-        selectedWeekStart = Self.startOfWeek(for: .now)
+        selectedWeekStart = currentFeedWeekStart
         selectedLocationFilter = nil
         selectedEventFilter = .all
         selectedCategoryFilterID = nil
@@ -1456,6 +1600,7 @@ struct HomeView: View {
             weekStart: weekStart,
             using: apiClient,
             cacheIdentity: eventFeedCacheIdentity,
+            timeZone: feedTimeZone,
             forceRefresh: forceRefresh
         )
         async let reviewPromptLoad: Void = loadPostEventFeedbackPrompt(using: apiClient)
@@ -1464,7 +1609,38 @@ struct HomeView: View {
             forceRefresh: forceRefresh
         )
 
-        _ = await (eventLoad, reviewPromptLoad, recentActivityLoad)
+        // The current events API includes the unbounded What's New collection in
+        // the same response as the weekly feed. Wait for that response first so
+        // the carousel has its final contents before Home is revealed. Only use
+        // the separate wide-range request as compatibility fallback for an older
+        // server that omits `latestFromFollows` entirely.
+        await eventLoad
+        if currentResponse?.latestFromFollows == nil {
+            await loadLatestFromFollows(
+                using: apiClient,
+                forceRefresh: forceRefresh
+            )
+        } else {
+            latestFromFollowsViewModel.clear()
+        }
+
+        _ = await (reviewPromptLoad, recentActivityLoad)
+    }
+
+    private func loadLatestFromFollows(
+        using apiClient: APIClient,
+        forceRefresh: Bool = false
+    ) async {
+        guard isAuthenticated else {
+            latestFromFollowsViewModel.clear()
+            return
+        }
+
+        await latestFromFollowsViewModel.load(
+            using: apiClient,
+            cacheIdentity: eventFeedCacheIdentity,
+            forceRefresh: forceRefresh
+        )
     }
 
     private func loadRecentActivity(
@@ -1629,9 +1805,7 @@ struct HomeView: View {
     }
 
     private func visibleSectionDay(for event: EventFeedItem) -> Date {
-        var eventCalendar = Self.weekCalendar
-        eventCalendar.timeZone = event.displayTimeZone
-        let eventDateComponents = eventCalendar.dateComponents(
+        let eventDateComponents = feedCalendar.dateComponents(
             [.year, .month, .day],
             from: event.startAt
         )
@@ -1642,10 +1816,11 @@ struct HomeView: View {
 
     private func sectionTitle(for day: Date) -> String {
         let now = Date()
-        let startOfToday = Self.weekCalendar.startOfDay(for: now)
+        let startOfToday = logicalFeedToday
         let startOfDay = Self.weekCalendar.startOfDay(for: day)
-        let isEarlyMorning = Self.weekCalendar.component(.hour, from: now) < 6
-        let isEvening = Self.weekCalendar.component(.hour, from: now) >= 17
+        let feedHour = feedCalendar.component(.hour, from: now)
+        let isEarlyMorning = feedHour < 6
+        let isEvening = feedHour >= 17
 
         if !isViewingFutureWeek,
            isEarlyMorning,
@@ -1687,7 +1862,66 @@ struct HomeView: View {
     }
 
     private var isViewingCurrentWeek: Bool {
-        selectedWeekStart == Self.startOfWeek(for: .now)
+        selectedWeekStart == currentFeedWeekStart
+    }
+
+    private var feedTimeZone: TimeZone {
+        let identifier = currentResponse?.feedTimeZone ?? viewModel.feedTimeZoneIdentifier
+        if let timeZone = identifier.flatMap(TimeZone.init(identifier:)) {
+            return timeZone
+        }
+
+        if let state = currentUserLocation?.state,
+           let profileTimeZone = TimeZone.usStateFallback(for: state)
+        {
+            return profileTimeZone
+        }
+
+        return TimeZone(identifier: "America/New_York") ?? .autoupdatingCurrent
+    }
+
+    private var feedCalendar: Calendar {
+        var calendar = Self.weekCalendar
+        calendar.timeZone = feedTimeZone
+        return calendar
+    }
+
+    private var logicalFeedToday: Date {
+        Self.logicalDay(for: .now, timeZone: feedTimeZone)
+    }
+
+    private var currentFeedWeekStart: Date {
+        logicalStartOfWeek(for: .now, timeZone: feedTimeZone)
+    }
+
+    private var logicalDisplayRangeStartDate: Date {
+        guard selectedWeekStart == currentFeedWeekStart else {
+            return selectedWeekStart
+        }
+
+        let feedHour = feedCalendar.component(.hour, from: .now)
+        if feedHour < 6,
+           let yesterday = Self.weekCalendar.date(byAdding: .day, value: -1, to: logicalFeedToday)
+        {
+            return yesterday
+        }
+
+        return logicalFeedToday
+    }
+
+    private var logicalWeekEnd: Date? {
+        Self.weekCalendar.date(byAdding: .day, value: 7, to: selectedWeekStart)
+    }
+
+    private func logicalStartOfWeek(for date: Date, timeZone: TimeZone) -> Date {
+        Self.startOfWeek(for: Self.logicalDay(for: date, timeZone: timeZone))
+    }
+
+    private static func logicalDay(for date: Date, timeZone: TimeZone) -> Date {
+        var calendar = weekCalendar
+        calendar.timeZone = timeZone
+        let components = calendar.dateComponents([.year, .month, .day], from: date)
+        return weekCalendar.date(from: components) ?? weekCalendar.startOfDay(for: date)
     }
 
     private static func startOfWeek(for date: Date) -> Date {
@@ -1853,6 +2087,155 @@ private struct EventSection: Identifiable {
     let events: [EventFeedItem]
 
     var id: Date { day }
+}
+
+private struct FollowedEventUpdate: Identifiable {
+    enum Kind {
+        case newEvent
+        case seriesUpdated
+
+        var title: String {
+            switch self {
+            case .newEvent: "New event"
+            case .seriesUpdated: "Series updated"
+            }
+        }
+    }
+
+    let event: EventFeedItem
+    let kind: Kind
+    let activityDate: Date
+
+    var id: UUID { event.id }
+}
+
+private struct LatestFromFollowsSection: View {
+    let updates: [FollowedEventUpdate]
+
+    @ViewBuilder
+    var body: some View {
+        if !updates.isEmpty {
+            EventCardCarousel(
+                events: updates.map(\.event),
+                cardWidth: 164,
+                snapsToCards: false,
+                showsCounter: false
+            ) {
+                Text("What’s New")
+                    .font(AppTheme.contentHeaderFont)
+                    .foregroundStyle(.white)
+            } card: { event in
+                if let update = updates.first(where: { $0.event.id == event.id }) {
+                    EventDetailNavigationLink(event: event) {
+                        LatestFromFollowsCard(update: update)
+                    }
+                    .buttonStyle(.plain)
+                }
+            }
+            .accessibilityElement(children: .contain)
+            .accessibilityLabel("What’s New")
+        }
+    }
+}
+
+private struct LatestFromFollowsCard: View {
+    let update: FollowedEventUpdate
+
+    @Environment(\.apiClient) private var apiClient
+    @State private var refreshedSocialEvent: EventFeedItem?
+
+    var body: some View {
+        VStack(alignment: .leading, spacing: 0) {
+            RemoteImageView(url: update.event.displayImageURL) { image in
+                image
+                    .resizable()
+                    .scaledToFill()
+            } placeholder: {
+                EventCardArtworkPlaceholder(width: 164, height: 164)
+            }
+            .frame(width: 164, height: 164)
+            .clipped()
+            .overlay(alignment: .topTrailing) {
+                EventSocialOverlayView(
+                    attendees: goingAttendees,
+                    size: .card,
+                    maximumVisibleAttendees: 2,
+                    totalAttendeeCount: totalGoingCount
+                )
+                .padding(8)
+            }
+            .clipShape(RoundedRectangle(cornerRadius: 12, style: .continuous))
+
+            VStack(alignment: .leading, spacing: 3) {
+                Text(update.event.title)
+                    .font(.system(size: 14, weight: .semibold))
+                    .foregroundStyle(.white)
+                    .multilineTextAlignment(.leading)
+                    .lineLimit(2)
+                    .lineSpacing(1)
+
+                Text(update.event.formattedCardStart)
+                    .font(.system(size: 12, weight: .medium))
+                    .foregroundStyle(AppTheme.accentBlue)
+                    .lineLimit(1)
+                    .minimumScaleFactor(0.82)
+
+                Text(update.event.primaryLocation)
+                    .font(.system(size: 12, weight: .medium))
+                    .foregroundStyle(.white.opacity(0.58))
+                    .lineLimit(1)
+                    .minimumScaleFactor(0.82)
+            }
+            .padding(.top, 8)
+        }
+        .frame(width: 164, alignment: .leading)
+        .contentShape(Rectangle())
+        .accessibilityElement(children: .ignore)
+        .accessibilityLabel(
+            "\(update.kind.title), \(update.event.title), \(update.event.formattedCardStart), \(update.event.primaryLocation)"
+        )
+        .accessibilityHint("Opens event details")
+        .task(id: update.event.id) {
+            await refreshSocialEvent()
+        }
+    }
+
+    private var goingAttendees: [EventSocialAttendee] {
+        socialEvent.socialAttendees
+            .filter { $0.status == .going }
+            .sorted { lhs, rhs in
+                let lhsIsCurrentUser = socialEvent.friendsGoing.first {
+                    $0.user.id == lhs.id
+                }?.user.isCurrentUser ?? false
+                let rhsIsCurrentUser = socialEvent.friendsGoing.first {
+                    $0.user.id == rhs.id
+                }?.user.isCurrentUser ?? false
+                return lhsIsCurrentUser && !rhsIsCurrentUser
+            }
+    }
+
+    private var totalGoingCount: Int {
+        max(update.event.goingCount ?? 0, socialEvent.friendsGoing.count)
+    }
+
+    private var socialEvent: EventFeedItem {
+        refreshedSocialEvent ?? update.event
+    }
+
+    @MainActor
+    private func refreshSocialEvent() async {
+        do {
+            let event = try await apiClient.send(
+                APIClient.mobileEventDetail(eventID: update.event.id)
+            )
+            guard !Task.isCancelled else { return }
+            refreshedSocialEvent = event
+        } catch is CancellationError {
+            return
+        } catch {
+            // Keep the feed payload as the fallback if the detail refresh fails.
+        }
+    }
 }
 
 private struct HomeEventDaySection<Header: View>: View {

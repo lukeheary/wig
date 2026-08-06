@@ -135,6 +135,7 @@ struct MobileEventCreationView: View {
                 }
                 deleteSection
             }
+            .environment(\.timeZone, scheduleTimeZone)
             .scrollContentBackground(.hidden)
             .background(Color(uiColor: .systemGroupedBackground))
             .navigationTitle(navigationTitle)
@@ -360,6 +361,30 @@ struct MobileEventCreationView: View {
         }
     }
 
+    private var scheduleTimeZone: TimeZone {
+        switch mode {
+        case .edit(let event):
+            return event.displayTimeZone
+        case .editSeries(let series):
+            if let identifier = series.timeZone,
+               let timeZone = TimeZone(identifier: identifier)
+            {
+                return timeZone
+            }
+
+            return TimeZone.usStateFallback(for: series.state) ?? .autoupdatingCurrent
+        case .create:
+            let selectedState = selectedVenue?.state ?? selectedOrganizer?.state ?? state
+            return TimeZone.usStateFallback(for: selectedState) ?? .autoupdatingCurrent
+        }
+    }
+
+    private var scheduleCalendar: Calendar {
+        var calendar = Calendar(identifier: .gregorian)
+        calendar.timeZone = scheduleTimeZone
+        return calendar
+    }
+
     @ViewBuilder
     private var detailsSection: some View {
         Section("Details") {
@@ -393,33 +418,45 @@ struct MobileEventCreationView: View {
         }
 
         Section(isSeriesForm ? "First Event" : "Schedule") {
-            DatePicker(
-                "Start Date",
-                selection: startDateBinding,
-                displayedComponents: [.date]
-            )
+            LabeledContent("Event Start") {
+                HStack(spacing: 6) {
+                    DatePicker(
+                        "Start Date",
+                        selection: startDateBinding,
+                        displayedComponents: [.date]
+                    )
+                    .labelsHidden()
 
-            DatePicker(
-                "Start Time",
-                selection: $startAt,
-                displayedComponents: [.hourAndMinute]
-            )
+                    DatePicker(
+                        "Start Time",
+                        selection: $startAt,
+                        displayedComponents: [.hourAndMinute]
+                    )
+                    .labelsHidden()
+                }
+            }
 
             Toggle("Add End Time", isOn: $hasEndAt)
                 .tint(AppTheme.accentBlue)
 
             if hasEndAt {
-                DatePicker(
-                    "End Date",
-                    selection: endDateBinding,
-                    displayedComponents: [.date]
-                )
+                LabeledContent("Event End") {
+                    HStack(spacing: 6) {
+                        DatePicker(
+                            "End Date",
+                            selection: endDateBinding,
+                            displayedComponents: [.date]
+                        )
+                        .labelsHidden()
 
-                DatePicker(
-                    "End Time",
-                    selection: $endAt,
-                    displayedComponents: [.hourAndMinute]
-                )
+                        DatePicker(
+                            "End Time",
+                            selection: $endAt,
+                            displayedComponents: [.hourAndMinute]
+                        )
+                        .labelsHidden()
+                    }
+                }
             }
         }
 
@@ -804,7 +841,7 @@ struct MobileEventCreationView: View {
                 return
             }
 
-            if hasSeriesEndDate && Calendar.current.startOfDay(for: seriesEndDate) < Calendar.current.startOfDay(for: startAt) {
+            if hasSeriesEndDate && scheduleCalendar.startOfDay(for: seriesEndDate) < scheduleCalendar.startOfDay(for: startAt) {
                 alertMessage = "Series end date must be on or after the first event date."
                 return
             }
@@ -1213,7 +1250,7 @@ struct MobileEventCreationView: View {
         case .weekly:
             daysOfWeek = recurrenceDaysOfWeek.sorted()
         case .monthly:
-            daysOfWeek = [Self.weekdayIndex(for: startAt)]
+            daysOfWeek = [weekdayIndex(for: startAt)]
         }
 
         return MobileEventSeriesRecurrenceRequest(
@@ -1221,7 +1258,7 @@ struct MobileEventCreationView: View {
             interval: recurrenceInterval,
             daysOfWeek: daysOfWeek,
             untilDate: hasSeriesEndDate
-                ? Self.iso8601FractionalFormatter.string(from: Self.endOfDay(seriesEndDate))
+                ? Self.iso8601FractionalFormatter.string(from: endOfDay(seriesEndDate))
                 : nil
         )
     }
@@ -1320,7 +1357,7 @@ struct MobileEventCreationView: View {
     }
 
     private func applySuggestedTimes(startAt suggestedStartAt: Date, endAt suggestedEndAt: Date?) {
-        let calendar = Calendar.current
+        let calendar = scheduleCalendar
         let selectedDateComponents = calendar.dateComponents([.year, .month, .day], from: startAt)
         let suggestedStartTimeComponents = calendar.dateComponents([.hour, .minute, .second], from: suggestedStartAt)
 
@@ -1384,7 +1421,7 @@ struct MobileEventCreationView: View {
     }
 
     private var monthlyRecurrenceSummary: String {
-        "Repeats on the \(Self.monthlyPatternLabel(for: startAt)) of every \(recurrenceInterval == 1 ? "month" : "\(recurrenceInterval) months")."
+        "Repeats on the \(monthlyPatternLabel(for: startAt)) of every \(recurrenceInterval == 1 ? "month" : "\(recurrenceInterval) months")."
     }
 
     private func applyDefaultRecurrenceDayIfNeeded() {
@@ -1392,7 +1429,7 @@ struct MobileEventCreationView: View {
             return
         }
 
-        recurrenceDaysOfWeek = [Self.weekdayIndex(for: startAt)]
+        recurrenceDaysOfWeek = [weekdayIndex(for: startAt)]
     }
     private func cleaned(_ value: String?) -> String? {
         guard let value else {
@@ -1404,7 +1441,7 @@ struct MobileEventCreationView: View {
     }
 
     private var scheduleDateKey: Date {
-        Calendar.current.startOfDay(for: startAt)
+        scheduleCalendar.startOfDay(for: startAt)
     }
 
     private var titleBinding: Binding<String> {
@@ -1427,21 +1464,21 @@ struct MobileEventCreationView: View {
                 let previousStartAt = startAt
                 let previousEndAt = endAt
 
-                startAt = Self.combineDate(newDate, withTimeFrom: previousStartAt)
+                startAt = combineDate(newDate, withTimeFrom: previousStartAt)
 
                 if hasEndAt && !shouldAutoApplyVenueHours {
-                    let calendar = Calendar.current
+                    let calendar = scheduleCalendar
                     let dayOffset = calendar.dateComponents(
                         [.day],
                         from: calendar.startOfDay(for: previousStartAt),
                         to: calendar.startOfDay(for: previousEndAt)
                     ).day ?? 0
                     let shiftedEndBaseDate = calendar.date(byAdding: .day, value: dayOffset, to: startAt) ?? startAt
-                    endAt = Self.combineDate(shiftedEndBaseDate, withTimeFrom: previousEndAt)
+                    endAt = combineDate(shiftedEndBaseDate, withTimeFrom: previousEndAt)
                 }
 
                 if isSeriesForm && recurrenceFrequency != .daily {
-                    recurrenceDaysOfWeek = [Self.weekdayIndex(for: startAt)]
+                    recurrenceDaysOfWeek = [weekdayIndex(for: startAt)]
                 }
 
                 if endAt < startAt {
@@ -1455,7 +1492,7 @@ struct MobileEventCreationView: View {
         Binding(
             get: { endAt },
             set: { newDate in
-                endAt = Self.combineDate(newDate, withTimeFrom: endAt)
+                endAt = combineDate(newDate, withTimeFrom: endAt)
             }
         )
     }
@@ -1471,22 +1508,22 @@ struct MobileEventCreationView: View {
             return
         }
 
-        if let openDate = Self.date(for: dayHours.open, on: startAt) {
+        if let openDate = date(for: dayHours.open, on: startAt) {
             startAt = openDate
         }
 
-        if let closeDate = Self.date(for: dayHours.close, on: startAt) {
+        if let closeDate = date(for: dayHours.close, on: startAt) {
             hasEndAt = true
 
             if closeDate >= startAt {
                 endAt = closeDate
-            } else if let nextDayClose = Calendar.current.date(byAdding: .day, value: 1, to: closeDate) {
+            } else if let nextDayClose = scheduleCalendar.date(byAdding: .day, value: 1, to: closeDate) {
                 endAt = nextDayClose
             }
         }
     }
 
-    private static func date(for time: String, on baseDate: Date) -> Date? {
+    private func date(for time: String, on baseDate: Date) -> Date? {
         let parts = time.split(separator: ":")
         guard parts.count == 2,
               let hour = Int(parts[0]),
@@ -1495,15 +1532,15 @@ struct MobileEventCreationView: View {
             return nil
         }
 
-        var components = Calendar.current.dateComponents([.year, .month, .day], from: baseDate)
+        var components = scheduleCalendar.dateComponents([.year, .month, .day], from: baseDate)
         components.hour = hour
         components.minute = minute
         components.second = 0
-        return Calendar.current.date(from: components)
+        return scheduleCalendar.date(from: components)
     }
 
-    private static func combineDate(_ date: Date, withTimeFrom timeSource: Date) -> Date {
-        let calendar = Calendar.current
+    private func combineDate(_ date: Date, withTimeFrom timeSource: Date) -> Date {
+        let calendar = scheduleCalendar
         var dateComponents = calendar.dateComponents([.year, .month, .day], from: date)
         let timeComponents = calendar.dateComponents([.hour, .minute, .second], from: timeSource)
         dateComponents.hour = timeComponents.hour
@@ -1530,21 +1567,21 @@ struct MobileEventCreationView: View {
 
     private static let ordinalLabels = ["First", "Second", "Third", "Fourth", "Fifth"]
 
-    private static func weekdayIndex(for date: Date) -> Int {
-        Calendar.current.component(.weekday, from: date) - 1
+    private func weekdayIndex(for date: Date) -> Int {
+        scheduleCalendar.component(.weekday, from: date) - 1
     }
 
-    private static func monthlyPatternLabel(for date: Date) -> String {
+    private func monthlyPatternLabel(for date: Date) -> String {
         let weekday = weekdayIndex(for: date)
-        let day = Calendar.current.component(.day, from: date)
-        let ordinalIndex = min(max((day - 1) / 7, 0), ordinalLabels.count - 1)
-        let ordinal = ordinalLabels[ordinalIndex]
-        let weekdayLabel = weekdayOptions.first { $0.index == weekday }?.fullLabel ?? "Day"
+        let day = scheduleCalendar.component(.day, from: date)
+        let ordinalIndex = min(max((day - 1) / 7, 0), Self.ordinalLabels.count - 1)
+        let ordinal = Self.ordinalLabels[ordinalIndex]
+        let weekdayLabel = Self.weekdayOptions.first { $0.index == weekday }?.fullLabel ?? "Day"
         return "\(ordinal) \(weekdayLabel)"
     }
 
-    private static func endOfDay(_ date: Date) -> Date {
-        let calendar = Calendar.current
+    private func endOfDay(_ date: Date) -> Date {
+        let calendar = scheduleCalendar
         let start = calendar.startOfDay(for: date)
         return calendar.date(byAdding: DateComponents(day: 1, second: -1), to: start) ?? date
     }

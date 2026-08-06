@@ -1,5 +1,51 @@
 import SwiftUI
 
+enum PlaceEventCreationDestination: String, Identifiable {
+    case event
+    case series
+
+    var id: String { rawValue }
+}
+
+struct PlaceEventCreationMenu: View {
+    let onAddEvent: () -> Void
+    let onAddSeries: () -> Void
+
+    var body: some View {
+        Menu {
+            Button(action: onAddEvent) {
+                Label {
+                    Text("Add Event")
+                } icon: {
+                    Image(systemName: "calendar.badge.plus")
+                        .symbolRenderingMode(.monochrome)
+                        .foregroundStyle(.white)
+                }
+            }
+
+            Button(action: onAddSeries) {
+                Label {
+                    Text("Add Event Series")
+                } icon: {
+                    Image(systemName: "calendar.badge.clock")
+                        .symbolRenderingMode(.monochrome)
+                        .foregroundStyle(.white)
+                }
+            }
+        } label: {
+            Image(systemName: "plus")
+                .font(.system(size: 19, weight: .semibold))
+                .foregroundStyle(.white)
+                .frame(width: 46, height: 46)
+                .background(.white.opacity(0.10), in: Circle())
+                .overlay(Circle().strokeBorder(.white.opacity(0.12), lineWidth: 1))
+        }
+        .buttonStyle(.plain)
+        .tint(.white)
+        .accessibilityLabel("Add event")
+    }
+}
+
 struct ManagePlaceView: View {
     let placeSlug: String
     let placeName: String
@@ -13,7 +59,7 @@ struct ManagePlaceView: View {
     @State private var isAddMemberSheetPresented = false
     @State private var editingMember: PlaceMemberListItem?
     @State private var editingSeries: PlaceEventSeriesSummary?
-    @State private var creationDestination: CreationDestination?
+    @State private var creationDestination: PlaceEventCreationDestination?
 
     var body: some View {
         ScrollView {
@@ -111,41 +157,14 @@ struct ManagePlaceView: View {
     }
 
     private var creationMenu: some View {
-        Menu {
-            Button {
+        PlaceEventCreationMenu(
+            onAddEvent: {
                 creationDestination = .event
-            } label: {
-                Label {
-                    Text("Add Event")
-                } icon: {
-                    Image(systemName: "calendar.badge.plus")
-                        .symbolRenderingMode(.monochrome)
-                        .foregroundStyle(.white)
-                }
-            }
-
-            Button {
+            },
+            onAddSeries: {
                 creationDestination = .series
-            } label: {
-                Label {
-                    Text("Add Event Series")
-                } icon: {
-                    Image(systemName: "calendar.badge.clock")
-                        .symbolRenderingMode(.monochrome)
-                        .foregroundStyle(.white)
-                }
             }
-        } label: {
-            Image(systemName: "plus")
-                .font(.system(size: 19, weight: .semibold))
-                .foregroundStyle(.white)
-                .frame(width: 46, height: 46)
-                .background(.white.opacity(0.10), in: Circle())
-                .overlay(Circle().strokeBorder(.white.opacity(0.12), lineWidth: 1))
-        }
-        .buttonStyle(.plain)
-        .tint(.white)
-        .accessibilityLabel("Add event")
+        )
     }
 
     // MARK: - Place edit header
@@ -382,13 +401,6 @@ struct ManagePlaceView: View {
             RoundedRectangle(cornerRadius: 16, style: .continuous)
                 .strokeBorder(.white.opacity(0.07), lineWidth: 1)
         )
-    }
-
-    private enum CreationDestination: String, Identifiable {
-        case event
-        case series
-
-        var id: String { rawValue }
     }
 
     private var rowDivider: some View {

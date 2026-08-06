@@ -70,6 +70,8 @@ struct EventCardCarousel<Header: View, Card: View>: View {
     let events: [EventFeedItem]
     let cardWidth: CGFloat
     let verticalSpacing: CGFloat
+    let snapsToCards: Bool
+    let showsCounter: Bool
     private let header: Header
     private let card: (EventFeedItem) -> Card
 
@@ -83,12 +85,16 @@ struct EventCardCarousel<Header: View, Card: View>: View {
         events: [EventFeedItem],
         cardWidth: CGFloat,
         verticalSpacing: CGFloat = 12,
+        snapsToCards: Bool = true,
+        showsCounter: Bool = true,
         @ViewBuilder header: () -> Header,
         @ViewBuilder card: @escaping (EventFeedItem) -> Card
     ) {
         self.events = events
         self.cardWidth = cardWidth
         self.verticalSpacing = verticalSpacing
+        self.snapsToCards = snapsToCards
+        self.showsCounter = showsCounter
         self.header = header()
         self.card = card
         _currentEventID = State(initialValue: events.first?.id)
@@ -106,12 +112,14 @@ struct EventCardCarousel<Header: View, Card: View>: View {
 
                 Spacer(minLength: 8)
 
-                Text("\(currentEventNumber) / \(events.count)")
-                    .font(.system(size: 13, weight: .medium))
-                    .monospacedDigit()
-                    .foregroundStyle(.white.opacity(0.52))
-                    .opacity(isCountVisible && events.count > 1 ? 1 : 0)
-                    .accessibilityHidden(!isCountVisible || events.count <= 1)
+                if showsCounter {
+                    Text("\(currentEventNumber) / \(events.count)")
+                        .font(.system(size: 13, weight: .medium))
+                        .monospacedDigit()
+                        .foregroundStyle(.white.opacity(0.52))
+                        .opacity(isCountVisible && events.count > 1 ? 1 : 0)
+                        .accessibilityHidden(!isCountVisible || events.count <= 1)
+                }
             }
             .padding(.horizontal, 16)
 
@@ -167,7 +175,17 @@ struct EventCardCarousel<Header: View, Card: View>: View {
         }
     }
 
+    @ViewBuilder
     private var scrollView: some View {
+        if snapsToCards {
+            positionedScrollView
+                .scrollTargetBehavior(.viewAligned)
+        } else {
+            positionedScrollView
+        }
+    }
+
+    private var positionedScrollView: some View {
         ScrollView(.horizontal) {
             LazyHStack(alignment: .top, spacing: 12) {
                 ForEach(events) { event in
@@ -181,7 +199,6 @@ struct EventCardCarousel<Header: View, Card: View>: View {
         }
         .scrollIndicators(.hidden)
         .contentMargins(.horizontal, 16, for: .scrollContent)
-        .scrollTargetBehavior(.viewAligned)
         .scrollPosition(id: $currentEventID, anchor: .leading)
         .onChange(of: currentEventID) { _, _ in
             guard isCountVisible, !isNativeScrollActive else {
@@ -590,6 +607,21 @@ private struct EventCardBackground: View {
     }
 }
 
+struct EventCardArtworkPlaceholder: View {
+    let width: CGFloat
+    let height: CGFloat
+
+    var body: some View {
+        EventCardBackground(
+            image: nil,
+            blurredImage: nil,
+            palette: .fallback,
+            cardWidth: width,
+            cardHeight: height
+        )
+    }
+}
+
 // Processed artwork (decoded image + blurred backdrop + derived palette) cached per
 // URL so a card recycled back into view renders instantly without re-running the
 // CoreImage work.
@@ -780,6 +812,12 @@ private extension UIColor {
 struct EventSocialOverlayView: View {
     let attendees: [EventSocialAttendee]
     let size: Size
+    var maximumVisibleAttendees: Int? = nil
+    var totalAttendeeCount: Int? = nil
+
+    private var displayLimit: Int {
+        maximumVisibleAttendees ?? size.maxDisplay
+    }
 
     private var visibleAttendees: [EventSocialAttendee] {
         Array(
@@ -787,16 +825,16 @@ struct EventSocialOverlayView: View {
                 .sorted { lhs, rhs in
                     statusPriority(lhs.status) < statusPriority(rhs.status)
                 }
-                .prefix(size.maxDisplay)
+                .prefix(displayLimit)
         )
     }
 
     private var remainingCount: Int {
-        max(0, attendees.count - size.maxDisplay)
+        max(0, (totalAttendeeCount ?? attendees.count) - visibleAttendees.count)
     }
 
     var body: some View {
-        if !attendees.isEmpty {
+        if !attendees.isEmpty || remainingCount > 0 {
             HStack(spacing: size.avatarSpacing) {
                 ForEach(visibleAttendees) { attendee in
                     EventSocialAvatarView(

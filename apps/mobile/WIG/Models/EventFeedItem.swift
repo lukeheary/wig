@@ -2,8 +2,10 @@ import Foundation
 
 struct MobileEventsResponse: Codable, Hashable, Sendable {
     let events: [EventFeedItem]
+    let latestFromFollows: [EventFeedItem]?
     let availableCities: [EventCity]
     let currentUserLocation: EventCity?
+    let feedTimeZone: String?
 }
 
 struct MobileEventReviewPromptResponse: Decodable, Hashable, Sendable {
@@ -383,7 +385,7 @@ private extension String {
     }
 }
 
-private extension TimeZone {
+extension TimeZone {
     static func usStateFallback(for state: String) -> TimeZone? {
         let identifier: String?
 
@@ -464,6 +466,7 @@ extension EventFeedItem {
         friendsGoing = try container.decodeIfPresent([EventSocialRSVP].self, forKey: .friendsGoing) ?? []
         friendsInterested = try container.decodeIfPresent([EventSocialRSVP].self, forKey: .friendsInterested) ?? []
         friendsNotGoing = try container.decodeIfPresent([EventSocialRSVP].self, forKey: .friendsNotGoing) ?? []
+        goingCount = try container.decodeIfPresent(Int.self, forKey: .goingCount)
     }
 }
 
