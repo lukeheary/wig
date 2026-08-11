@@ -6,16 +6,16 @@
 	<string>$(API_BASE_URL)</string>
 	<key>CFBundleDevelopmentRegion</key>
 	<string>$(DEVELOPMENT_LANGUAGE)</string>
-	<key>CFBundleExecutable</key>
-	<string>$(EXECUTABLE_NAME)</string>
-	<key>CFBundleIdentifier</key>
-	<string>$(PRODUCT_BUNDLE_IDENTIFIER)</string>
-	<key>CFBundleIconName</key>
-	<string>AppIcon</string>
-	<key>CFBundleInfoDictionaryVersion</key>
-	<string>6.0</string>
 	<key>CFBundleDisplayName</key>
 	<string>Who Is Going</string>
+	<key>CFBundleExecutable</key>
+	<string>$(EXECUTABLE_NAME)</string>
+	<key>CFBundleIconName</key>
+	<string>AppIcon</string>
+	<key>CFBundleIdentifier</key>
+	<string>$(PRODUCT_BUNDLE_IDENTIFIER)</string>
+	<key>CFBundleInfoDictionaryVersion</key>
+	<string>6.0</string>
 	<key>CFBundleName</key>
 	<string>Who Is Going</string>
 	<key>CFBundlePackageType</key>
@@ -43,10 +43,10 @@
 	<string>$(CLERK_JWT_TEMPLATE)</string>
 	<key>CLERK_PUBLISHABLE_KEY</key>
 	<string>$(CLERK_PUBLISHABLE_KEY)</string>
-	<key>NSCameraUsageDescription</key>
-	<string>WIG needs camera access so you can take a profile picture.</string>
 	<key>NSCalendarsWriteOnlyAccessUsageDescription</key>
 	<string>WIG needs calendar access so you can add events to your Apple Calendar.</string>
+	<key>NSCameraUsageDescription</key>
+	<string>WIG needs camera access so you can take a profile picture.</string>
 	<key>NSPhotoLibraryUsageDescription</key>
 	<string>WIG needs photo library access so you can choose a profile picture.</string>
 	<key>OAUTH_CALLBACK_SCHEME</key>
@@ -56,10 +56,10 @@
 		<key>UIApplicationSupportsMultipleScenes</key>
 		<false/>
 	</dict>
-	<key>UIRequiresFullScreen</key>
-	<true/>
 	<key>UILaunchScreen</key>
 	<dict/>
+	<key>UIRequiresFullScreen</key>
+	<true/>
 	<key>UISupportedInterfaceOrientations</key>
 	<array>
 		<string>UIInterfaceOrientationPortrait</string>

@@ -43,6 +43,7 @@
 		CA9B0D3B6C19273F055C584F /* MainTabView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 2FAA685514B54FEB5C7493A3 /* MainTabView.swift */; };
 		CE792A15304AE66E5C43ECBB /* ManagePlaceView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 93E098F4DD6BECA74B29F9A2 /* ManagePlaceView.swift */; };
 		D0A5C649C6897F8D058D193C /* PlaceDetailViewModel.swift in Sources */ = {isa = PBXBuildFile; fileRef = FB7522ACC7AF252899EB4576 /* PlaceDetailViewModel.swift */; };
+		D11111111111111111111111 /* GuestGoogleAuthController.swift in Sources */ = {isa = PBXBuildFile; fileRef = D22222222222222222222222 /* GuestGoogleAuthController.swift */; };
 		D660CF02FF972B340A8A88B0 /* Person.swift in Sources */ = {isa = PBXBuildFile; fileRef = 21CCB7FA0EC72A72E5A18158 /* Person.swift */; };
 		DADC279B33BBB821553BCA3D /* PlaceDetail.swift in Sources */ = {isa = PBXBuildFile; fileRef = 06DBD4E356DEF2762352E743 /* PlaceDetail.swift */; };
 		DEA8D387E941A5D6DE8FEEE4 /* EventFeedItem.swift in Sources */ = {isa = PBXBuildFile; fileRef = AD7E693663E90E06CD35BD12 /* EventFeedItem.swift */; };
@@ -63,6 +64,7 @@
 		0FD5804DD40C7D36149B3454 /* MobilePlaceCreationView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = MobilePlaceCreationView.swift; sourceTree = "<group>"; };
 		1787978AD759053BF62E9FC0 /* ProfileViewModel.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ProfileViewModel.swift; sourceTree = "<group>"; };
 		184FF519AEEF1B3325EA5631 /* UserProfile.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = UserProfile.swift; sourceTree = "<group>"; };
+		194C154B1143AF4ABB9BD866 /* ProdLocal.xcconfig */ = {isa = PBXFileReference; lastKnownFileType = text.xcconfig; path = ProdLocal.xcconfig; sourceTree = "<group>"; };
 		1EFBA2EF2E31AA35C105FDAB /* MobileCategoryStore.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = MobileCategoryStore.swift; sourceTree = "<group>"; };
 		205A0A05764438AFB15835AF /* Info.plist */ = {isa = PBXFileReference; lastKnownFileType = text.plist; path = Info.plist; sourceTree = "<group>"; };
 		209CCAB342734F97FABBA5D2 /* APIClient.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = APIClient.swift; sourceTree = "<group>"; };
@@ -101,6 +103,7 @@
 		C47EB2040C338297AF811986 /* AppConfig.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AppConfig.swift; sourceTree = "<group>"; };
 		C4B12A3FE36D056CEF6A6FBD /* RemoteImageView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = RemoteImageView.swift; sourceTree = "<group>"; };
 		CD2B5220253C407CE688D6CD /* FriendsFeed.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = FriendsFeed.swift; sourceTree = "<group>"; };
+		D22222222222222222222222 /* GuestGoogleAuthController.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = GuestGoogleAuthController.swift; sourceTree = "<group>"; };
 		DC1F5481F6C16EA27B43C269 /* SignedOutView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SignedOutView.swift; sourceTree = "<group>"; };
 		E9F25C520369E8D97B2E2329 /* AppSession.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AppSession.swift; sourceTree = "<group>"; };
 		EB564D2CF3E17440A471C692 /* WIGAuthSheetView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = WIGAuthSheetView.swift; sourceTree = "<group>"; };
@@ -253,6 +256,7 @@
 			isa = PBXGroup;
 			children = (
 				F1A0ACCD8478786570AD3796 /* Debug.xcconfig */,
+				194C154B1143AF4ABB9BD866 /* ProdLocal.xcconfig */,
 				A475F5DF3650AE1E3FB243DC /* Release.xcconfig */,
 			);
 			path = Config;
@@ -300,6 +304,7 @@
 			isa = PBXGroup;
 			children = (
 				849CE0A638A3798C811514B1 /* AuthGate.swift */,
+				D22222222222222222222222 /* GuestGoogleAuthController.swift */,
 				DC1F5481F6C16EA27B43C269 /* SignedOutView.swift */,
 				EB564D2CF3E17440A471C692 /* WIGAuthSheetView.swift */,
 			);
@@ -409,6 +414,7 @@
 				1DE08FF7F8809AF0B032AF4E /* FriendsFeed.swift in Sources */,
 				E2B9CF0F03D62D8AC3E9D987 /* Gift.swift in Sources */,
 				1D348DDF86D014D61E9BAB1F /* GiftList.swift in Sources */,
+				D11111111111111111111111 /* GuestGoogleAuthController.swift in Sources */,
 				68199AEF2370D451C6B2E824 /* HomeView.swift in Sources */,
 				CA9B0D3B6C19273F055C584F /* MainTabView.swift in Sources */,
 				CE792A15304AE66E5C43ECBB /* ManagePlaceView.swift in Sources */,
@@ -571,7 +577,7 @@
 				CODE_SIGN_ENTITLEMENTS = WIG/Support/WIG.entitlements;
 				CODE_SIGN_IDENTITY = "iPhone Developer";
 				CODE_SIGN_STYLE = Automatic;
-				CURRENT_PROJECT_VERSION = 7;
+				CURRENT_PROJECT_VERSION = 22;
 				DEVELOPMENT_TEAM = V347D294CZ;
 				INFOPLIST_FILE = WIG/Support/Info.plist;
 				INFOPLIST_KEY_CFBundleDisplayName = "Who Is Going";
@@ -579,7 +585,7 @@
 					"$(inherited)",
 					"@executable_path/Frameworks",
 				);
-				MARKETING_VERSION = 1.0.6;
+				MARKETING_VERSION = 1.0.0;
 				PRODUCT_BUNDLE_IDENTIFIER = com.whoisgoing.app;
 				PRODUCT_NAME = WIG;
 				SDKROOT = iphoneos;
@@ -587,6 +593,70 @@
 				SUPPORTS_MACCATALYST = NO;
 			};
 			name = Debug;
+		};
+		CFD6A1AEEB1AAE84C7E5927E /* ProdLocal */ = {
+			isa = XCBuildConfiguration;
+			buildSettings = {
+				ALWAYS_SEARCH_USER_PATHS = NO;
+				CLANG_ANALYZER_NONNULL = YES;
+				CLANG_ANALYZER_NUMBER_OBJECT_CONVERSION = YES_AGGRESSIVE;
+				CLANG_CXX_LANGUAGE_STANDARD = "gnu++14";
+				CLANG_CXX_LIBRARY = "libc++";
+				CLANG_ENABLE_MODULES = YES;
+				CLANG_ENABLE_OBJC_ARC = YES;
+				CLANG_ENABLE_OBJC_WEAK = YES;
+				CLANG_WARN_BLOCK_CAPTURE_AUTORELEASING = YES;
+				CLANG_WARN_BOOL_CONVERSION = YES;
+				CLANG_WARN_COMMA = YES;
+				CLANG_WARN_CONSTANT_CONVERSION = YES;
+				CLANG_WARN_DEPRECATED_OBJC_IMPLEMENTATIONS = YES;
+				CLANG_WARN_DIRECT_OBJC_ISA_USAGE = YES_ERROR;
+				CLANG_WARN_DOCUMENTATION_COMMENTS = YES;
+				CLANG_WARN_EMPTY_BODY = YES;
+				CLANG_WARN_ENUM_CONVERSION = YES;
+				CLANG_WARN_INFINITE_RECURSION = YES;
+				CLANG_WARN_INT_CONVERSION = YES;
+				CLANG_WARN_NON_LITERAL_NULL_CONVERSION = YES;
+				CLANG_WARN_OBJC_IMPLICIT_RETAIN_SELF = YES;
+				CLANG_WARN_OBJC_LITERAL_CONVERSION = YES;
+				CLANG_WARN_OBJC_ROOT_CLASS = YES_ERROR;
+				CLANG_WARN_QUOTED_INCLUDE_IN_FRAMEWORK_HEADER = YES;
+				CLANG_WARN_RANGE_LOOP_ANALYSIS = YES;
+				CLANG_WARN_STRICT_PROTOTYPES = YES;
+				CLANG_WARN_SUSPICIOUS_MOVE = YES;
+				CLANG_WARN_UNGUARDED_AVAILABILITY = YES_AGGRESSIVE;
+				CLANG_WARN_UNREACHABLE_CODE = YES;
+				CLANG_WARN__DUPLICATE_METHOD_MATCH = YES;
+				COPY_PHASE_STRIP = NO;
+				DEBUG_INFORMATION_FORMAT = dwarf;
+				ENABLE_STRICT_OBJC_MSGSEND = YES;
+				ENABLE_TESTABILITY = YES;
+				GCC_C_LANGUAGE_STANDARD = gnu11;
+				GCC_DYNAMIC_NO_PIC = NO;
+				GCC_NO_COMMON_BLOCKS = YES;
+				GCC_OPTIMIZATION_LEVEL = 0;
+				GCC_PREPROCESSOR_DEFINITIONS = (
+					"$(inherited)",
+					"DEBUG=1",
+				);
+				GCC_WARN_64_TO_32_BIT_CONVERSION = YES;
+				GCC_WARN_ABOUT_RETURN_TYPE = YES_ERROR;
+				GCC_WARN_UNDECLARED_SELECTOR = YES;
+				GCC_WARN_UNINITIALIZED_AUTOS = YES_AGGRESSIVE;
+				GCC_WARN_UNUSED_FUNCTION = YES;
+				GCC_WARN_UNUSED_VARIABLE = YES;
+				IPHONEOS_DEPLOYMENT_TARGET = 17.0;
+				MTL_ENABLE_DEBUG_INFO = INCLUDE_SOURCE;
+				MTL_FAST_MATH = YES;
+				ONLY_ACTIVE_ARCH = YES;
+				PRODUCT_NAME = "$(TARGET_NAME)";
+				SDKROOT = iphoneos;
+				SWIFT_ACTIVE_COMPILATION_CONDITIONS = DEBUG;
+				SWIFT_OPTIMIZATION_LEVEL = "-Onone";
+				SWIFT_VERSION = 5.1;
+				TARGETED_DEVICE_FAMILY = 1;
+			};
+			name = ProdLocal;
 		};
 		DB87D3D9EC2576FAAC576C29 /* Release */ = {
 			isa = XCBuildConfiguration;
@@ -598,7 +668,7 @@
 				CODE_SIGN_ENTITLEMENTS = WIG/Support/WIG.entitlements;
 				CODE_SIGN_IDENTITY = "iPhone Developer";
 				CODE_SIGN_STYLE = Automatic;
-				CURRENT_PROJECT_VERSION = 7;
+				CURRENT_PROJECT_VERSION = 22;
 				DEVELOPMENT_TEAM = V347D294CZ;
 				INFOPLIST_FILE = WIG/Support/Info.plist;
 				INFOPLIST_KEY_CFBundleDisplayName = "Who Is Going";
@@ -606,7 +676,7 @@
 					"$(inherited)",
 					"@executable_path/Frameworks",
 				);
-				MARKETING_VERSION = 1.0.6;
+				MARKETING_VERSION = 1.0.0;
 				PRODUCT_BUNDLE_IDENTIFIER = com.whoisgoing.app;
 				PRODUCT_NAME = WIG;
 				SDKROOT = iphoneos;
@@ -615,6 +685,33 @@
 			};
 			name = Release;
 		};
+		DD01E54B40B90168EC049B4E /* ProdLocal */ = {
+			isa = XCBuildConfiguration;
+			baseConfigurationReference = 194C154B1143AF4ABB9BD866 /* ProdLocal.xcconfig */;
+			buildSettings = {
+				APS_ENVIRONMENT = development;
+				ASSETCATALOG_COMPILER_APPICON_NAME = AppIcon;
+				ASSETCATALOG_COMPILER_GLOBAL_ACCENT_COLOR_NAME = AccentColor;
+				CODE_SIGN_ENTITLEMENTS = WIG/Support/WIG.entitlements;
+				CODE_SIGN_IDENTITY = "iPhone Developer";
+				CODE_SIGN_STYLE = Automatic;
+				CURRENT_PROJECT_VERSION = 22;
+				DEVELOPMENT_TEAM = V347D294CZ;
+				INFOPLIST_FILE = WIG/Support/Info.plist;
+				INFOPLIST_KEY_CFBundleDisplayName = "Who Is Going";
+				LD_RUNPATH_SEARCH_PATHS = (
+					"$(inherited)",
+					"@executable_path/Frameworks",
+				);
+				MARKETING_VERSION = 1.0.0;
+				PRODUCT_BUNDLE_IDENTIFIER = com.whoisgoing.app;
+				PRODUCT_NAME = WIG;
+				SDKROOT = iphoneos;
+				SUPPORTED_PLATFORMS = "iphoneos iphonesimulator";
+				SUPPORTS_MACCATALYST = NO;
+			};
+			name = ProdLocal;
+		};
 /* End XCBuildConfiguration section */
 
 /* Begin XCConfigurationList section */
@@ -622,6 +719,7 @@
 			isa = XCConfigurationList;
 			buildConfigurations = (
 				93918B0D8B665897D2FECB4A /* Debug */,
+				DD01E54B40B90168EC049B4E /* ProdLocal */,
 				DB87D3D9EC2576FAAC576C29 /* Release */,
 			);
 			defaultConfigurationIsVisible = 0;
@@ -631,6 +729,7 @@
 			isa = XCConfigurationList;
 			buildConfigurations = (
 				1343768D4ECAE534035CBB19 /* Debug */,
+				CFD6A1AEEB1AAE84C7E5927E /* ProdLocal */,
 				8DB5EA8B965479DA8D5D29CC /* Release */,
 			);
 			defaultConfigurationIsVisible = 0;

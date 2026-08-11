@@ -7,14 +7,12 @@ struct MainTabView: View {
     @Environment(\.apiClient) private var apiClient
     @EnvironmentObject private var appSession: AppSession
     @StateObject private var activityRequestStore = ActivityRequestStore()
+    @StateObject private var guestGoogleAuthController = GuestGoogleAuthController()
     @State private var selectedTab: AppTab = .home
     @State private var previousNonSearchTab: AppTab = .home
-    @State private var isAuthSheetPresented = false
-    @State private var isGuestIntroPresented = true
+    @State private var isAuthPagePresented = false
+    @State private var isGuestWelcomePresented = true
     @State private var hasLoadedHomeContent = false
-    @State private var hasLoadedGuestHomeContent = false
-    @State private var guestIntroSheetHeight: CGFloat = 400
-    @State private var guestIntroSelectedDetent: PresentationDetent = .height(400)
     @State private var homeResetTrigger = 0
     @State private var venuesResetTrigger = 0
     @State private var activityResetTrigger = 0
@@ -41,6 +39,14 @@ struct MainTabView: View {
         }
         .environmentObject(activityRequestStore)
         .environment(\.eventDetailTransitionNamespace, eventDetailTransitionNamespace)
+        .blur(radius: !isAuthenticated && isGuestWelcomePresented ? 1.25 : 0)
+        .overlay {
+            guestWelcomeOverlay
+        }
+        .fullScreenCover(isPresented: $isAuthPagePresented) {
+            WIGAuthSheetView(isDismissible: true)
+                .background(AppTheme.background.ignoresSafeArea())
+        }
         .fullScreenCover(item: $appSession.presentedEventDetail) { presentation in
             eventDetailOverlay(for: presentation)
         }
@@ -171,14 +177,6 @@ struct MainTabView: View {
                 await refreshFriendRequestBadge()
             }
         }
-        .sheet(isPresented: $isAuthSheetPresented) {
-            WIGAuthSheetView(isDismissible: true)
-                .presentationDetents([.large])
-                .presentationDragIndicator(.visible)
-        }
-        .sheet(isPresented: guestIntroSheetPresentation) {
-            guestIntroSheetContent
-        }
         .sheet(isPresented: $isEventCreationSheetPresented) {
             MobileEventCreationView()
                 .presentationDetents([.large])
@@ -304,14 +302,6 @@ struct MainTabView: View {
         .onReceive(NotificationCenter.default.publisher(for: .friendRequestDidChange)) { notification in
             handleFriendRequestChange(notification)
         }
-        .sheet(isPresented: $isAuthSheetPresented) {
-            WIGAuthSheetView(isDismissible: true)
-                .presentationDetents([.large])
-                .presentationDragIndicator(.visible)
-        }
-        .sheet(isPresented: guestIntroSheetPresentation) {
-            guestIntroSheetContent
-        }
         .sheet(isPresented: $isEventCreationSheetPresented) {
             MobileEventCreationView()
                 .presentationDetents([.large])
@@ -405,12 +395,12 @@ struct MainTabView: View {
 
     @ViewBuilder
     private var guestAuthButton: some View {
-        if !isAuthenticated && (selectedTab != .home || !isGuestIntroPresented) {
+        if !isAuthenticated && !isGuestWelcomePresented {
             VStack {
                 Spacer()
 
                 Button {
-                    isAuthSheetPresented = true
+                    isAuthPagePresented = true
                 } label: {
                     Text("Log in / Sign up")
                         .font(.system(size: 15, weight: .bold))
@@ -430,64 +420,33 @@ struct MainTabView: View {
         }
     }
 
-    private var guestIntroSheetPresentation: Binding<Bool> {
-        Binding(
-            get: {
-                !isAuthenticated &&
-                    selectedTab == .home &&
-                    isGuestIntroPresented &&
-                    hasLoadedGuestHomeContent
-            },
-            set: { isPresented in
-                if !isPresented {
-                    isGuestIntroPresented = false
-                }
-            }
-        )
-    }
-
     @ViewBuilder
-    private var guestIntroSheetContent: some View {
-        GuestWigIntroductionSheet(
-            onAuthenticate: presentAuthenticationFromGuestIntro,
-            onHeightChange: updateGuestIntroSheetHeight
-        )
-        .presentationDetents(
-            [.height(guestIntroSheetHeight), .large],
-            selection: $guestIntroSelectedDetent
-        )
-        .presentationDragIndicator(.visible)
+    private var guestWelcomeOverlay: some View {
+        if !isAuthenticated && isGuestWelcomePresented {
+            GuestWelcomeView(
+                googleAuthController: guestGoogleAuthController,
+                onContinueWithGoogle: continueWithGoogle,
+                onUseEmail: presentAuthenticationFromGuestWelcome
+            )
+            .transition(.opacity)
+            .zIndex(10)
+        }
     }
 
     private func markHomeContentReady() {
         hasLoadedHomeContent = true
-
-        guard !isAuthenticated, !hasLoadedGuestHomeContent else { return }
-
-        Task { @MainActor in
-            try? await Task.sleep(for: .milliseconds(500))
-            guard !isAuthenticated else { return }
-            hasLoadedGuestHomeContent = true
-        }
     }
 
-    private func updateGuestIntroSheetHeight(_ measuredHeight: CGFloat) {
-        let fittedHeight = ceil(measuredHeight)
-        guard fittedHeight > 0, abs(fittedHeight - guestIntroSheetHeight) >= 1 else {
-            return
-        }
-
-        guestIntroSheetHeight = fittedHeight
-        guestIntroSelectedDetent = .height(fittedHeight)
+    private func presentAuthenticationFromGuestWelcome() {
+        guard !isAuthenticated else { return }
+        isAuthPagePresented = true
     }
 
-    private func presentAuthenticationFromGuestIntro() {
-        isGuestIntroPresented = false
-
-        Task { @MainActor in
-            try? await Task.sleep(for: .milliseconds(350))
-            guard !isAuthenticated else { return }
-            isAuthSheetPresented = true
+    private func continueWithGoogle() {
+        Task {
+            let outcome = await guestGoogleAuthController.signIn(using: clerk)
+            guard outcome == .needsContinuation, !isAuthenticated else { return }
+            isAuthPagePresented = true
         }
     }
 
@@ -603,82 +562,164 @@ struct MainTabView: View {
         if isAuthenticated {
             selectedTab = .activity
         } else {
-            isAuthSheetPresented = true
+            isAuthPagePresented = true
         }
     }
 }
 
-private struct GuestWigIntroductionSheet: View {
-    let onAuthenticate: () -> Void
-    let onHeightChange: (CGFloat) -> Void
-    @Environment(\.dismiss) private var dismiss
+private struct GuestWelcomeView: View {
+    @ObservedObject var googleAuthController: GuestGoogleAuthController
+    let onContinueWithGoogle: () -> Void
+    let onUseEmail: () -> Void
 
-    private let benefits = [
-        "Discover events and see where your friends are going.",
-        "Keep track of what you’re attending and where you’ve been.",
-        "Follow venues and organizers to stay up to date.",
-    ]
+    @Environment(Clerk.self) private var clerk
 
     var body: some View {
-        VStack(alignment: .leading, spacing: 24) {
-                VStack(alignment: .leading, spacing: 7) {
-                    Text("Welcome to WIG")
-                        .font(.system(size: 24, weight: .bold))
-                        .foregroundStyle(.white)
+        ZStack {
+            previewWindowBackground
 
-                    Text("WIG makes it easy to discover events, see where your friends are going, and keep track of your plans.")
-                        .font(.system(size: 15, weight: .medium))
-                        .foregroundStyle(.white.opacity(0.68))
-                        .fixedSize(horizontal: false, vertical: true)
-                }
-                .padding(.trailing, 58)
+            Color.clear
+                .contentShape(Rectangle())
+                .gesture(
+                    DragGesture(minimumDistance: 0)
+                        .onChanged { _ in }
+                )
+                .accessibilityHidden(true)
 
-                VStack(alignment: .leading, spacing: 13) {
-                    ForEach(benefits, id: \.self) { benefit in
-                        HStack(alignment: .top, spacing: 10) {
-                            Image(systemName: "checkmark.circle.fill")
-                                .font(.system(size: 15, weight: .semibold))
-                                .foregroundStyle(AppTheme.accentBlue)
-                                .padding(.top, 1)
+            VStack(spacing: 0) {
+                Image("LaunchIcon")
+                    .resizable()
+                    .scaledToFit()
+                    .frame(width: 92, height: 92)
+                    .clipShape(RoundedRectangle(cornerRadius: 20, style: .continuous))
+                    .shadow(color: .black.opacity(0.30), radius: 18, y: 8)
+                    .padding(.top, 18)
 
-                            Text(benefit)
-                                .font(.system(size: 15, weight: .medium))
-                                .foregroundStyle(.white.opacity(0.88))
-                                .fixedSize(horizontal: false, vertical: true)
+                Spacer()
+
+                Text("See who is going,\ndecide where to go.")
+                    .font(.system(size: 36, weight: .heavy))
+                    .foregroundStyle(.white)
+                    .multilineTextAlignment(.center)
+                    .tracking(-0.8)
+                    .frame(maxWidth: .infinity)
+                    .padding(.bottom, 20)
+
+                VStack(spacing: 12) {
+                    Button(action: onContinueWithGoogle) {
+                        ZStack(alignment: .leading) {
+                            Text("Continue with Google")
+                                .font(.system(size: 17, weight: .semibold))
+                                .frame(maxWidth: .infinity)
+
+                            googleProviderIcon
+                                .padding(.leading, 20)
+                        }
+                        .foregroundStyle(.black.opacity(0.88))
+                        .frame(maxWidth: .infinity, minHeight: 58)
+                        .background(.white, in: RoundedRectangle(cornerRadius: 18, style: .continuous))
+                        .overlay {
+                            if googleAuthController.isLoading {
+                                RoundedRectangle(cornerRadius: 18, style: .continuous)
+                                    .fill(.white.opacity(0.90))
+
+                                ProgressView()
+                                    .tint(.black)
+                            }
                         }
                     }
-                }
+                    .buttonStyle(.plain)
+                    .disabled(googleAuthController.isLoading)
 
-                Button(action: onAuthenticate) {
-                    Text("Sign up or log in")
-                        .font(.system(size: 17, weight: .bold))
-                        .foregroundStyle(.black.opacity(0.86))
-                        .frame(maxWidth: .infinity, minHeight: 58)
-                        .background(AppTheme.accentBlue, in: RoundedRectangle(cornerRadius: 18, style: .continuous))
+                    Button(action: onUseEmail) {
+                        ZStack(alignment: .leading) {
+                            Text("Continue with email")
+                                .font(.system(size: 17, weight: .semibold))
+                                .frame(maxWidth: .infinity)
+
+                            Image(systemName: "envelope.fill")
+                                .font(.system(size: 18, weight: .semibold))
+                                .frame(width: 21, height: 21)
+                                .padding(.leading, 20)
+                        }
+                        .foregroundStyle(.white)
+                        .frame(maxWidth: .infinity, minHeight: 56)
+                        .background(.white.opacity(0.08), in: RoundedRectangle(cornerRadius: 18, style: .continuous))
+                        .overlay {
+                            RoundedRectangle(cornerRadius: 18, style: .continuous)
+                                .strokeBorder(.white.opacity(0.18), lineWidth: 1)
+                        }
+                    }
+                    .buttonStyle(.plain)
+
                 }
-                .buttonStyle(.plain)
-        }
-        .padding(20)
-        .padding(.top, 8)
-        .fixedSize(horizontal: false, vertical: true)
-        .overlay(alignment: .topTrailing) {
-            Button(action: dismiss.callAsFunction) {
-                Image(systemName: "xmark")
-                    .font(.system(size: 16, weight: .semibold))
-                    .foregroundStyle(.white.opacity(0.80))
-                    .frame(width: 42, height: 42)
-                    .background(.white.opacity(0.08), in: Circle())
             }
-            .buttonStyle(.plain)
-            .accessibilityLabel("Close")
-            .padding(.top, 20)
-            .padding(.trailing, 20)
+            .padding(.horizontal, 24)
+            .padding(.bottom, 54)
         }
-        .onGeometryChange(for: CGFloat.self) { geometry in
-            geometry.size.height
-        } action: { height in
-            onHeightChange(height)
+        .accessibilityElement(children: .contain)
+        .alert(
+            "Couldn't Continue with Google",
+            isPresented: Binding(
+                get: { googleAuthController.errorMessage != nil },
+                set: { isPresented in
+                    if !isPresented {
+                        googleAuthController.errorMessage = nil
+                    }
+                }
+            )
+        ) {
+            Button("OK", role: .cancel) {}
+        } message: {
+            Text(googleAuthController.errorMessage ?? "Please try again.")
         }
+    }
+
+    @ViewBuilder
+    private var googleProviderIcon: some View {
+        if let logoURL = googleLogoURL {
+            AsyncImage(url: logoURL) { image in
+                image
+                    .resizable()
+                    .scaledToFit()
+            } placeholder: {
+                Text("G")
+                    .font(.system(size: 17, weight: .bold))
+                    .foregroundStyle(.blue)
+            }
+            .frame(width: 21, height: 21)
+        } else {
+            Text("G")
+                .font(.system(size: 17, weight: .bold))
+                .foregroundStyle(.blue)
+                .frame(width: 21, height: 21)
+        }
+    }
+
+    private var googleLogoURL: URL? {
+        guard let logoURLString = clerk.environment?.userSettings.social["oauth_google"]?.logoUrl else {
+            return nil
+        }
+
+        return URL(string: logoURLString)
+    }
+
+    private var previewWindowBackground: some View {
+        LinearGradient(
+            stops: [
+                .init(color: .black, location: 0.00),
+                .init(color: .black, location: 0.11),
+                .init(color: .black.opacity(0.45), location: 0.19),
+                .init(color: .black.opacity(0.38), location: 0.43),
+                .init(color: .black.opacity(0.66), location: 0.60),
+                .init(color: .black, location: 0.69),
+                .init(color: .black, location: 1.00),
+            ],
+            startPoint: .top,
+            endPoint: .bottom
+        )
+        .ignoresSafeArea()
+        .allowsHitTesting(false)
     }
 }
 
