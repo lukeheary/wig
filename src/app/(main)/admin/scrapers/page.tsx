@@ -757,7 +757,7 @@ export default function AdminScrapersPage() {
     setBatchPoshProgress({ current: 0, total: poshRows.length });
 
     let eventsFound = 0;
-    let eventsCreated = 0;
+    let eventsSynced = 0;
     const failures: string[] = [];
 
     for (let index = 0; index < poshRows.length; index += 1) {
@@ -817,7 +817,9 @@ export default function AdminScrapersPage() {
           headers: { "Content-Type": "application/json" },
           body: JSON.stringify({
             scraperId: row.id,
-            overrideExisting: false,
+            // Batch scraper runs synchronize Posh's latest event details,
+            // including schedule, image, and location changes.
+            overrideExisting: true,
             events: scrapeData.events.map((event) => ({
               title: event.title,
               description: event.description,
@@ -845,7 +847,7 @@ export default function AdminScrapersPage() {
         if (!importResponse.ok) {
           throw new Error(importData.error || "Failed to import events");
         }
-        eventsCreated += importData.created ?? 0;
+        eventsSynced += importData.created ?? 0;
       } catch (err) {
         failures.push(
           `${row.place.name}: ${err instanceof Error ? err.message : "Unknown error"}`
@@ -865,7 +867,7 @@ export default function AdminScrapersPage() {
         failures.length === 0
           ? "All Posh scrapers completed"
           : "Posh batch completed with errors",
-      description: `${eventsFound} events found; ${eventsCreated} new events imported.`,
+      description: `${eventsFound} events found; ${eventsSynced} events synchronized.`,
       variant: failures.length === poshRows.length ? "destructive" : "default",
     });
   };
