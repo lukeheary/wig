@@ -440,6 +440,10 @@ export async function PATCH(request: Request) {
     }));
 
     let dedupedEvents = parsedEvents;
+    const existingEventsByKey = new Map<
+      string,
+      { id: string; address: string | null }
+    >();
 
     if (!body.overrideExisting) {
       const eventsWithExternal = parsedEvents.filter(
@@ -463,14 +467,21 @@ export async function PATCH(request: Request) {
               inArray(events.externalId, Array.from(ids))
             ),
             columns: {
+              id: true,
               source: true,
               externalId: true,
+              address: true,
             },
           });
 
           rows.forEach((row) => {
             if (row.source && row.externalId) {
-              existingKeys.add(`${row.source}::${row.externalId}`);
+              const key = `${row.source}::${row.externalId}`;
+              existingKeys.add(key);
+              existingEventsByKey.set(key, {
+                id: row.id,
+                address: row.address,
+              });
             }
           });
         }
@@ -486,6 +497,45 @@ export async function PATCH(request: Request) {
         }
         return true;
       });
+    }
+
+    // A later scrape can contain venue details that were not published when
+    // the event was first imported. Preserve the normal "do not overwrite"
+    // behavior, but fill an existing event's missing location from the newly
+    // scraped data.
+    if (!body.overrideExisting && existingEventsByKey.size > 0) {
+      await Promise.all(
+        parsedEvents.map(async (event) => {
+          if (!event.source || !event.externalId || !event.address?.trim()) {
+            return;
+          }
+
+          const existing = existingEventsByKey.get(
+            `${event.source}::${event.externalId}`
+          );
+          if (!existing || existing.address?.trim()) {
+            return;
+          }
+
+          await db
+            .update(events)
+            .set({
+              address: event.address.trim(),
+              city: event.city,
+              state: event.normalizedState,
+              ...(row.place.type === "venue"
+                ? { venueId: row.placeId }
+                : event.venueId
+                  ? { venueId: event.venueId }
+                  : {}),
+              ...(row.place.type === "organizer"
+                ? { organizerId: row.placeId }
+                : {}),
+              updatedAt: new Date(),
+            })
+            .where(eq(events.id, existing.id));
+        })
+      );
     }
 
     if (dedupedEvents.length === 0) {
