@@ -14,10 +14,10 @@ import SwiftUI
 // "Secured by Clerk" only appears when branding is enabled in the Clerk
 // dashboard — disable it there to remove it permanently.
 struct WIGAuthSheetView: View {
-    let isDismissable: Bool
+    let isDismissible: Bool
 
     var body: some View {
-        AuthView(isDismissable: isDismissable)
+        AuthView(isDismissible: isDismissible)
             .environment(Clerk.shared)
             .environment(\.clerkTheme, Self.theme)
             .clerkAppIcon(Image("LaunchIcon"))

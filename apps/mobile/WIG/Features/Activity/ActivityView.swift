@@ -163,7 +163,7 @@ struct ActivityView: View {
                     }
                 }
                 .padding(.top, 56)
-                .padding(.bottom, 32)
+                .padding(.bottom, 18)
             }
             .scrollIndicators(.hidden)
             .modifier(ScrollableHeaderVisibilityTrackingModifier(visibility: headerVisibility))
@@ -1042,7 +1042,7 @@ struct InlineLinkedActivityText: UIViewRepresentable {
         switch activity.type {
         case .rsvpGoing:
             return isPastEvent
-                ? "went to"
+                ? "attended"
                 : (isPluralSubject ? "are going to" : "is going to")
         case .rsvpInterested:
             return isPastEvent

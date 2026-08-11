@@ -114,7 +114,7 @@ struct PlaceDetailView: View {
                 }
                 .padding(.horizontal, 16)
                 .padding(.top, 74)
-                .padding(.bottom, 32)
+                .padding(.bottom, 18)
                 .frame(maxWidth: .infinity, alignment: .topLeading)
         }
         .background(AppTheme.background.ignoresSafeArea())
@@ -583,7 +583,7 @@ struct PlaceDetailView: View {
                     EventCardCarousel(
                         events: group.events,
                         cardWidth: eventCardWidth,
-                        verticalSpacing: 14
+                        verticalSpacing: 10
                     ) {
                         Text(group.label)
                             .font(AppTheme.contentHeaderFont)
@@ -899,7 +899,7 @@ private struct PlaceFollowersView: View {
             }
             .padding(.horizontal, 16)
             .padding(.top, 74)
-            .padding(.bottom, 32)
+            .padding(.bottom, 18)
         }
         .background(AppTheme.background.ignoresSafeArea())
         .background(SwipeBackEnabler())
@@ -974,7 +974,7 @@ private struct PlaceMembersView: View {
             }
             .padding(.horizontal, 16)
             .padding(.top, 74)
-            .padding(.bottom, 32)
+            .padding(.bottom, 18)
         }
         .background(AppTheme.background.ignoresSafeArea())
         .background(SwipeBackEnabler())

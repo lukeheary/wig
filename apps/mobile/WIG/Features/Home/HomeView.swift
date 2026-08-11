@@ -137,6 +137,25 @@ private final class HomeForegroundRefreshCoordinator: ObservableObject {
         schedule(refresh)
     }
 
+    func dataDidChange(
+        eventDetailPresented: Bool,
+        refresh: @escaping @MainActor () async -> Void
+    ) {
+        needsRefresh = true
+        refreshTask?.cancel()
+        refreshTask = nil
+
+        // Event edits post their change notification before the edit sheet and
+        // event detail finish dismissing. Waiting until the detail closes avoids
+        // racing the freshly updated What's New response. Changes made outside an
+        // event detail are still refreshed automatically after the normal debounce.
+        guard !eventDetailPresented else {
+            return
+        }
+
+        schedule(refresh)
+    }
+
     private func schedule(_ refresh: @escaping @MainActor () async -> Void) {
         refreshTask?.cancel()
         refreshTask = Task { @MainActor [weak self] in
@@ -292,12 +311,16 @@ struct HomeView: View {
                     }
                 }
                 .onReceive(NotificationCenter.default.publisher(for: .eventRSVPDidChange)) { _ in
-                    Task {
+                    foregroundRefreshCoordinator.dataDidChange(
+                        eventDetailPresented: appSession.isEventDetailPresented
+                    ) {
                         await loadHome(for: selectedWeekStart, using: apiClient, forceRefresh: true)
                     }
                 }
                 .onReceive(NotificationCenter.default.publisher(for: .mobileEventDidChange)) { _ in
-                    Task {
+                    foregroundRefreshCoordinator.dataDidChange(
+                        eventDetailPresented: appSession.isEventDetailPresented
+                    ) {
                         await loadHome(for: selectedWeekStart, using: apiClient, forceRefresh: true)
                     }
                 }
@@ -325,7 +348,9 @@ struct HomeView: View {
                 .onReceive(NotificationCenter.default.publisher(for: .appDataDidChange)) { _ in
                     HomeSearchDirectoryViewModel.invalidateCache()
 
-                    Task {
+                    foregroundRefreshCoordinator.dataDidChange(
+                        eventDetailPresented: appSession.isEventDetailPresented
+                    ) {
                         await loadHome(for: selectedWeekStart, using: apiClient, forceRefresh: true)
 
                         if showsNativeSearch {
@@ -660,7 +685,7 @@ struct HomeView: View {
                 .top,
                 isViewingCurrentWeek && postEventFeedbackPrompt != nil ? 66 : 74
             )
-            .padding(.bottom, 32)
+            .padding(.bottom, 18)
         }
         .scrollIndicators(.hidden)
         .scrollDismissesKeyboard(.interactively)
@@ -697,7 +722,7 @@ struct HomeView: View {
                 }
                 .frame(maxWidth: .infinity)
                 .padding(.top, 60)
-                .padding(.bottom, 32)
+                .padding(.bottom, 18)
             }
             .scrollIndicators(.hidden)
             .scrollDismissesKeyboard(.interactively)
@@ -915,7 +940,7 @@ struct HomeView: View {
                     homeEventSearchGridContent
                 }
                 .padding(.top, 74)
-                .padding(.bottom, 32)
+                .padding(.bottom, 18)
             }
             .scrollIndicators(.hidden)
             .scrollDismissesKeyboard(.interactively)
@@ -1183,8 +1208,13 @@ struct HomeView: View {
         let startDate = logicalDisplayRangeStartDate
         let weekEnd = logicalWeekEnd ?? startDate
         let inclusiveEndDate = Self.weekCalendar.date(byAdding: .day, value: -1, to: weekEnd) ?? startDate
+        let formattedStartDate = Self.weekRangeMonthFormatter.string(from: startDate)
 
-        return "\(Self.weekRangeMonthFormatter.string(from: startDate)) - \(Self.weekRangeMonthFormatter.string(from: inclusiveEndDate))"
+        guard !Self.weekCalendar.isDate(startDate, inSameDayAs: inclusiveEndDate) else {
+            return formattedStartDate
+        }
+
+        return "\(formattedStartDate) - \(Self.weekRangeMonthFormatter.string(from: inclusiveEndDate))"
     }
 
     private var visibleWeekRelativeTitle: String {
@@ -2118,6 +2148,7 @@ private struct LatestFromFollowsSection: View {
             EventCardCarousel(
                 events: updates.map(\.event),
                 cardWidth: 164,
+                verticalSpacing: 10,
                 snapsToCards: false,
                 showsCounter: false
             ) {
@@ -2159,7 +2190,7 @@ private struct LatestFromFollowsCard: View {
                 EventSocialOverlayView(
                     attendees: goingAttendees,
                     size: .card,
-                    maximumVisibleAttendees: 2,
+                    maximumVisibleAttendees: 3,
                     totalAttendeeCount: totalGoingCount
                 )
                 .padding(8)
@@ -2256,7 +2287,7 @@ private struct HomeEventDaySection<Header: View>: View {
     @ViewBuilder
     var body: some View {
         if section.events.isEmpty {
-            VStack(alignment: .leading, spacing: 12) {
+            VStack(alignment: .leading, spacing: 10) {
                 header
                     .padding(.horizontal, 16)
 
@@ -2266,7 +2297,8 @@ private struct HomeEventDaySection<Header: View>: View {
         } else {
             EventCardCarousel(
                 events: section.events,
-                cardWidth: eventCardWidth
+                cardWidth: eventCardWidth,
+                verticalSpacing: 10
             ) {
                 header
             } card: { event in

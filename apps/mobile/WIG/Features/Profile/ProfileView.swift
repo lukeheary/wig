@@ -335,7 +335,7 @@ struct ProfileView: View {
                 }
                 .padding(.horizontal, 16)
                 .padding(.top, 74)
-                .padding(.bottom, 32)
+                .padding(.bottom, 18)
             }
             .scrollIndicators(.hidden)
             .modifier(ScrollableHeaderVisibilityTrackingModifier(visibility: headerVisibility))
@@ -390,7 +390,7 @@ struct ProfileView: View {
                     EventCardCarousel(
                         events: group.events,
                         cardWidth: 220,
-                        verticalSpacing: 14
+                        verticalSpacing: 10
                     ) {
                         Text(group.label)
                             .font(AppTheme.contentHeaderFont)
@@ -1033,7 +1033,7 @@ struct UserProfileView: View {
                 }
                 .padding(.horizontal, 16)
                 .padding(.top, 74)
-                .padding(.bottom, 32)
+                .padding(.bottom, 18)
             }
             .scrollIndicators(.hidden)
             .modifier(ScrollableHeaderVisibilityTrackingModifier(visibility: headerVisibility))
@@ -1897,7 +1897,7 @@ private enum ProfileEventsRSVPFilter: String, CaseIterable, Identifiable {
         case .all:
             return "All RSVPs"
         case .going:
-            return tab == .past ? "Went" : "Going"
+            return tab == .past ? "Attended" : "Going"
         case .interested:
             return "Interested"
         }
@@ -1945,7 +1945,7 @@ private struct UserProfileEventsSection: View {
                     EventCardCarousel(
                         events: group.events,
                         cardWidth: 220,
-                        verticalSpacing: 14
+                        verticalSpacing: 10
                     ) {
                         Text(group.label)
                             .font(.system(size: 20, weight: .bold))
@@ -2572,7 +2572,7 @@ private struct PartnerPickerSheet: View {
                 }
                 .padding(16)
                 .padding(.top, 16)
-                .padding(.bottom, 40)
+                .padding(.bottom, 26)
             }
         }
         .alert(item: $pendingPartner) { friend in
@@ -3272,7 +3272,7 @@ private struct RelationshipListScreen<Content: View>: View {
             }
             .padding(.horizontal, 16)
             .padding(.top, 74)
-            .padding(.bottom, 32)
+            .padding(.bottom, 18)
         }
         .background(ProfileTheme.background.ignoresSafeArea())
         .background(SwipeBackEnabler())
@@ -3612,7 +3612,7 @@ private struct AdminSettingsView: View {
             }
             .padding(.horizontal, 16)
             .padding(.top, 74)
-            .padding(.bottom, 32)
+            .padding(.bottom, 18)
         }
         .scrollIndicators(.hidden)
         .background(ProfileTheme.background.ignoresSafeArea())
@@ -3823,7 +3823,7 @@ private struct AdminScrapersView: View {
             }
             .padding(.horizontal, 16)
             .padding(.top, 74)
-            .padding(.bottom, 32)
+            .padding(.bottom, 18)
         }
         .scrollIndicators(.hidden)
         .background(ProfileTheme.background.ignoresSafeArea())

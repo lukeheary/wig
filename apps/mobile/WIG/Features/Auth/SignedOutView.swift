@@ -11,7 +11,7 @@ struct SignedOutView: View {
                 VStack(spacing: 26) {
                     header
 
-                    AuthView(isDismissable: false)
+                    AuthView(isDismissible: false)
                         .environment(Clerk.shared)
                         .frame(maxWidth: .infinity)
                         .padding(.horizontal, 2)
@@ -41,7 +41,7 @@ struct SignedOutView: View {
                 }
                 .padding(.horizontal, 22)
                 .padding(.top, 92)
-                .padding(.bottom, 28)
+                .padding(.bottom, 14)
             }
             .scrollIndicators(.hidden)
             .background(background)

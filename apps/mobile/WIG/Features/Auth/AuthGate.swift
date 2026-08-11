@@ -295,7 +295,7 @@ struct MobileOnboardingView: View {
             }
             .padding(.horizontal, mode == .editing ? 16 : 18)
             .padding(.top, mode == .editing ? 74 : 20)
-            .padding(.bottom, 20)
+            .padding(.bottom, 6)
         }
         .scrollIndicators(.hidden)
         .background(onboardingBackground)

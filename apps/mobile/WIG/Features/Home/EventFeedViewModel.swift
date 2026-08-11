@@ -111,6 +111,7 @@ final class EventFeedViewModel: ObservableObject {
         }
 
         if !forceRefresh, let inFlightLoad = Self.inFlightLoads[loadKey] {
+            let inFlightToken = Self.inFlightTokens[loadKey]
             loadingWeekStarts.insert(cacheKey)
             defer {
                 loadingWeekStarts.remove(cacheKey)
@@ -122,6 +123,10 @@ final class EventFeedViewModel: ObservableObject {
 
             do {
                 let response = try await inFlightLoad.value
+                guard Self.inFlightTokens[loadKey] == inFlightToken else {
+                    return
+                }
+
                 responsesByWeek[cacheKey] = response
                 Self.preloadedResponses[loadKey] = response
                 rememberCurrentUserLocation(from: response)
@@ -163,12 +168,17 @@ final class EventFeedViewModel: ObservableObject {
             Self.inFlightTokens[loadKey] = token
 
             let response = try await loadTask.value
+            guard Self.inFlightTokens[loadKey] == token else {
+                return
+            }
+
             responsesByWeek[cacheKey] = response
             Self.preloadedResponses[loadKey] = response
             rememberCurrentUserLocation(from: response)
             state = .loaded(response)
         } catch {
-            if shouldShowFullScreenLoading {
+            if shouldShowFullScreenLoading,
+               Self.inFlightTokens[loadKey] == token {
                 state = .failed(error.localizedDescription)
             }
         }

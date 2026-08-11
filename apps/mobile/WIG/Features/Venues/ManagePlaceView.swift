@@ -70,7 +70,7 @@ struct ManagePlaceView: View {
             }
             .padding(.horizontal, 20)
             .padding(.top, 84)
-            .padding(.bottom, 44)
+            .padding(.bottom, 30)
         }
         .background(AppTheme.background.ignoresSafeArea())
         .navigationBarBackButtonHidden()

@@ -132,7 +132,7 @@ struct EventDetailView: View {
                     }
                     .padding(.horizontal, 16)
                     .padding(.top, 10)
-                    .padding(.bottom, 20)
+                    .padding(.bottom, 6)
                 }
                 .frame(maxWidth: .infinity, alignment: .leading)
             }
@@ -245,7 +245,7 @@ struct EventDetailView: View {
             }
         }
         .sheet(isPresented: $isAuthSheetPresented) {
-            WIGAuthSheetView(isDismissable: true)
+            WIGAuthSheetView(isDismissible: true)
                 .presentationDetents([.large])
                 .presentationDragIndicator(.visible)
         }
@@ -917,7 +917,7 @@ struct EventDetailView: View {
                         .frame(width: 22)
                         .foregroundStyle(AppTheme.accentBlue)
 
-                    Text("Mark as Went")
+                    Text("Mark as Attended")
                         .font(.system(size: 15, weight: .bold))
                         .foregroundStyle(.white)
 
@@ -1405,7 +1405,7 @@ struct EventDetailView: View {
 
         switch rsvpViewModel.status {
         case .going:
-            return currentEvent.hasEnded ? "Went" : "Going"
+            return currentEvent.hasEnded ? "Attended" : "Going"
         case .interested:
             return "Interested"
         case .notGoing:
@@ -2032,7 +2032,7 @@ private struct EventRSVPListView: View {
             }
             .padding(.horizontal, 16)
             .padding(.top, 18)
-            .padding(.bottom, 20)
+            .padding(.bottom, 6)
         }
         .background(AppTheme.background.ignoresSafeArea())
         .navigationTitle("Friends")

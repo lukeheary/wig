@@ -172,7 +172,7 @@ struct MainTabView: View {
             }
         }
         .sheet(isPresented: $isAuthSheetPresented) {
-            WIGAuthSheetView(isDismissable: true)
+            WIGAuthSheetView(isDismissible: true)
                 .presentationDetents([.large])
                 .presentationDragIndicator(.visible)
         }
@@ -305,7 +305,7 @@ struct MainTabView: View {
             handleFriendRequestChange(notification)
         }
         .sheet(isPresented: $isAuthSheetPresented) {
-            WIGAuthSheetView(isDismissable: true)
+            WIGAuthSheetView(isDismissible: true)
                 .presentationDetents([.large])
                 .presentationDragIndicator(.visible)
         }
