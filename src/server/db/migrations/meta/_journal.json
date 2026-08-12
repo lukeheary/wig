@@ -349,6 +349,12 @@
       "when": 1786543200000,
       "tag": "0056_add_event_source_image_url",
       "breakpoints": true
+    },
+    {
+      "idx": 58,
+      "when": 1786546800000,
+      "tag": "0057_remove_environment_from_stored_event_image_keys",
+      "breakpoints": true
     }
   ]
 }

@@ -1,5 +1,19 @@
+import { getEnvironmentPrefix } from "./env";
+
 function trimTrailingSlashes(value: string): string {
   return value.replace(/\/+$/, "");
+}
+
+const ENVIRONMENT_KEY_PREFIX = /^(?:production|development|test)\/+/;
+
+function stripEnvironmentPrefix(key: string): string {
+  return key.replace(/^\/+/, "").replace(ENVIRONMENT_KEY_PREFIX, "");
+}
+
+function addCurrentEnvironmentPrefix(key: string): string {
+  const normalizedKey = key.replace(/^\/+/, "");
+  if (ENVIRONMENT_KEY_PREFIX.test(normalizedKey)) return normalizedKey;
+  return `${getEnvironmentPrefix()}/${normalizedKey}`;
 }
 
 function configuredStorageBaseUrls(): URL[] {
@@ -49,7 +63,19 @@ function keyFromKnownStorageUrl(value: string): string | null {
  */
 export function normalizeStoredImageValue(value: string): string {
   const trimmed = value.trim();
-  return keyFromKnownStorageUrl(trimmed) ?? trimmed.replace(/^\/(?!\/)/, "");
+  const knownStorageKey = keyFromKnownStorageUrl(trimmed);
+  if (knownStorageKey) return stripEnvironmentPrefix(knownStorageKey);
+
+  try {
+    const parsed = new URL(trimmed);
+    if (parsed.protocol === "http:" || parsed.protocol === "https:") {
+      return trimmed;
+    }
+  } catch {
+    // A non-URL value is an object key.
+  }
+
+  return stripEnvironmentPrefix(trimmed);
 }
 
 /**
@@ -73,5 +99,5 @@ export function resolveStoredImageValue(value: string): string {
     process.env.R2_ENDPOINT;
 
   if (!publicBaseUrl) return trimmed;
-  return `${trimTrailingSlashes(publicBaseUrl)}/${trimmed.replace(/^\/+/, "")}`;
+  return `${trimTrailingSlashes(publicBaseUrl)}/${addCurrentEnvironmentPrefix(trimmed)}`;
 }
