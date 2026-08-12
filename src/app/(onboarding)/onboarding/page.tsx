@@ -200,6 +200,7 @@ export default function OnboardingPage() {
     },
     []
   );
+  const avatarUploadUserId = clerkUser?.id ?? user?.id;
 
   // Wait only for Clerk to hydrate the auth state.
   if (!isLoaded) {
@@ -229,21 +230,28 @@ export default function OnboardingPage() {
                 className="h-24 w-24 border-2 border-primary/10"
               />
             </div>
-            <S3Uploader
-              variant="button"
-              buttonText={
-                formData.avatarImageUrl ? "Change Picture" : "Upload Picture"
-              }
-              onUploadComplete={(url) =>
-                setFormData({ ...formData, avatarImageUrl: url })
-              }
-              onRemoveImage={() =>
-                setFormData({ ...formData, avatarImageUrl: "" })
-              }
-              folder={`users/${clerkUser?.id ?? user?.id ?? "pending-user"}`}
-              fileName="avatar-image.png"
-              className="w-full max-w-[200px]"
-            />
+            {avatarUploadUserId ? (
+              <S3Uploader
+                variant="button"
+                buttonText={
+                  formData.avatarImageUrl ? "Change Picture" : "Upload Picture"
+                }
+                onUploadComplete={(url) =>
+                  setFormData({ ...formData, avatarImageUrl: url })
+                }
+                onRemoveImage={() =>
+                  setFormData({ ...formData, avatarImageUrl: "" })
+                }
+                folder={`users/${avatarUploadUserId}`}
+                fileName="avatar-image.png"
+                className="w-full max-w-[200px]"
+              />
+            ) : (
+              <Button disabled className="w-full max-w-[200px]">
+                <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+                Loading profile
+              </Button>
+            )}
             {!formData.avatarImageUrl && (
               <p className="mt-2 text-xs text-muted-foreground">
                 You can add a profile picture later in settings

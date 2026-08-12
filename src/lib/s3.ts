@@ -5,16 +5,70 @@ import {
 } from "@aws-sdk/client-s3";
 import { getStoragePath } from "./env";
 
-// Initialize S3 client
-export const s3Client = new S3Client({
-  region: process.env.AWS_REGION!,
+const R2_BUCKET = process.env.R2_BUCKET!;
+const rawR2Endpoint = process.env.R2_ENDPOINT!;
+const AWS_BUCKET = process.env.AWS_S3_BUCKET!;
+const AWS_REGION = process.env.AWS_REGION!;
+
+function trimTrailingSlashes(value: string): string {
+  return value.replace(/\/+$/, "");
+}
+
+function getR2ApiEndpoint(endpoint: string, bucket: string): string {
+  const parsed = new URL(endpoint);
+  const bucketSuffix = `/${bucket}`;
+
+  if (trimTrailingSlashes(parsed.pathname).endsWith(bucketSuffix)) {
+    parsed.pathname = trimTrailingSlashes(parsed.pathname).slice(
+      0,
+      -bucketSuffix.length
+    );
+  }
+
+  return trimTrailingSlashes(parsed.toString());
+}
+
+function getR2PublicBaseUrl(endpoint: string, bucket: string): string {
+  const configuredPublicUrl =
+    process.env.R2_PUBLIC_BASE_URL || process.env.R2_PUBLIC_URL;
+  if (configuredPublicUrl) return trimTrailingSlashes(configuredPublicUrl);
+
+  const normalizedEndpoint = trimTrailingSlashes(endpoint);
+  return normalizedEndpoint.endsWith(`/${bucket}`)
+    ? normalizedEndpoint
+    : `${normalizedEndpoint}/${bucket}`;
+}
+
+const R2_PUBLIC_BASE_URL = getR2PublicBaseUrl(rawR2Endpoint, R2_BUCKET);
+const R2_PUBLIC_URL = new URL(`${R2_PUBLIC_BASE_URL}/`);
+const AWS_PUBLIC_URL = new URL(
+  `https://${AWS_BUCKET}.s3.${AWS_REGION}.amazonaws.com/`
+);
+
+// Cloudflare R2 exposes an S3-compatible API, so the AWS SDK remains the client.
+export const r2Client = new S3Client({
+  region: process.env.R2_REGION || "auto",
+  endpoint: getR2ApiEndpoint(rawR2Endpoint, R2_BUCKET),
+  credentials: {
+    accessKeyId: process.env.R2_ACCESS_KEY_ID!,
+    secretAccessKey: process.env.R2_SECRET_ACCESS_KEY!,
+  },
+});
+
+export const awsS3Client = new S3Client({
+  region: AWS_REGION,
   credentials: {
     accessKeyId: process.env.AWS_ACCESS_KEY_ID!,
     secretAccessKey: process.env.AWS_SECRET_ACCESS_KEY!,
   },
 });
 
-export const BUCKET_NAME = process.env.AWS_S3_BUCKET!;
+export const BUCKET_NAME = R2_BUCKET;
+
+const STORAGE_TARGETS = [
+  { name: "R2", client: r2Client, bucket: R2_BUCKET },
+  { name: "S3", client: awsS3Client, bucket: AWS_BUCKET },
+] as const;
 
 const IMAGE_CONTENT_TYPE_TO_EXT: Record<string, string> = {
   "image/jpeg": "jpg",
@@ -45,14 +99,102 @@ export function generateUniqueFilename(originalName: string): string {
 }
 
 /**
- * Get the public URL for an S3 object
+ * Get the public URL for an R2 object.
  */
 export function getS3Url(key: string): string {
-  return `https://${BUCKET_NAME}.s3.${process.env.AWS_REGION}.amazonaws.com/${key}`;
+  return `${R2_PUBLIC_BASE_URL}/${key}`;
+}
+
+function keyFromBaseUrl(url: string, baseUrl: URL): string | null {
+  const parsed = new URL(url);
+  const basePath = baseUrl.pathname.replace(/\/$/, "");
+
+  if (
+    parsed.origin !== baseUrl.origin ||
+    parsed.pathname === basePath ||
+    !parsed.pathname.startsWith(`${basePath}/`)
+  ) {
+    return null;
+  }
+
+  return decodeURIComponent(
+    parsed.pathname.slice(basePath.length).replace(/^\//, "")
+  );
+}
+
+function getStorageKey(url: string): string | null {
+  try {
+    return (
+      keyFromBaseUrl(url, R2_PUBLIC_URL) ||
+      keyFromBaseUrl(url, AWS_PUBLIC_URL)
+    );
+  } catch {
+    return null;
+  }
 }
 
 /**
- * Upload a file to S3
+ * Check whether a URL points at the configured R2 public origin.
+ */
+export function isStorageUrl(url: string): boolean {
+  return getStorageKey(url) !== null;
+}
+
+async function writeToBothStorageProviders(
+  key: string,
+  body: Buffer,
+  contentType: string
+): Promise<void> {
+  const results = await Promise.allSettled(
+    STORAGE_TARGETS.map(({ client, bucket }) =>
+      client.send(
+        new PutObjectCommand({
+          Bucket: bucket,
+          Key: key,
+          Body: body,
+          ContentType: contentType,
+        })
+      )
+    )
+  );
+  const failedWrites = results
+    .map((result, index) => ({ result, target: STORAGE_TARGETS[index] }))
+    .filter(
+      (
+        item
+      ): item is {
+        result: PromiseRejectedResult;
+        target: (typeof STORAGE_TARGETS)[number];
+      } => item.result.status === "rejected"
+    );
+
+  if (failedWrites.length === 0) return;
+
+  // Best-effort rollback prevents a reported failure from silently leaving only
+  // one provider with the object.
+  await Promise.allSettled(
+    results.flatMap((result, index) =>
+      result.status === "fulfilled"
+        ? [
+            STORAGE_TARGETS[index]!.client.send(
+              new DeleteObjectCommand({
+                Bucket: STORAGE_TARGETS[index]!.bucket,
+                Key: key,
+              })
+            ),
+          ]
+        : []
+    )
+  );
+
+  throw new AggregateError(
+    failedWrites.map(({ result }) => result.reason),
+    `Image upload failed for ${failedWrites.map(({ target }) => target.name).join(" and ")}`
+  );
+}
+
+/**
+ * Upload a file to R2 and S3, returning the R2 public URL.
  * Automatically adds environment prefix (production/development) to the path
  */
 export async function uploadToS3(
@@ -67,20 +209,13 @@ export async function uploadToS3(
   const arrayBuffer = await file.arrayBuffer();
   const buffer = Buffer.from(arrayBuffer);
 
-  const command = new PutObjectCommand({
-    Bucket: BUCKET_NAME,
-    Key: key,
-    Body: buffer,
-    ContentType: file.type,
-  });
-
-  await s3Client.send(command);
+  await writeToBothStorageProviders(key, buffer, file.type);
 
   return getS3Url(key);
 }
 
 /**
- * Download an image from a URL and upload it to S3.
+ * Download an image from a URL and upload it to R2 and S3.
  * Useful for re-hosting scraped event images on our own bucket.
  */
 export async function uploadImageFromUrl(
@@ -154,34 +289,33 @@ export async function uploadImageFromUrl(
   }
   const buffer = Buffer.from(arrayBuffer);
 
-  const command = new PutObjectCommand({
-    Bucket: BUCKET_NAME,
-    Key: key,
-    Body: buffer,
-    ContentType: contentType,
-  });
-
-  await s3Client.send(command);
+  await writeToBothStorageProviders(key, buffer, contentType);
 
   return getS3Url(key);
 }
 
 /**
- * Delete a file from S3
+ * Delete a file from both R2 and S3.
  */
 export async function deleteFromS3(url: string): Promise<void> {
-  // Extract key from URL
-  const urlParts = url.split(".amazonaws.com/");
-  if (urlParts.length !== 2) {
-    throw new Error("Invalid S3 URL");
+  const key = getStorageKey(url);
+  if (!key) {
+    throw new Error("Invalid storage URL");
   }
 
-  const key = urlParts[1];
+  const results = await Promise.allSettled(
+    STORAGE_TARGETS.map(({ client, bucket }) =>
+      client.send(new DeleteObjectCommand({ Bucket: bucket, Key: key }))
+    )
+  );
+  const failures = results.filter(
+    (result): result is PromiseRejectedResult => result.status === "rejected"
+  );
 
-  const command = new DeleteObjectCommand({
-    Bucket: BUCKET_NAME,
-    Key: key,
-  });
-
-  await s3Client.send(command);
+  if (failures.length > 0) {
+    throw new AggregateError(
+      failures.map((failure) => failure.reason),
+      "Failed to delete image from every storage provider"
+    );
+  }
 }

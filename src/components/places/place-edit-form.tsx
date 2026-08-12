@@ -64,7 +64,7 @@ export interface PlaceFormData {
 interface PlaceEditFormProps {
   initialData?: Partial<PlaceFormData>;
   placeType: PlaceType;
-  placeId?: string; // Required for edit mode to upload to correct S3 path
+  placeId?: string; // Required for edit mode to upload to the correct storage path
   mode: "create" | "edit";
   onDeferredLogoFileChange?: (file: File | null) => void;
   onSubmit: (data: PlaceFormData) => void;

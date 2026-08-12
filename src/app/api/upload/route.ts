@@ -37,7 +37,7 @@ export async function POST(request: NextRequest) {
       );
     }
 
-    // Upload to S3
+    // Upload to Cloudflare R2
     const url = await uploadToS3(file, folder, filename);
 
     return NextResponse.json({

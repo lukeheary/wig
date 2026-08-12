@@ -1,3 +1,23 @@
+const storageImagePattern = (() => {
+  const storageUrl =
+    process.env.R2_PUBLIC_BASE_URL ||
+    process.env.R2_PUBLIC_URL ||
+    process.env.R2_ENDPOINT;
+  if (!storageUrl) return null;
+
+  try {
+    const parsed = new URL(storageUrl);
+    return {
+      protocol: parsed.protocol.replace(":", ""),
+      hostname: parsed.hostname,
+      port: parsed.port,
+      pathname: "/**",
+    };
+  } catch {
+    return null;
+  }
+})();
+
 /** @type {import('next').NextConfig} */
 const nextConfig = {
   async redirects() {
@@ -41,6 +61,8 @@ const nextConfig = {
   },
   images: {
     remotePatterns: [
+      ...(storageImagePattern ? [storageImagePattern] : []),
+      // Keep previously persisted S3 images renderable during the R2 migration.
       {
         protocol: "https",
         hostname: "whoisgoing.s3.us-east-2.amazonaws.com",

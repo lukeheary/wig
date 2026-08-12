@@ -33,7 +33,7 @@ import {
   or,
   sql,
 } from "drizzle-orm";
-import { uploadImageFromUrl, deleteFromS3, BUCKET_NAME } from "@/lib/s3";
+import { uploadImageFromUrl, deleteFromS3, isStorageUrl } from "@/lib/s3";
 import { TRPCError } from "@trpc/server";
 import {
   clearRsvpActivity,
@@ -84,7 +84,7 @@ function isPendingEventUploadUrl(url: string): boolean {
   try {
     const parsed = new URL(url);
     return (
-      parsed.host.includes(`${BUCKET_NAME}.s3`) &&
+      isStorageUrl(url) &&
       parsed.pathname.includes("/events/pending/")
     );
   } catch {
@@ -181,18 +181,14 @@ async function notifyPartnerOfMirroredRsvp({
 }
 
 function isBucketUrl(url: string): boolean {
-  try {
-    return new URL(url).host.includes(`${BUCKET_NAME}.s3`);
-  } catch {
-    return false;
-  }
+  return isStorageUrl(url);
 }
 
 function isLegacyEventCoverImageUrl(url: string, eventId: string): boolean {
   try {
     const parsed = new URL(url);
     return (
-      parsed.host.includes(`${BUCKET_NAME}.s3`) &&
+      isStorageUrl(url) &&
       parsed.pathname.endsWith(`/events/${eventId}/coverImage.png`)
     );
   } catch {
@@ -1261,7 +1257,7 @@ export const eventRouter = router({
         );
       }
 
-      // Re-upload external cover images, and migrate legacy S3 keys, to events/{id}/cover-image.png
+      // Re-upload external cover images, and migrate legacy keys, to events/{id}/cover-image.png
       await Promise.allSettled(
         upserted.map(async (row) => {
           if (!row.coverImageUrl) {

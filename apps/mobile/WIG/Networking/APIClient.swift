@@ -719,6 +719,23 @@ struct APIClient: Sendable {
         )
     }
 
+    static func mobileSetPlaceLogoImage(
+        slug: String,
+        logoImageURL: URL
+    ) throws -> Endpoint<EmptyResponse> {
+        let request = MobilePlaceLogoImageRequest(
+            logoImageUrl: logoImageURL.absoluteString
+        )
+
+        return Endpoint(
+            path: "/api/mobile/places/\(slug)/logo-image",
+            method: .post,
+            body: try JSONEncoder().encode(request),
+            requiresAuthentication: false,
+            includesAuthenticationIfAvailable: true
+        )
+    }
+
     static func mobileDeletePlace(slug: String) -> Endpoint<DeleteSuccessResponse> {
         Endpoint(
             path: "/api/mobile/places/\(slug)/delete",
@@ -790,6 +807,24 @@ struct APIClient: Sendable {
 
         return Endpoint(
             path: "/api/mobile/events/\(eventID.uuidString)/cover-image",
+            method: .post,
+            body: try JSONEncoder().encode(request),
+            requiresAuthentication: false,
+            includesAuthenticationIfAvailable: true
+        )
+    }
+
+    static func mobileSetEventSeriesCoverImage(
+        seriesID: UUID,
+        coverImageURL: URL
+    ) throws -> Endpoint<EmptyResponse> {
+        let request = MobileEventSeriesCoverImageRequest(
+            seriesId: seriesID.uuidString,
+            coverImageUrl: coverImageURL.absoluteString
+        )
+
+        return Endpoint(
+            path: "/api/mobile/event-series/\(seriesID.uuidString)/cover-image",
             method: .post,
             body: try JSONEncoder().encode(request),
             requiresAuthentication: false,
@@ -1743,6 +1778,15 @@ private struct MobileEventCoverImageRequest: Encodable {
         case eventId
         case coverImageUrl
     }
+}
+
+private struct MobileEventSeriesCoverImageRequest: Encodable {
+    let seriesId: String
+    let coverImageUrl: String
+}
+
+private struct MobilePlaceLogoImageRequest: Encodable {
+    let logoImageUrl: String
 }
 
 private struct MobilePlaceScrapersUpdateRequest: Encodable {

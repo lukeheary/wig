@@ -13,8 +13,25 @@ import {
   doublePrecision,
   boolean,
   integer,
+  customType,
 } from "drizzle-orm/pg-core";
 import { RSVP_DECLINE_REASON_VALUES } from "@/lib/rsvp";
+import {
+  normalizeStoredImageValue,
+  resolveStoredImageValue,
+} from "@/lib/storage-url";
+
+const storedImage = customType<{ data: string; driverData: string }>({
+  dataType() {
+    return "text";
+  },
+  fromDriver(value) {
+    return resolveStoredImageValue(value);
+  },
+  toDriver(value) {
+    return normalizeStoredImageValue(value);
+  },
+});
 
 // ============================================================================
 // ENUMS
@@ -164,7 +181,7 @@ export const users = pgTable(
     username: varchar("username", { length: 50 }).notNull().unique(),
     firstName: varchar("first_name", { length: 100 }),
     lastName: varchar("last_name", { length: 100 }),
-    avatarImageUrl: text("avatar_image_url"),
+    avatarImageUrl: storedImage("avatar_image_url"),
     city: varchar("city", { length: 100 }),
     state: varchar("state", { length: 2 }),
     gender: genderEnum("gender"),
@@ -443,8 +460,8 @@ export const places = pgTable(
     slug: varchar("slug", { length: 100 }).notNull().unique(),
     name: varchar("name", { length: 255 }).notNull(),
     description: text("description"),
-    logoImageUrl: text("logo_image_url"),
-    coverImageUrl: text("banner_image_url"), // Optional banner image for place profile
+    logoImageUrl: storedImage("logo_image_url"),
+    coverImageUrl: storedImage("banner_image_url"), // Optional banner image for place profile
     address: text("address"), // primarily for venues
     city: varchar("city", { length: 100 }),
     state: varchar("state", { length: 2 }),
@@ -719,7 +736,7 @@ export const eventSeries = pgTable(
       .references(() => users.id, { onDelete: "cascade" }),
     title: varchar("title", { length: 255 }).notNull(),
     description: text("description"),
-    coverImageUrl: text("cover_image_url"),
+    coverImageUrl: storedImage("cover_image_url"),
     eventUrl: text("event_url"),
     source: varchar("source", { length: 50 }),
     externalId: text("external_id"),
@@ -786,7 +803,7 @@ export const events = pgTable(
       .references(() => users.id, { onDelete: "cascade" }),
     title: varchar("title", { length: 255 }).notNull(),
     description: text("description"),
-    coverImageUrl: text("cover_image_url"),
+    coverImageUrl: storedImage("cover_image_url"),
     eventUrl: text("event_url"),
     source: varchar("source", { length: 50 }),
     externalId: text("external_id"),

@@ -619,7 +619,6 @@ struct MobilePlaceCreationView: View {
         }
 
         do {
-            let uploadedLogoURL = try await uploadedLogoImageURLIfNeeded()
             let savedPlace: MobilePlaceCreateResponse
             switch mode {
             case .create:
@@ -628,7 +627,7 @@ struct MobilePlaceCreationView: View {
                         type: type,
                         name: trimmedName,
                         description: trimmedDescription.isEmpty ? nil : trimmedDescription,
-                        logoImageURL: uploadedLogoURL,
+                        logoImageURL: nil,
                         address: isVenue && !trimmedAddress.isEmpty ? trimmedAddress : nil,
                         city: trimmedCity.isEmpty ? nil : trimmedCity,
                         state: trimmedState.isEmpty ? nil : trimmedState,
@@ -638,7 +637,25 @@ struct MobilePlaceCreationView: View {
                         categories: orderedSelectedCategories
                     )
                 )
+
+                do {
+                    if let uploadedLogoURL = try await uploadedLogoImageURLIfNeeded(
+                        folder: "places/\(savedPlace.id.uuidString.lowercased())"
+                    ) {
+                        try await apiClient.send(
+                            APIClient.mobileSetPlaceLogoImage(
+                                slug: savedPlace.slug,
+                                logoImageURL: uploadedLogoURL
+                            )
+                        )
+                    }
+                } catch {
+                    // Keep the place creation success even if its logo upload fails.
+                }
             case .edit(let place):
+                let uploadedLogoURL = try await uploadedLogoImageURLIfNeeded(
+                    folder: "places/\(place.id.uuidString.lowercased())"
+                )
                 savedPlace = try await apiClient.send(
                     APIClient.mobileUpdatePlace(
                         slug: place.slug,
@@ -692,7 +709,7 @@ struct MobilePlaceCreationView: View {
         }
     }
 
-    private func uploadedLogoImageURLIfNeeded() async throws -> URL? {
+    private func uploadedLogoImageURLIfNeeded(folder: String) async throws -> URL? {
         guard let selectedLogoImage else {
             return nil
         }
@@ -704,7 +721,7 @@ struct MobilePlaceCreationView: View {
         let uploadedImage = try await apiClient.send(
             APIClient.mobileUploadImage(
                 imageData: imageData,
-                folder: "places/pending/\(UUID().uuidString)",
+                folder: folder,
                 fileName: "logo-image.jpg"
             )
         )

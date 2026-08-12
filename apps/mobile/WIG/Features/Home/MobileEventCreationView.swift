@@ -887,6 +887,28 @@ struct MobileEventCreationView: View {
                         )
                     )
 
+                    if let selectedCoverImage,
+                       let imageData = selectedCoverImage.eventCoverUploadJPEGData(maxBytes: 4 * 1024 * 1024) {
+                        do {
+                            let uploadedImage = try await apiClient.send(
+                                APIClient.mobileUploadImage(
+                                    imageData: imageData,
+                                    folder: "event-series/\(createdSeries.seriesId.uuidString.lowercased())",
+                                    fileName: "cover-image.jpg"
+                                )
+                            )
+
+                            try await apiClient.send(
+                                APIClient.mobileSetEventSeriesCoverImage(
+                                    seriesID: createdSeries.seriesId,
+                                    coverImageURL: uploadedImage.url
+                                )
+                            )
+                        } catch {
+                            // Keep the series creation success even if the cover image upload fails.
+                        }
+                    }
+
                     NotificationCenter.default.post(name: .mobileEventDidChange, object: createdSeries.firstEventId)
                     onSeriesCompleted?()
                     dismiss()
@@ -917,7 +939,7 @@ struct MobileEventCreationView: View {
                             let uploadedImage = try await apiClient.send(
                                 APIClient.mobileUploadImage(
                                     imageData: imageData,
-                                    folder: "events/\(createdEvent.id.uuidString)",
+                                    folder: "events/\(createdEvent.id.uuidString.lowercased())",
                                     fileName: "cover-image.jpg"
                                 )
                             )
@@ -1005,11 +1027,12 @@ struct MobileEventCreationView: View {
         let folder: String
         switch mode {
         case .create:
-            folder = "events/pending/\(UUID().uuidString)"
+            // Creation uploads after the event or series has its permanent ID.
+            return nil
         case .edit(let event):
-            folder = "events/\(event.id.uuidString)"
+            folder = "events/\(event.id.uuidString.lowercased())"
         case .editSeries(let series):
-            folder = "event-series/\(series.id.uuidString)"
+            folder = "event-series/\(series.id.uuidString.lowercased())"
         }
 
         let uploadedImage = try await apiClient.send(
