@@ -64,6 +64,12 @@ import {
 import { sendPushNotificationToUsers } from "@/server/utils/push-notifications";
 import { accentInsensitiveLike } from "@/server/db/search";
 import { RSVP_DECLINE_REASON_VALUES } from "@/lib/rsvp";
+import {
+  rehostExistingScrapedEventImages,
+  rehostScrapedEventImage,
+  SCRAPER_SOURCES,
+  type ScraperSource,
+} from "@/server/utils/scraped-event-images";
 
 function resolveEventUpdateActivityType(
   previousStatus: EventStatus,
@@ -1097,6 +1103,19 @@ export const eventRouter = router({
         return { created: 0 };
       }
 
+      const scraperSources = Array.from(
+        new Set(
+          input.events
+            .map((event) => event.source)
+            .filter(
+              (source): source is ScraperSource =>
+                Boolean(source) &&
+                SCRAPER_SOURCES.includes(source as ScraperSource)
+            )
+        )
+      );
+      await rehostExistingScrapedEventImages(scraperSources);
+
       const toEventKey = (event: {
         source?: string | null;
         externalId?: string | null;
@@ -1290,6 +1309,15 @@ export const eventRouter = router({
             row.id
           );
           if (isBucketUrl(row.coverImageUrl) && !isLegacyS3Key) {
+            return;
+          }
+
+          if (!isBucketUrl(row.coverImageUrl)) {
+            await rehostScrapedEventImage(
+              row.id,
+              row.coverImageUrl,
+              row.coverImageUrl
+            );
             return;
           }
 

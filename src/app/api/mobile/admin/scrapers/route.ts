@@ -14,8 +14,12 @@ import {
   setEventCategoryKeys,
 } from "@/server/utils/categories";
 import { logEventActivity } from "@/server/utils/event-activity-logger";
-import { isStorageUrl, uploadImageFromUrl } from "@/lib/s3";
-import { rehostExistingPoshEventImages } from "@/server/utils/posh-images";
+import {
+  rehostExistingScrapedEventImages,
+  rehostScrapedEventImage,
+} from "@/server/utils/scraped-event-images";
+
+export const maxDuration = 300;
 
 const scraperTypeSchema = z.enum(["dice", "posh", "ticketmaster"]);
 
@@ -91,30 +95,6 @@ async function assertMobileAdmin() {
   }
 
   return { userId };
-}
-
-async function rehostScrapedEventImage(
-  eventId: string,
-  sourceImageUrl: string | null | undefined,
-  currentImageUrl?: string | null
-) {
-  if (!sourceImageUrl || isStorageUrl(currentImageUrl ?? sourceImageUrl)) {
-    return;
-  }
-
-  try {
-    const hostedImageUrl = await uploadImageFromUrl(
-      sourceImageUrl,
-      `events/${eventId}`,
-      "cover-image.png"
-    );
-    await db
-      .update(events)
-      .set({ coverImageUrl: hostedImageUrl, updatedAt: new Date() })
-      .where(eq(events.id, eventId));
-  } catch (error) {
-    console.error(`Failed to re-host scraped image for event ${eventId}`, error);
-  }
 }
 
 function normalizeMatchText(value: string | null | undefined) {
@@ -444,16 +424,14 @@ export async function PATCH(request: Request) {
 
     // Repair WIG rows that Posh no longer includes in current scrape results.
     // This only updates images; it never inserts an event.
-    const existingPoshImageRepair =
-      row.scraper === "posh"
-        ? await rehostExistingPoshEventImages()
-        : { found: 0, updated: 0, failed: 0 };
+    const existingScraperImageRepair =
+      await rehostExistingScrapedEventImages([row.scraper]);
 
     if (body.events.length === 0) {
       return NextResponse.json({
         created: 0,
-        imagesRehosted: existingPoshImageRepair.updated,
-        imageFailures: existingPoshImageRepair.failed,
+        imagesRehosted: existingScraperImageRepair.updated,
+        imageFailures: existingScraperImageRepair.failed,
       });
     }
 
@@ -734,8 +712,8 @@ export async function PATCH(request: Request) {
 
     return NextResponse.json({
       created: upserted.length,
-      imagesRehosted: existingPoshImageRepair.updated,
-      imageFailures: existingPoshImageRepair.failed,
+      imagesRehosted: existingScraperImageRepair.updated,
+      imageFailures: existingScraperImageRepair.failed,
     });
   } catch (error) {
     if (error instanceof z.ZodError) {

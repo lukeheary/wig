@@ -6,11 +6,14 @@ import {
   filterExistingCategoryKeys,
   setEventCategoryKeys,
 } from "@/server/utils/categories";
-import { isStorageUrl, uploadImageFromUrl } from "@/lib/s3";
+import { isStorageUrl } from "@/lib/s3";
 import { scrapeDice } from "@/app/api/scrape-dice/route";
 import { scrapePosh } from "@/app/api/scrape-posh/route";
 import { scrapeTicketmaster } from "@/app/api/scrape-ticketmaster/route";
-import { rehostExistingPoshEventImages } from "@/server/utils/posh-images";
+import {
+  rehostExistingScrapedEventImages,
+  rehostScrapedEventImage,
+} from "@/server/utils/scraped-event-images";
 
 export const dynamic = "force-dynamic";
 export const maxDuration = 300; // 5 minutes
@@ -369,21 +372,7 @@ async function runScraper(
 
   await Promise.allSettled(
     imageUpdates.map(async ({ id, coverImageUrl }) => {
-      try {
-        const s3Url = await uploadImageFromUrl(
-          coverImageUrl,
-          `events/${id}`,
-          "cover-image.png"
-        );
-
-        await db
-          .update(events)
-          .set({ coverImageUrl: s3Url })
-          .where(eq(events.id, id));
-      } catch (error) {
-        console.error(`Failed to re-host scraped image for event ${id}`, error);
-        // Keep the original external URL if re-hosting fails.
-      }
+      await rehostScrapedEventImage(id, coverImageUrl, coverImageUrl);
     })
   );
 
@@ -423,7 +412,7 @@ async function runAllScrapers() {
 
   // Posh stops returning expired events, so repair any existing WIG rows that
   // still reference Posh's image host independently of the scrape response.
-  await rehostExistingPoshEventImages();
+  await rehostExistingScrapedEventImages();
 
   // Load all scrapers with place data
   const allScrapers = await db.query.scrapers.findMany({
