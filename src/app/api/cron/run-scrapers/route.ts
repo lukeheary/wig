@@ -6,7 +6,6 @@ import {
   filterExistingCategoryKeys,
   setEventCategoryKeys,
 } from "@/server/utils/categories";
-import { isStorageUrl } from "@/lib/s3";
 import { scrapeDice } from "@/app/api/scrape-dice/route";
 import { scrapePosh } from "@/app/api/scrape-posh/route";
 import { scrapeTicketmaster } from "@/app/api/scrape-ticketmaster/route";
@@ -353,26 +352,42 @@ async function runScraper(
               eq(events.source, value.source!),
               eq(events.externalId, value.externalId!)
             ),
-            columns: { id: true, coverImageUrl: true },
+            columns: {
+              id: true,
+              coverImageUrl: true,
+              sourceImageUrl: true,
+            },
           });
 
-          if (
-            !existingEvent ||
-            isStorageUrl(existingEvent.coverImageUrl ?? "")
-          ) {
+          if (!existingEvent) {
             return [];
           }
 
           return [
-            { id: existingEvent.id, coverImageUrl: value.coverImageUrl! },
+            {
+              id: existingEvent.id,
+              coverImageUrl: value.coverImageUrl!,
+              currentCoverImageUrl: existingEvent.coverImageUrl,
+              currentSourceImageUrl: existingEvent.sourceImageUrl,
+            },
           ];
         })
     )
   ).flat();
 
   await Promise.allSettled(
-    imageUpdates.map(async ({ id, coverImageUrl }) => {
-      await rehostScrapedEventImage(id, coverImageUrl, coverImageUrl);
+    imageUpdates.map(async ({
+      id,
+      coverImageUrl,
+      currentCoverImageUrl,
+      currentSourceImageUrl,
+    }) => {
+      await rehostScrapedEventImage(
+        id,
+        coverImageUrl,
+        currentCoverImageUrl,
+        currentSourceImageUrl
+      );
     })
   );
 

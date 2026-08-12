@@ -15,6 +15,7 @@ import {
 } from "@/server/utils/categories";
 import { logEventActivity } from "@/server/utils/event-activity-logger";
 import {
+  meaningfulScraperUpdatedAt,
   rehostExistingScrapedEventImages,
   rehostScrapedEventImage,
 } from "@/server/utils/scraped-event-images";
@@ -457,7 +458,12 @@ export async function PATCH(request: Request) {
     let dedupedEvents = parsedEvents;
     const existingEventsByKey = new Map<
       string,
-      { id: string; address: string | null; coverImageUrl: string | null }
+      {
+        id: string;
+        address: string | null;
+        coverImageUrl: string | null;
+        sourceImageUrl: string | null;
+      }
     >();
     const existingKeys = new Set<string>();
     const eventsWithExternal = parsedEvents.filter(
@@ -485,6 +491,7 @@ export async function PATCH(request: Request) {
             externalId: true,
             address: true,
             coverImageUrl: true,
+            sourceImageUrl: true,
           },
         });
 
@@ -496,6 +503,7 @@ export async function PATCH(request: Request) {
               id: existingEvent.id,
               address: existingEvent.address,
               coverImageUrl: existingEvent.coverImageUrl,
+              sourceImageUrl: existingEvent.sourceImageUrl,
             });
           }
         });
@@ -567,7 +575,8 @@ export async function PATCH(request: Request) {
           await rehostScrapedEventImage(
             existing.id,
             event.coverImageUrl,
-            existing.coverImageUrl
+            existing.coverImageUrl,
+            existing.sourceImageUrl
           );
         })
       );
@@ -611,6 +620,7 @@ export async function PATCH(request: Request) {
           title: event.title,
           description: event.description ?? null,
           coverImageUrl: event.coverImageUrl ?? null,
+          sourceImageUrl: event.coverImageUrl ?? null,
           eventUrl: event.eventUrl ?? null,
           source: event.source ?? null,
           externalId: event.externalId ?? null,
@@ -640,8 +650,13 @@ export async function PATCH(request: Request) {
             set: {
               title: sql`excluded.title`,
               description: sql`excluded.description`,
-              // Existing images are re-hosted before this upsert. Do not
-              // replace the repaired storage URL with Posh's external URL.
+              coverImageUrl: sql`case
+                when ${events.sourceImageUrl} is not null
+                  and ${events.sourceImageUrl} is distinct from excluded.source_image_url
+                then excluded.cover_image_url
+                else ${events.coverImageUrl}
+              end`,
+              sourceImageUrl: sql`excluded.source_image_url`,
               eventUrl: sql`excluded.event_url`,
               startAt: sql`excluded.start_at`,
               timeZone: sql`excluded.time_zone`,
@@ -651,7 +666,7 @@ export async function PATCH(request: Request) {
               state: sql`excluded.state`,
               venueId: sql`excluded.venue_id`,
               organizerId: sql`excluded.organizer_id`,
-              updatedAt: sql`now()`,
+              updatedAt: meaningfulScraperUpdatedAt(),
             },
           })
         : insertQuery.onConflictDoNothing({
@@ -703,8 +718,9 @@ export async function PATCH(request: Request) {
         upserted.map((event) =>
           rehostScrapedEventImage(
             event.id,
+            event.sourceImageUrl ?? event.coverImageUrl,
             event.coverImageUrl,
-            event.coverImageUrl
+            event.sourceImageUrl
           )
         )
       );

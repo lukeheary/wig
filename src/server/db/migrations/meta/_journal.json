@@ -343,6 +343,12 @@
       "when": 1785427200000,
       "tag": "0055_remove_public_handle_namespace",
       "breakpoints": true
+    },
+    {
+      "idx": 57,
+      "when": 1786543200000,
+      "tag": "0056_add_event_source_image_url",
+      "breakpoints": true
     }
   ]
 }

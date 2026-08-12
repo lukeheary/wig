@@ -804,6 +804,7 @@ export const events = pgTable(
     title: varchar("title", { length: 255 }).notNull(),
     description: text("description"),
     coverImageUrl: storedImage("cover_image_url"),
+    sourceImageUrl: text("source_image_url"),
     eventUrl: text("event_url"),
     source: varchar("source", { length: 50 }),
     externalId: text("external_id"),

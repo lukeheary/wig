@@ -65,6 +65,7 @@ import { sendPushNotificationToUsers } from "@/server/utils/push-notifications";
 import { accentInsensitiveLike } from "@/server/db/search";
 import { RSVP_DECLINE_REASON_VALUES } from "@/lib/rsvp";
 import {
+  meaningfulScraperUpdatedAt,
   rehostExistingScrapedEventImages,
   rehostScrapedEventImage,
   SCRAPER_SOURCES,
@@ -1204,6 +1205,7 @@ export const eventRouter = router({
             title: event.title,
             description: event.description ?? null,
             coverImageUrl: event.coverImageUrl ?? null,
+            sourceImageUrl: event.coverImageUrl ?? null,
             eventUrl: event.eventUrl ?? null,
             source: event.source ?? null,
             externalId: event.externalId ?? null,
@@ -1234,7 +1236,13 @@ export const eventRouter = router({
               set: {
                 title: sql`excluded.title`,
                 description: sql`excluded.description`,
-                coverImageUrl: sql`excluded.cover_image_url`,
+                coverImageUrl: sql`case
+                  when ${events.sourceImageUrl} is not null
+                    and ${events.sourceImageUrl} is distinct from excluded.source_image_url
+                  then excluded.cover_image_url
+                  else ${events.coverImageUrl}
+                end`,
+                sourceImageUrl: sql`excluded.source_image_url`,
                 eventUrl: sql`excluded.event_url`,
                 startAt: sql`excluded.start_at`,
                 timeZone: sql`excluded.time_zone`,
@@ -1243,7 +1251,7 @@ export const eventRouter = router({
                 city: sql`excluded.city`,
                 state: sql`excluded.state`,
                 venueId: sql`excluded.venue_id`,
-                updatedAt: sql`now()`,
+                updatedAt: meaningfulScraperUpdatedAt(),
               },
             })
           : insertQuery.onConflictDoNothing({
@@ -1315,8 +1323,9 @@ export const eventRouter = router({
           if (!isBucketUrl(row.coverImageUrl)) {
             await rehostScrapedEventImage(
               row.id,
+              row.sourceImageUrl ?? row.coverImageUrl,
               row.coverImageUrl,
-              row.coverImageUrl
+              row.sourceImageUrl
             );
             return;
           }
