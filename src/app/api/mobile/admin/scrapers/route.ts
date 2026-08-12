@@ -570,11 +570,6 @@ export async function PATCH(request: Request) {
       await Promise.all(
         parsedEvents.map(async (event) => {
           if (!event.source || !event.externalId) return;
-          const isHistoricalPoshEvent =
-            row.scraper === "posh" &&
-            event.startAtDate.getTime() < importStartedAt;
-          if (body.overrideExisting && !isHistoricalPoshEvent) return;
-
           const existing = existingEventsByKey.get(
             `${event.source}::${event.externalId}`
           );
@@ -655,7 +650,8 @@ export async function PATCH(request: Request) {
             set: {
               title: sql`excluded.title`,
               description: sql`excluded.description`,
-              coverImageUrl: sql`excluded.cover_image_url`,
+              // Existing images are re-hosted before this upsert. Do not
+              // replace the repaired storage URL with Posh's external URL.
               eventUrl: sql`excluded.event_url`,
               startAt: sql`excluded.start_at`,
               timeZone: sql`excluded.time_zone`,
