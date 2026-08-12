@@ -15,6 +15,7 @@ import {
 } from "@/server/utils/categories";
 import { logEventActivity } from "@/server/utils/event-activity-logger";
 import { isStorageUrl, uploadImageFromUrl } from "@/lib/s3";
+import { rehostExistingPoshEventImages } from "@/server/utils/posh-images";
 
 const scraperTypeSchema = z.enum(["dice", "posh", "ticketmaster"]);
 
@@ -441,8 +442,19 @@ export async function PATCH(request: Request) {
       return NextResponse.json({ error: "Scraper not found" }, { status: 404 });
     }
 
+    // Repair WIG rows that Posh no longer includes in current scrape results.
+    // This only updates images; it never inserts an event.
+    const existingPoshImageRepair =
+      row.scraper === "posh"
+        ? await rehostExistingPoshEventImages()
+        : { found: 0, updated: 0, failed: 0 };
+
     if (body.events.length === 0) {
-      return NextResponse.json({ created: 0 });
+      return NextResponse.json({
+        created: 0,
+        imagesRehosted: existingPoshImageRepair.updated,
+        imageFailures: existingPoshImageRepair.failed,
+      });
     }
 
     const toEventKey = (event: {
@@ -720,7 +732,11 @@ export async function PATCH(request: Request) {
       );
     }
 
-    return NextResponse.json({ created: upserted.length });
+    return NextResponse.json({
+      created: upserted.length,
+      imagesRehosted: existingPoshImageRepair.updated,
+      imageFailures: existingPoshImageRepair.failed,
+    });
   } catch (error) {
     if (error instanceof z.ZodError) {
       return NextResponse.json({ error: "Invalid request" }, { status: 400 });

@@ -10,6 +10,7 @@ import { isStorageUrl, uploadImageFromUrl } from "@/lib/s3";
 import { scrapeDice } from "@/app/api/scrape-dice/route";
 import { scrapePosh } from "@/app/api/scrape-posh/route";
 import { scrapeTicketmaster } from "@/app/api/scrape-ticketmaster/route";
+import { rehostExistingPoshEventImages } from "@/server/utils/posh-images";
 
 export const dynamic = "force-dynamic";
 export const maxDuration = 300; // 5 minutes
@@ -419,6 +420,10 @@ async function runAllScrapers() {
       { status: 500 }
     );
   }
+
+  // Posh stops returning expired events, so repair any existing WIG rows that
+  // still reference Posh's image host independently of the scrape response.
+  await rehostExistingPoshEventImages();
 
   // Load all scrapers with place data
   const allScrapers = await db.query.scrapers.findMany({
