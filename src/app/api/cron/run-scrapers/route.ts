@@ -6,7 +6,7 @@ import {
   filterExistingCategoryKeys,
   setEventCategoryKeys,
 } from "@/server/utils/categories";
-import { uploadImageFromUrl } from "@/lib/s3";
+import { isStorageUrl, uploadImageFromUrl } from "@/lib/s3";
 import { scrapeDice } from "@/app/api/scrape-dice/route";
 import { scrapePosh } from "@/app/api/scrape-posh/route";
 import { scrapeTicketmaster } from "@/app/api/scrape-ticketmaster/route";
@@ -152,7 +152,7 @@ async function runScraper(
     await filterExistingCategoryKeys(db, allCategoryKeys, { activeOnly: true })
   );
 
-  const insertValues = scrapedEvents
+  const validScrapedValues = scrapedEvents
     .map((e) => ({
       title: e.title,
       description: e.description ?? null,
@@ -172,7 +172,7 @@ async function runScraper(
     }))
     .filter((v) => v.city && v.state);
 
-  if (insertValues.length === 0) {
+  if (validScrapedValues.length === 0) {
     return {
       status: "partial",
       eventsFound: scrapedEvents.length,
@@ -182,6 +182,15 @@ async function runScraper(
     };
   }
 
+  // Posh can return historical events. Never create a missing historical Posh
+  // event, while still retaining it in `validScrapedValues` so an existing WIG
+  // row can have its externally hosted image repaired below.
+  const now = new Date();
+  const insertValues = validScrapedValues.filter(
+    (value) =>
+      scraperRow.scraper !== "posh" || value.startAt.getTime() >= now.getTime()
+  );
+
   let upserted: {
     id: string;
     title: string;
@@ -189,81 +198,71 @@ async function runScraper(
     externalId: string | null;
   }[] = [];
 
-  try {
-    upserted = await db
-      .insert(events)
-      .values(insertValues as any)
-      .onConflictDoNothing({ target: [events.source, events.externalId] })
-      .returning({
-        id: events.id,
-        title: events.title,
-        source: events.source,
-        externalId: events.externalId,
-      });
-  } catch (err) {
-    return {
-      status: "error",
-      eventsFound: scrapedEvents.length,
-      eventsAdded: 0,
-      error: err instanceof Error ? err.message : "DB insert error",
-      data: { eventsFound: eventsFoundData, eventsAdded: [] },
-    };
+  if (insertValues.length > 0) {
+    try {
+      upserted = await db
+        .insert(events)
+        .values(insertValues as any)
+        .onConflictDoNothing({ target: [events.source, events.externalId] })
+        .returning({
+          id: events.id,
+          title: events.title,
+          source: events.source,
+          externalId: events.externalId,
+        });
+    } catch (err) {
+      return {
+        status: "error",
+        eventsFound: scrapedEvents.length,
+        eventsAdded: 0,
+        error: err instanceof Error ? err.message : "DB insert error",
+        data: { eventsFound: eventsFoundData, eventsAdded: [] },
+      };
+    }
   }
 
   // A scraper can discover a corrected location for an event we already have.
   // Keep the existing-event path out of `upserted` so it does not count as a
-  // newly added event, but refresh its location and image together.
-  const locationUpdatedImages = (
-    await Promise.all(
-      insertValues
-        .filter((value) => value.source && value.externalId)
-        .map(async (value) => {
-          const updates: Partial<{
-            city: string;
-            state: string;
-            venueId: string | null;
-            coverImageUrl: string | null;
-            updatedAt: Date;
-          }> = {
-            city: value.city,
-            state: value.state,
-            updatedAt: new Date(),
-          };
-          const locationMismatchConditions = [
-            ne(events.city, value.city),
-            ne(events.state, value.state),
-          ];
+  // newly added event.
+  await Promise.all(
+    insertValues
+      .filter((value) => value.source && value.externalId)
+      .map(async (value) => {
+        const updates: Partial<{
+          city: string;
+          state: string;
+          venueId: string | null;
+          updatedAt: Date;
+        }> = {
+          city: value.city,
+          state: value.state,
+          updatedAt: new Date(),
+        };
+        const locationMismatchConditions = [
+          ne(events.city, value.city),
+          ne(events.state, value.state),
+        ];
 
-          if (venueId) {
-            updates.venueId = venueId;
-            locationMismatchConditions.push(
-              isNull(events.venueId),
-              ne(events.venueId, venueId)
-            );
-          }
+        if (venueId) {
+          updates.venueId = venueId;
+          locationMismatchConditions.push(
+            isNull(events.venueId),
+            ne(events.venueId, venueId)
+          );
+        }
 
-          if (value.coverImageUrl) {
-            updates.coverImageUrl = value.coverImageUrl;
-          }
-
-          const [updatedEvent] = await db
-            .update(events)
-            .set(updates)
-            .where(
-              and(
-                eq(events.source, value.source!),
-                eq(events.externalId, value.externalId!),
-                or(...locationMismatchConditions)
-              )
+        await db
+          .update(events)
+          .set(updates)
+          .where(
+            and(
+              eq(events.source, value.source!),
+              eq(events.externalId, value.externalId!),
+              or(...locationMismatchConditions)
             )
-            .returning({ id: events.id });
-
-          return updatedEvent && value.coverImageUrl
-            ? [{ id: updatedEvent.id, coverImageUrl: value.coverImageUrl }]
-            : [];
-        })
-    )
-  ).flat();
+          );
+      })
+  );
 
   // If an event already existed, still enrich it with a venue/organizer link
   // when the scraper now knows that relationship and the stored row does not.
@@ -335,19 +334,37 @@ async function runScraper(
     );
   }
 
-  const imageUpdates = [
-    ...upserted.flatMap((row) => {
-      const scrapedEvent = scrapedEvents.find(
-        (event) =>
-          event.source === row.source && event.externalId === row.externalId
-      );
+  // Resolve every scraped row, not only newly inserted/location-updated rows.
+  // This repairs existing Posh events whose images were previously left on
+  // images.posh.vip and avoids replacing an already-hosted image each run.
+  const imageUpdates = (
+    await Promise.all(
+      validScrapedValues
+        .filter(
+          (value) => value.source && value.externalId && value.coverImageUrl
+        )
+        .map(async (value) => {
+          const existingEvent = await db.query.events.findFirst({
+            where: and(
+              eq(events.source, value.source!),
+              eq(events.externalId, value.externalId!)
+            ),
+            columns: { id: true, coverImageUrl: true },
+          });
 
-      return scrapedEvent?.coverImageUrl
-        ? [{ id: row.id, coverImageUrl: scrapedEvent.coverImageUrl }]
-        : [];
-    }),
-    ...locationUpdatedImages,
-  ];
+          if (
+            !existingEvent ||
+            isStorageUrl(existingEvent.coverImageUrl ?? "")
+          ) {
+            return [];
+          }
+
+          return [
+            { id: existingEvent.id, coverImageUrl: value.coverImageUrl! },
+          ];
+        })
+    )
+  ).flat();
 
   await Promise.allSettled(
     imageUpdates.map(async ({ id, coverImageUrl }) => {
@@ -362,7 +379,8 @@ async function runScraper(
           .update(events)
           .set({ coverImageUrl: s3Url })
           .where(eq(events.id, id));
-      } catch {
+      } catch (error) {
+        console.error(`Failed to re-host scraped image for event ${id}`, error);
         // Keep the original external URL if re-hosting fails.
       }
     })

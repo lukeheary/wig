@@ -33,7 +33,12 @@ import {
   or,
   sql,
 } from "drizzle-orm";
-import { uploadImageFromUrl, deleteFromS3, isStorageUrl } from "@/lib/s3";
+import {
+  uploadImageFromUrl,
+  deleteFromS3,
+  isPendingStorageUrl,
+  isStorageUrl,
+} from "@/lib/s3";
 import { TRPCError } from "@trpc/server";
 import {
   clearRsvpActivity,
@@ -78,18 +83,6 @@ function resolveEventUpdateActivityType(
   }
 
   return "updated";
-}
-
-function isPendingEventUploadUrl(url: string): boolean {
-  try {
-    const parsed = new URL(url);
-    return (
-      isStorageUrl(url) &&
-      parsed.pathname.includes("/events/pending/")
-    );
-  } catch {
-    return false;
-  }
 }
 
 async function notifyPartnerOfMirroredRsvp({
@@ -197,7 +190,7 @@ function isLegacyEventCoverImageUrl(url: string, eventId: string): boolean {
 }
 
 async function cleanupPendingEventUpload(url: string): Promise<void> {
-  if (!isPendingEventUploadUrl(url)) return;
+  if (!isPendingStorageUrl(url)) return;
   try {
     await deleteFromS3(url);
   } catch {
@@ -340,7 +333,12 @@ export const eventRouter = router({
           endAt: input.endAt ?? null,
           venueId: input.venueId ?? null,
           organizerId: input.organizerId ?? null,
-          coverImageUrl: input.coverImageUrl ?? null,
+          // Never persist a temporary key. Older clients may still submit one;
+          // it is promoted after the permanent event ID exists below.
+          coverImageUrl:
+            input.coverImageUrl && isPendingStorageUrl(input.coverImageUrl)
+              ? null
+              : input.coverImageUrl ?? null,
           eventUrl: input.eventUrl ?? null,
           source: input.source ?? null,
           externalId: input.externalId ?? null,
@@ -354,9 +352,9 @@ export const eventRouter = router({
         });
       }
 
-      if (event?.coverImageUrl) {
+      if (event && input.coverImageUrl) {
         try {
-          const originalCoverImageUrl = event.coverImageUrl;
+          const originalCoverImageUrl = input.coverImageUrl;
           const eventCoverImageUrl = await uploadImageFromUrl(
             originalCoverImageUrl,
             `events/${event.id}`,
@@ -370,7 +368,8 @@ export const eventRouter = router({
 
           await cleanupPendingEventUpload(originalCoverImageUrl);
         } catch {
-          // Keep existing cover image URL if re-hosting fails.
+          // A non-temporary external URL was already retained on insert. A
+          // temporary URL is intentionally never persisted.
         }
       }
 
@@ -515,7 +514,12 @@ export const eventRouter = router({
         .values({
           title: input.title,
           description: input.description ?? null,
-          coverImageUrl: input.coverImageUrl ?? null,
+          // Never persist a temporary key. It is promoted once the permanent
+          // series ID exists below.
+          coverImageUrl:
+            input.coverImageUrl && isPendingStorageUrl(input.coverImageUrl)
+              ? null
+              : input.coverImageUrl ?? null,
           eventUrl: input.eventUrl ?? null,
           source: input.source ?? null,
           externalId: input.externalId ?? null,
@@ -771,6 +775,9 @@ export const eventRouter = router({
 
       const seriesImageWasRemoved =
         input.coverImageUrl === "" && existingSeries.coverImageUrl !== null;
+      const submittedPendingCover =
+        Boolean(input.coverImageUrl) &&
+        isPendingStorageUrl(input.coverImageUrl!);
 
       const [updatedSeries] = await ctx.db
         .update(eventSeries)
@@ -780,6 +787,8 @@ export const eventRouter = router({
           coverImageUrl:
             input.coverImageUrl === ""
               ? null
+              : submittedPendingCover
+                ? existingSeries.coverImageUrl
               : input.coverImageUrl !== undefined
                 ? input.coverImageUrl
                 : existingSeries.coverImageUrl,
@@ -962,7 +971,15 @@ export const eventRouter = router({
       await assertCanManageSeries(ctx, existingSeries);
 
       const nextCoverImageUrl =
-        input.coverImageUrl === "" ? null : input.coverImageUrl;
+        input.coverImageUrl === ""
+          ? null
+          : isPendingStorageUrl(input.coverImageUrl)
+            ? await uploadImageFromUrl(
+                input.coverImageUrl,
+                `event-series/${input.seriesId}`,
+                "cover-image.png"
+              )
+            : input.coverImageUrl;
       const inheritedImageCondition =
         existingSeries.coverImageUrl === null
           ? isNull(events.coverImageUrl)
@@ -999,6 +1016,10 @@ export const eventRouter = router({
         .where(
           and(eq(events.seriesId, input.seriesId), inheritedImageCondition)
         );
+
+      if (input.coverImageUrl && isPendingStorageUrl(input.coverImageUrl)) {
+        await cleanupPendingEventUpload(input.coverImageUrl);
+      }
 
       return updatedSeries;
     }),

@@ -13,6 +13,11 @@ import {
   normalizeSeriesDaysOfWeek,
 } from "@/server/utils/event-series";
 import { resolveMobileEventEditPermissions } from "@/app/api/mobile/event-edit-permissions";
+import {
+  deleteFromS3,
+  isPendingStorageUrl,
+  uploadImageFromUrl,
+} from "@/lib/s3";
 
 const mobileCreateEventSeriesSchema = z.object({
   venueId: z.string().uuid().optional(),
@@ -142,6 +147,9 @@ export async function POST(request: Request) {
     const cleanedState = body.state.trim().toUpperCase();
     const cleanedDescription = body.description?.trim() || null;
     const cleanedCoverImageUrl = body.coverImageUrl?.trim() || null;
+    const submittedPendingCover =
+      cleanedCoverImageUrl !== null &&
+      isPendingStorageUrl(cleanedCoverImageUrl);
     const cleanedAddress = body.address?.trim() || null;
     const cleanedEventUrl = body.eventUrl?.trim() || null;
     const resolvedTimeZone =
@@ -168,7 +176,7 @@ export async function POST(request: Request) {
       .values({
         title: cleanedTitle,
         description: cleanedDescription,
-        coverImageUrl: cleanedCoverImageUrl,
+        coverImageUrl: submittedPendingCover ? null : cleanedCoverImageUrl,
         eventUrl: cleanedEventUrl,
         startAt,
         durationMinutes,
@@ -199,6 +207,24 @@ export async function POST(request: Request) {
       await setEventSeriesCategoryKeys(db, series.id, validCategories, {
         activeOnly: true,
       });
+    }
+
+    if (submittedPendingCover && cleanedCoverImageUrl) {
+      try {
+        const finalCoverImageUrl = await uploadImageFromUrl(
+          cleanedCoverImageUrl,
+          `event-series/${series.id}`,
+          "cover-image.png"
+        );
+        await db
+          .update(eventSeries)
+          .set({ coverImageUrl: finalCoverImageUrl, updatedAt: new Date() })
+          .where(eq(eventSeries.id, series.id));
+        await deleteFromS3(cleanedCoverImageUrl).catch(() => undefined);
+      } catch (error) {
+        console.error("Failed to promote temporary series cover image", error);
+        // The temporary URL is deliberately not persisted.
+      }
     }
 
     const generated = await materializeEventSeries(db, {

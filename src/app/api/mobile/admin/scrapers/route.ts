@@ -14,6 +14,7 @@ import {
   setEventCategoryKeys,
 } from "@/server/utils/categories";
 import { logEventActivity } from "@/server/utils/event-activity-logger";
+import { isStorageUrl, uploadImageFromUrl } from "@/lib/s3";
 
 const scraperTypeSchema = z.enum(["dice", "posh", "ticketmaster"]);
 
@@ -89,6 +90,30 @@ async function assertMobileAdmin() {
   }
 
   return { userId };
+}
+
+async function rehostScrapedEventImage(
+  eventId: string,
+  sourceImageUrl: string | null | undefined,
+  currentImageUrl?: string | null
+) {
+  if (!sourceImageUrl || isStorageUrl(currentImageUrl ?? sourceImageUrl)) {
+    return;
+  }
+
+  try {
+    const hostedImageUrl = await uploadImageFromUrl(
+      sourceImageUrl,
+      `events/${eventId}`,
+      "cover-image.png"
+    );
+    await db
+      .update(events)
+      .set({ coverImageUrl: hostedImageUrl, updatedAt: new Date() })
+      .where(eq(events.id, eventId));
+  } catch (error) {
+    console.error(`Failed to re-host scraped image for event ${eventId}`, error);
+  }
 }
 
 function normalizeMatchText(value: string | null | undefined) {
@@ -442,51 +467,52 @@ export async function PATCH(request: Request) {
     let dedupedEvents = parsedEvents;
     const existingEventsByKey = new Map<
       string,
-      { id: string; address: string | null }
+      { id: string; address: string | null; coverImageUrl: string | null }
     >();
+    const existingKeys = new Set<string>();
+    const eventsWithExternal = parsedEvents.filter(
+      (event) => event.source && event.externalId
+    );
 
-    if (!body.overrideExisting) {
-      const eventsWithExternal = parsedEvents.filter(
-        (event) => event.source && event.externalId
-      );
-      const existingKeys = new Set<string>();
+    if (eventsWithExternal.length > 0) {
+      const bySource = new Map<string, Set<string>>();
+      eventsWithExternal.forEach((event) => {
+        if (!event.source || !event.externalId) return;
+        const set = bySource.get(event.source) ?? new Set<string>();
+        set.add(event.externalId);
+        bySource.set(event.source, set);
+      });
 
-      if (eventsWithExternal.length > 0) {
-        const bySource = new Map<string, Set<string>>();
-        eventsWithExternal.forEach((event) => {
-          if (!event.source || !event.externalId) return;
-          const set = bySource.get(event.source) ?? new Set<string>();
-          set.add(event.externalId);
-          bySource.set(event.source, set);
+      for (const [source, ids] of bySource.entries()) {
+        const rows = await db.query.events.findMany({
+          where: and(
+            eq(events.source, source),
+            inArray(events.externalId, Array.from(ids))
+          ),
+          columns: {
+            id: true,
+            source: true,
+            externalId: true,
+            address: true,
+            coverImageUrl: true,
+          },
         });
 
-        for (const [source, ids] of bySource.entries()) {
-          const rows = await db.query.events.findMany({
-            where: and(
-              eq(events.source, source),
-              inArray(events.externalId, Array.from(ids))
-            ),
-            columns: {
-              id: true,
-              source: true,
-              externalId: true,
-              address: true,
-            },
-          });
-
-          rows.forEach((row) => {
-            if (row.source && row.externalId) {
-              const key = `${row.source}::${row.externalId}`;
-              existingKeys.add(key);
-              existingEventsByKey.set(key, {
-                id: row.id,
-                address: row.address,
-              });
-            }
-          });
-        }
+        rows.forEach((existingEvent) => {
+          if (existingEvent.source && existingEvent.externalId) {
+            const key = `${existingEvent.source}::${existingEvent.externalId}`;
+            existingKeys.add(key);
+            existingEventsByKey.set(key, {
+              id: existingEvent.id,
+              address: existingEvent.address,
+              coverImageUrl: existingEvent.coverImageUrl,
+            });
+          }
+        });
       }
+    }
 
+    if (!body.overrideExisting) {
       const seenKeys = new Set<string>();
       dedupedEvents = parsedEvents.filter((event) => {
         if (event.source && event.externalId) {
@@ -503,40 +529,71 @@ export async function PATCH(request: Request) {
     // the event was first imported. Preserve the normal "do not overwrite"
     // behavior, but fill an existing event's missing location from the newly
     // scraped data.
-    if (!body.overrideExisting && existingEventsByKey.size > 0) {
+    const importStartedAt = Date.now();
+
+    if (existingEventsByKey.size > 0) {
+      if (!body.overrideExisting) {
+        await Promise.all(
+          parsedEvents.map(async (event) => {
+            if (!event.source || !event.externalId || !event.address?.trim()) {
+              return;
+            }
+
+            const existing = existingEventsByKey.get(
+              `${event.source}::${event.externalId}`
+            );
+            if (!existing || existing.address?.trim()) {
+              return;
+            }
+
+            await db
+              .update(events)
+              .set({
+                address: event.address.trim(),
+                city: event.city,
+                state: event.normalizedState,
+                ...(row.place.type === "venue"
+                  ? { venueId: row.placeId }
+                  : event.venueId
+                    ? { venueId: event.venueId }
+                    : {}),
+                ...(row.place.type === "organizer"
+                  ? { organizerId: row.placeId }
+                  : {}),
+                updatedAt: new Date(),
+              })
+              .where(eq(events.id, existing.id));
+          })
+        );
+      }
+
       await Promise.all(
         parsedEvents.map(async (event) => {
-          if (!event.source || !event.externalId || !event.address?.trim()) {
-            return;
-          }
+          if (!event.source || !event.externalId) return;
+          const isHistoricalPoshEvent =
+            row.scraper === "posh" &&
+            event.startAtDate.getTime() < importStartedAt;
+          if (body.overrideExisting && !isHistoricalPoshEvent) return;
 
           const existing = existingEventsByKey.get(
             `${event.source}::${event.externalId}`
           );
-          if (!existing || existing.address?.trim()) {
-            return;
-          }
-
-          await db
-            .update(events)
-            .set({
-              address: event.address.trim(),
-              city: event.city,
-              state: event.normalizedState,
-              ...(row.place.type === "venue"
-                ? { venueId: row.placeId }
-                : event.venueId
-                  ? { venueId: event.venueId }
-                  : {}),
-              ...(row.place.type === "organizer"
-                ? { organizerId: row.placeId }
-                : {}),
-              updatedAt: new Date(),
-            })
-            .where(eq(events.id, existing.id));
+          if (!existing) return;
+          await rehostScrapedEventImage(
+            existing.id,
+            event.coverImageUrl,
+            existing.coverImageUrl
+          );
         })
       );
     }
+
+    dedupedEvents = dedupedEvents.filter((event) => {
+      return (
+        row.scraper !== "posh" ||
+        event.startAtDate.getTime() >= importStartedAt
+      );
+    });
 
     if (dedupedEvents.length === 0) {
       return NextResponse.json({ created: 0 });
@@ -654,6 +711,16 @@ export async function PATCH(request: Request) {
             activeOnly: true,
           });
         })
+      );
+
+      await Promise.all(
+        upserted.map((event) =>
+          rehostScrapedEventImage(
+            event.id,
+            event.coverImageUrl,
+            event.coverImageUrl
+          )
+        )
       );
     }
 

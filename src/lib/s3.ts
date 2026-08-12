@@ -140,6 +140,15 @@ export function isStorageUrl(url: string): boolean {
   return getStorageKey(url) !== null;
 }
 
+/**
+ * Detect a legacy temporary upload without treating unrelated external URLs
+ * containing the word "pending" as one of our objects.
+ */
+export function isPendingStorageUrl(url: string): boolean {
+  const key = getStorageKey(url);
+  return key?.split("/").includes("pending") ?? false;
+}
+
 async function writeToBothStorageProviders(
   key: string,
   body: Buffer,

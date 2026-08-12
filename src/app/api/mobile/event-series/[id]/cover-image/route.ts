@@ -4,6 +4,11 @@ import { NextRequest, NextResponse } from "next/server";
 import { resolveMobileEventEditPermissions } from "@/app/api/mobile/event-edit-permissions";
 import { db } from "@/server/db";
 import { eventSeries, events, users } from "@/server/db/schema";
+import {
+  deleteFromS3,
+  isPendingStorageUrl,
+  uploadImageFromUrl,
+} from "@/lib/s3";
 
 async function currentMobileUserContext() {
   const { userId } = await auth();
@@ -71,6 +76,13 @@ export async function POST(
       }
     }
 
+    const finalCoverImageUrl = isPendingStorageUrl(coverImageUrl)
+      ? await uploadImageFromUrl(
+          coverImageUrl,
+          `event-series/${seriesId}`,
+          "cover-image.png"
+        )
+      : coverImageUrl;
     const inheritedImageCondition =
       series.coverImageUrl === null
         ? isNull(events.coverImageUrl)
@@ -82,7 +94,7 @@ export async function POST(
 
     const [updatedSeries] = await db
       .update(eventSeries)
-      .set({ coverImageUrl, updatedAt })
+      .set({ coverImageUrl: finalCoverImageUrl, updatedAt })
       .where(eq(eventSeries.id, seriesId))
       .returning({
         id: eventSeries.id,
@@ -98,8 +110,12 @@ export async function POST(
 
     await db
       .update(events)
-      .set({ coverImageUrl, updatedAt })
+      .set({ coverImageUrl: finalCoverImageUrl, updatedAt })
       .where(and(eq(events.seriesId, seriesId), inheritedImageCondition));
+
+    if (isPendingStorageUrl(coverImageUrl)) {
+      await deleteFromS3(coverImageUrl).catch(() => undefined);
+    }
 
     return NextResponse.json(updatedSeries);
   } catch (error) {

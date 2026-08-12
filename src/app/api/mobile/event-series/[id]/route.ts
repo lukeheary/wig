@@ -16,6 +16,11 @@ import {
   normalizeSeriesDaysOfWeek,
 } from "@/server/utils/event-series";
 import { resolveMobileEventEditPermissions } from "@/app/api/mobile/event-edit-permissions";
+import {
+  deleteFromS3,
+  isPendingStorageUrl,
+  uploadImageFromUrl,
+} from "@/lib/s3";
 
 const mobileUpdateEventSeriesSchema = z.object({
   venueId: z.string().uuid().nullable().optional(),
@@ -260,9 +265,20 @@ export async function PATCH(
     const cleanedDescription = body.description?.trim() || null;
     const cleanedAddress = body.address?.trim() || null;
     const cleanedEventUrl = body.eventUrl?.trim() || null;
-    const cleanedCoverImageUrl = body.removeCoverImage
+    const submittedCoverImageUrl = body.removeCoverImage
       ? null
       : body.coverImageUrl?.trim() || existingSeries.coverImageUrl;
+    const pendingCoverImageUrl =
+      submittedCoverImageUrl && isPendingStorageUrl(submittedCoverImageUrl)
+        ? submittedCoverImageUrl
+        : null;
+    const cleanedCoverImageUrl = pendingCoverImageUrl
+      ? await uploadImageFromUrl(
+          pendingCoverImageUrl,
+          `event-series/${id}`,
+          "cover-image.png"
+        )
+      : submittedCoverImageUrl;
     const resolvedTimeZone =
       body.timeZone?.trim() ||
       eventTimeZone(undefined, cleanedState) ||
@@ -321,6 +337,10 @@ export async function PATCH(
       now,
       ...(untilDate ? { windowEnd: untilDate } : {}),
     });
+
+    if (pendingCoverImageUrl) {
+      await deleteFromS3(pendingCoverImageUrl).catch(() => undefined);
+    }
 
     const nextEvent = await db.query.events.findFirst({
       where: and(eq(events.seriesId, id), gte(events.startAt, now)),
