@@ -174,11 +174,7 @@ struct MobilePlaceCreationView: View {
     }
 
     private var showsScrapersSection: Bool {
-        if case .edit = mode {
-            return true
-        }
-
-        return isVenue
+        true
     }
 
     private var navigationTitle: String {
