@@ -2,6 +2,7 @@ import {
   S3Client,
   PutObjectCommand,
   DeleteObjectCommand,
+  GetObjectCommand,
 } from "@aws-sdk/client-s3";
 import { getStoragePath } from "./env";
 
@@ -200,6 +201,58 @@ async function writeToBothStorageProviders(
     failedWrites.map(({ result }) => result.reason),
     `Image upload failed for ${failedWrites.map(({ target }) => target.name).join(" and ")}`
   );
+}
+
+async function readFromEitherStorageProvider(key: string): Promise<{
+  body: Buffer;
+  contentType: string;
+}> {
+  const failures: unknown[] = [];
+
+  for (const { client, bucket } of STORAGE_TARGETS) {
+    try {
+      const object = await client.send(
+        new GetObjectCommand({ Bucket: bucket, Key: key })
+      );
+      if (!object.Body) throw new Error("Storage object has no body");
+
+      return {
+        body: Buffer.from(await object.Body.transformToByteArray()),
+        contentType: object.ContentType || "image/png",
+      };
+    } catch (error) {
+      failures.push(error);
+    }
+  }
+
+  throw new AggregateError(
+    failures,
+    `Could not read ${key} from R2 or S3`
+  );
+}
+
+/**
+ * Copy an existing R2/S3 object to a new environment-relative key in both
+ * providers. The source is not deleted until the caller has persisted the new
+ * database value.
+ */
+export async function copyStorageObject(
+  sourceUrl: string,
+  targetFolder: string,
+  targetFileName: string
+): Promise<string> {
+  const sourceKey = getStorageKey(sourceUrl);
+  if (!sourceKey) throw new Error("Invalid source storage URL");
+
+  const targetKey = `${getStoragePath(targetFolder)}/${targetFileName}`;
+  const source = await readFromEitherStorageProvider(sourceKey);
+  await writeToBothStorageProviders(
+    targetKey,
+    source.body,
+    source.contentType
+  );
+
+  return getS3Url(targetKey);
 }
 
 /**

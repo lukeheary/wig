@@ -1932,12 +1932,12 @@ private struct PlaceLookupSheet: View {
             .foregroundStyle(.white)
             .frame(maxWidth: .infinity, minHeight: 240)
         } else {
-            LazyVStack(spacing: 12) {
+            LazyVStack(spacing: 2) {
                 ForEach(viewModel.places, id: \.listRowID) { place in
                     Button {
                         select(place)
                     } label: {
-                        PlaceSearchRow(place: place)
+                        PlaceRowView(place: place, style: .plain)
                     }
                     .buttonStyle(.plain)
                 }
@@ -2061,76 +2061,5 @@ private final class PlaceLookupViewModel: ObservableObject {
         }
 
         inFlightLoad = nil
-    }
-}
-
-private struct PlaceSearchRow: View {
-    let place: PlaceListItem
-
-    var body: some View {
-        HStack(spacing: 12) {
-            logo
-
-            VStack(alignment: .leading, spacing: 4) {
-                Text(place.name)
-                    .font(.system(size: 15, weight: .semibold))
-                    .foregroundStyle(.white)
-                    .lineLimit(1)
-
-                Text(place.type.displayName)
-                    .font(.system(size: 13, weight: .semibold))
-                    .foregroundStyle(AppTheme.accentBlue)
-
-                if !place.locationText.isEmpty {
-                    Text(place.locationText)
-                        .font(.system(size: 13, weight: .medium))
-                        .foregroundStyle(.white.opacity(0.58))
-                        .lineLimit(1)
-                }
-            }
-
-            Spacer(minLength: 0)
-        }
-        .padding(12)
-        .background(
-            RoundedRectangle(cornerRadius: 20, style: .continuous)
-                .fill(Color.white.opacity(0.06))
-        )
-        .overlay(
-            RoundedRectangle(cornerRadius: 20, style: .continuous)
-                .strokeBorder(.white.opacity(0.05), lineWidth: 1)
-        )
-    }
-
-    @ViewBuilder
-    private var logo: some View {
-        Group {
-            if let url = place.displayLogoURL {
-                AsyncImage(url: url) { phase in
-                    switch phase {
-                    case .success(let image):
-                        image
-                            .resizable()
-                            .scaledToFill()
-                    default:
-                        placeholder
-                    }
-                }
-            } else {
-                placeholder
-            }
-        }
-        .frame(width: 46, height: 46)
-        .clipShape(RoundedRectangle(cornerRadius: 14, style: .continuous))
-    }
-
-    private var placeholder: some View {
-        RoundedRectangle(cornerRadius: 14, style: .continuous)
-            .fill(.white.opacity(0.08))
-            .overlay {
-                Image(systemName: place.type == .venue ? "building.2" : "person.2")
-                    .font(.system(size: 18, weight: .semibold))
-                    .foregroundStyle(.white.opacity(0.76))
-            }
     }
 }

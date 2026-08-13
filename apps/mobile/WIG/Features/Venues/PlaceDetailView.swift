@@ -576,7 +576,6 @@ struct PlaceDetailView: View {
             ProfileEmptyEventsPlaceholder(
                 message: "There aren’t any \(selectedTab.emptyStateName) events for this place yet."
             )
-            .frame(maxWidth: .infinity, minHeight: 220)
         } else {
             VStack(alignment: .leading, spacing: 18) {
                 ForEach(groups) { group in
@@ -864,12 +863,9 @@ private struct PlaceFollowersView: View {
     var body: some View {
         ScrollView {
             VStack(alignment: .leading, spacing: 8) {
-                Text("Followers")
-                    .font(.system(size: 20, weight: .bold))
-                    .foregroundStyle(.white)
-
                 if isLoading {
-                    ProgressView().frame(maxWidth: .infinity).padding(.top, 40)
+                    NativeLoadingView(fillsAvailableSpace: false)
+                        .frame(maxWidth: .infinity, minHeight: 320)
                 } else if failed {
                     ContentUnavailableView("Couldn't Load Followers", systemImage: "wifi.exclamationmark")
                         .foregroundStyle(.white)
@@ -898,16 +894,15 @@ private struct PlaceFollowersView: View {
                 }
             }
             .padding(.horizontal, 16)
-            .padding(.top, 74)
+            .padding(.top, 60)
             .padding(.bottom, 18)
         }
         .background(AppTheme.background.ignoresSafeArea())
         .background(SwipeBackEnabler())
         .toolbar(.hidden, for: .navigationBar)
         .navigationBarBackButtonHidden()
-        .overlay(alignment: .topLeading) {
-            FloatingGlassIconButton(systemImage: "chevron.left") { dismiss() }
-                .padding(.leading, 16)
+        .overlay(alignment: .top) {
+            PlaceRelationshipNavigation(title: "Followers") { dismiss() }
         }
         .task {
             await load()
@@ -939,18 +934,14 @@ private struct PlaceMembersView: View {
     var body: some View {
         ScrollView {
             VStack(alignment: .leading, spacing: 8) {
-                Text("Members")
-                    .font(.system(size: 20, weight: .bold))
-                    .foregroundStyle(.white)
-
                 if isLoading {
-                    ProgressView().frame(maxWidth: .infinity).padding(.top, 40)
+                    NativeLoadingView(fillsAvailableSpace: false)
+                        .frame(maxWidth: .infinity, minHeight: 320)
                 } else if failed {
                     ContentUnavailableView("Couldn't Load Members", systemImage: "wifi.exclamationmark")
                         .foregroundStyle(.white)
                 } else if members.isEmpty {
-                    ContentUnavailableView("No Members Yet", systemImage: "person.slash")
-                        .foregroundStyle(.white)
+                    PlaceRelationshipEmptyPlaceholder(message: "No members yet")
                 } else {
                     VStack(spacing: 2) {
                         ForEach(members) { member in
@@ -973,16 +964,15 @@ private struct PlaceMembersView: View {
                 }
             }
             .padding(.horizontal, 16)
-            .padding(.top, 74)
+            .padding(.top, 60)
             .padding(.bottom, 18)
         }
         .background(AppTheme.background.ignoresSafeArea())
         .background(SwipeBackEnabler())
         .toolbar(.hidden, for: .navigationBar)
         .navigationBarBackButtonHidden()
-        .overlay(alignment: .topLeading) {
-            FloatingGlassIconButton(systemImage: "chevron.left") { dismiss() }
-                .padding(.leading, 16)
+        .overlay(alignment: .top) {
+            PlaceRelationshipNavigation(title: "Members") { dismiss() }
         }
         .task {
             await load()
@@ -999,6 +989,51 @@ private struct PlaceMembersView: View {
             failed = true
         }
         isLoading = false
+    }
+}
+
+private struct PlaceRelationshipNavigation: View {
+    let title: String
+    let onBack: () -> Void
+
+    var body: some View {
+        ZStack {
+            Text(title)
+                .font(.system(size: 17, weight: .semibold))
+                .foregroundStyle(.white)
+                .lineLimit(1)
+                .accessibilityAddTraits(.isHeader)
+
+            HStack {
+                FloatingGlassIconButton(systemImage: "chevron.left", action: onBack)
+                Spacer()
+            }
+        }
+        .frame(height: 46)
+        .padding(.horizontal, 16)
+    }
+}
+
+private struct PlaceRelationshipEmptyPlaceholder: View {
+    let message: String
+
+    var body: some View {
+        RoundedRectangle(cornerRadius: 20, style: .continuous)
+            .fill(Color.white.opacity(0.015))
+            .frame(maxWidth: .infinity)
+            .frame(height: 140)
+            .overlay {
+                Text(message)
+                    .font(.system(size: 15, weight: .medium))
+                    .foregroundStyle(.white.opacity(0.58))
+                    .multilineTextAlignment(.center)
+                    .padding(.horizontal, 24)
+            }
+            .overlay {
+                RoundedRectangle(cornerRadius: 20, style: .continuous)
+                    .strokeBorder(style: StrokeStyle(lineWidth: 1, dash: [5, 5]))
+                    .foregroundStyle(.white.opacity(0.10))
+            }
     }
 }
 

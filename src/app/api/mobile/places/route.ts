@@ -332,7 +332,7 @@ export async function GET(request: Request) {
 
 export async function POST(request: Request) {
   try {
-    const { userId, isPreview } = await currentMobileUserContext();
+    const { userId } = await currentMobileUserContext();
 
     if (!userId) {
       return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
@@ -404,17 +404,6 @@ export async function POST(request: Request) {
       await setPlaceCategoryKeys(db, place.id, validCategories, {
         activeOnly: true,
       });
-    }
-
-    if (!isPreview) {
-      await db
-        .insert(placeMembers)
-        .values({
-          userId,
-          placeId: place.id,
-          role: "owner",
-        })
-        .onConflictDoNothing();
     }
 
     return NextResponse.json({ id: place.id, slug: place.slug });

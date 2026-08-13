@@ -89,8 +89,13 @@ struct MobilePlaceCreationView: View {
         NavigationStack {
             Form {
                 logoSection
-                locationSection
-                detailsSection
+                if isVenue {
+                    locationSection
+                    detailsSection
+                } else {
+                    detailsSection
+                    locationSection
+                }
                 categoriesSection
                 if showsScrapersSection {
                     placeScrapersSection

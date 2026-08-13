@@ -28,6 +28,7 @@ struct EventDetailHero<
     let containerWidth: CGFloat
     let topInset: CGFloat
     let onImageTap: () -> Void
+    let onBackgroundColorChange: (Color) -> Void
 
     private let header: Header
     private let topLeadingControls: TopLeadingControls
@@ -38,6 +39,7 @@ struct EventDetailHero<
     @State private var loadedArtwork: UIImage?
     @State private var blurredArtwork: UIImage?
     @State private var palette: EventHeroPalette = .fallback
+    @State private var headerHeight: CGFloat = 0
 
     private let horizontalPadding: CGFloat = 16
     private let imageCornerRadius: CGFloat = 22
@@ -50,7 +52,6 @@ struct EventDetailHero<
     private let headerSpacing: CGFloat = 18
     private let bottomTail: CGFloat = 8
     private let solidTail: CGFloat = 0
-    private let fadeHeight: CGFloat = 240
     // Extends the tinted background above the hero so pulling / overscrolling at the
     // top reveals more of the fade instead of a hard cutoff line.
     private let overscrollExtension: CGFloat = 500
@@ -58,13 +59,14 @@ struct EventDetailHero<
     // has room to finish reaching transparent before it would otherwise be clipped at
     // the hero bounds — without this the fade cuts off mid-transition as a hard line
     // just under the RSVP button.
-    private let bottomExtension: CGFloat = 320
+    private let bottomExtension: CGFloat = 600
 
     init(
         imageURL: URL?,
         containerWidth: CGFloat,
         topInset: CGFloat,
         onImageTap: @escaping () -> Void,
+        onBackgroundColorChange: @escaping (Color) -> Void = { _ in },
         @ViewBuilder header: () -> Header,
         @ViewBuilder topLeadingControls: () -> TopLeadingControls = { EmptyView() },
         @ViewBuilder topTrailingControls: () -> TopTrailingControls = { EmptyView() },
@@ -75,6 +77,7 @@ struct EventDetailHero<
         self.containerWidth = containerWidth
         self.topInset = topInset
         self.onImageTap = onImageTap
+        self.onBackgroundColorChange = onBackgroundColorChange
         self.header = header()
         self.topLeadingControls = topLeadingControls()
         self.topTrailingControls = topTrailingControls()
@@ -94,6 +97,21 @@ struct EventDetailHero<
         topGap
     }
 
+    private var fadeHeight: CGFloat {
+        // Keep compact headers from ending the transition abruptly beneath the RSVP
+        // control, while allowing wrapped titles and extra metadata a little more
+        // room. The limits preserve the tuned range without letting unusually tall
+        // content stretch the fade indefinitely.
+        min(max(headerHeight - 20, 400), 460)
+    }
+
+    private var fadeStartOverlap: CGFloat {
+        // Compact headers place the RSVP control much closer to the artwork, so begin
+        // their fade farther up. As the header grows, lower the start toward the
+        // original position to keep the RSVP area near the visual middle of the fade.
+        min(max(260 - headerHeight * 0.5, 100), 160)
+    }
+
     var body: some View {
         VStack(spacing: 0) {
             Color.clear
@@ -105,12 +123,24 @@ struct EventDetailHero<
                 .padding(.top, headerSpacing)
                 .padding(.horizontal, horizontalPadding)
                 .frame(maxWidth: .infinity, alignment: .leading)
+                .background {
+                    GeometryReader { proxy in
+                        Color.clear
+                            .preference(
+                                key: EventDetailHeaderHeightPreferenceKey.self,
+                                value: proxy.size.height
+                            )
+                    }
+                }
 
             Color.clear
                 .frame(height: bottomTail)
         }
         .frame(width: containerWidth)
         .background { backdrop }
+        .onPreferenceChange(EventDetailHeaderHeightPreferenceKey.self) { height in
+            headerHeight = height
+        }
         .task(id: imageURL) {
             await loadArtwork()
         }
@@ -119,12 +149,13 @@ struct EventDetailHero<
     // Layers 1–2: an artwork-tinted background — dominant color plus a blurred
     // duplicate — that fills from above the top of the screen (so overscroll keeps
     // showing the fade rather than a hard edge), down through the artwork and
-    // slightly behind the header, then dissolves gradually into the app background
+    // slightly behind the header, then dissolves gradually into the page's darker
+    // artwork-derived color
     // before the About section. The artwork itself is padded down so it clears the
     // Dynamic Island.
     private var backdrop: some View {
         ZStack {
-            AppTheme.background
+            palette.deepColor
 
             tint
         }
@@ -175,7 +206,10 @@ struct EventDetailHero<
         .mask(
             VStack(spacing: 0) {
                 Color.white
-                    .frame(height: overscrollExtension + imageTopOffset + imageSide + solidTail)
+                    .frame(
+                        height: overscrollExtension + imageTopOffset + imageSide
+                            + solidTail - fadeStartOverlap
+                    )
 
                 LinearGradient(
                     stops: [
@@ -273,6 +307,7 @@ struct EventDetailHero<
             loadedArtwork = nil
             blurredArtwork = nil
             palette = .fallback
+            onBackgroundColorChange(EventHeroPalette.fallback.deepColor)
         }
 
         guard let imageURL else {
@@ -290,7 +325,16 @@ struct EventDetailHero<
             loadedArtwork = image
             blurredArtwork = blurred
             palette = newPalette
+            onBackgroundColorChange(newPalette.deepColor)
         }
+    }
+}
+
+private struct EventDetailHeaderHeightPreferenceKey: PreferenceKey {
+    static let defaultValue: CGFloat = 0
+
+    static func reduce(value: inout CGFloat, nextValue: () -> CGFloat) {
+        value = max(value, nextValue())
     }
 }
 
@@ -298,7 +342,7 @@ struct EventDetailHero<
 private struct EventHeroPalette {
     // Dominant dark color used behind the image and across the top of the hero.
     let baseColor: Color
-    // Deeper variant used for the middle of the fade before it reaches black.
+    // Deeper variant used as the page color beneath the hero fade.
     let deepColor: Color
 
     // Muted gray/brown used when color extraction fails (never pure black).
@@ -313,7 +357,9 @@ private struct EventHeroPalette {
         }
 
         let base = sampled.darkHeroDominant()
-        let deep = base.heroAdjusted(saturation: 0.95, brightness: 0.6)
+        // Keep just enough of the artwork's hue to color the near-black page
+        // background while maintaining strong contrast for white body text.
+        let deep = base.heroAdjusted(saturation: 1.05, brightness: 0.22)
 
         return EventHeroPalette(
             baseColor: Color(uiColor: base),

@@ -2290,14 +2290,30 @@ private struct MyFriendsView: View {
     let onChangePartner: () -> Void
     let onRemovePartner: () -> Void
     let onRemoveFriend: (FriendUserSummary) -> Void
+    @State private var selectedSection: FriendsPageSection = .friends
     @State private var pendingFriendRemoval: FriendUserSummary?
 
     var body: some View {
-        RelationshipListScreen {
-            VStack(alignment: .leading, spacing: 18) {
-                VStack(alignment: .leading, spacing: 7) {
-                    RelationshipSectionHeader(title: "Partner")
+        RelationshipListScreen(title: "Friends") {
+            VStack(alignment: .leading, spacing: 14) {
+                RelationshipFilterPills(
+                    titles: FriendsPageSection.allCases.map(\.title),
+                    selection: Binding(
+                        get: { FriendsPageSection.allCases.firstIndex(of: selectedSection) ?? 0 },
+                        set: { selectedSection = FriendsPageSection.allCases[$0] }
+                    )
+                )
 
+                switch selectedSection {
+                case .friends:
+                    FriendsListViewContent(
+                        friends: response.friends,
+                        onRemoveFriend: { friend in
+                            pendingFriendRemoval = friend
+                        }
+                    )
+
+                case .partner:
                     PartnerManagementCard(
                         relationship: partnerRelationship,
                         availableFriendCount: availablePartnerCount,
@@ -2308,17 +2324,6 @@ private struct MyFriendsView: View {
                         onCancelRequest: onCancelPartnerRequest,
                         onChangePartner: onChangePartner,
                         onRemovePartner: onRemovePartner
-                    )
-                }
-
-                VStack(alignment: .leading, spacing: 7) {
-                    RelationshipSectionHeader(title: "My Friends")
-
-                    FriendsListViewContent(
-                        friends: response.friends,
-                        onRemoveFriend: { friend in
-                            pendingFriendRemoval = friend
-                        }
                     )
                 }
             }
@@ -2348,6 +2353,18 @@ private struct MyFriendsView: View {
             if let pendingFriendRemoval {
                 Text("Remove \(pendingFriendRemoval.name) from your friends?")
             }
+        }
+    }
+}
+
+private enum FriendsPageSection: CaseIterable {
+    case friends
+    case partner
+
+    var title: String {
+        switch self {
+        case .friends: "Friends"
+        case .partner: "Partner"
         }
     }
 }
@@ -2754,6 +2771,7 @@ private struct FriendRequestsView: View {
     @EnvironmentObject private var activityRequestStore: ActivityRequestStore
     @State private var receivedRequests: [FriendUserSummary]
     @State private var sentRequests: [FriendUserSummary]
+    @State private var selectedSection: RequestsPageSection = .received
     @State private var activeRequestID: String?
     @State private var selectedUserProfile: RequestSelectedUserProfile?
     @State private var pendingDeleteRequest: FriendUserSummary?
@@ -2776,73 +2794,20 @@ private struct FriendRequestsView: View {
     }
 
     var body: some View {
-        RelationshipListScreen(title: "Received Requests") {
-            VStack(alignment: .leading, spacing: 6) {
-                if receivedRequests.isEmpty {
-                    EmptyRequestPlaceholder(message: "No pending friend requests")
-                } else {
-                    VStack(spacing: 2) {
-                        ForEach(receivedRequests) { request in
-                            HStack(spacing: 8) {
-                                Button {
-                                    selectedUserProfile = RequestSelectedUserProfile(id: request.id)
-                                } label: {
-                                    CompactUserListRowView(
-                                        imageURL: request.avatarImageURL,
-                                        name: request.name,
-                                        subtitle: request.usernameText,
-                                        identityKey: request.id
-                                    )
-                                    .frame(maxWidth: .infinity, alignment: .leading)
-                                    .contentShape(Rectangle())
-                                }
-                                .buttonStyle(.plain)
-                                .frame(maxWidth: .infinity, alignment: .leading)
+        RelationshipListScreen(title: "Requests") {
+            VStack(alignment: .leading, spacing: 14) {
+                RelationshipFilterPills(
+                    titles: RequestsPageSection.allCases.map(\.title),
+                    selection: Binding(
+                        get: { RequestsPageSection.allCases.firstIndex(of: selectedSection) ?? 0 },
+                        set: { selectedSection = RequestsPageSection.allCases[$0] }
+                    )
+                )
 
-                                HStack(spacing: 8) {
-                                    Button {
-                                        pendingDeleteRequest = request
-                                    } label: {
-                                        Text("Decline")
-                                            .font(.system(size: 12, weight: .semibold))
-                                            .foregroundStyle(.white.opacity(0.82))
-                                            .padding(.horizontal, 11)
-                                            .frame(height: 34)
-                                            .background(
-                                                RoundedRectangle(cornerRadius: 10, style: .continuous)
-                                                    .fill(Color.white.opacity(0.10))
-                                            )
-                                    }
-                                    .buttonStyle(.plain)
-                                    .disabled(activeRequestID != nil)
-
-                                    Button {
-                                        submit(.accept, for: request)
-                                    } label: {
-                                        Text("Accept")
-                                            .font(.system(size: 12, weight: .semibold))
-                                            .foregroundStyle(.black)
-                                            .padding(.horizontal, 12)
-                                            .frame(height: 34)
-                                            .background(
-                                                RoundedRectangle(cornerRadius: 10, style: .continuous)
-                                                    .fill(AppTheme.accentBlue)
-                                            )
-                                    }
-                                    .buttonStyle(.plain)
-                                    .disabled(activeRequestID != nil)
-                                }
-                                .opacity(activeRequestID != nil ? 0.5 : 1)
-                            }
-                        }
-                    }
-                }
-
-                VStack(alignment: .leading, spacing: 7) {
-                    Text("Sent Requests")
-                        .font(.system(size: 20, weight: .bold))
-                        .foregroundStyle(.white)
-
+                switch selectedSection {
+                case .received:
+                    receivedRequestsContent
+                case .sent:
                     if sentRequests.isEmpty {
                         EmptyRequestPlaceholder(message: "No sent requests")
                     } else {
@@ -2866,7 +2831,6 @@ private struct FriendRequestsView: View {
                         }
                     }
                 }
-                .padding(.top, 28)
             }
         }
         .navigationDestination(item: $selectedUserProfile) { selection in
@@ -2911,6 +2875,69 @@ private struct FriendRequestsView: View {
                     .spring(response: 0.35, dampingFraction: 0.60),
                     value: isRequestConfirmationVisible
                 )
+            }
+        }
+    }
+
+    @ViewBuilder
+    private var receivedRequestsContent: some View {
+        if receivedRequests.isEmpty {
+            EmptyRequestPlaceholder(message: "No pending friend requests")
+        } else {
+            VStack(spacing: 2) {
+                ForEach(receivedRequests) { request in
+                    HStack(spacing: 8) {
+                        Button {
+                            selectedUserProfile = RequestSelectedUserProfile(id: request.id)
+                        } label: {
+                            CompactUserListRowView(
+                                imageURL: request.avatarImageURL,
+                                name: request.name,
+                                subtitle: request.usernameText,
+                                identityKey: request.id
+                            )
+                            .frame(maxWidth: .infinity, alignment: .leading)
+                            .contentShape(Rectangle())
+                        }
+                        .buttonStyle(.plain)
+                        .frame(maxWidth: .infinity, alignment: .leading)
+
+                        HStack(spacing: 8) {
+                            Button {
+                                pendingDeleteRequest = request
+                            } label: {
+                                Text("Decline")
+                                    .font(.system(size: 12, weight: .semibold))
+                                    .foregroundStyle(.white.opacity(0.82))
+                                    .padding(.horizontal, 11)
+                                    .frame(height: 34)
+                                    .background(
+                                        RoundedRectangle(cornerRadius: 10, style: .continuous)
+                                            .fill(Color.white.opacity(0.10))
+                                    )
+                            }
+                            .buttonStyle(.plain)
+                            .disabled(activeRequestID != nil)
+
+                            Button {
+                                submit(.accept, for: request)
+                            } label: {
+                                Text("Accept")
+                                    .font(.system(size: 12, weight: .semibold))
+                                    .foregroundStyle(.black)
+                                    .padding(.horizontal, 12)
+                                    .frame(height: 34)
+                                    .background(
+                                        RoundedRectangle(cornerRadius: 10, style: .continuous)
+                                            .fill(AppTheme.accentBlue)
+                                    )
+                            }
+                            .buttonStyle(.plain)
+                            .disabled(activeRequestID != nil)
+                        }
+                        .opacity(activeRequestID != nil ? 0.5 : 1)
+                    }
+                }
             }
         }
     }
@@ -2989,6 +3016,18 @@ private struct FriendRequestsView: View {
     }
 }
 
+private enum RequestsPageSection: CaseIterable {
+    case received
+    case sent
+
+    var title: String {
+        switch self {
+        case .received: "Received"
+        case .sent: "Sent"
+        }
+    }
+}
+
 private struct FriendRequestConfirmation: Identifiable, Equatable {
     let id = UUID()
     let response: ActivityRequestResponse
@@ -3040,7 +3079,7 @@ private struct FriendRequestConfirmationToast: View {
 
 private struct RequestsPageLoadingContent: View {
     var body: some View {
-        RelationshipListScreen(title: "Received Requests") {
+        RelationshipListScreen(title: "Requests") {
             NativeLoadingView()
                 .frame(minHeight: 320)
         }
@@ -3059,19 +3098,21 @@ struct RequestsPageView: View {
                 RequestsPageLoadingContent()
 
             case .failed(let message):
-                ContentUnavailableView {
-                    Label("Couldn't Load Requests", systemImage: "wifi.exclamationmark")
-                } description: {
-                    Text(message)
-                } actions: {
-                    Button("Try Again") {
-                        Task {
-                            await viewModel.load(using: apiClient, forceRefresh: true)
+                RelationshipListScreen(title: "Requests") {
+                    ContentUnavailableView {
+                        Label("Couldn't Load Requests", systemImage: "wifi.exclamationmark")
+                    } description: {
+                        Text(message)
+                    } actions: {
+                        Button("Try Again") {
+                            Task {
+                                await viewModel.load(using: apiClient, forceRefresh: true)
+                            }
                         }
                     }
+                    .foregroundStyle(.white)
+                    .frame(minHeight: 320)
                 }
-                .foregroundStyle(.white)
-                .background(ProfileTheme.background)
 
             case .loaded(let response):
                 FriendRequestsView(
@@ -3262,16 +3303,10 @@ private struct RelationshipListScreen<Content: View>: View {
     var body: some View {
         ScrollView {
             VStack(alignment: .leading, spacing: 8) {
-                if let title {
-                    Text(title)
-                        .font(.system(size: 20, weight: .bold))
-                        .foregroundStyle(.white)
-                }
-
                 content
             }
             .padding(.horizontal, 16)
-            .padding(.top, 74)
+            .padding(.top, 60)
             .padding(.bottom, 18)
         }
         .background(ProfileTheme.background.ignoresSafeArea())
@@ -3279,12 +3314,44 @@ private struct RelationshipListScreen<Content: View>: View {
         .toolbar(.hidden, for: .navigationBar)
         .navigationBarBackButtonHidden()
         .navigationBarTitleDisplayMode(.inline)
-        .overlay(alignment: .topLeading) {
-            FloatingGlassIconButton(systemImage: "chevron.left") {
-                dismiss()
+        .overlay(alignment: .top) {
+            ZStack {
+                if let title {
+                    Text(title)
+                        .font(.system(size: 17, weight: .semibold))
+                        .foregroundStyle(.white)
+                        .lineLimit(1)
+                        .accessibilityAddTraits(.isHeader)
+                }
+
+                HStack {
+                    FloatingGlassIconButton(systemImage: "chevron.left") {
+                        dismiss()
+                    }
+
+                    Spacer()
+                }
             }
-            .padding(.leading, 16)
-            .padding(.top, 0)
+            .frame(height: 46)
+            .padding(.horizontal, 16)
+        }
+    }
+}
+
+private struct RelationshipFilterPills: View {
+    let titles: [String]
+    @Binding var selection: Int
+
+    var body: some View {
+        ScopePillBar {
+            ForEach(titles.indices, id: \.self) { index in
+                ScopePill(
+                    title: titles[index],
+                    isSelected: selection == index
+                ) {
+                    selection = index
+                }
+            }
         }
     }
 }
@@ -3560,58 +3627,51 @@ private struct AdminSettingsView: View {
 
     var body: some View {
         ScrollView {
-            VStack(alignment: .leading, spacing: 22) {
-                Text("Admin Settings")
-                    .font(.system(size: 20, weight: .bold))
-                    .foregroundStyle(.white)
-                    .padding(.bottom, -10)
+            VStack(spacing: 12) {
+                AdminSettingsActionButton(
+                    title: "Add Event",
+                    systemImage: "calendar.badge.plus"
+                ) {
+                    isEventCreationSheetPresented = true
+                }
 
-                VStack(spacing: 12) {
-                    AdminSettingsActionButton(
-                        title: "Add Event",
-                        systemImage: "calendar.badge.plus"
-                    ) {
-                        isEventCreationSheetPresented = true
-                    }
+                AdminSettingsActionButton(
+                    title: "Add Event Series",
+                    systemImage: "calendar.badge.clock"
+                ) {
+                    isEventSeriesCreationSheetPresented = true
+                }
 
-                    AdminSettingsActionButton(
-                        title: "Add Event Series",
-                        systemImage: "calendar.badge.clock"
-                    ) {
-                        isEventSeriesCreationSheetPresented = true
-                    }
+                AdminSettingsActionButton(
+                    title: "Add Venue",
+                    systemImage: "building.2"
+                ) {
+                    presentedPlaceCreationType = .venue
+                }
 
-                    AdminSettingsActionButton(
-                        title: "Add Venue",
-                        systemImage: "building.2"
-                    ) {
-                        presentedPlaceCreationType = .venue
-                    }
+                AdminSettingsActionButton(
+                    title: "Add Organizer",
+                    systemImage: "person.2.badge.plus"
+                ) {
+                    presentedPlaceCreationType = .organizer
+                }
 
-                    AdminSettingsActionButton(
-                        title: "Add Organizer",
-                        systemImage: "person.2.badge.plus"
-                    ) {
-                        presentedPlaceCreationType = .organizer
-                    }
+                AdminSettingsActionButton(
+                    title: "Add Metro Area",
+                    systemImage: "mappin.and.ellipse"
+                ) {
+                    isMetroAreaSheetPresented = true
+                }
 
-                    AdminSettingsActionButton(
-                        title: "Add Metro Area",
-                        systemImage: "mappin.and.ellipse"
-                    ) {
-                        isMetroAreaSheetPresented = true
-                    }
-
-                    AdminSettingsActionButton(
-                        title: "Scrapers",
-                        systemImage: "play.rectangle.on.rectangle"
-                    ) {
-                        isAdminScrapersPresented = true
-                    }
+                AdminSettingsActionButton(
+                    title: "Scrapers",
+                    systemImage: "play.rectangle.on.rectangle"
+                ) {
+                    isAdminScrapersPresented = true
                 }
             }
             .padding(.horizontal, 16)
-            .padding(.top, 74)
+            .padding(.top, 58)
             .padding(.bottom, 18)
         }
         .scrollIndicators(.hidden)
@@ -3619,12 +3679,21 @@ private struct AdminSettingsView: View {
         .background(SwipeBackEnabler())
         .toolbar(.hidden, for: .navigationBar)
         .navigationBarBackButtonHidden()
-        .overlay(alignment: .topLeading) {
-            FloatingGlassIconButton(systemImage: "chevron.left") {
-                dismiss()
+        .overlay(alignment: .top) {
+            ZStack {
+                Text("Admin Settings")
+                    .font(.system(size: 17, weight: .semibold))
+                    .foregroundStyle(.white)
+
+                HStack {
+                    FloatingGlassIconButton(systemImage: "chevron.left") {
+                        dismiss()
+                    }
+
+                    Spacer()
+                }
             }
-            .padding(.leading, 16)
-            .padding(.top, 0)
+            .padding(.horizontal, 16)
         }
         .navigationDestination(isPresented: $isAdminScrapersPresented) {
             AdminScrapersView()

@@ -54,6 +54,7 @@ struct EventDetailView: View {
     @StateObject private var presentationLifecycle = EventDetailPresentationLifecycle()
     @State private var presentedPlace: PlaceListItem?
     @State private var presentedRoute: EventDetailRoute?
+    @State private var eventPageBackgroundColor = Color(red: 0.11, green: 0.10, blue: 0.10)
 
     private let placeNavigationAnimation = Animation.easeInOut(duration: 0.30)
     private let routeNavigationAnimation = Animation.easeInOut(duration: 0.24)
@@ -86,6 +87,9 @@ struct EventDetailView: View {
                         // Tapping the image itself does nothing; expanding is only via
                         // the expand button (leadingAccessory) below.
                         onImageTap: {},
+                        onBackgroundColorChange: { color in
+                            eventPageBackgroundColor = color
+                        },
                         header: {
                             VStack(alignment: .leading, spacing: 0) {
                                 details
@@ -137,11 +141,11 @@ struct EventDetailView: View {
                 .frame(maxWidth: .infinity, alignment: .leading)
             }
             .scrollIndicators(.hidden)
-            // Fill the whole screen (including behind the status bar) with the app
-            // background, but keep the SCROLL CONTENT within the top safe area. If the
+            // Fill the whole screen (including behind the status bar) with the
+            // artwork-derived background, but keep the SCROLL CONTENT within the top safe area. If the
             // scroll content underlaps the status bar while the nav bar is hidden, iOS
             // injects an automatic status-bar scrim (the "black fade" at the top).
-            .background(AppTheme.background.ignoresSafeArea())
+            .background(eventPageBackgroundColor.ignoresSafeArea())
         .navigationBarBackButtonHidden()
         .toolbar(.hidden, for: .navigationBar)
         .overlay {

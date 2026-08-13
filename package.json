@@ -12,6 +12,7 @@
     "db:push": "drizzle-kit push",
     "db:migrate": "node src/server/db/migrate-http.mjs",
     "db:backfill-event-timezones": "tsx src/server/db/backfill-event-timezones.ts",
+    "db:migrate-event-cover-filenames": "tsx src/server/db/migrate-event-cover-filenames.ts",
     "db:studio": "drizzle-kit studio",
     "db:seed": "tsx src/server/db/seed.ts"
   },
