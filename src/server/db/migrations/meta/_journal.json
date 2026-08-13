@@ -355,6 +355,12 @@
       "when": 1786546800000,
       "tag": "0057_remove_environment_from_stored_event_image_keys",
       "breakpoints": true
+    },
+    {
+      "idx": 59,
+      "when": 1786550400000,
+      "tag": "0058_normalize_user_and_place_image_keys",
+      "breakpoints": true
     }
   ]
 }

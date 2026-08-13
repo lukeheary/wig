@@ -93,10 +93,15 @@ export function resolveStoredImageValue(value: string): string {
     // A non-URL value is an object key.
   }
 
+  // Prefer S3 while the R2 migration is in progress. The database remains
+  // provider-independent, so switching this preference later requires no data
+  // migration.
   const publicBaseUrl =
-    process.env.R2_PUBLIC_BASE_URL ||
-    process.env.R2_PUBLIC_URL ||
-    process.env.R2_ENDPOINT;
+    process.env.AWS_S3_BUCKET && process.env.AWS_REGION
+      ? `https://${process.env.AWS_S3_BUCKET}.s3.${process.env.AWS_REGION}.amazonaws.com`
+      : process.env.R2_PUBLIC_BASE_URL ||
+        process.env.R2_PUBLIC_URL ||
+        process.env.R2_ENDPOINT;
 
   if (!publicBaseUrl) return trimmed;
   return `${trimTrailingSlashes(publicBaseUrl)}/${addCurrentEnvironmentPrefix(trimmed)}`;

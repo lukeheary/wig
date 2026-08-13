@@ -100,10 +100,11 @@ export function generateUniqueFilename(originalName: string): string {
 }
 
 /**
- * Get the public URL for an R2 object.
+ * Get the preferred public URL for a stored object. Objects are dual-written,
+ * but S3 is the read origin while the R2 migration is in progress.
  */
 export function getS3Url(key: string): string {
-  return `${R2_PUBLIC_BASE_URL}/${key}`;
+  return new URL(key.replace(/^\/+/, ""), AWS_PUBLIC_URL).toString();
 }
 
 function keyFromBaseUrl(url: string, baseUrl: URL): string | null {
@@ -256,7 +257,7 @@ export async function copyStorageObject(
 }
 
 /**
- * Upload a file to R2 and S3, returning the R2 public URL.
+ * Upload a file to R2 and S3, returning the preferred S3 public URL.
  * Automatically adds environment prefix (production/development) to the path
  */
 export async function uploadToS3(
