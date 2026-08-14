@@ -14,6 +14,7 @@ struct MobileEventReviewPromptResponse: Decodable, Hashable, Sendable {
 
 struct MobileEventReviewPrompt: Decodable, Hashable, Identifiable, Sendable {
     let id: UUID
+    let publicID: String
     let title: String
     let coverImageURL: URL?
     let startAt: Date
@@ -24,6 +25,7 @@ struct MobileEventReviewPrompt: Decodable, Hashable, Identifiable, Sendable {
 
     enum CodingKeys: String, CodingKey {
         case id, title, startAt, endAt, venueName, city, state
+        case publicID = "publicId"
         case coverImageURL = "coverImageUrl"
     }
 }
@@ -55,11 +57,13 @@ struct EventCity: Codable, Hashable, Identifiable, Sendable {
 
 struct EventFeedItem: Codable, Identifiable, Hashable, Sendable {
     let id: UUID
+    var publicID: String = ""
     let title: String
     let description: String?
     let coverImageURL: URL?
     let eventURL: URL?
     let seriesID: UUID?
+    var seriesPublicID: String? = nil
     let startAt: Date
     let endAt: Date?
     let address: String?
@@ -101,11 +105,13 @@ struct EventFeedItem: Codable, Identifiable, Hashable, Sendable {
 
     enum CodingKeys: String, CodingKey {
         case id
+        case publicID = "publicId"
         case title
         case description
         case coverImageURL = "coverImageUrl"
         case eventURL = "eventUrl"
         case seriesID = "seriesId"
+        case seriesPublicID = "seriesPublicId"
         case startAt
         case endAt
         case address
@@ -418,11 +424,13 @@ extension EventFeedItem {
         let container = try decoder.container(keyedBy: CodingKeys.self)
 
         id = try container.decode(UUID.self, forKey: .id)
+        publicID = try container.decode(String.self, forKey: .publicID)
         title = try container.decode(String.self, forKey: .title)
         description = try container.decodeIfPresent(String.self, forKey: .description)
         coverImageURL = try container.decodeOptionalURL(forKey: .coverImageURL)
         eventURL = try container.decodeOptionalURL(forKey: .eventURL)
         seriesID = try container.decodeIfPresent(UUID.self, forKey: .seriesID)
+        seriesPublicID = try container.decodeIfPresent(String.self, forKey: .seriesPublicID)
         startAt = try container.decode(Date.self, forKey: .startAt)
         endAt = try container.decodeIfPresent(Date.self, forKey: .endAt)
         address = try container.decodeIfPresent(String.self, forKey: .address)
@@ -472,6 +480,7 @@ extension EventFeedItem {
 
 struct MobileEventSeriesDetail: Decodable, Identifiable, Hashable, Sendable {
     let id: UUID
+    let publicID: String
     let title: String
     let description: String?
     let coverImageURL: URL?
@@ -500,6 +509,7 @@ struct MobileEventSeriesDetail: Decodable, Identifiable, Hashable, Sendable {
 
     enum CodingKeys: String, CodingKey {
         case id
+        case publicID = "publicId"
         case title
         case description
         case coverImageURL = "coverImageUrl"

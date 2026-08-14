@@ -174,6 +174,7 @@ export async function notifyFriendsOfRsvp(
       where: eq(events.id, eventId),
       columns: {
         id: true,
+        publicId: true,
         title: true,
         startAt: true,
       },
@@ -229,7 +230,7 @@ export async function notifyFriendsOfRsvp(
     status,
     includesPartner,
   });
-  const actionUrl = `/event/${event.id}`;
+  const actionUrl = `/event/${event.publicId}`;
 
   const createdNotifications = await createNotifications(
     recipientIds.map((userId) => ({

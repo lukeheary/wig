@@ -105,7 +105,7 @@ struct ManagePlaceView: View {
             .presentationDetents([.medium])
         }
         .sheet(item: $editingSeries) { series in
-            EventSeriesEditSheet(seriesID: series.id) {
+            EventSeriesEditSheet(seriesID: series.id, seriesPublicID: series.publicID) {
                 Task { await viewModel.load(slug: placeSlug, using: apiClient, forceRefresh: true) }
             }
         }

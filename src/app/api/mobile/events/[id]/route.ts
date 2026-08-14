@@ -24,6 +24,7 @@ import {
 } from "@/server/utils/categories";
 import { logEventActivity } from "@/server/utils/event-activity-logger";
 import { EVENT_STATUS_VALUES, type EventStatus } from "@/lib/event-status";
+import { isPublicId, publicOrUuidSchema } from "@/lib/public-id";
 import { withStoredImageReplacements } from "@/server/utils/stored-image-lifecycle";
 
 const mobileUpdateEventSchema = z.object({
@@ -98,12 +99,15 @@ export async function GET(
   context: { params: Promise<{ id: string }> }
 ) {
   const { id } = await context.params;
-  const eventID = z.string().uuid().parse(id);
+  const eventIdentifier = publicOrUuidSchema.parse(id);
   const { userId } = await currentMobileUserContext();
 
   const event = await db.query.events.findFirst({
-    where: eq(events.id, eventID),
+    where: isPublicId(eventIdentifier)
+      ? eq(events.publicId, eventIdentifier)
+      : eq(events.id, eventIdentifier),
     with: {
+      series: true,
       venue: true,
       organizer: true,
       categoryLinks: { with: { category: true } },
@@ -118,7 +122,7 @@ export async function GET(
       userId
         ? db.query.eventRsvps.findFirst({
             where: and(
-              eq(eventRsvps.eventId, eventID),
+              eq(eventRsvps.eventId, event.id),
               eq(eventRsvps.userId, userId)
             ),
           })
@@ -126,7 +130,7 @@ export async function GET(
       userId
         ? db.query.eventReviews.findFirst({
             where: and(
-              eq(eventReviews.eventId, eventID),
+              eq(eventReviews.eventId, event.id),
               eq(eventReviews.userId, userId),
               isNotNull(eventReviews.rating)
             ),
@@ -157,7 +161,7 @@ export async function GET(
   );
   const visibleRSVPs = await db.query.eventRsvps.findMany({
     where: and(
-      eq(eventRsvps.eventId, eventID),
+      eq(eventRsvps.eventId, event.id),
       userId
         ? or(
             eq(eventRsvps.userId, userId),
@@ -218,11 +222,13 @@ export async function GET(
 
   return NextResponse.json({
     id: mapped.id,
+    publicId: mapped.publicId,
     title: mapped.title,
     description: mapped.description,
     coverImageUrl: mapped.coverImageUrl,
     eventUrl: mapped.eventUrl,
     seriesId: mapped.seriesId,
+    seriesPublicId: event.series?.publicId ?? null,
     startAt: mapped.startAt,
     endAt: mapped.endAt,
     address: mapped.address,
@@ -484,6 +490,7 @@ export async function PATCH(
 
     return NextResponse.json({
       id: mapped.id,
+      publicId: mapped.publicId,
       title: mapped.title,
       description: mapped.description,
       coverImageUrl: mapped.coverImageUrl,

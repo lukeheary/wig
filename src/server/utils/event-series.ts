@@ -1,5 +1,6 @@
 import { and, eq, inArray } from "drizzle-orm";
 import { eventSeries, events } from "@/server/db/schema";
+import { generateNanoId } from "@/lib/nano-id";
 import {
   mapEventSeriesCategoryData,
   setEventCategoryKeys,
@@ -25,6 +26,7 @@ interface MaterializeResult {
   processedSeries: number;
   createdEvents: number;
   firstCreatedEventId: string | null;
+  firstCreatedEventPublicId: string | null;
 }
 
 interface TimeZoneDateTimeParts {
@@ -87,7 +89,10 @@ function getTimeZoneDateTimeParts(
   }
 }
 
-function getSeriesStartWeekday(startAt: Date, timeZone: string | null | undefined) {
+function getSeriesStartWeekday(
+  startAt: Date,
+  timeZone: string | null | undefined
+) {
   if (!timeZone) {
     return startAt.getDay();
   }
@@ -221,8 +226,13 @@ function getTimeZoneOffsetMs(date: Date, timeZone: string) {
   return asUtc - date.getTime();
 }
 
-function clampWindow(series: EventSeriesRow, windowStart: Date, windowEnd: Date) {
-  const effectiveStart = series.startAt > windowStart ? series.startAt : windowStart;
+function clampWindow(
+  series: EventSeriesRow,
+  windowStart: Date,
+  windowEnd: Date
+) {
+  const effectiveStart =
+    series.startAt > windowStart ? series.startAt : windowStart;
   const untilDate = series.untilDate ?? null;
   const effectiveEnd =
     untilDate && untilDate < windowEnd ? untilDate : windowEnd;
@@ -400,7 +410,10 @@ function buildWeeklyOccurrencesLocal(
           (7 * MS_PER_DAY)
       );
       if (weeksSinceAnchor >= 0 && weeksSinceAnchor % intervalWeeks === 0) {
-        const occurrence = combineDateWithSeriesTimeLocal(cursor, series.startAt);
+        const occurrence = combineDateWithSeriesTimeLocal(
+          cursor,
+          series.startAt
+        );
         if (occurrence >= effectiveStart && occurrence <= effectiveEnd) {
           occurrences.push(occurrence);
         }
@@ -716,14 +729,20 @@ export async function materializeEventSeries(
 
   let createdEvents = 0;
   let firstCreatedEventId: string | null = null;
+  let firstCreatedEventPublicId: string | null = null;
 
   for (const series of activeSeries) {
-    const occurrenceStarts = buildSeriesOccurrences(series, windowStart, windowEnd);
+    const occurrenceStarts = buildSeriesOccurrences(
+      series,
+      windowStart,
+      windowEnd
+    );
 
     if (occurrenceStarts.length > 0) {
       const durationMinutes = getSeriesDurationMinutes(series);
       const values = occurrenceStarts.map((startAt) => {
         return {
+          publicId: generateNanoId(),
           seriesId: series.id,
           venueId: series.venueId,
           organizerId: series.organizerId,
@@ -748,7 +767,7 @@ export async function materializeEventSeries(
         };
       });
 
-      const inserted: Array<{ id: string }> = await db
+      const inserted: Array<{ id: string; publicId: string }> = await db
         .insert(events)
         .values(values)
         .onConflictDoNothing({
@@ -756,12 +775,14 @@ export async function materializeEventSeries(
         })
         .returning({
           id: events.id,
+          publicId: events.publicId,
         });
 
       if (inserted.length > 0) {
         createdEvents += inserted.length;
         if (!firstCreatedEventId) {
           firstCreatedEventId = inserted[0]?.id ?? null;
+          firstCreatedEventPublicId = inserted[0]?.publicId ?? null;
         }
 
         const categoryKeys = getSeriesCategoryKeys(series);
@@ -787,5 +808,6 @@ export async function materializeEventSeries(
     processedSeries: activeSeries.length,
     createdEvents,
     firstCreatedEventId,
+    firstCreatedEventPublicId,
   };
 }

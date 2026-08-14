@@ -7,11 +7,11 @@ import {
   withReturnTo,
 } from "@/lib/navigation";
 
-export function useEventCardLink(eventId: string) {
+export function useEventCardLink(eventPublicId: string) {
   const pathname = usePathname();
   const searchParams = useSearchParams();
   const returnTo = buildReturnTo(pathname, searchParams);
-  const eventHref = withReturnTo(`/event/${eventId}`, returnTo);
+  const eventHref = withReturnTo(`/event/${eventPublicId}`, returnTo);
 
   const handleClick = () => {
     if (typeof window === "undefined") return;

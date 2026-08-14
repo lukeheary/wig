@@ -138,13 +138,22 @@ export function PlaceManagementPage({
   const recurringSeries = Object.values(
     upcomingEvents.reduce(
       (
-        acc: Record<string, { seriesId: string; title: string; events: any[] }>,
+        acc: Record<
+          string,
+          {
+            seriesId: string;
+            seriesPublicId: string;
+            title: string;
+            events: any[];
+          }
+        >,
         event: any
       ) => {
         if (!event.seriesId) return acc;
         if (!acc[event.seriesId]) {
           acc[event.seriesId] = {
             seriesId: event.seriesId,
+            seriesPublicId: event.series.publicId,
             title: event.title,
             events: [],
           };
@@ -261,7 +270,7 @@ export function PlaceManagementPage({
                   {upcomingEvents.slice(0, 5).map((event: any) => (
                     <Link
                       key={event.id}
-                      href={withReturnTo(`/event/${event.id}`, returnTo)}
+                      href={withReturnTo(`/event/${event.publicId}`, returnTo)}
                       className="flex w-full min-w-0 items-center gap-3 overflow-hidden rounded-lg border p-2 transition-colors hover:bg-muted/50 sm:gap-4 sm:p-3"
                     >
                       {event.coverImageUrl ? (
@@ -375,7 +384,7 @@ export function PlaceManagementPage({
                       </div>
                       <Link
                         href={withReturnTo(
-                          `/event-series/${series.seriesId}/edit`,
+                          `/event-series/${series.seriesPublicId}/edit`,
                           returnTo
                         )}
                       >

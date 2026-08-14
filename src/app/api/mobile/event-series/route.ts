@@ -5,8 +5,12 @@ import { z } from "zod";
 import { EVENT_STATUS_VALUES } from "@/lib/event-status";
 import { eventTimeZone } from "@/lib/utils";
 import { db } from "@/server/db";
+import { generateNanoId } from "@/lib/nano-id";
 import { eventSeries, users } from "@/server/db/schema";
-import { filterExistingCategoryKeys, setEventSeriesCategoryKeys } from "@/server/utils/categories";
+import {
+  filterExistingCategoryKeys,
+  setEventSeriesCategoryKeys,
+} from "@/server/utils/categories";
 import { logEventActivity } from "@/server/utils/event-activity-logger";
 import {
   materializeEventSeries,
@@ -153,9 +157,7 @@ export async function POST(request: Request) {
     const cleanedAddress = body.address?.trim() || null;
     const cleanedEventUrl = body.eventUrl?.trim() || null;
     const resolvedTimeZone =
-      body.timeZone?.trim() ||
-      eventTimeZone(undefined, cleanedState) ||
-      null;
+      body.timeZone?.trim() || eventTimeZone(undefined, cleanedState) || null;
     const validCategories = await filterExistingCategoryKeys(
       db,
       body.categories,
@@ -174,6 +176,7 @@ export async function POST(request: Request) {
     const [series] = await db
       .insert(eventSeries)
       .values({
+        publicId: generateNanoId(),
         title: cleanedTitle,
         description: cleanedDescription,
         coverImageUrl: submittedPendingCover ? null : cleanedCoverImageUrl,
@@ -194,7 +197,7 @@ export async function POST(request: Request) {
         organizerId: body.organizerId ?? null,
         createdByUserId: userId,
       })
-      .returning({ id: eventSeries.id });
+      .returning({ id: eventSeries.id, publicId: eventSeries.publicId });
 
     if (!series) {
       return NextResponse.json(
@@ -248,6 +251,7 @@ export async function POST(request: Request) {
 
     return NextResponse.json({
       seriesId: series.id,
+      seriesPublicId: series.publicId,
       createdEvents: generated.createdEvents,
       firstEventId: generated.firstCreatedEventId,
     });

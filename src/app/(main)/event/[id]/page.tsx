@@ -42,7 +42,7 @@ export async function generateMetadata({
   const { userId } = await auth();
 
   const event = await db.query.events.findFirst({
-    where: eq(events.id, id),
+    where: eq(events.publicId, id),
     with: {
       venue: true,
       organizer: true,
@@ -67,12 +67,12 @@ export async function generateMetadata({
     title: `${event.title} | WIG`,
     description,
     alternates: {
-      canonical: `/event/${event.id}`,
+      canonical: `/event/${event.publicId}`,
     },
     openGraph: {
       title: event.title,
       description,
-      url: `/event/${event.id}`,
+      url: `/event/${event.publicId}`,
       siteName: "WIG",
       type: "website",
       images: imageUrl

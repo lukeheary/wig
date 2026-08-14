@@ -31,6 +31,7 @@ export async function GET(
       where: and(condition, eq(eventSeries.isActive, true)),
       columns: {
         id: true,
+        publicId: true,
         title: true,
         frequency: true,
         interval: true,

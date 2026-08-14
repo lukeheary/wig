@@ -64,6 +64,8 @@ import {
 import { sendPushNotificationToUsers } from "@/server/utils/push-notifications";
 import { accentInsensitiveLike } from "@/server/db/search";
 import { RSVP_DECLINE_REASON_VALUES } from "@/lib/rsvp";
+import { generateNanoId } from "@/lib/nano-id";
+import { isPublicId, publicOrUuidSchema } from "@/lib/public-id";
 import {
   meaningfulScraperUpdatedAt,
   rehostExistingScrapedEventImages,
@@ -119,6 +121,7 @@ async function notifyPartnerOfMirroredRsvp({
       where: eq(events.id, eventId),
       columns: {
         id: true,
+        publicId: true,
         title: true,
         startAt: true,
       },
@@ -142,7 +145,7 @@ async function notifyPartnerOfMirroredRsvp({
     status === "going"
       ? `Is going with you to ${event.title}${partnerRsvpDate ? ` on ${partnerRsvpDate}` : ""}`
       : `Is interested in ${event.title} with you${partnerRsvpDate ? ` on ${partnerRsvpDate}` : ""}`;
-  const actionUrl = `/event/${event.id}`;
+  const actionUrl = `/event/${event.publicId}`;
 
   await createNotification(
     {
@@ -329,6 +332,7 @@ export const eventRouter = router({
       const [event] = await ctx.db
         .insert(events)
         .values({
+          publicId: generateNanoId(),
           title: input.title,
           city: input.city,
           state: input.state,
@@ -520,6 +524,7 @@ export const eventRouter = router({
       const [series] = await ctx.db
         .insert(eventSeries)
         .values({
+          publicId: generateNanoId(),
           title: input.title,
           description: input.description ?? null,
           // Never persist a temporary key. It is promoted once the permanent
@@ -547,7 +552,7 @@ export const eventRouter = router({
           organizerId: input.organizerId ?? null,
           createdByUserId: ctx.auth.userId,
         })
-        .returning({ id: eventSeries.id });
+        .returning({ id: eventSeries.id, publicId: eventSeries.publicId });
 
       if (!series) {
         throw new TRPCError({
@@ -616,8 +621,10 @@ export const eventRouter = router({
 
       return {
         seriesId: series.id,
+        seriesPublicId: series.publicId,
         createdEvents: generated.createdEvents,
         firstEventId: generated.firstCreatedEventId,
+        firstEventPublicId: generated.firstCreatedEventPublicId,
       };
     }),
 
@@ -680,10 +687,12 @@ export const eventRouter = router({
     }),
 
   getEventSeriesById: protectedProcedure
-    .input(z.object({ seriesId: z.string().uuid() }))
+    .input(z.object({ seriesId: publicOrUuidSchema }))
     .query(async ({ ctx, input }) => {
       const series = await ctx.db.query.eventSeries.findFirst({
-        where: eq(eventSeries.id, input.seriesId),
+        where: isPublicId(input.seriesId)
+          ? eq(eventSeries.publicId, input.seriesId)
+          : eq(eventSeries.id, input.seriesId),
         with: {
           venue: true,
           organizer: true,
@@ -1229,6 +1238,7 @@ export const eventRouter = router({
           eventKey: toEventKey(event),
           categoryKeys,
           data: {
+            publicId: generateNanoId(),
             title: event.title,
             description: event.description ?? null,
             coverImageUrl: event.coverImageUrl ?? null,
@@ -1805,10 +1815,12 @@ export const eventRouter = router({
     }),
 
   getEventById: publicProcedure
-    .input(z.object({ eventId: z.string().uuid() }))
+    .input(z.object({ eventId: publicOrUuidSchema }))
     .query(async ({ ctx, input }) => {
       const event = await ctx.db.query.events.findFirst({
-        where: eq(events.id, input.eventId),
+        where: isPublicId(input.eventId)
+          ? eq(events.publicId, input.eventId)
+          : eq(events.id, input.eventId),
         with: {
           venue: true,
           organizer: true,
@@ -1840,7 +1852,7 @@ export const eventRouter = router({
       if (ctx.auth.userId) {
         userRsvp = await ctx.db.query.eventRsvps.findFirst({
           where: and(
-            eq(eventRsvps.eventId, input.eventId),
+            eq(eventRsvps.eventId, event.id),
             eq(eventRsvps.userId, ctx.auth.userId)
           ),
         });

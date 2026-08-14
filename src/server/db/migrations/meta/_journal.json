@@ -361,6 +361,12 @@
       "when": 1786550400000,
       "tag": "0058_normalize_user_and_place_image_keys",
       "breakpoints": true
+    },
+    {
+      "idx": 60,
+      "when": 1786719745000,
+      "tag": "0059_add_event_public_ids",
+      "breakpoints": true
     }
   ]
 }

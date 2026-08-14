@@ -440,6 +440,7 @@ export const placeRouter = router({
         where: and(eventCondition, gte(events.startAt, now)),
         orderBy: [asc(events.startAt)],
         with: {
+          series: true,
           venue: true,
           organizer: true,
           createdBy: true,
@@ -456,6 +457,7 @@ export const placeRouter = router({
         orderBy: [desc(events.startAt)],
         limit: 12,
         with: {
+          series: true,
           venue: true,
           organizer: true,
           createdBy: true,

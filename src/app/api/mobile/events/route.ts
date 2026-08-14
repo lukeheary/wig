@@ -17,6 +17,7 @@ import {
 } from "drizzle-orm";
 import { z } from "zod";
 import { db } from "@/server/db";
+import { generateNanoId } from "@/lib/nano-id";
 import {
   cities,
   eventReviews,
@@ -134,7 +135,9 @@ function startOfDayInTimeZone(date: Date, timeZone: string) {
     return fallback;
   }
 
-  const naiveUtcMidnight = new Date(Date.UTC(parts.year, parts.month - 1, parts.day));
+  const naiveUtcMidnight = new Date(
+    Date.UTC(parts.year, parts.month - 1, parts.day)
+  );
   const offset = getTimeZoneOffsetMs(naiveUtcMidnight, timeZone) ?? 0;
 
   return new Date(naiveUtcMidnight.getTime() - offset);
@@ -299,6 +302,7 @@ export async function GET(request: Request) {
     orderBy: [asc(events.startAt)],
     limit,
     with: {
+      series: true,
       venue: true,
       organizer: true,
       categoryLinks: {
@@ -352,6 +356,7 @@ export async function GET(request: Request) {
           ),
           orderBy: [desc(events.updatedAt), desc(events.createdAt)],
           with: {
+            series: true,
             venue: true,
             organizer: true,
             categoryLinks: {
@@ -380,26 +385,27 @@ export async function GET(request: Request) {
         .filter((placeID): placeID is string => Boolean(placeID))
     )
   );
-  const [followerCounts, memberCounts] = relatedPlaceIds.length > 0
-    ? await Promise.all([
-        db
-          .select({
-            placeId: placeFollows.placeId,
-            count: sql<number>`count(*)::int`,
-          })
-          .from(placeFollows)
-          .where(inArray(placeFollows.placeId, relatedPlaceIds))
-          .groupBy(placeFollows.placeId),
-        db
-          .select({
-            placeId: placeMembers.placeId,
-            count: sql<number>`count(*)::int`,
-          })
-          .from(placeMembers)
-          .where(inArray(placeMembers.placeId, relatedPlaceIds))
-          .groupBy(placeMembers.placeId),
-      ])
-    : [[], []];
+  const [followerCounts, memberCounts] =
+    relatedPlaceIds.length > 0
+      ? await Promise.all([
+          db
+            .select({
+              placeId: placeFollows.placeId,
+              count: sql<number>`count(*)::int`,
+            })
+            .from(placeFollows)
+            .where(inArray(placeFollows.placeId, relatedPlaceIds))
+            .groupBy(placeFollows.placeId),
+          db
+            .select({
+              placeId: placeMembers.placeId,
+              count: sql<number>`count(*)::int`,
+            })
+            .from(placeMembers)
+            .where(inArray(placeMembers.placeId, relatedPlaceIds))
+            .groupBy(placeMembers.placeId),
+        ])
+      : [[], []];
   const followerCountByPlaceId = new Map(
     followerCounts.map((row) => [row.placeId, row.count])
   );
@@ -432,25 +438,26 @@ export async function GET(request: Request) {
       notGoingReason: string | null;
     }
   >();
-  const currentUserReviewMap = new Map<string, (typeof eventReviews.$inferSelect)>();
+  const currentUserReviewMap = new Map<
+    string,
+    typeof eventReviews.$inferSelect
+  >();
 
-  const addSocialRsvp = (
-    rsvp: {
-      eventId: string;
-      userId: string;
-      status: "going" | "interested" | "not_going";
-      user: {
-        id: string;
-        firstName: string | null;
-        lastName: string | null;
-        avatarImageUrl: string | null;
-        isCurrentUser: boolean;
-        isFriend: boolean;
-      };
+  const addSocialRsvp = (rsvp: {
+    eventId: string;
+    userId: string;
+    status: "going" | "interested" | "not_going";
+    user: {
+      id: string;
+      firstName: string | null;
+      lastName: string | null;
+      avatarImageUrl: string | null;
       isCurrentUser: boolean;
       isFriend: boolean;
-    }
-  ) => {
+    };
+    isCurrentUser: boolean;
+    isFriend: boolean;
+  }) => {
     if (!socialRsvpsMap.has(rsvp.eventId)) {
       socialRsvpsMap.set(rsvp.eventId, []);
     }
@@ -480,46 +487,46 @@ export async function GET(request: Request) {
       currentUserReviews,
       mirroredPartnerRsvps,
       friendConnections,
-    ] =
-      await Promise.all([
-        db.query.eventRsvps.findMany({
-          where: and(
-            inArray(eventRsvps.eventId, eventIds),
-            eq(eventRsvps.userId, userId)
+    ] = await Promise.all([
+      db.query.eventRsvps.findMany({
+        where: and(
+          inArray(eventRsvps.eventId, eventIds),
+          eq(eventRsvps.userId, userId)
+        ),
+        with: {
+          user: true,
+        },
+      }),
+      db.query.eventReviews.findMany({
+        where: and(
+          inArray(eventReviews.eventId, eventIds),
+          eq(eventReviews.userId, userId),
+          isNotNull(eventReviews.rating)
+        ),
+      }),
+      db.query.eventRsvps.findMany({
+        where: and(
+          inArray(eventRsvps.eventId, eventIds),
+          eq(eventRsvps.partnerRsvpByUserId, userId),
+          inArray(eventRsvps.status, ["going", "interested", "not_going"])
+        ),
+        with: {
+          user: true,
+        },
+      }),
+      db.query.userFriends.findMany({
+        where: and(
+          or(
+            eq(userFriends.userId, userId),
+            eq(userFriends.friendUserId, userId)
           ),
-          with: {
-            user: true,
-          },
-        }),
-        db.query.eventReviews.findMany({
-          where: and(
-            inArray(eventReviews.eventId, eventIds),
-            eq(eventReviews.userId, userId),
-            isNotNull(eventReviews.rating)
-          ),
-        }),
-        db.query.eventRsvps.findMany({
-          where: and(
-            inArray(eventRsvps.eventId, eventIds),
-            eq(eventRsvps.partnerRsvpByUserId, userId),
-            inArray(eventRsvps.status, ["going", "interested", "not_going"])
-          ),
-          with: {
-            user: true,
-          },
-        }),
-        db.query.userFriends.findMany({
-          where: and(
-            or(eq(userFriends.userId, userId), eq(userFriends.friendUserId, userId)),
-            eq(userFriends.status, "accepted")
-          ),
-        }),
-      ]);
+          eq(userFriends.status, "accepted")
+        ),
+      }),
+    ]);
 
     const friendIds = friendConnections.map((friendship) =>
-      friendship.userId === userId
-        ? friendship.friendUserId
-        : friendship.userId
+      friendship.userId === userId ? friendship.friendUserId : friendship.userId
     );
     const friendIdSet = new Set(friendIds);
 
@@ -553,7 +560,12 @@ export async function GET(request: Request) {
       ...mirroredPartnerRsvps,
       ...friendRsvps,
     ]) {
-      if (!rsvp.user || (rsvp.status !== "going" && rsvp.status !== "interested" && rsvp.status !== "not_going")) {
+      if (
+        !rsvp.user ||
+        (rsvp.status !== "going" &&
+          rsvp.status !== "interested" &&
+          rsvp.status !== "not_going")
+      ) {
         continue;
       }
 
@@ -588,11 +600,13 @@ export async function GET(request: Request) {
 
     return {
       id: mapped.id,
+      publicId: mapped.publicId,
       title: mapped.title,
       description: mapped.description,
       coverImageUrl: mapped.coverImageUrl,
       eventUrl: mapped.eventUrl,
       seriesId: mapped.seriesId,
+      seriesPublicId: event.series?.publicId ?? null,
       startAt: mapped.startAt,
       endAt: mapped.endAt,
       address: mapped.address,
@@ -622,17 +636,19 @@ export async function GET(request: Request) {
         (mapped.venueId ? followedPlaceIds.has(mapped.venueId) : false) ||
         (mapped.organizerId ? followedPlaceIds.has(mapped.organizerId) : false),
       venueFollowerCount: mapped.venueId
-        ? followerCountByPlaceId.get(mapped.venueId) ?? 0
+        ? (followerCountByPlaceId.get(mapped.venueId) ?? 0)
         : 0,
       venueMemberCount: mapped.venueId
-        ? memberCountByPlaceId.get(mapped.venueId) ?? 0
+        ? (memberCountByPlaceId.get(mapped.venueId) ?? 0)
         : 0,
-      venueIsFollowed: mapped.venueId ? followedPlaceIds.has(mapped.venueId) : false,
+      venueIsFollowed: mapped.venueId
+        ? followedPlaceIds.has(mapped.venueId)
+        : false,
       organizerFollowerCount: mapped.organizerId
-        ? followerCountByPlaceId.get(mapped.organizerId) ?? 0
+        ? (followerCountByPlaceId.get(mapped.organizerId) ?? 0)
         : 0,
       organizerMemberCount: mapped.organizerId
-        ? memberCountByPlaceId.get(mapped.organizerId) ?? 0
+        ? (memberCountByPlaceId.get(mapped.organizerId) ?? 0)
         : 0,
       organizerIsFollowed: mapped.organizerId
         ? followedPlaceIds.has(mapped.organizerId)
@@ -647,7 +663,9 @@ export async function GET(request: Request) {
       friendsInterested: socialRsvps.filter(
         (rsvp) => rsvp.status === "interested"
       ),
-      friendsNotGoing: socialRsvps.filter((rsvp) => rsvp.status === "not_going"),
+      friendsNotGoing: socialRsvps.filter(
+        (rsvp) => rsvp.status === "not_going"
+      ),
     };
   });
 
@@ -704,9 +722,7 @@ export async function POST(request: Request) {
     const cleanedAddress = body.address?.trim() || null;
     const cleanedEventUrl = body.eventUrl?.trim() || null;
     const resolvedTimeZone =
-      body.timeZone?.trim() ||
-      eventTimeZone(undefined, cleanedState) ||
-      null;
+      body.timeZone?.trim() || eventTimeZone(undefined, cleanedState) || null;
 
     if (!isPreview) {
       const permissions = await resolveMobileEventEditPermissions(userId);
@@ -734,13 +750,18 @@ export async function POST(request: Request) {
       }
     }
 
-    const validCategories = await filterExistingCategoryKeys(db, body.categories, {
-      activeOnly: true,
-    });
+    const validCategories = await filterExistingCategoryKeys(
+      db,
+      body.categories,
+      {
+        activeOnly: true,
+      }
+    );
 
     const [event] = await db
       .insert(events)
       .values({
+        publicId: generateNanoId(),
         title: cleanedTitle,
         city: cleanedCity,
         state: cleanedState,
@@ -757,7 +778,7 @@ export async function POST(request: Request) {
         eventUrl: cleanedEventUrl,
         timeZone: resolvedTimeZone,
       } as any)
-      .returning({ id: events.id });
+      .returning({ id: events.id, publicId: events.publicId });
 
     if (!event) {
       return NextResponse.json(
@@ -782,7 +803,7 @@ export async function POST(request: Request) {
       },
     });
 
-    return NextResponse.json({ id: event.id });
+    return NextResponse.json({ id: event.id, publicId: event.publicId });
   } catch (error) {
     if (error instanceof z.ZodError) {
       return NextResponse.json({ error: "Invalid request" }, { status: 400 });

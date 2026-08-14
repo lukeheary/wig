@@ -17,6 +17,7 @@ import {
   userActivity,
 } from "./schema";
 import { inArray } from "drizzle-orm";
+import { generateNanoId } from "@/lib/nano-id";
 
 neonConfig.webSocketConstructor = ws;
 
@@ -334,7 +335,9 @@ async function main() {
       .from(categories)
       .where(inArray(categories.key, allPlaceCategoryKeys));
 
-    const categoryIdByKey = new Map(categoryRows.map((row) => [row.key, row.id]));
+    const categoryIdByKey = new Map(
+      categoryRows.map((row) => [row.key, row.id])
+    );
 
     const placeCategoryRows = placeData.flatMap((place) => {
       const placeId = placeIdBySlug.get(place.slug);
@@ -354,7 +357,10 @@ async function main() {
     });
 
     if (placeCategoryRows.length > 0) {
-      await db.insert(placeCategories).values(placeCategoryRows).onConflictDoNothing();
+      await db
+        .insert(placeCategories)
+        .values(placeCategoryRows)
+        .onConflictDoNothing();
     }
   }
 
@@ -374,9 +380,21 @@ async function main() {
   await db
     .insert(placeMembers)
     .values([
-      { userId: u3, placeId: placeIdBySlug.get("bijou-boston")!, role: "manager" },
-      { userId: u2, placeId: placeIdBySlug.get("elsewhere-brooklyn")!, role: "promoter" },
-      { userId: u4, placeId: placeIdBySlug.get("good-room-brooklyn")!, role: "staff" },
+      {
+        userId: u3,
+        placeId: placeIdBySlug.get("bijou-boston")!,
+        role: "manager",
+      },
+      {
+        userId: u2,
+        placeId: placeIdBySlug.get("elsewhere-brooklyn")!,
+        role: "promoter",
+      },
+      {
+        userId: u4,
+        placeId: placeIdBySlug.get("good-room-brooklyn")!,
+        role: "staff",
+      },
     ])
     .onConflictDoNothing();
 
@@ -384,10 +402,26 @@ async function main() {
   await db
     .insert(placeMembers)
     .values([
-      { userId: u1, placeId: placeIdBySlug.get("neon-nights-collective")!, role: "owner" },
-      { userId: u2, placeId: placeIdBySlug.get("midnight-moves")!, role: "manager" },
-      { userId: u3, placeId: placeIdBySlug.get("afterhours-society")!, role: "promoter" },
-      { userId: u4, placeId: placeIdBySlug.get("rooftop-rituals")!, role: "staff" },
+      {
+        userId: u1,
+        placeId: placeIdBySlug.get("neon-nights-collective")!,
+        role: "owner",
+      },
+      {
+        userId: u2,
+        placeId: placeIdBySlug.get("midnight-moves")!,
+        role: "manager",
+      },
+      {
+        userId: u3,
+        placeId: placeIdBySlug.get("afterhours-society")!,
+        role: "promoter",
+      },
+      {
+        userId: u4,
+        placeId: placeIdBySlug.get("rooftop-rituals")!,
+        role: "staff",
+      },
     ])
     .onConflictDoNothing();
 
@@ -711,7 +745,12 @@ async function main() {
 
   const createdEvents = await db
     .insert(events)
-    .values(eventData.map(({ categoryKeys: _categoryKeys, ...event }) => event) as any)
+    .values(
+      eventData.map(({ categoryKeys: _categoryKeys, ...event }) => ({
+        ...event,
+        publicId: generateNanoId(),
+      })) as any
+    )
     .onConflictDoNothing()
     .returning();
 
@@ -731,7 +770,9 @@ async function main() {
       .from(categories)
       .where(inArray(categories.key, allEventCategoryKeys));
 
-    const categoryIdByKey = new Map(categoryRows.map((row) => [row.key, row.id]));
+    const categoryIdByKey = new Map(
+      categoryRows.map((row) => [row.key, row.id])
+    );
 
     const toEventKey = (event: {
       title: string;
@@ -763,7 +804,10 @@ async function main() {
     });
 
     if (eventCategoryRows.length > 0) {
-      await db.insert(eventCategories).values(eventCategoryRows).onConflictDoNothing();
+      await db
+        .insert(eventCategories)
+        .values(eventCategoryRows)
+        .onConflictDoNothing();
     }
   }
 

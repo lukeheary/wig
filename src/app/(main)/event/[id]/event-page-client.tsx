@@ -117,13 +117,12 @@ export default function EventPage() {
   const router = useRouter();
   const searchParams = useSearchParams();
   const { isSignedIn, userId } = useAuth();
-  const eventId = params.id as string;
+  const eventPublicId = params.id as string;
   const { toast } = useToast();
   const utils = trpc.useUtils();
   const [isImageModalOpen, setIsImageModalOpen] = useState(false);
   const [isShareCopied, setIsShareCopied] = useState(false);
   const returnTo = searchParams.get("returnTo");
-  const editHref = withReturnTo(`/event/${eventId}/edit`, returnTo);
   const signInHref = withReturnTo(
     "/sign-in",
     buildReturnTo(pathname, searchParams)
@@ -137,13 +136,19 @@ export default function EventPage() {
 
   // Fetch event data
   const { data: event, isLoading } = trpc.event.getEventById.useQuery({
-    eventId,
+    eventId: eventPublicId,
   });
+  const eventId = event?.id;
+  const editHref = withReturnTo(
+    `/event/${event?.publicId ?? eventPublicId}/edit`,
+    returnTo
+  );
 
   // Fetch attendees
-  const { data: attendees } = trpc.event.listEventAttendees.useQuery({
-    eventId,
-  });
+  const { data: attendees } = trpc.event.listEventAttendees.useQuery(
+    { eventId: eventId ?? "00000000-0000-0000-0000-000000000000" },
+    { enabled: Boolean(eventId) }
+  );
   const { data: activeCategories } = trpc.category.listActive.useQuery();
   const categoryLabelMap = useMemo(
     () =>
@@ -324,6 +329,7 @@ export default function EventPage() {
       router.push(unauthedRsvpHref);
       return;
     }
+    if (!eventId) return;
 
     // If clicking the same status button again, remove the RSVP
     if (event?.userRsvp?.status === status) {
@@ -403,6 +409,7 @@ export default function EventPage() {
       router.push(unauthedRsvpHref);
       return;
     }
+    if (!eventId) return;
 
     void triggerHaptic(HapticPreset.Warning);
     sendGoogleAnalyticsEvent("event_rsvp_changed", userId, {
@@ -422,6 +429,7 @@ export default function EventPage() {
   };
 
   const handlePartnerToggle = () => {
+    if (!eventId) return;
     if (currentRsvpStatus !== "going" && currentRsvpStatus !== "interested") {
       return;
     }
@@ -440,7 +448,7 @@ export default function EventPage() {
     try {
       if (!navigator.clipboard?.writeText) return;
 
-      const eventUrl = `${window.location.origin}/event/${eventId}`;
+      const eventUrl = `${window.location.origin}/event/${event?.publicId ?? eventPublicId}`;
       await navigator.clipboard.writeText(eventUrl);
       void triggerHaptic(HapticPreset.Light);
       setIsShareCopied(true);
@@ -718,6 +726,7 @@ export default function EventPage() {
             }
             disabled={isRsvpPending}
             onCheckedChange={(checked) => {
+              if (!eventId) return;
               if (currentRsvpStatus === "not_going") {
                 setCantGoIncludePartner(checked);
                 rsvpMutation.mutate({

@@ -47,18 +47,18 @@ import { resolveBackHref, withReturnTo } from "@/lib/navigation";
 export default function EditEventPage() {
   const params = useParams();
   const searchParams = useSearchParams();
-  const eventId = params.id as string;
+  const eventPublicId = params.id as string;
   const router = useRouter();
   const { toast } = useToast();
   const utils = trpc.useUtils();
   const returnTo = searchParams.get("returnTo");
-  const eventDetailHref = withReturnTo(`/event/${eventId}`, returnTo);
+  const eventDetailHref = withReturnTo(`/event/${eventPublicId}`, returnTo);
   const afterDeleteHref = resolveBackHref({ returnTo, fallbackHref: "/home" });
 
   // Fetch event data
   const { data: event, isLoading: eventLoading } =
     trpc.event.getEventById.useQuery({
-      eventId,
+      eventId: eventPublicId,
     });
 
   // Check if user is admin
@@ -145,7 +145,7 @@ export default function EditEventPage() {
   const updateMutation = trpc.event.updateEvent.useMutation({
     onSuccess: async () => {
       await Promise.all([
-        utils.event.getEventById.invalidate({ eventId }),
+        utils.event.getEventById.invalidate({ eventId: eventPublicId }),
         utils.event.listEventsByRange.invalidate(),
         utils.event.getRecentlyAddedEvents.invalidate(),
       ]);
@@ -182,7 +182,7 @@ export default function EditEventPage() {
       });
 
       void Promise.all([
-        utils.event.getEventById.invalidate({ eventId }),
+        utils.event.getEventById.invalidate({ eventId: eventPublicId }),
         utils.event.listEventsByRange.invalidate(),
         utils.event.getRecentlyAddedEvents.invalidate(),
       ]);
@@ -247,6 +247,8 @@ export default function EditEventPage() {
 
   const handleSubmit = (e: React.FormEvent) => {
     e.preventDefault();
+    if (!event) return;
+    const internalEventId = event.id;
 
     if (
       !formData.title ||
@@ -308,7 +310,7 @@ export default function EditEventPage() {
       }
 
       updateMutation.mutate({
-        eventId,
+        eventId: internalEventId,
         title: formData.title,
         description: formData.description || undefined,
         eventUrl: formData.eventUrl || undefined,
@@ -334,7 +336,7 @@ export default function EditEventPage() {
 
   const handleDelete = () => {
     setIsDeleteDialogOpen(false);
-    deleteMutation.mutate({ eventId });
+    if (event) deleteMutation.mutate({ eventId: event.id });
   };
 
   if (eventLoading) {
@@ -420,7 +422,7 @@ export default function EditEventPage() {
             <div className="space-y-2 pt-6">
               <Label htmlFor="image">Event Image</Label>
               <S3Uploader
-                folder={`events/${eventId}/cover-images`}
+                folder={`events/${event.id}/cover-images`}
                 fileName="cover-image.jpg"
                 currentImageUrl={formData.coverImageUrl || undefined}
                 onUploadComplete={(url) =>

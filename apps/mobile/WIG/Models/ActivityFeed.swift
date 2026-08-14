@@ -82,6 +82,7 @@ enum UserGender: String, Codable, CaseIterable, Hashable, Sendable {
 
 struct ActivityEventSummary: Decodable, Identifiable, Hashable, Sendable {
     let id: UUID
+    let publicID: String
     let title: String
     let description: String?
     let coverImageURL: URL?
@@ -114,6 +115,7 @@ struct ActivityEventSummary: Decodable, Identifiable, Hashable, Sendable {
 
     enum CodingKeys: String, CodingKey {
         case id
+        case publicID = "publicId"
         case title
         case description
         case coverImageURL = "coverImageUrl"
@@ -156,6 +158,7 @@ struct ActivityEventSummary: Decodable, Identifiable, Hashable, Sendable {
     var eventFeedItem: EventFeedItem {
         EventFeedItem(
             id: id,
+            publicID: publicID,
             title: title,
             description: description,
             coverImageURL: coverImageURL,
@@ -215,6 +218,7 @@ extension ActivityEventSummary {
         let container = try decoder.container(keyedBy: CodingKeys.self)
 
         id = try container.decode(UUID.self, forKey: .id)
+        publicID = try container.decode(String.self, forKey: .publicID)
         title = try container.decode(String.self, forKey: .title)
         description = try container.decodeIfPresent(String.self, forKey: .description)
         coverImageURL = try container.decodeOptionalURL(forKey: .coverImageURL)

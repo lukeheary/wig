@@ -538,7 +538,7 @@ function HomePageContent() {
                                 onClick={() => {
                                   const returnTo = `${window.location.pathname}${window.location.search}`;
                                   window.location.href = withReturnTo(
-                                    `/event/${event.id}`,
+                                    `/event/${event.publicId}`,
                                     returnTo
                                   );
                                 }}

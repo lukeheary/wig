@@ -1721,7 +1721,7 @@ struct HomeView: View {
                         onOpenEvent: {
                             do {
                                 pendingPostEventDetail = try await apiClient.send(
-                                    APIClient.mobileEventDetail(eventID: event.id)
+                                    APIClient.mobileEventDetail(eventPublicID: event.publicID)
                                 )
                             } catch {
                                 return
@@ -2283,7 +2283,7 @@ private struct LatestFromFollowsCard: View {
     private func refreshSocialEvent() async {
         do {
             let event = try await apiClient.send(
-                APIClient.mobileEventDetail(eventID: update.event.id)
+                APIClient.mobileEventDetail(eventPublicID: update.event.publicID)
             )
             guard !Task.isCancelled else { return }
             refreshedSocialEvent = event

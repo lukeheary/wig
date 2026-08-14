@@ -455,6 +455,7 @@ export async function GET() {
 
     return {
       id: mapped.id,
+      publicId: mapped.publicId,
       title: mapped.title,
       description: mapped.description,
       coverImageUrl: mapped.coverImageUrl,

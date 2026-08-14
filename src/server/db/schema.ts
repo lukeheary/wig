@@ -704,19 +704,16 @@ export const placeHomeHides = pgTable(
   })
 );
 
-export const placeHomeHidesRelations = relations(
-  placeHomeHides,
-  ({ one }) => ({
-    user: one(users, {
-      fields: [placeHomeHides.userId],
-      references: [users.id],
-    }),
-    place: one(places, {
-      fields: [placeHomeHides.placeId],
-      references: [places.id],
-    }),
-  })
-);
+export const placeHomeHidesRelations = relations(placeHomeHides, ({ one }) => ({
+  user: one(users, {
+    fields: [placeHomeHides.userId],
+    references: [users.id],
+  }),
+  place: one(places, {
+    fields: [placeHomeHides.placeId],
+    references: [places.id],
+  }),
+}));
 
 // ============================================================================
 // EVENT SERIES TABLE
@@ -725,6 +722,7 @@ export const eventSeries = pgTable(
   "event_series",
   {
     id: uuid("id").defaultRandom().primaryKey(),
+    publicId: varchar("public_id", { length: 20 }).notNull().unique(),
     venueId: uuid("venue_id").references(() => places.id, {
       onDelete: "set null",
     }),
@@ -792,6 +790,7 @@ export const events = pgTable(
   "events",
   {
     id: uuid("id").defaultRandom().primaryKey(),
+    publicId: varchar("public_id", { length: 20 }).notNull().unique(),
     venueId: uuid("venue_id").references(() => places.id, {
       onDelete: "set null",
     }),

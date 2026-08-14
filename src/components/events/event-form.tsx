@@ -520,7 +520,7 @@ export function EventForm({
             setIsSubmittingImage(false);
           }
         }
-        onSuccess?.(createdSeries.firstEventId ?? undefined);
+        onSuccess?.(createdSeries.firstEventPublicId ?? undefined);
         return;
       }
 
@@ -551,7 +551,7 @@ export function EventForm({
         }
       }
 
-      onSuccess?.(createdEvent.id);
+      onSuccess?.(createdEvent.publicId);
     } catch {
       // Mutation-specific toasts are handled in each mutation's onError callback.
     } finally {

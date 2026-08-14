@@ -46,7 +46,7 @@ const ORDINAL_LABELS = ["First", "Second", "Third", "Fourth", "Fifth"];
 export default function EditEventSeriesPage() {
   const params = useParams();
   const searchParams = useSearchParams();
-  const seriesId = params.id as string;
+  const seriesPublicId = params.id as string;
   const router = useRouter();
   const { toast } = useToast();
   const utils = trpc.useUtils();
@@ -54,13 +54,13 @@ export default function EditEventSeriesPage() {
   const backHref = resolveBackHref({ returnTo, fallbackHref: "/home" });
 
   const { data: series, isLoading } = trpc.event.getEventSeriesById.useQuery({
-    seriesId,
+    seriesId: seriesPublicId,
   });
 
   const updateSeriesMutation = trpc.event.updateEventSeries.useMutation({
     onSuccess: async (data) => {
       await Promise.all([
-        utils.event.getEventSeriesById.invalidate({ seriesId }),
+        utils.event.getEventSeriesById.invalidate({ seriesId: seriesPublicId }),
         utils.place.getPlaceBySlug.invalidate(),
       ]);
       toast({
@@ -84,7 +84,7 @@ export default function EditEventSeriesPage() {
   const deleteSeriesMutation = trpc.event.deleteEventSeries.useMutation({
     onSuccess: async (data) => {
       await Promise.all([
-        utils.event.getEventSeriesById.invalidate({ seriesId }),
+        utils.event.getEventSeriesById.invalidate({ seriesId: seriesPublicId }),
         utils.place.getPlaceBySlug.invalidate(),
       ]);
       toast({
@@ -283,6 +283,7 @@ export default function EditEventSeriesPage() {
 
   const handleSubmit = (e: React.FormEvent) => {
     e.preventDefault();
+    if (!series) return;
 
     if (
       !formData.title ||
@@ -335,7 +336,7 @@ export default function EditEventSeriesPage() {
     }
 
     updateSeriesMutation.mutate({
-      seriesId,
+      seriesId: series.id,
       title: formData.title,
       description: formData.description || undefined,
       coverImageUrl: formData.coverImageUrl,
@@ -369,7 +370,7 @@ export default function EditEventSeriesPage() {
       "Delete this recurring series? This will permanently delete the series and all events generated from it."
     );
     if (!confirmed) return;
-    deleteSeriesMutation.mutate({ seriesId });
+    if (series) deleteSeriesMutation.mutate({ seriesId: series.id });
   };
 
   if (isLoading) {
@@ -423,7 +424,7 @@ export default function EditEventSeriesPage() {
             <div className="space-y-2">
               <Label htmlFor="image">Event Image</Label>
               <S3Uploader
-                folder={`event-series/${seriesId}/cover-images`}
+                folder={`event-series/${series.id}/cover-images`}
                 fileName="cover-image.jpg"
                 currentImageUrl={formData.coverImageUrl}
                 onUploadComplete={(url: string) =>

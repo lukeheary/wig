@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from "next/server";
 import { db } from "@/server/db";
+import { generateNanoId } from "@/lib/nano-id";
 import { scrapers, scraperLogs, events, users } from "@/server/db/schema";
 import { and, eq, isNull, ne, or } from "drizzle-orm";
 import {
@@ -68,7 +69,10 @@ async function runScraper(
     eventsAdded: { id: string; title: string; externalId: string | null }[];
   };
 }> {
-  let scrapeResult: { events: ScrapedEvent[]; errors?: { url: string; error: string }[] };
+  let scrapeResult: {
+    events: ScrapedEvent[];
+    errors?: { url: string; error: string }[];
+  };
 
   try {
     if (scraperRow.scraper === "dice") {
@@ -157,6 +161,7 @@ async function runScraper(
 
   const validScrapedValues = scrapedEvents
     .map((e) => ({
+      publicId: generateNanoId(),
       title: e.title,
       description: e.description ?? null,
       coverImageUrl: e.coverImageUrl ?? null,
@@ -376,19 +381,21 @@ async function runScraper(
   ).flat();
 
   await Promise.allSettled(
-    imageUpdates.map(async ({
-      id,
-      coverImageUrl,
-      currentCoverImageUrl,
-      currentSourceImageUrl,
-    }) => {
-      await rehostScrapedEventImage(
+    imageUpdates.map(
+      async ({
         id,
         coverImageUrl,
         currentCoverImageUrl,
-        currentSourceImageUrl
-      );
-    })
+        currentSourceImageUrl,
+      }) => {
+        await rehostScrapedEventImage(
+          id,
+          coverImageUrl,
+          currentCoverImageUrl,
+          currentSourceImageUrl
+        );
+      }
+    )
   );
 
   const eventsAddedData = upserted.map((r) => ({
@@ -522,10 +529,7 @@ export async function GET(request: NextRequest) {
     return await runAllScrapers();
   } catch (error) {
     console.error("Scraper cron failed:", error);
-    return NextResponse.json(
-      { error: "Scraper cron failed" },
-      { status: 500 }
-    );
+    return NextResponse.json({ error: "Scraper cron failed" }, { status: 500 });
   }
 }
 

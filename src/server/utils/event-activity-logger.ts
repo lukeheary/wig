@@ -40,6 +40,7 @@ export async function logEventActivity({
         where: eq(events.id, eventId),
         columns: {
           id: true,
+          publicId: true,
           title: true,
         },
       }),
@@ -93,7 +94,7 @@ export async function logEventActivity({
         entityId: event.id,
         title: "Event update",
         body: `${actorName} ${actionTextByType[type]} ${event.title}`,
-        actionUrl: `/event/${event.id}`,
+        actionUrl: `/event/${event.publicId}`,
         metadata: {
           eventActivityId: activity.id,
           eventId: event.id,

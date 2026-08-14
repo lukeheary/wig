@@ -96,7 +96,10 @@ export function ActivityItem({ activity }: ActivityItemProps) {
   const isEventStatusUpdate = EVENT_UPDATE_TYPES.has(type);
   const shouldInlineEventDate = type === "rsvp_not_going";
   const returnTo = buildReturnTo(pathname, searchParams);
-  const eventHref = withReturnTo(`/event/${entityId}`, returnTo);
+  const eventHref = withReturnTo(
+    `/event/${event?.publicId ?? entityId}`,
+    returnTo
+  );
   const placeHref =
     place?.slug && place?.type
       ? `/${place.type === "organizer" ? "organizer" : "venue"}/${place.slug}`

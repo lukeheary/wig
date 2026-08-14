@@ -104,6 +104,7 @@ export async function GET() {
     event: event
       ? {
           id: event.id,
+          publicId: event.publicId,
           title: event.title,
           coverImageUrl: event.coverImageUrl,
           startAt: event.startAt,

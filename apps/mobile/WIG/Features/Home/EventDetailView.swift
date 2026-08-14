@@ -277,7 +277,7 @@ struct EventDetailView: View {
             )
         }
         .sheet(item: $editingSeriesRoute) { route in
-            EventSeriesEditSheet(seriesID: route.id)
+            EventSeriesEditSheet(seriesID: route.id, seriesPublicID: route.publicID)
         }
         .fullScreenCover(isPresented: $isImageViewerPresented) {
             if let posterImageURL = currentEvent.posterImageURL {
@@ -348,6 +348,7 @@ struct EventDetailView: View {
     private var reviewSheetEvent: MobileEventReviewPrompt {
         MobileEventReviewPrompt(
             id: currentEvent.id,
+            publicID: currentEvent.publicID,
             title: currentEvent.title,
             coverImageURL: currentEvent.coverImageURL,
             startAt: currentEvent.startAt,
@@ -502,7 +503,8 @@ struct EventDetailView: View {
 
     @ViewBuilder
     private var editButton: some View {
-        if let seriesID = currentEvent.seriesID {
+        if let seriesID = currentEvent.seriesID,
+           let seriesPublicID = currentEvent.seriesPublicID {
             Menu {
                 Button {
                     closeRSVPMenu()
@@ -513,7 +515,10 @@ struct EventDetailView: View {
 
                 Button {
                     closeRSVPMenu()
-                    editingSeriesRoute = EventSeriesEditRoute(id: seriesID)
+                    editingSeriesRoute = EventSeriesEditRoute(
+                        id: seriesID,
+                        publicID: seriesPublicID
+                    )
                 } label: {
                     Label("Edit Event Series", systemImage: "calendar.badge.clock")
                 }
@@ -1678,7 +1683,7 @@ struct EventDetailView: View {
     }
 
     private var shareURL: URL {
-        URL(string: "https://www.whoisgoing.com/event/\(currentEvent.id.uuidString)")!
+        URL(string: "https://www.whoisgoing.com/event/\(currentEvent.publicID)")!
     }
 
     private var relativeStartDayText: String {
@@ -1688,11 +1693,13 @@ struct EventDetailView: View {
     private func mergeUpdatedEvent(_ updatedEvent: EventFeedItem) -> EventFeedItem {
         EventFeedItem(
             id: updatedEvent.id,
+            publicID: updatedEvent.publicID,
             title: updatedEvent.title,
             description: updatedEvent.description,
             coverImageURL: updatedEvent.coverImageURL,
             eventURL: updatedEvent.eventURL,
             seriesID: updatedEvent.seriesID ?? currentEvent.seriesID,
+            seriesPublicID: updatedEvent.seriesPublicID ?? currentEvent.seriesPublicID,
             startAt: updatedEvent.startAt,
             endAt: updatedEvent.endAt,
             address: updatedEvent.address,
@@ -2816,10 +2823,12 @@ private extension View {
 
 private struct EventSeriesEditRoute: Identifiable {
     let id: UUID
+    let publicID: String
 }
 
 struct EventSeriesEditSheet: View {
     let seriesID: UUID
+    let seriesPublicID: String
     var onSeriesUpdated: (() -> Void)? = nil
 
     @Environment(\.apiClient) private var apiClient
@@ -2870,7 +2879,7 @@ struct EventSeriesEditSheet: View {
 
         do {
             let series = try await apiClient.send(
-                APIClient.mobileEventSeriesDetail(seriesID: seriesID)
+                APIClient.mobileEventSeriesDetail(seriesPublicID: seriesPublicID)
             )
             state = .loaded(series)
         } catch {

@@ -22,6 +22,7 @@ import {
   uploadImageFromUrl,
 } from "@/lib/s3";
 import { withStoredImageReplacements } from "@/server/utils/stored-image-lifecycle";
+import { isPublicId, publicOrUuidSchema } from "@/lib/public-id";
 
 const mobileUpdateEventSeriesSchema = z.object({
   venueId: z.string().uuid().nullable().optional(),
@@ -105,6 +106,7 @@ function mapMobileEventSeries(series: any) {
 
   return {
     id: mapped.id,
+    publicId: mapped.publicId,
     title: mapped.title,
     description: mapped.description,
     coverImageUrl: mapped.coverImageUrl,
@@ -141,6 +143,7 @@ export async function GET(
 ) {
   try {
     const { id } = await context.params;
+    const seriesIdentifier = publicOrUuidSchema.parse(id);
     const { userId, isPreview } = await currentMobileUserContext();
 
     if (!userId) {
@@ -148,7 +151,9 @@ export async function GET(
     }
 
     const series = await db.query.eventSeries.findFirst({
-      where: eq(eventSeries.id, id),
+      where: isPublicId(seriesIdentifier)
+        ? eq(eventSeries.publicId, seriesIdentifier)
+        : eq(eventSeries.id, seriesIdentifier),
       with: {
         venue: true,
         organizer: true,

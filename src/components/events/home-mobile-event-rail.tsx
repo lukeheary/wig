@@ -299,7 +299,7 @@ function MobileRailScroller({
 }
 
 function HomeMiniEventCard({ event }: { event: EventCardItem }) {
-  const { eventHref, handleClick } = useEventCardLink(event.id);
+  const { eventHref, handleClick } = useEventCardLink(event.publicId);
   const dayOfWeek = formatEventDate(event.startAt, event.timeZone, event.state, {
     weekday: "short",
   });

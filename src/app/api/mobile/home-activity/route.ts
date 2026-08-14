@@ -512,6 +512,7 @@ export async function GET(request: Request) {
       updatedAt: activity.updatedAt,
       event: {
         id: event.id,
+        publicId: event.publicId,
         title: event.title,
         description: event.description,
         coverImageUrl: event.coverImageUrl,

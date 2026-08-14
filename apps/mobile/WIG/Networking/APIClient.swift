@@ -556,9 +556,9 @@ struct APIClient: Sendable {
         )
     }
 
-    static func mobileEventSeriesDetail(seriesID: UUID) -> Endpoint<MobileEventSeriesDetail> {
+    static func mobileEventSeriesDetail(seriesPublicID: String) -> Endpoint<MobileEventSeriesDetail> {
         Endpoint(
-            path: "/api/mobile/event-series/\(seriesID.uuidString)",
+            path: "/api/mobile/event-series/\(seriesPublicID)",
             requiresAuthentication: false,
             includesAuthenticationIfAvailable: true
         )
@@ -985,9 +985,9 @@ struct APIClient: Sendable {
         )
     }
 
-    static func mobileEventDetail(eventID: UUID) -> Endpoint<EventFeedItem> {
+    static func mobileEventDetail(eventPublicID: String) -> Endpoint<EventFeedItem> {
         Endpoint(
-            path: "/api/mobile/events/\(eventID.uuidString)",
+            path: "/api/mobile/events/\(eventPublicID)",
             requiresAuthentication: false,
             includesAuthenticationIfAvailable: true
         )
@@ -1338,11 +1338,17 @@ struct MobilePlaceMembersResponse: Decodable, Sendable {
 
 struct PlaceEventSeriesSummary: Decodable, Identifiable, Sendable {
     let id: UUID
+    let publicID: String
     let title: String
     let frequency: MobileEventSeriesFrequency
     let interval: Int
     let daysOfWeek: [Int]?
     let startAt: Date
+
+    enum CodingKeys: String, CodingKey {
+        case id, title, frequency, interval, daysOfWeek, startAt
+        case publicID = "publicId"
+    }
 
     var recurrenceLabel: String {
         switch frequency {
@@ -1370,9 +1376,6 @@ struct PlaceEventSeriesSummary: Decodable, Identifiable, Sendable {
         }
     }
 
-    enum CodingKeys: String, CodingKey {
-        case id, title, frequency, interval, daysOfWeek, startAt
-    }
 }
 
 struct MobilePlaceEventSeriesResponse: Decodable, Sendable {

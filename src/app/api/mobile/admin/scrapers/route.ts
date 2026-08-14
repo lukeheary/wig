@@ -7,6 +7,7 @@ import { scrapeDice } from "@/app/api/scrape-dice/route";
 import { scrapePosh } from "@/app/api/scrape-posh/route";
 import { scrapeTicketmaster } from "@/app/api/scrape-ticketmaster/route";
 import { db } from "@/server/db";
+import { generateNanoId } from "@/lib/nano-id";
 import { events, places, scrapers, users } from "@/server/db/schema";
 import { EVENT_STATUS_VALUES } from "@/lib/event-status";
 import {
@@ -87,12 +88,16 @@ async function currentMobileUserContext() {
 async function assertMobileAdmin() {
   const { userId } = await currentMobileUserContext();
   if (!userId) {
-    return { error: NextResponse.json({ error: "Unauthorized" }, { status: 401 }) };
+    return {
+      error: NextResponse.json({ error: "Unauthorized" }, { status: 401 }),
+    };
   }
 
   const permissions = await resolveMobileEventEditPermissions(userId);
   if (!permissions.isAdmin) {
-    return { error: NextResponse.json({ error: "Forbidden" }, { status: 403 }) };
+    return {
+      error: NextResponse.json({ error: "Forbidden" }, { status: 403 }),
+    };
   }
 
   return { userId };
@@ -248,7 +253,9 @@ async function runSelectedScraper(
     result = await scrapePosh(urls, prefetchedGroups);
   } else {
     if (!row.place.state) {
-      throw new Error("Ticketmaster scrapers require the linked venue to have a 2-letter state code.");
+      throw new Error(
+        "Ticketmaster scrapers require the linked venue to have a 2-letter state code."
+      );
     }
 
     result = await scrapeTicketmaster({
@@ -259,7 +266,11 @@ async function runSelectedScraper(
   }
 
   let venueMatches: Array<any> = [];
-  if (row.place.type === "organizer" && Array.isArray(result.events) && result.events.length > 0) {
+  if (
+    row.place.type === "organizer" &&
+    Array.isArray(result.events) &&
+    result.events.length > 0
+  ) {
     const venuePlaces = await db
       .select({
         id: places.id,
@@ -354,13 +365,14 @@ export async function GET(request: Request) {
   });
 
   const normalizedSearch = search?.toLowerCase() ?? "";
-  const filteredRows = normalizedSearch.length === 0
-    ? rows
-    : rows.filter(
-        (row) =>
-          row.searchString.toLowerCase().includes(normalizedSearch) ||
-          row.place.name.toLowerCase().includes(normalizedSearch)
-      );
+  const filteredRows =
+    normalizedSearch.length === 0
+      ? rows
+      : rows.filter(
+          (row) =>
+            row.searchString.toLowerCase().includes(normalizedSearch) ||
+            row.place.name.toLowerCase().includes(normalizedSearch)
+        );
 
   return NextResponse.json({
     scrapers: filteredRows.map((row) => ({
@@ -398,7 +410,8 @@ export async function POST(request: Request) {
     );
     return NextResponse.json(result);
   } catch (error) {
-    const message = error instanceof Error ? error.message : "Failed to run scraper";
+    const message =
+      error instanceof Error ? error.message : "Failed to run scraper";
     return NextResponse.json({ error: message }, { status: 400 });
   }
 }
@@ -425,8 +438,9 @@ export async function PATCH(request: Request) {
 
     // Repair WIG rows that Posh no longer includes in current scrape results.
     // This only updates images; it never inserts an event.
-    const existingScraperImageRepair =
-      await rehostExistingScrapedEventImages([row.scraper]);
+    const existingScraperImageRepair = await rehostExistingScrapedEventImages([
+      row.scraper,
+    ]);
 
     if (body.events.length === 0) {
       return NextResponse.json({
@@ -584,8 +598,7 @@ export async function PATCH(request: Request) {
 
     dedupedEvents = dedupedEvents.filter((event) => {
       return (
-        row.scraper !== "posh" ||
-        event.startAtDate.getTime() >= importStartedAt
+        row.scraper !== "posh" || event.startAtDate.getTime() >= importStartedAt
       );
     });
 
@@ -596,7 +609,9 @@ export async function PATCH(request: Request) {
     const validBatchCategoryKeys = new Set(
       await filterExistingCategoryKeys(
         db,
-        Array.from(new Set(dedupedEvents.flatMap((event) => event.categories ?? []))),
+        Array.from(
+          new Set(dedupedEvents.flatMap((event) => event.categories ?? []))
+        ),
         { activeOnly: true }
       )
     );
@@ -617,6 +632,7 @@ export async function PATCH(request: Request) {
         }),
         categoryKeys,
         data: {
+          publicId: generateNanoId(),
           title: event.title,
           description: event.description ?? null,
           coverImageUrl: event.coverImageUrl ?? null,
@@ -633,7 +649,8 @@ export async function PATCH(request: Request) {
           visibility: event.visibility,
           status: event.status,
           createdByUserId: userId,
-          venueId: row.place.type === "venue" ? row.placeId : event.venueId ?? null,
+          venueId:
+            row.place.type === "venue" ? row.placeId : (event.venueId ?? null),
           organizerId: row.place.type === "organizer" ? row.placeId : null,
         },
       };
@@ -735,7 +752,8 @@ export async function PATCH(request: Request) {
     if (error instanceof z.ZodError) {
       return NextResponse.json({ error: "Invalid request" }, { status: 400 });
     }
-    const message = error instanceof Error ? error.message : "Failed to import events";
+    const message =
+      error instanceof Error ? error.message : "Failed to import events";
     return NextResponse.json({ error: message }, { status: 500 });
   }
 }
