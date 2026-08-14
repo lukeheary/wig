@@ -37,6 +37,7 @@ interface ScrapedEvent {
   startAt: string;
   endAt: string | null;
   venueName?: string;
+  address?: string | null;
   city: string;
   state: string;
   categories: string[];
@@ -191,7 +192,34 @@ async function runScraper(
       );
     });
 
-    return matches.length === 1 ? matches[0].id : null;
+    if (matches.length === 1) return matches[0].id;
+    if (matches.length > 1) return null;
+
+    if (
+      !event.address ||
+      normalizeVenueName(event.venueName) !== normalizeVenueName(event.address)
+    ) {
+      return null;
+    }
+
+    const organizerName = normalizeVenueName(scraperRow.place.name);
+    const organizerAliasMatches = organizerVenues.filter((place) => {
+      if (
+        event.state &&
+        place.state &&
+        normalizeVenueName(event.state) !== normalizeVenueName(place.state)
+      ) {
+        return false;
+      }
+
+      return place.aliases.some(
+        (alias) => normalizeVenueName(alias) === organizerName
+      );
+    });
+
+    return organizerAliasMatches.length === 1
+      ? organizerAliasMatches[0].id
+      : null;
   };
 
   // Collect all category keys for batch validation

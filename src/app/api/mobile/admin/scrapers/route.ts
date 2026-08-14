@@ -307,10 +307,34 @@ async function runSelectedScraper(
 
       const bestMatch = scoredMatches[0];
       const secondMatch = scoredMatches[1];
-      return bestMatch &&
+      if (bestMatch &&
         bestMatch.score >= 900 &&
-        (!secondMatch || secondMatch.score < bestMatch.score)
-        ? bestMatch.place
+        (!secondMatch || secondMatch.score < bestMatch.score)) {
+        return bestMatch.place;
+      }
+
+      // Some Posh groups report only a street address for their primary
+      // events. In that case, use the organizer's name as a venue alias while
+      // still preferring any explicit event-venue match above.
+      if (
+        !event.address ||
+        normalizeMatchText(event.venueName) !== normalizeMatchText(event.address)
+      ) {
+        return null;
+      }
+      const organizerName = normalizeMatchText(row.place.name);
+      const organizerAliasMatches = venuePlaces.filter(
+        (place) =>
+          (!event.state ||
+            !place.state ||
+            normalizeMatchText(event.state) === normalizeMatchText(place.state)) &&
+          place.aliases.some(
+            (alias) => normalizeMatchText(alias) === organizerName
+          )
+      );
+
+      return organizerAliasMatches.length === 1
+        ? organizerAliasMatches[0]
         : null;
     });
   }
@@ -503,8 +527,32 @@ export async function PATCH(request: Request) {
         const best = matches[0];
         const second = matches[1];
 
-        return best && (!second || second.score < best.score)
-          ? { ...event, venueId: best.place.id }
+        if (best && (!second || second.score < best.score)) {
+          return { ...event, venueId: best.place.id };
+        }
+
+        if (
+          !event.address ||
+          normalizeMatchText(event.venueName) !==
+            normalizeMatchText(event.address)
+        ) {
+          return event;
+        }
+
+        const organizerName = normalizeMatchText(row.place.name);
+        const organizerAliasMatches = venuePlaces.filter(
+          (place) =>
+            (!event.state ||
+              !place.state ||
+              normalizeMatchText(event.state) ===
+                normalizeMatchText(place.state)) &&
+            place.aliases.some(
+              (alias) => normalizeMatchText(alias) === organizerName
+            )
+        );
+
+        return organizerAliasMatches.length === 1
+          ? { ...event, venueId: organizerAliasMatches[0].id }
           : event;
       });
     }
