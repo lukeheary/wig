@@ -459,6 +459,7 @@ export const places = pgTable(
     type: placeTypeEnum("type").notNull(), // 'venue' or 'organizer'
     slug: varchar("slug", { length: 100 }).notNull().unique(),
     name: varchar("name", { length: 255 }).notNull(),
+    aliases: text("aliases").array().notNull().default([]),
     description: text("description"),
     logoImageUrl: storedImage("logo_image_url"),
     coverImageUrl: storedImage("banner_image_url"), // Optional banner image for place profile

@@ -144,6 +144,7 @@ function scoreScrapedVenueMatch(
   place: {
     id: string;
     name: string;
+    aliases: string[];
     city: string | null;
     state: string | null;
     address: string | null;
@@ -152,6 +153,9 @@ function scoreScrapedVenueMatch(
 ) {
   const scrapedName = normalizeMatchText(scraped.venueName);
   const placeName = normalizeMatchText(place.name);
+  const aliasMatch = place.aliases.some(
+    (alias) => normalizeMatchText(alias) === scrapedName
+  );
 
   if (!scrapedName || !placeName) {
     return -1;
@@ -185,7 +189,7 @@ function scoreScrapedVenueMatch(
   const scrapedCore = stripLocationWords(scrapedName);
   const placeCore = stripLocationWords(placeName);
 
-  let score = -1;
+  let score = aliasMatch ? 1000 : -1;
 
   if (scrapedName === placeName) {
     score = 1000;
@@ -275,6 +279,7 @@ async function runSelectedScraper(
       .select({
         id: places.id,
         name: places.name,
+        aliases: places.aliases,
         city: places.city,
         state: places.state,
         address: places.address,

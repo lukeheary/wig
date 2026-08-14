@@ -621,6 +621,7 @@ struct APIClient: Sendable {
     static func mobileCreatePlace(
         type: PlaceListItem.PlaceType,
         name: String,
+        aliases: [String] = [],
         description: String? = nil,
         logoImageURL: URL? = nil,
         address: String? = nil,
@@ -634,6 +635,7 @@ struct APIClient: Sendable {
         let request = MobilePlaceCreateRequest(
             type: type.rawValue,
             name: name,
+            aliases: aliases,
             description: description,
             logoImageUrl: logoImageURL?.absoluteString,
             address: address,
@@ -682,6 +684,7 @@ struct APIClient: Sendable {
         slug: String,
         type: PlaceListItem.PlaceType,
         name: String,
+        aliases: [String] = [],
         description: String? = nil,
         logoImageURL: URL? = nil,
         keepExistingLogo: Bool = true,
@@ -697,6 +700,7 @@ struct APIClient: Sendable {
         let request = MobilePlaceUpdateRequest(
             type: type.rawValue,
             name: name,
+            aliases: aliases,
             description: description,
             logoImageUrl: logoImageURL?.absoluteString,
             keepExistingLogo: keepExistingLogo,
@@ -1730,6 +1734,7 @@ struct MobileEventSeriesRecurrenceRequest: Encodable, Hashable, Sendable {
 private struct MobilePlaceCreateRequest: Encodable {
     let type: String
     let name: String
+    let aliases: [String]
     let description: String?
     let logoImageUrl: String?
     let address: String?
@@ -1744,6 +1749,7 @@ private struct MobilePlaceCreateRequest: Encodable {
 private struct MobilePlaceUpdateRequest: Encodable {
     let type: String
     let name: String
+    let aliases: [String]
     let description: String?
     let logoImageUrl: String?
     let keepExistingLogo: Bool

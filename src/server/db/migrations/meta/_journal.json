@@ -367,6 +367,12 @@
       "when": 1786719745000,
       "tag": "0059_add_event_public_ids",
       "breakpoints": true
+    },
+    {
+      "idx": 61,
+      "when": 1786744800000,
+      "tag": "0060_add_place_aliases",
+      "breakpoints": true
     }
   ]
 }

@@ -47,6 +47,7 @@ const mobileUpdatePlaceSchema = z
   .object({
     type: z.enum(["venue", "organizer"]),
     name: z.string().trim().min(1).max(255),
+    aliases: z.array(z.string().trim().min(1).max(255)).max(25).optional().default([]),
     description: z.string().trim().nullable().optional(),
     logoImageUrl: z.string().url().nullable().optional(),
     keepExistingLogo: z.boolean().optional().default(true),
@@ -469,6 +470,7 @@ export async function GET(
     type: mappedPlace.type,
     slug: mappedPlace.slug,
     name: mappedPlace.name,
+    aliases: place.aliases,
     description: mappedPlace.description,
     logoImageUrl: mappedPlace.logoImageUrl,
     coverImageUrl: mappedPlace.coverImageUrl,
@@ -557,6 +559,7 @@ export async function PATCH(
           .set({
             type: body.type,
             name: body.name.trim(),
+            aliases: body.type === "venue" ? body.aliases : [],
             description: body.description?.trim() || null,
             logoImageUrl: nextLogoImageUrl,
             address:

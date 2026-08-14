@@ -21,6 +21,7 @@ struct MobilePlaceCreationView: View {
     @State private var didRemoveExistingLogo = false
     @State private var selectedGooglePlaceName: String?
     @State private var name = ""
+    @State private var aliasesText = ""
     @State private var descriptionText = ""
     @State private var address = ""
     @State private var city = ""
@@ -49,6 +50,7 @@ struct MobilePlaceCreationView: View {
 
         if case .edit(let place) = mode {
             _name = State(initialValue: place.name)
+            _aliasesText = State(initialValue: place.aliases.joined(separator: "\n"))
             _descriptionText = State(initialValue: place.description ?? "")
             _address = State(initialValue: place.address ?? "")
             _city = State(initialValue: place.city ?? "")
@@ -97,6 +99,9 @@ struct MobilePlaceCreationView: View {
                     locationSection
                 }
                 categoriesSection
+                if isVenue {
+                    venueAliasesSection
+                }
                 if showsScrapersSection {
                     placeScrapersSection
                 }
@@ -176,6 +181,18 @@ struct MobilePlaceCreationView: View {
 
     private var isVenue: Bool {
         type == .venue
+    }
+
+    private var venueAliasesSection: some View {
+        Section("Alternate Venue Names") {
+            TextField("One alternate name per line", text: $aliasesText, axis: .vertical)
+                .lineLimit(2...6)
+                .textInputAutocapitalization(.words)
+
+            Text("Scraped events using one of these names will be linked to this venue.")
+                .font(.footnote)
+                .foregroundStyle(.secondary)
+        }
     }
 
     private var showsScrapersSection: Bool {
@@ -620,6 +637,10 @@ struct MobilePlaceCreationView: View {
         }
 
         do {
+            let aliases = aliasesText
+                .components(separatedBy: .newlines)
+                .map { $0.trimmingCharacters(in: .whitespacesAndNewlines) }
+                .filter { !$0.isEmpty }
             let savedPlace: MobilePlaceCreateResponse
             switch mode {
             case .create:
@@ -627,6 +648,7 @@ struct MobilePlaceCreationView: View {
                     APIClient.mobileCreatePlace(
                         type: type,
                         name: trimmedName,
+                        aliases: aliases,
                         description: trimmedDescription.isEmpty ? nil : trimmedDescription,
                         logoImageURL: nil,
                         address: isVenue && !trimmedAddress.isEmpty ? trimmedAddress : nil,
@@ -662,6 +684,7 @@ struct MobilePlaceCreationView: View {
                         slug: place.slug,
                         type: type,
                         name: trimmedName,
+                        aliases: aliases,
                         description: trimmedDescription.isEmpty ? nil : trimmedDescription,
                         logoImageURL: uploadedLogoURL,
                         keepExistingLogo: selectedLogoImage == nil && !didRemoveExistingLogo,

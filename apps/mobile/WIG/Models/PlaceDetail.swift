@@ -5,6 +5,7 @@ struct PlaceDetail: Decodable, Identifiable, Hashable, Sendable {
     let type: PlaceListItem.PlaceType
     let slug: String
     let name: String
+    let aliases: [String]
     let description: String?
     let logoImageURL: URL?
     let coverImageURL: URL?
@@ -31,6 +32,7 @@ struct PlaceDetail: Decodable, Identifiable, Hashable, Sendable {
         case type
         case slug
         case name
+        case aliases
         case description
         case logoImageURL = "logoImageUrl"
         case coverImageURL = "coverImageUrl"
@@ -121,6 +123,7 @@ extension PlaceDetail {
             type: listItem.type,
             slug: listItem.slug,
             name: listItem.name,
+            aliases: [],
             description: nil,
             logoImageURL: listItem.logoImageURL,
             coverImageURL: nil,
@@ -150,6 +153,7 @@ extension PlaceDetail {
         type = try container.decode(PlaceListItem.PlaceType.self, forKey: .type)
         slug = try container.decode(String.self, forKey: .slug)
         name = try container.decode(String.self, forKey: .name)
+        aliases = try container.decodeIfPresent([String].self, forKey: .aliases) ?? []
         description = try container.decodeIfPresent(String.self, forKey: .description)
         logoImageURL = try container.decodeOptionalURL(forKey: .logoImageURL)
         coverImageURL = try container.decodeOptionalURL(forKey: .coverImageURL)

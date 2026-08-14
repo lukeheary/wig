@@ -51,6 +51,7 @@ const mobileCreatePlaceSchema = z
   .object({
     type: z.enum(["venue", "organizer"]),
     name: z.string().trim().min(1).max(255),
+    aliases: z.array(z.string().trim().min(1).max(255)).max(25).optional().default([]),
     description: z.string().trim().optional(),
     logoImageUrl: z.string().url().optional(),
     address: z.string().trim().optional(),
@@ -382,6 +383,7 @@ export async function POST(request: Request) {
         type: body.type,
         slug,
         name: cleanedName,
+        aliases: body.type === "venue" ? body.aliases : [],
         description: cleanedDescription,
         logoImageUrl: cleanedLogoImageUrl,
         address: body.type == "venue" ? cleanedAddress : null,
