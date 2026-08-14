@@ -1,7 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import { db } from "@/server/db";
 import { generateNanoId } from "@/lib/nano-id";
-import { scrapers, scraperLogs, events, users } from "@/server/db/schema";
+import { scrapers, scraperLogs, events, places, users } from "@/server/db/schema";
 import { and, eq, isNull, ne, or } from "drizzle-orm";
 import {
   filterExistingCategoryKeys,
@@ -36,6 +36,7 @@ interface ScrapedEvent {
   externalId: string | null;
   startAt: string;
   endAt: string | null;
+  venueName?: string;
   city: string;
   state: string;
   categories: string[];
@@ -151,6 +152,48 @@ async function runScraper(
   const organizerId =
     scraperRow.place.type === "organizer" ? scraperRow.placeId : undefined;
 
+  const normalizeVenueName = (value: string | null | undefined) =>
+    (value ?? "")
+      .toLowerCase()
+      .replace(/&/g, " and ")
+      .replace(/[^a-z0-9]+/g, " ")
+      .replace(/\s+/g, " ")
+      .trim();
+
+  const organizerVenues = organizerId
+    ? await db
+        .select({
+          id: places.id,
+          name: places.name,
+          aliases: places.aliases,
+          city: places.city,
+          state: places.state,
+        })
+        .from(places)
+        .where(eq(places.type, "venue"))
+    : [];
+
+  const resolveOrganizerVenueId = (event: ScrapedEvent) => {
+    const scrapedName = normalizeVenueName(event.venueName);
+    if (!scrapedName) return null;
+
+    const matches = organizerVenues.filter((place) => {
+      if (
+        event.state &&
+        place.state &&
+        normalizeVenueName(event.state) !== normalizeVenueName(place.state)
+      ) {
+        return false;
+      }
+
+      return [place.name, ...place.aliases].some(
+        (name) => normalizeVenueName(name) === scrapedName
+      );
+    });
+
+    return matches.length === 1 ? matches[0].id : null;
+  };
+
   // Collect all category keys for batch validation
   const allCategoryKeys = Array.from(
     new Set(scrapedEvents.flatMap((e) => e.categories ?? []))
@@ -172,7 +215,7 @@ async function runScraper(
       endAt: e.endAt ? new Date(e.endAt) : null,
       city: e.city || scraperRow.place.city || "",
       state: e.state || scraperRow.place.state || "",
-      venueId: venueId ?? null,
+      venueId: venueId ?? resolveOrganizerVenueId(e),
       organizerId: organizerId ?? null,
       visibility: "public" as const,
       status: "active" as const,
@@ -251,11 +294,11 @@ async function runScraper(
           ne(events.state, value.state),
         ];
 
-        if (venueId) {
-          updates.venueId = venueId;
+        if (value.venueId) {
+          updates.venueId = value.venueId;
           locationMismatchConditions.push(
             isNull(events.venueId),
-            ne(events.venueId, venueId)
+            ne(events.venueId, value.venueId)
           );
         }
 
@@ -274,7 +317,7 @@ async function runScraper(
 
   // If an event already existed, still enrich it with a venue/organizer link
   // when the scraper now knows that relationship and the stored row does not.
-  if (venueId || organizerId) {
+  if (venueId || organizerId || insertValues.some((value) => value.venueId)) {
     const linkableEvents = insertValues.filter(
       (value) => value.source && value.externalId
     );
@@ -287,8 +330,8 @@ async function runScraper(
         }> = {};
         const missingLinkConditions = [];
 
-        if (venueId) {
-          updates.venueId = venueId;
+        if (value.venueId) {
+          updates.venueId = value.venueId;
           missingLinkConditions.push(isNull(events.venueId));
         }
 

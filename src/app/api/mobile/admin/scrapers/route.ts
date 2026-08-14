@@ -467,12 +467,47 @@ export async function PATCH(request: Request) {
         ? `${event.source}::${event.externalId}`
         : `${event.title}::${event.startAt.toISOString()}::${event.city}::${event.state}`;
 
-    const parsedEvents = body.events.map((event) => ({
+    let parsedEvents = body.events.map((event) => ({
       ...event,
       startAtDate: new Date(event.startAt),
       endAtDate: event.endAt ? new Date(event.endAt) : undefined,
       normalizedState: event.state.trim().toUpperCase(),
     }));
+
+    // Resolve organizer-event venues on the server as well as in the preview.
+    // This makes imports reliable even when an older client omits venueId.
+    if (row.place.type === "organizer") {
+      const venuePlaces = await db
+        .select({
+          id: places.id,
+          name: places.name,
+          aliases: places.aliases,
+          city: places.city,
+          state: places.state,
+          address: places.address,
+          website: places.website,
+        })
+        .from(places)
+        .where(eq(places.type, "venue"));
+
+      parsedEvents = parsedEvents.map((event) => {
+        if (event.venueId || !event.venueName.trim()) return event;
+
+        const matches = venuePlaces
+          .map((place) => ({
+            place,
+            score: scoreScrapedVenueMatch(event, place),
+          }))
+          .filter(({ score }) => score >= 900)
+          .sort((a, b) => b.score - a.score);
+        const best = matches[0];
+        const second = matches[1];
+
+        return best && (!second || second.score < best.score)
+          ? { ...event, venueId: best.place.id }
+          : event;
+      });
+    }
 
     let dedupedEvents = parsedEvents;
     const existingEventsByKey = new Map<
@@ -480,6 +515,7 @@ export async function PATCH(request: Request) {
       {
         id: string;
         address: string | null;
+        venueId: string | null;
         coverImageUrl: string | null;
         sourceImageUrl: string | null;
       }
@@ -509,6 +545,7 @@ export async function PATCH(request: Request) {
             source: true,
             externalId: true,
             address: true,
+            venueId: true,
             coverImageUrl: true,
             sourceImageUrl: true,
           },
@@ -521,6 +558,7 @@ export async function PATCH(request: Request) {
             existingEventsByKey.set(key, {
               id: existingEvent.id,
               address: existingEvent.address,
+              venueId: existingEvent.venueId,
               coverImageUrl: existingEvent.coverImageUrl,
               sourceImageUrl: existingEvent.sourceImageUrl,
             });
@@ -552,26 +590,29 @@ export async function PATCH(request: Request) {
       if (!body.overrideExisting) {
         await Promise.all(
           parsedEvents.map(async (event) => {
-            if (!event.source || !event.externalId || !event.address?.trim()) {
-              return;
-            }
+            if (!event.source || !event.externalId) return;
 
             const existing = existingEventsByKey.get(
               `${event.source}::${event.externalId}`
             );
-            if (!existing || existing.address?.trim()) {
-              return;
-            }
+            if (!existing) return;
+
+            const shouldFillAddress =
+              Boolean(event.address?.trim()) && !existing.address?.trim();
+            const shouldFillVenue = Boolean(event.venueId) && !existing.venueId;
+            if (!shouldFillAddress && !shouldFillVenue) return;
 
             await db
               .update(events)
               .set({
-                address: event.address.trim(),
+                ...(shouldFillAddress
+                  ? { address: event.address!.trim() }
+                  : {}),
                 city: event.city,
                 state: event.normalizedState,
                 ...(row.place.type === "venue"
                   ? { venueId: row.placeId }
-                  : event.venueId
+                  : shouldFillVenue
                     ? { venueId: event.venueId }
                     : {}),
                 ...(row.place.type === "organizer"
