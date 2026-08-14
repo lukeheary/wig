@@ -12,24 +12,12 @@ export type SocialUser = {
   rsvpStatus: "going" | "interested";
 };
 
-function toVersionToken(value: Date | string | null | undefined) {
-  if (!value) return null;
-  const date = value instanceof Date ? value : new Date(value);
-  const time = date.getTime();
-  return Number.isNaN(time) ? null : String(time);
-}
-
+/** @deprecated Immutable image keys no longer need query-string versions. */
 export function withImageVersion(
   imageUrl: string | null | undefined,
-  updatedAt?: Date | string | null
+  _updatedAt?: Date | string | null
 ) {
-  if (!imageUrl) return null;
-
-  const version = toVersionToken(updatedAt);
-  if (!version) return imageUrl;
-
-  const separator = imageUrl.includes("?") ? "&" : "?";
-  return `${imageUrl}${separator}v=${version}`;
+  return imageUrl ?? null;
 }
 
 export function getSocialUsers(event: EventCardItem): SocialUser[] {
@@ -52,7 +40,7 @@ export function getSocialUsers(event: EventCardItem): SocialUser[] {
 
 export function getEventImageUrl(event: EventCardItem) {
   return (
-    withImageVersion(event.coverImageUrl, event.updatedAt) ||
+    event.coverImageUrl ||
     event.venue?.logoImageUrl ||
     event.organizer?.logoImageUrl ||
     null

@@ -9,6 +9,7 @@ import {
   isPendingStorageUrl,
   uploadImageFromUrl,
 } from "@/lib/s3";
+import { withStoredImageReplacements } from "@/server/utils/stored-image-lifecycle";
 
 async function currentMobileUserContext() {
   const { userId } = await auth();
@@ -79,8 +80,8 @@ export async function POST(
     const finalCoverImageUrl = isPendingStorageUrl(coverImageUrl)
       ? await uploadImageFromUrl(
           coverImageUrl,
-          `event-series/${seriesId}`,
-          "cover-image.png"
+          `event-series/${seriesId}/cover-images`,
+          "cover-image.jpg"
         )
       : coverImageUrl;
     const inheritedImageCondition =
@@ -92,26 +93,29 @@ export async function POST(
           );
     const updatedAt = new Date();
 
-    const [updatedSeries] = await db
-      .update(eventSeries)
-      .set({ coverImageUrl: finalCoverImageUrl, updatedAt })
-      .where(eq(eventSeries.id, seriesId))
-      .returning({
-        id: eventSeries.id,
-        coverImageUrl: eventSeries.coverImageUrl,
-      });
+    const updatedSeries = await withStoredImageReplacements({
+      db,
+      replacements: [
+        { oldUrl: series.coverImageUrl, newUrl: finalCoverImageUrl },
+      ],
+      persist: async () => {
+        const [updated] = await db
+          .update(eventSeries)
+          .set({ coverImageUrl: finalCoverImageUrl, updatedAt })
+          .where(eq(eventSeries.id, seriesId))
+          .returning({
+            id: eventSeries.id,
+            coverImageUrl: eventSeries.coverImageUrl,
+          });
+        if (!updated) throw new Error("Failed to update event series cover");
 
-    if (!updatedSeries) {
-      return NextResponse.json(
-        { error: "Failed to update event series cover image" },
-        { status: 500 }
-      );
-    }
-
-    await db
-      .update(events)
-      .set({ coverImageUrl: finalCoverImageUrl, updatedAt })
-      .where(and(eq(events.seriesId, seriesId), inheritedImageCondition));
+        await db
+          .update(events)
+          .set({ coverImageUrl: finalCoverImageUrl, updatedAt })
+          .where(and(eq(events.seriesId, seriesId), inheritedImageCondition));
+        return updated;
+      },
+    });
 
     if (isPendingStorageUrl(coverImageUrl)) {
       await deleteFromS3(coverImageUrl).catch(() => undefined);

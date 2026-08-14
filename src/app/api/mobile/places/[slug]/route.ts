@@ -1,6 +1,17 @@
 import { auth } from "@clerk/nextjs/server";
 import { NextResponse } from "next/server";
-import { and, asc, desc, eq, gte, inArray, isNotNull, lt, or, sql } from "drizzle-orm";
+import {
+  and,
+  asc,
+  desc,
+  eq,
+  gte,
+  inArray,
+  isNotNull,
+  lt,
+  or,
+  sql,
+} from "drizzle-orm";
 import { z } from "zod";
 import { db } from "@/server/db";
 import {
@@ -30,6 +41,7 @@ import {
   INSTAGRAM_HANDLE_REGEX,
 } from "@/lib/place-identifiers";
 import { goingRsvpCountsForEventIds } from "@/app/api/mobile/event-rsvp-counts";
+import { withStoredImageReplacements } from "@/server/utils/stored-image-lifecycle";
 
 const mobileUpdatePlaceSchema = z
   .object({
@@ -156,7 +168,9 @@ function mapMobileEvent(
     currentUserReview: currentUserReview ?? null,
     goingCount,
     friendsGoing: socialRsvps.filter((rsvp) => rsvp.status === "going"),
-    friendsInterested: socialRsvps.filter((rsvp) => rsvp.status === "interested"),
+    friendsInterested: socialRsvps.filter(
+      (rsvp) => rsvp.status === "interested"
+    ),
     friendsNotGoing: socialRsvps.filter((rsvp) => rsvp.status === "not_going"),
   };
 }
@@ -229,9 +243,8 @@ export async function GET(
   const mappedPlace = mapPlaceCategoryData(place);
   const { userId: authenticatedUserId } = await auth();
   const userId = authenticatedUserId ?? (await previewMobileUserId());
-  const editPermissions = await resolveMobileEventEditPermissions(
-    authenticatedUserId
-  );
+  const editPermissions =
+    await resolveMobileEventEditPermissions(authenticatedUserId);
   const canManagePlace =
     editPermissions.isAdmin || editPermissions.manageablePlaceIds.has(place.id);
   const allEvents = [...upcomingEvents, ...pastEvents];
@@ -294,23 +307,21 @@ export async function GET(
         )
       : new Map();
 
-  const addSocialRsvp = (
-    rsvp: {
-      eventId: string;
-      userId: string;
-      status: "going" | "interested" | "not_going";
-      user: {
-        id: string;
-        firstName: string | null;
-        lastName: string | null;
-        avatarImageUrl: string | null;
-        isCurrentUser: boolean;
-        isFriend: boolean;
-      };
+  const addSocialRsvp = (rsvp: {
+    eventId: string;
+    userId: string;
+    status: "going" | "interested" | "not_going";
+    user: {
+      id: string;
+      firstName: string | null;
+      lastName: string | null;
+      avatarImageUrl: string | null;
       isCurrentUser: boolean;
       isFriend: boolean;
-    }
-  ) => {
+    };
+    isCurrentUser: boolean;
+    isFriend: boolean;
+  }) => {
     if (!socialRsvpsMap.has(rsvp.eventId)) {
       socialRsvpsMap.set(rsvp.eventId, []);
     }
@@ -358,16 +369,17 @@ export async function GET(
         }),
         db.query.userFriends.findMany({
           where: and(
-            or(eq(userFriends.userId, userId), eq(userFriends.friendUserId, userId)),
+            or(
+              eq(userFriends.userId, userId),
+              eq(userFriends.friendUserId, userId)
+            ),
             eq(userFriends.status, "accepted")
           ),
         }),
       ]);
 
     const friendIds = friendConnections.map((friendship) =>
-      friendship.userId === userId
-        ? friendship.friendUserId
-        : friendship.userId
+      friendship.userId === userId ? friendship.friendUserId : friendship.userId
     );
     const friendIdSet = new Set(friendIds);
 
@@ -390,7 +402,12 @@ export async function GET(
       ...mirroredPartnerRsvps,
       ...friendRsvps,
     ]) {
-      if (!rsvp.user || (rsvp.status !== "going" && rsvp.status !== "interested" && rsvp.status !== "not_going")) {
+      if (
+        !rsvp.user ||
+        (rsvp.status !== "going" &&
+          rsvp.status !== "interested" &&
+          rsvp.status !== "not_going")
+      ) {
         continue;
       }
 
@@ -412,38 +429,39 @@ export async function GET(
     }
   }
 
-  const [followerCountResult, memberCountResult, follow, homeHide] = await Promise.all([
-    db
-      .select({ count: sql<number>`count(*)::int` })
-      .from(placeFollows)
-      .where(eq(placeFollows.placeId, place.id)),
-    db
-      .select({ count: sql<number>`count(*)::int` })
-      .from(placeMembers)
-      .where(eq(placeMembers.placeId, place.id)),
-    userId
-      ? db.query.placeFollows.findFirst({
-          where: and(
-            eq(placeFollows.userId, userId),
-            eq(placeFollows.placeId, place.id)
-          ),
-          columns: {
-            id: true,
-          },
-        })
-      : Promise.resolve(null),
-    authenticatedUserId
-      ? db.query.placeHomeHides.findFirst({
-          where: and(
-            eq(placeHomeHides.userId, authenticatedUserId),
-            eq(placeHomeHides.placeId, place.id)
-          ),
-          columns: {
-            id: true,
-          },
-        })
-      : Promise.resolve(null),
-  ]);
+  const [followerCountResult, memberCountResult, follow, homeHide] =
+    await Promise.all([
+      db
+        .select({ count: sql<number>`count(*)::int` })
+        .from(placeFollows)
+        .where(eq(placeFollows.placeId, place.id)),
+      db
+        .select({ count: sql<number>`count(*)::int` })
+        .from(placeMembers)
+        .where(eq(placeMembers.placeId, place.id)),
+      userId
+        ? db.query.placeFollows.findFirst({
+            where: and(
+              eq(placeFollows.userId, userId),
+              eq(placeFollows.placeId, place.id)
+            ),
+            columns: {
+              id: true,
+            },
+          })
+        : Promise.resolve(null),
+      authenticatedUserId
+        ? db.query.placeHomeHides.findFirst({
+            where: and(
+              eq(placeHomeHides.userId, authenticatedUserId),
+              eq(placeHomeHides.placeId, place.id)
+            ),
+            columns: {
+              id: true,
+            },
+          })
+        : Promise.resolve(null),
+    ]);
 
   return NextResponse.json({
     id: mappedPlace.id,
@@ -518,29 +536,42 @@ export async function PATCH(
     }
 
     const body = mobileUpdatePlaceSchema.parse(await request.json());
-    const validCategories = await filterExistingCategoryKeys(db, body.categories, {
-      activeOnly: true,
-    });
+    const validCategories = await filterExistingCategoryKeys(
+      db,
+      body.categories,
+      {
+        activeOnly: true,
+      }
+    );
 
-    await db
-      .update(places)
-      .set({
-        type: body.type,
-        name: body.name.trim(),
-        description: body.description?.trim() || null,
-        logoImageUrl: body.keepExistingLogo
-          ? place.logoImageUrl
-          : body.logoImageUrl?.trim() || null,
-        address: body.type === "venue" ? body.address?.trim() || null : null,
-        city: body.city?.trim() || null,
-        state: body.state?.trim().toUpperCase() || null,
-        website: body.website?.trim() || null,
-        instagram: body.instagram?.trim() || null,
-        hours: body.type === "venue" ? body.hours ?? null : null,
-        ...(body.isEnabled !== undefined ? { isEnabled: body.isEnabled } : {}),
-        updatedAt: new Date(),
-      })
-      .where(eq(places.id, place.id));
+    const nextLogoImageUrl = body.keepExistingLogo
+      ? place.logoImageUrl
+      : body.logoImageUrl?.trim() || null;
+    await withStoredImageReplacements({
+      db,
+      replacements: [{ oldUrl: place.logoImageUrl, newUrl: nextLogoImageUrl }],
+      persist: () =>
+        db
+          .update(places)
+          .set({
+            type: body.type,
+            name: body.name.trim(),
+            description: body.description?.trim() || null,
+            logoImageUrl: nextLogoImageUrl,
+            address:
+              body.type === "venue" ? body.address?.trim() || null : null,
+            city: body.city?.trim() || null,
+            state: body.state?.trim().toUpperCase() || null,
+            website: body.website?.trim() || null,
+            instagram: body.instagram?.trim() || null,
+            hours: body.type === "venue" ? (body.hours ?? null) : null,
+            ...(body.isEnabled !== undefined
+              ? { isEnabled: body.isEnabled }
+              : {}),
+            updatedAt: new Date(),
+          })
+          .where(eq(places.id, place.id)),
+    });
 
     await setPlaceCategoryKeys(db, place.id, validCategories, {
       activeOnly: true,

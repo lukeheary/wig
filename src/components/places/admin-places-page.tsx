@@ -59,7 +59,7 @@ export function AdminPlacesPage({ placeType }: AdminPlacesPageProps) {
   const uploadPlaceLogo = async (placeId: string, file: File) => {
     const uploadFormData = new FormData();
     uploadFormData.append("file", file);
-    uploadFormData.append("folder", `places/${placeId}`);
+    uploadFormData.append("folder", `places/${placeId}/logos`);
     uploadFormData.append("filename", "logo-image.png");
 
     const response = await fetch("/api/upload", {

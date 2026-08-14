@@ -1099,18 +1099,56 @@ struct EventDetailView: View {
 
     @ViewBuilder
     private var about: some View {
-        if let description = currentEvent.description?.trimmingCharacters(in: .whitespacesAndNewlines),
-           !description.isEmpty
-        {
+        if let description = aboutDescription {
             VStack(alignment: .leading, spacing: 14) {
                 Text("About")
                     .font(.system(size: 20, weight: .bold))
                     .foregroundStyle(.white)
 
-                Text(description)
-                    .font(.system(size: 14, weight: .medium))
+                Text(markdownDescription(description))
+                    .font(.system(size: 14, weight: .regular))
                     .foregroundStyle(.white.opacity(0.64))
+                    .tint(AppTheme.accentBlue)
                     .lineSpacing(4)
+            }
+        }
+    }
+
+    private var aboutDescription: String? {
+        guard let description = currentEvent.description?.trimmingCharacters(in: .whitespacesAndNewlines),
+              !description.isEmpty
+        else {
+            return nil
+        }
+
+        return description
+    }
+
+    private func markdownDescription(_ description: String) -> AttributedString {
+        // Markdown treats a single newline as a soft wrap. Parse each authored
+        // line independently, then append explicit newline characters so the
+        // original event-copy layout cannot be collapsed by the parser.
+        let normalizedDescription = description
+            .replacingOccurrences(of: "\r\n", with: "\n")
+            .replacingOccurrences(of: "\r", with: "\n")
+            // Some imported Posh descriptions contain a literal backslash
+            // immediately before a newline. It is an export artifact, not
+            // copy meant for attendees to see.
+            .replacingOccurrences(of: "\\\n", with: "\n")
+            .replacingOccurrences(of: "\\n", with: "\n")
+
+        let lines = normalizedDescription.components(separatedBy: "\n")
+
+        return lines.enumerated().reduce(into: AttributedString()) { rendered, line in
+            let markdownLine = (try? AttributedString(
+                markdown: line.element,
+                options: .init(interpretedSyntax: .full)
+            )) ?? AttributedString(line.element)
+
+            rendered += markdownLine
+
+            if line.offset < lines.count - 1 {
+                rendered += AttributedString("\n")
             }
         }
     }
@@ -1141,11 +1179,13 @@ struct EventDetailView: View {
                 }
                 .buttonStyle(.plain)
 
-                Rectangle()
-                    .fill(Color.white.opacity(0.08))
-                    .frame(maxWidth: .infinity)
-                    .frame(height: 1)
-                    .padding(.top, 6)
+                if aboutDescription != nil {
+                    Rectangle()
+                        .fill(Color.white.opacity(0.08))
+                        .frame(maxWidth: .infinity)
+                        .frame(height: 1)
+                        .padding(.top, 6)
+                }
             }
         }
     }
@@ -1737,35 +1777,28 @@ private struct AppleCalendarComposerView: UIViewControllerRepresentable {
 }
 
 private struct EventAttendeeSection: View {
-    let title: String
     let attendees: [EventSocialRSVP]
     let attendeeReviewRatings: [String: EventReviewRating]
 
     var body: some View {
-        VStack(alignment: .leading, spacing: 12) {
-            Text(title)
-                .font(.system(size: 20, weight: .bold))
-                .foregroundStyle(.white)
-
-            VStack(spacing: 2) {
-                ForEach(attendees, id: \.user.id) { attendee in
-                    NavigationLink(
-                        value: EventRSVPAttendeeRoute(
-                            userID: attendee.user.id,
-                            isCurrentUser: attendee.user.isCurrentUser
-                        )
-                    ) {
-                        EventAttendeeRow(
-                            attendee: attendee,
-                            reviewRating: attendeeReviewRatings[attendee.user.id]
-                        )
-                            .contentShape(Rectangle())
-                    }
-                    .buttonStyle(.plain)
+        VStack(spacing: 2) {
+            ForEach(attendees, id: \.user.id) { attendee in
+                NavigationLink(
+                    value: EventRSVPAttendeeRoute(
+                        userID: attendee.user.id,
+                        isCurrentUser: attendee.user.isCurrentUser
+                    )
+                ) {
+                    EventAttendeeRow(
+                        attendee: attendee,
+                        reviewRating: attendeeReviewRatings[attendee.user.id]
+                    )
+                        .contentShape(Rectangle())
                 }
+                .buttonStyle(.plain)
             }
-            .frame(maxWidth: .infinity, alignment: .leading)
         }
+        .frame(maxWidth: .infinity, alignment: .leading)
     }
 }
 
@@ -1994,48 +2027,49 @@ private struct EventRSVPListView: View {
     let attendeeReviewRatings: [String: EventReviewRating]
     @Environment(\.apiClient) private var apiClient
     @State private var loadedAttendeeReviewRatings = [String: EventReviewRating]()
+    @State private var selectedSection: EventRSVPListSection = .going
 
     private var reviewRatings: [String: EventReviewRating] {
         attendeeReviewRatings.merging(loadedAttendeeReviewRatings) { _, loaded in loaded }
     }
 
+    private var sections: [EventRSVPListSection] {
+        var sections: [EventRSVPListSection] = [.going, .interested]
+        if !notGoingAttendees.isEmpty {
+            sections.append(.notGoing)
+        }
+        return sections
+    }
+
     var body: some View {
         ScrollView {
             VStack(alignment: .leading, spacing: 18) {
-                if !goingAttendees.isEmpty {
-                    EventAttendeeSection(
-                        title: isPastEvent ? "Attended" : "Going",
-                        attendees: goingAttendees,
-                        attendeeReviewRatings: reviewRatings
-                    )
+                ScopePillBar {
+                    ForEach(sections, id: \.self) { section in
+                        ScopePill(
+                            title: section.title(isPastEvent: isPastEvent),
+                            count: attendees(for: section).count,
+                            isSelected: selectedSection == section
+                        ) {
+                            selectedSection = section
+                        }
+                    }
                 }
 
-                if !interestedAttendees.isEmpty {
+                let selectedAttendees = attendees(for: selectedSection)
+                if selectedAttendees.isEmpty {
+                    EventRSVPEmptyPlaceholder(
+                        message: emptyMessage(for: selectedSection)
+                    )
+                } else {
                     EventAttendeeSection(
-                        title: "Interested",
-                        attendees: interestedAttendees,
+                        attendees: selectedAttendees,
                         attendeeReviewRatings: reviewRatings
                     )
-                }
-
-                if !notGoingAttendees.isEmpty {
-                    EventAttendeeSection(
-                        title: "Can't Go",
-                        attendees: notGoingAttendees,
-                        attendeeReviewRatings: reviewRatings
-                    )
-                }
-
-                if goingAttendees.isEmpty && interestedAttendees.isEmpty && notGoingAttendees.isEmpty {
-                    Text("No RSVPs yet")
-                        .font(.system(size: 15, weight: .medium))
-                        .foregroundStyle(.white.opacity(0.58))
-                        .frame(maxWidth: .infinity, alignment: .center)
-                        .padding(.top, 24)
                 }
             }
             .padding(.horizontal, 16)
-            .padding(.top, 18)
+            .padding(.top, 14)
             .padding(.bottom, 6)
         }
         .background(AppTheme.background.ignoresSafeArea())
@@ -2055,6 +2089,68 @@ private struct EventRSVPListView: View {
             } catch {
                 loadedAttendeeReviewRatings = [:]
             }
+        }
+    }
+
+    private func attendees(for section: EventRSVPListSection) -> [EventSocialRSVP] {
+        switch section {
+        case .going: goingAttendees
+        case .interested: interestedAttendees
+        case .notGoing: notGoingAttendees
+        }
+    }
+
+    private func emptyMessage(for section: EventRSVPListSection) -> String {
+        switch section {
+        case .going: isPastEvent ? "No one attended" : "No one is going yet"
+        case .interested: "No one is interested yet"
+        case .notGoing: "No one has said they can't go"
+        }
+    }
+}
+
+private struct EventRSVPEmptyPlaceholder: View {
+    let message: String
+
+    var body: some View {
+        RoundedRectangle(cornerRadius: 20, style: .continuous)
+            .fill(Color.clear)
+            .frame(maxWidth: .infinity)
+            .frame(height: 140)
+            .overlay {
+                Text(message)
+                    .font(.system(size: 15, weight: .medium))
+                    .foregroundStyle(.white.opacity(0.58))
+                    .multilineTextAlignment(.center)
+                    .padding(.horizontal, 24)
+            }
+            .overlay {
+                RoundedRectangle(cornerRadius: 20, style: .continuous)
+                    .strokeBorder(
+                        style: StrokeStyle(
+                            lineWidth: 1,
+                            dash: [5, 5]
+                        )
+                    )
+                    .foregroundStyle(.white.opacity(0.10))
+            }
+            .background(
+                RoundedRectangle(cornerRadius: 20, style: .continuous)
+                    .fill(Color.white.opacity(0.015))
+            )
+    }
+}
+
+private enum EventRSVPListSection: Hashable {
+    case going
+    case interested
+    case notGoing
+
+    func title(isPastEvent: Bool) -> String {
+        switch self {
+        case .going: isPastEvent ? "Attended" : "Going"
+        case .interested: "Interested"
+        case .notGoing: "Can't Go"
         }
     }
 }

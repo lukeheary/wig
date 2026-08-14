@@ -71,6 +71,7 @@ import {
   SCRAPER_SOURCES,
   type ScraperSource,
 } from "@/server/utils/scraped-event-images";
+import { withStoredImageReplacements } from "@/server/utils/stored-image-lifecycle";
 
 function resolveEventUpdateActivityType(
   previousStatus: EventStatus,
@@ -345,7 +346,7 @@ export const eventRouter = router({
           coverImageUrl:
             input.coverImageUrl && isPendingStorageUrl(input.coverImageUrl)
               ? null
-              : input.coverImageUrl ?? null,
+              : (input.coverImageUrl ?? null),
           eventUrl: input.eventUrl ?? null,
           source: input.source ?? null,
           externalId: input.externalId ?? null,
@@ -364,8 +365,8 @@ export const eventRouter = router({
           const originalCoverImageUrl = input.coverImageUrl;
           const eventCoverImageUrl = await uploadImageFromUrl(
             originalCoverImageUrl,
-            `events/${event.id}`,
-            "cover-image.png"
+            `events/${event.id}/cover-images`,
+            "cover-image.jpg"
           );
 
           await ctx.db
@@ -526,7 +527,7 @@ export const eventRouter = router({
           coverImageUrl:
             input.coverImageUrl && isPendingStorageUrl(input.coverImageUrl)
               ? null
-              : input.coverImageUrl ?? null,
+              : (input.coverImageUrl ?? null),
           eventUrl: input.eventUrl ?? null,
           source: input.source ?? null,
           externalId: input.externalId ?? null,
@@ -565,8 +566,8 @@ export const eventRouter = router({
           const originalCoverImageUrl = resolvedCoverImageUrl;
           resolvedCoverImageUrl = await uploadImageFromUrl(
             originalCoverImageUrl,
-            `event-series/${series.id}`,
-            "cover-image.png"
+            `event-series/${series.id}/cover-images`,
+            "cover-image.jpg"
           );
 
           await ctx.db
@@ -653,15 +654,20 @@ export const eventRouter = router({
         });
       }
 
-      const [updatedEvent] = await ctx.db
-        .update(events)
-        .set({
-          coverImageUrl:
-            input.coverImageUrl === "" ? null : input.coverImageUrl,
-          updatedAt: new Date(),
-        })
-        .where(eq(events.id, input.eventId))
-        .returning({ id: events.id, coverImageUrl: events.coverImageUrl });
+      const nextCoverImageUrl =
+        input.coverImageUrl === "" ? null : input.coverImageUrl;
+      const [updatedEvent] = await withStoredImageReplacements({
+        db: ctx.db,
+        replacements: [
+          { oldUrl: event.coverImageUrl, newUrl: nextCoverImageUrl },
+        ],
+        persist: () =>
+          ctx.db
+            .update(events)
+            .set({ coverImageUrl: nextCoverImageUrl, updatedAt: new Date() })
+            .where(eq(events.id, input.eventId))
+            .returning({ id: events.id, coverImageUrl: events.coverImageUrl }),
+      });
 
       if (!updatedEvent) {
         throw new TRPCError({
@@ -796,9 +802,9 @@ export const eventRouter = router({
               ? null
               : submittedPendingCover
                 ? existingSeries.coverImageUrl
-              : input.coverImageUrl !== undefined
-                ? input.coverImageUrl
-                : existingSeries.coverImageUrl,
+                : input.coverImageUrl !== undefined
+                  ? input.coverImageUrl
+                  : existingSeries.coverImageUrl,
           eventUrl:
             input.eventUrl !== undefined
               ? input.eventUrl
@@ -842,13 +848,13 @@ export const eventRouter = router({
         }
       );
 
-      if (input.coverImageUrl) {
+      if (input.coverImageUrl && submittedPendingCover) {
         try {
           const originalCoverImageUrl = input.coverImageUrl;
           const seriesCoverImageUrl = await uploadImageFromUrl(
             originalCoverImageUrl,
-            `event-series/${input.seriesId}`,
-            "cover-image.png"
+            `event-series/${input.seriesId}/cover-images`,
+            "cover-image.jpg"
           );
 
           await ctx.db
@@ -949,6 +955,21 @@ export const eventRouter = router({
           );
       }
 
+      const finalSeries = await ctx.db.query.eventSeries.findFirst({
+        where: eq(eventSeries.id, input.seriesId),
+        columns: { coverImageUrl: true },
+      });
+      await withStoredImageReplacements({
+        db: ctx.db,
+        replacements: [
+          {
+            oldUrl: existingSeries.coverImageUrl,
+            newUrl: finalSeries?.coverImageUrl,
+          },
+        ],
+        persist: async () => undefined,
+      });
+
       return {
         seriesId: input.seriesId,
         createdEvents: generated.createdEvents,
@@ -983,8 +1004,8 @@ export const eventRouter = router({
           : isPendingStorageUrl(input.coverImageUrl)
             ? await uploadImageFromUrl(
                 input.coverImageUrl,
-                `event-series/${input.seriesId}`,
-                "cover-image.png"
+                `event-series/${input.seriesId}/cover-images`,
+                "cover-image.jpg"
               )
             : input.coverImageUrl;
       const inheritedImageCondition =
@@ -995,34 +1016,40 @@ export const eventRouter = router({
               eq(events.coverImageUrl, existingSeries.coverImageUrl)
             );
 
-      const [updatedSeries] = await ctx.db
-        .update(eventSeries)
-        .set({
-          coverImageUrl: nextCoverImageUrl,
-          updatedAt: new Date(),
-        })
-        .where(eq(eventSeries.id, input.seriesId))
-        .returning({
-          id: eventSeries.id,
-          coverImageUrl: eventSeries.coverImageUrl,
-        });
+      const updatedSeries = await withStoredImageReplacements({
+        db: ctx.db,
+        replacements: [
+          {
+            oldUrl: existingSeries.coverImageUrl,
+            newUrl: nextCoverImageUrl,
+          },
+        ],
+        persist: async () => {
+          const [updated] = await ctx.db
+            .update(eventSeries)
+            .set({ coverImageUrl: nextCoverImageUrl, updatedAt: new Date() })
+            .where(eq(eventSeries.id, input.seriesId))
+            .returning({
+              id: eventSeries.id,
+              coverImageUrl: eventSeries.coverImageUrl,
+            });
 
-      if (!updatedSeries) {
-        throw new TRPCError({
-          code: "INTERNAL_SERVER_ERROR",
-          message: "Failed to update recurring event series cover image",
-        });
-      }
+          if (!updated) {
+            throw new TRPCError({
+              code: "INTERNAL_SERVER_ERROR",
+              message: "Failed to update recurring event series cover image",
+            });
+          }
 
-      await ctx.db
-        .update(events)
-        .set({
-          coverImageUrl: nextCoverImageUrl,
-          updatedAt: new Date(),
-        })
-        .where(
-          and(eq(events.seriesId, input.seriesId), inheritedImageCondition)
-        );
+          await ctx.db
+            .update(events)
+            .set({ coverImageUrl: nextCoverImageUrl, updatedAt: new Date() })
+            .where(
+              and(eq(events.seriesId, input.seriesId), inheritedImageCondition)
+            );
+          return updated;
+        },
+      });
 
       if (input.coverImageUrl && isPendingStorageUrl(input.coverImageUrl)) {
         await cleanupPendingEventUpload(input.coverImageUrl);
@@ -1305,7 +1332,7 @@ export const eventRouter = router({
         );
       }
 
-      // Re-upload external cover images, and migrate legacy keys, to events/{id}/cover-image.png
+      // Re-upload external covers to immutable events/{id}/cover-images/{nanoId}.jpg keys.
       await Promise.allSettled(
         upserted.map(async (row) => {
           if (!row.coverImageUrl) {
@@ -1333,8 +1360,8 @@ export const eventRouter = router({
           try {
             const s3Url = await uploadImageFromUrl(
               row.coverImageUrl,
-              `events/${row.id}`,
-              "cover-image.png"
+              `events/${row.id}/cover-images`,
+              "cover-image.jpg"
             );
             await ctx.db
               .update(events)
@@ -1896,7 +1923,7 @@ export const eventRouter = router({
         (input.status === "going" || input.status === "interested") &&
         existingMirroredPartnerRsvp?.status !== input.status;
       const notGoingReason =
-        input.status === "not_going" ? input.reason ?? null : null;
+        input.status === "not_going" ? (input.reason ?? null) : null;
       let includedPartnerInRsvp = false;
 
       // Upsert RSVP
@@ -2216,7 +2243,8 @@ export const eventRouter = router({
       if (updates.externalId !== undefined)
         updateData.externalId = updates.externalId;
       if (updates.startAt !== undefined) updateData.startAt = updates.startAt;
-      if (updates.timeZone !== undefined) updateData.timeZone = updates.timeZone;
+      if (updates.timeZone !== undefined)
+        updateData.timeZone = updates.timeZone;
       if (updates.endAt !== undefined) updateData.endAt = updates.endAt;
       if (updates.address !== undefined) updateData.address = updates.address;
       if (updates.city !== undefined) updateData.city = updates.city;
@@ -2228,12 +2256,22 @@ export const eventRouter = router({
       if (updates.organizerId !== undefined)
         updateData.organizerId = updates.organizerId;
 
-      // Update the event
-      const [updatedEvent] = await ctx.db
-        .update(events)
-        .set(updateData)
-        .where(eq(events.id, eventId))
-        .returning();
+      const nextCoverImageUrl =
+        updates.coverImageUrl === undefined
+          ? event.coverImageUrl
+          : updates.coverImageUrl || null;
+      const [updatedEvent] = await withStoredImageReplacements({
+        db: ctx.db,
+        replacements: [
+          { oldUrl: event.coverImageUrl, newUrl: nextCoverImageUrl },
+        ],
+        persist: () =>
+          ctx.db
+            .update(events)
+            .set(updateData)
+            .where(eq(events.id, eventId))
+            .returning(),
+      });
 
       if (!updatedEvent) {
         throw new TRPCError({

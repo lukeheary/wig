@@ -21,6 +21,7 @@ import {
   isPendingStorageUrl,
   uploadImageFromUrl,
 } from "@/lib/s3";
+import { withStoredImageReplacements } from "@/server/utils/stored-image-lifecycle";
 
 const mobileUpdateEventSeriesSchema = z.object({
   venueId: z.string().uuid().nullable().optional(),
@@ -76,7 +77,11 @@ async function currentMobileUserContext() {
   };
 }
 
-async function canManageSeries(userId: string, isPreview: boolean, series: typeof eventSeries.$inferSelect) {
+async function canManageSeries(
+  userId: string,
+  isPreview: boolean,
+  series: typeof eventSeries.$inferSelect
+) {
   if (isPreview) {
     return true;
   }
@@ -156,7 +161,10 @@ export async function GET(
     });
 
     if (!series) {
-      return NextResponse.json({ error: "Event series not found" }, { status: 404 });
+      return NextResponse.json(
+        { error: "Event series not found" },
+        { status: 404 }
+      );
     }
 
     if (!(await canManageSeries(userId, isPreview, series))) {
@@ -190,7 +198,10 @@ export async function PATCH(
     });
 
     if (!existingSeries) {
-      return NextResponse.json({ error: "Event series not found" }, { status: 404 });
+      return NextResponse.json(
+        { error: "Event series not found" },
+        { status: 404 }
+      );
     }
 
     if (!(await canManageSeries(userId, isPreview, existingSeries))) {
@@ -275,8 +286,8 @@ export async function PATCH(
     const cleanedCoverImageUrl = pendingCoverImageUrl
       ? await uploadImageFromUrl(
           pendingCoverImageUrl,
-          `event-series/${id}`,
-          "cover-image.png"
+          `event-series/${id}/cover-images`,
+          "cover-image.jpg"
         )
       : submittedCoverImageUrl;
     const resolvedTimeZone =
@@ -342,6 +353,17 @@ export async function PATCH(
       await deleteFromS3(pendingCoverImageUrl).catch(() => undefined);
     }
 
+    await withStoredImageReplacements({
+      db,
+      replacements: [
+        {
+          oldUrl: existingSeries.coverImageUrl,
+          newUrl: cleanedCoverImageUrl,
+        },
+      ],
+      persist: async () => undefined,
+    });
+
     const nextEvent = await db.query.events.findFirst({
       where: and(eq(events.seriesId, id), gte(events.startAt, now)),
       orderBy: [asc(events.startAt)],
@@ -386,7 +408,10 @@ export async function DELETE(
     });
 
     if (!existingSeries) {
-      return NextResponse.json({ error: "Event series not found" }, { status: 404 });
+      return NextResponse.json(
+        { error: "Event series not found" },
+        { status: 404 }
+      );
     }
 
     if (!(await canManageSeries(userId, isPreview, existingSeries))) {

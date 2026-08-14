@@ -213,8 +213,8 @@ export async function POST(request: Request) {
       try {
         const finalCoverImageUrl = await uploadImageFromUrl(
           cleanedCoverImageUrl,
-          `event-series/${series.id}`,
-          "cover-image.png"
+          `event-series/${series.id}/cover-images`,
+          "cover-image.jpg"
         );
         await db
           .update(eventSeries)

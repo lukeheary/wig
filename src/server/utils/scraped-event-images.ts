@@ -55,8 +55,8 @@ export async function rehostScrapedEventImage(
   try {
     const hostedImageUrl = await uploadImageFromUrl(
       sourceImageUrl,
-      `events/${eventId}`,
-      "cover-image.png"
+      `events/${eventId}/cover-images`,
+      "cover-image.jpg"
     );
     await db
       .update(events)

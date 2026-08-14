@@ -423,8 +423,8 @@ export default function EditEventSeriesPage() {
             <div className="space-y-2">
               <Label htmlFor="image">Event Image</Label>
               <S3Uploader
-                folder={`event-series/${seriesId}`}
-                fileName="cover-image.png"
+                folder={`event-series/${seriesId}/cover-images`}
+                fileName="cover-image.jpg"
                 currentImageUrl={formData.coverImageUrl}
                 onUploadComplete={(url: string) =>
                   setFormData((prev) => ({ ...prev, coverImageUrl: url }))

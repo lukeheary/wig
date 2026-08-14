@@ -38,6 +38,7 @@ import {
   PLACE_SLUG_REGEX,
 } from "@/lib/place-identifiers";
 import { accentInsensitiveLike } from "@/server/db/search";
+import { withStoredImageReplacements } from "@/server/utils/stored-image-lifecycle";
 
 const placeTypeSchema = z.enum(["venue", "organizer"]);
 
@@ -864,13 +865,18 @@ export const placeRouter = router({
         });
       }
 
+      const existingPlace = await ctx.db.query.places.findFirst({
+        where: eq(places.id, input.placeId),
+        columns: { logoImageUrl: true, coverImageUrl: true },
+      });
+      if (!existingPlace) {
+        throw new TRPCError({ code: "NOT_FOUND", message: "Place not found" });
+      }
+
       // If slug is being updated, check if it's already taken
       if (input.slug) {
         const existing = await ctx.db.query.places.findFirst({
-          where: and(
-            eq(places.slug, input.slug),
-            ne(places.id, input.placeId)
-          ),
+          where: and(eq(places.slug, input.slug), ne(places.id, input.placeId)),
         });
 
         if (existing) {
@@ -888,14 +894,31 @@ export const placeRouter = router({
         Object.entries(updates).filter(([_, value]) => value !== undefined)
       );
 
-      const [updated] = await ctx.db
-        .update(places)
-        .set({
-          ...filteredUpdates,
-          updatedAt: new Date(),
-        })
-        .where(eq(places.id, placeId))
-        .returning();
+      const [updated] = await withStoredImageReplacements({
+        db: ctx.db,
+        replacements: [
+          {
+            oldUrl: existingPlace.logoImageUrl,
+            newUrl:
+              input.logoImageUrl === undefined
+                ? existingPlace.logoImageUrl
+                : input.logoImageUrl || null,
+          },
+          {
+            oldUrl: existingPlace.coverImageUrl,
+            newUrl:
+              input.coverImageUrl === undefined
+                ? existingPlace.coverImageUrl
+                : input.coverImageUrl || null,
+          },
+        ],
+        persist: () =>
+          ctx.db
+            .update(places)
+            .set({ ...filteredUpdates, updatedAt: new Date() })
+            .where(eq(places.id, placeId))
+            .returning(),
+      });
 
       if (categories !== undefined) {
         await setPlaceCategoryKeys(ctx.db, placeId, categories, {

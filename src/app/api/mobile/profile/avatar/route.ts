@@ -5,6 +5,7 @@ import { uploadToS3 } from "@/lib/s3";
 import { db } from "@/server/db";
 import { users } from "@/server/db/schema";
 import { recordActivationActionBestEffort } from "@/server/utils/user-activation";
+import { withStoredImageReplacements } from "@/server/utils/stored-image-lifecycle";
 
 export async function POST(request: NextRequest) {
   try {
@@ -36,22 +37,28 @@ export async function POST(request: NextRequest) {
       );
     }
 
+    const existingUser = await db.query.users.findFirst({
+      where: eq(users.id, userId),
+      columns: { avatarImageUrl: true },
+    });
     const avatarImageUrl = await uploadToS3(
       file,
-      `users/${userId}`,
-      `avatar-image-${Date.now()}.jpg`
+      `users/${userId}/avatars`,
+      "avatar-image.jpg"
     );
 
-    const [updatedUser] = await db
-      .update(users)
-      .set({
-        avatarImageUrl,
-        updatedAt: new Date(),
-      })
-      .where(eq(users.id, userId))
-      .returning({
-        avatarImageUrl: users.avatarImageUrl,
-      });
+    const [updatedUser] = await withStoredImageReplacements({
+      db,
+      replacements: [
+        { oldUrl: existingUser?.avatarImageUrl, newUrl: avatarImageUrl },
+      ],
+      persist: () =>
+        db
+          .update(users)
+          .set({ avatarImageUrl, updatedAt: new Date() })
+          .where(eq(users.id, userId))
+          .returning({ avatarImageUrl: users.avatarImageUrl }),
+    });
 
     if (!updatedUser) {
       return NextResponse.json({ error: "User not found" }, { status: 404 });

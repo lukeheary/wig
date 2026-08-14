@@ -456,7 +456,7 @@ export function PlaceEditForm({
       <div>
         <Label>{typeLabel} Profile Image</Label>
         <S3Uploader
-          folder={placeId ? `places/${placeId}` : "places"}
+          folder={placeId ? `places/${placeId}/logos` : "places/logos"}
           fileName="logo-image.png"
           currentImageUrl={formData.logoImageUrl}
           deferUpload={shouldDeferLogoUpload}

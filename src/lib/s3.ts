@@ -4,7 +4,9 @@ import {
   DeleteObjectCommand,
   GetObjectCommand,
 } from "@aws-sdk/client-s3";
+import sharp from "sharp";
 import { getStoragePath } from "./env";
+import { generateNanoId } from "./nano-id";
 
 const R2_BUCKET = process.env.R2_BUCKET!;
 const rawR2Endpoint = process.env.R2_ENDPOINT!;
@@ -89,14 +91,35 @@ const IMAGE_EXT_TO_CONTENT_TYPE: Record<string, string> = {
   avif: "image/avif",
 };
 
-/**
- * Generate a unique filename with timestamp and random string
- */
+const JPEG_OPTIONS = {
+  quality: 82,
+  mozjpeg: true,
+} as const;
+
+function hasJpegExtension(fileName: string | undefined): boolean {
+  return /\.jpe?g$/i.test(fileName ?? "");
+}
+
+function hasPngExtension(fileName: string | undefined): boolean {
+  return /\.png$/i.test(fileName ?? "");
+}
+
+async function jpegBuffer(buffer: Buffer): Promise<Buffer> {
+  return sharp(buffer)
+    .rotate()
+    .flatten({ background: "#ffffff" })
+    .jpeg(JPEG_OPTIONS)
+    .toBuffer();
+}
+
+async function pngBuffer(buffer: Buffer): Promise<Buffer> {
+  return sharp(buffer).rotate().png({ compressionLevel: 9 }).toBuffer();
+}
+
+/** Generate an immutable image filename while preserving its extension. */
 export function generateUniqueFilename(originalName: string): string {
-  const timestamp = Date.now();
-  const randomString = Math.random().toString(36).substring(2, 15);
-  const extension = originalName.split(".").pop();
-  return `${timestamp}-${randomString}.${extension}`;
+  const extension = originalName.split(".").pop()?.toLowerCase() || "jpg";
+  return `${generateNanoId()}.${extension}`;
 }
 
 /**
@@ -127,8 +150,7 @@ function keyFromBaseUrl(url: string, baseUrl: URL): string | null {
 function getStorageKey(url: string): string | null {
   try {
     return (
-      keyFromBaseUrl(url, R2_PUBLIC_URL) ||
-      keyFromBaseUrl(url, AWS_PUBLIC_URL)
+      keyFromBaseUrl(url, R2_PUBLIC_URL) || keyFromBaseUrl(url, AWS_PUBLIC_URL)
     );
   } catch {
     return null;
@@ -164,6 +186,7 @@ async function writeToBothStorageProviders(
           Key: key,
           Body: body,
           ContentType: contentType,
+          CacheControl: "public, max-age=31536000, immutable",
         })
       )
     )
@@ -226,10 +249,7 @@ async function readFromEitherStorageProvider(key: string): Promise<{
     }
   }
 
-  throw new AggregateError(
-    failures,
-    `Could not read ${key} from R2 or S3`
-  );
+  throw new AggregateError(failures, `Could not read ${key} from R2 or S3`);
 }
 
 /**
@@ -247,12 +267,52 @@ export async function copyStorageObject(
 
   const targetKey = `${getStoragePath(targetFolder)}/${targetFileName}`;
   const source = await readFromEitherStorageProvider(sourceKey);
-  await writeToBothStorageProviders(
-    targetKey,
-    source.body,
-    source.contentType
-  );
+  await writeToBothStorageProviders(targetKey, source.body, source.contentType);
 
+  return getS3Url(targetKey);
+}
+
+/**
+ * Convert a stored image to JPEG and write it to a new key in both providers.
+ * Existing JPEG bytes are copied without recompression.
+ */
+export async function convertStorageImageToJpeg(
+  sourceUrl: string,
+  targetFolder: string,
+  targetFileName: string
+): Promise<string> {
+  const sourceKey = getStorageKey(sourceUrl);
+  if (!sourceKey) throw new Error("Invalid source storage URL");
+
+  const targetKey = `${getStoragePath(targetFolder)}/${targetFileName}`;
+  const source = await readFromEitherStorageProvider(sourceKey);
+  const metadata = await sharp(source.body).metadata();
+  const body =
+    metadata.format === "jpeg" ? source.body : await jpegBuffer(source.body);
+
+  await writeToBothStorageProviders(targetKey, body, "image/jpeg");
+  return getS3Url(targetKey);
+}
+
+/**
+ * Convert a stored image to PNG and write it to a new key in both providers.
+ * Existing PNG bytes are copied without recompression.
+ */
+export async function convertStorageImageToPng(
+  sourceUrl: string,
+  targetFolder: string,
+  targetFileName: string
+): Promise<string> {
+  const sourceKey = getStorageKey(sourceUrl);
+  if (!sourceKey) throw new Error("Invalid source storage URL");
+
+  const targetKey = `${getStoragePath(targetFolder)}/${targetFileName}`;
+  const source = await readFromEitherStorageProvider(sourceKey);
+  const metadata = await sharp(source.body).metadata();
+  const body =
+    metadata.format === "png" ? source.body : await pngBuffer(source.body);
+
+  await writeToBothStorageProviders(targetKey, body, "image/png");
   return getS3Url(targetKey);
 }
 
@@ -265,14 +325,23 @@ export async function uploadToS3(
   folder: string = "uploads",
   fileName?: string
 ): Promise<string> {
-  const filename = fileName || generateUniqueFilename(file.name);
+  const filename = generateUniqueFilename(fileName || file.name);
   const fullPath = getStoragePath(folder);
   const key = `${fullPath}/${filename}`;
 
   const arrayBuffer = await file.arrayBuffer();
-  const buffer = Buffer.from(arrayBuffer);
+  let buffer: Buffer = Buffer.from(arrayBuffer);
+  let contentType = file.type;
 
-  await writeToBothStorageProviders(key, buffer, file.type);
+  if (hasJpegExtension(filename)) {
+    buffer = await jpegBuffer(buffer);
+    contentType = "image/jpeg";
+  } else if (hasPngExtension(filename)) {
+    buffer = await pngBuffer(buffer);
+    contentType = "image/png";
+  }
+
+  await writeToBothStorageProviders(key, buffer, contentType);
 
   return getS3Url(key);
 }
@@ -306,9 +375,7 @@ export async function uploadImageFromUrl(
 
   if (maxBytes && contentLength > maxBytes) {
     const maxMb = (maxBytes / 1024 / 1024).toFixed(1).replace(/\.0$/, "");
-    throw new Error(
-      `Image is too large (max ${maxMb}MB)`
-    );
+    throw new Error(`Image is too large (max ${maxMb}MB)`);
   }
 
   let inferredExt: string | null = null;
@@ -338,21 +405,27 @@ export async function uploadImageFromUrl(
   // Determine extension from content type
   const ext = IMAGE_CONTENT_TYPE_TO_EXT[contentType] || inferredExt || "jpg";
 
-  const filename =
-    fileName || generateUniqueFilename(`image.${ext}`);
+  const filename = generateUniqueFilename(fileName || `image.${ext}`);
   const fullPath = getStoragePath(folder);
   const key = `${fullPath}/${filename}`;
 
   const arrayBuffer = await response.arrayBuffer();
   if (maxBytes && arrayBuffer.byteLength > maxBytes) {
     const maxMb = (maxBytes / 1024 / 1024).toFixed(1).replace(/\.0$/, "");
-    throw new Error(
-      `Image is too large (max ${maxMb}MB)`
-    );
+    throw new Error(`Image is too large (max ${maxMb}MB)`);
   }
-  const buffer = Buffer.from(arrayBuffer);
+  let buffer: Buffer = Buffer.from(arrayBuffer);
+  let outputContentType = contentType;
 
-  await writeToBothStorageProviders(key, buffer, contentType);
+  if (hasJpegExtension(filename)) {
+    buffer = await jpegBuffer(buffer);
+    outputContentType = "image/jpeg";
+  } else if (hasPngExtension(filename)) {
+    buffer = await pngBuffer(buffer);
+    outputContentType = "image/png";
+  }
+
+  await writeToBothStorageProviders(key, buffer, outputContentType);
 
   return getS3Url(key);
 }

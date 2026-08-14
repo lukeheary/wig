@@ -38,7 +38,6 @@ import {
 import { AvatarStack } from "@/components/ui/avatar-stack";
 import { useEffect, useMemo, useState } from "react";
 import { getEventStatusLabel } from "@/lib/event-status";
-import { withImageVersion } from "@/components/events/event-card-helpers";
 import { SharedBackButton } from "@/components/shared/back-button";
 import { buildReturnTo, withReturnTo } from "@/lib/navigation";
 import { HapticPreset, useHaptics } from "@/hooks/use-haptics";
@@ -493,7 +492,7 @@ export default function EventPage() {
     ];
   });
   const eventImageUrl =
-    withImageVersion(event.coverImageUrl, event.updatedAt) ||
+    event.coverImageUrl ||
     event.venue?.logoImageUrl ||
     event.organizer?.logoImageUrl ||
     null;

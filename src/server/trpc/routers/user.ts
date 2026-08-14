@@ -14,6 +14,7 @@ import { addDays } from "date-fns";
 import { USER_SURFACE_VALUES } from "@/lib/user-surface-state";
 import { isReservedUsername } from "@/lib/reserved-usernames";
 import { mapEventCategoryData } from "@/server/utils/categories";
+import { withStoredImageReplacements } from "@/server/utils/stored-image-lifecycle";
 
 export const userRouter = router({
   isAdmin: protectedProcedure.query(async ({ ctx }) => {
@@ -68,7 +69,10 @@ export const userRouter = router({
           .string()
           .min(3, "Username must be at least 3 characters")
           .max(20, "Username must be at most 20 characters")
-          .regex(/^[a-zA-Z0-9_]+$/, "Username can only contain letters, numbers, and underscores"),
+          .regex(
+            /^[a-zA-Z0-9_]+$/,
+            "Username can only contain letters, numbers, and underscores"
+          ),
         city: z.string().optional(),
         state: z.string().optional(),
         gender: z.enum(["male", "female", "other"]).optional(),
@@ -243,62 +247,66 @@ export const userRouter = router({
       const now = new Date();
       const viewerUserId = ctx.auth.userId ?? null;
 
-      const [friendships, pendingRequests, viewerTargetFriendship, profileRsvps] =
-        await Promise.all([
-          ctx.db.query.userFriends.findMany({
-            where: and(
-              or(
-                eq(userFriends.userId, targetUser.id),
-                eq(userFriends.friendUserId, targetUser.id)
-              ),
-              eq(userFriends.status, "accepted")
+      const [
+        friendships,
+        pendingRequests,
+        viewerTargetFriendship,
+        profileRsvps,
+      ] = await Promise.all([
+        ctx.db.query.userFriends.findMany({
+          where: and(
+            or(
+              eq(userFriends.userId, targetUser.id),
+              eq(userFriends.friendUserId, targetUser.id)
             ),
-            with: {
-              user: true,
-              friend: true,
-            },
-          }),
-          ctx.db.query.userFriends.findMany({
-            where: and(
-              eq(userFriends.friendUserId, targetUser.id),
-              eq(userFriends.status, "pending")
-            ),
-          }),
-          viewerUserId
-            ? ctx.db.query.userFriends.findFirst({
-                where: or(
-                  and(
-                    eq(userFriends.userId, viewerUserId),
-                    eq(userFriends.friendUserId, targetUser.id)
-                  ),
-                  and(
-                    eq(userFriends.userId, targetUser.id),
-                    eq(userFriends.friendUserId, viewerUserId)
-                  )
+            eq(userFriends.status, "accepted")
+          ),
+          with: {
+            user: true,
+            friend: true,
+          },
+        }),
+        ctx.db.query.userFriends.findMany({
+          where: and(
+            eq(userFriends.friendUserId, targetUser.id),
+            eq(userFriends.status, "pending")
+          ),
+        }),
+        viewerUserId
+          ? ctx.db.query.userFriends.findFirst({
+              where: or(
+                and(
+                  eq(userFriends.userId, viewerUserId),
+                  eq(userFriends.friendUserId, targetUser.id)
                 ),
-              })
-            : Promise.resolve(null),
-          ctx.db.query.eventRsvps.findMany({
-            where: and(
-              eq(eventRsvps.userId, targetUser.id),
-              inArray(eventRsvps.status, ["going", "interested"])
-            ),
-            with: {
-              event: {
-                with: {
-                  venue: true,
-                  organizer: true,
-                  categoryLinks: {
-                    with: {
-                      category: true,
-                    },
+                and(
+                  eq(userFriends.userId, targetUser.id),
+                  eq(userFriends.friendUserId, viewerUserId)
+                )
+              ),
+            })
+          : Promise.resolve(null),
+        ctx.db.query.eventRsvps.findMany({
+          where: and(
+            eq(eventRsvps.userId, targetUser.id),
+            inArray(eventRsvps.status, ["going", "interested"])
+          ),
+          with: {
+            event: {
+              with: {
+                venue: true,
+                organizer: true,
+                categoryLinks: {
+                  with: {
+                    category: true,
                   },
                 },
               },
             },
-            orderBy: [asc(eventRsvps.updatedAt)],
-          }),
-        ]);
+          },
+          orderBy: [asc(eventRsvps.updatedAt)],
+        }),
+      ]);
 
       const friendSummaries = friendships.flatMap((friendship) => {
         const friend =
@@ -427,10 +435,10 @@ export const userRouter = router({
         activeMissedWindowExpiresAt > now.getTime();
 
       const nextMissedWindowStartAt = hasActiveMissedWindow
-        ? existingState?.missedWindowStartAt ?? null
-        : input.startMissedWindowAt ?? null;
+        ? (existingState?.missedWindowStartAt ?? null)
+        : (input.startMissedWindowAt ?? null);
       const nextMissedWindowExpiresAt = hasActiveMissedWindow
-        ? existingState?.missedWindowExpiresAt ?? null
+        ? (existingState?.missedWindowExpiresAt ?? null)
         : input.startMissedWindowAt
           ? addDays(now, input.windowDays)
           : null;
@@ -486,6 +494,10 @@ export const userRouter = router({
     .mutation(async ({ ctx, input }) => {
       const userId = ctx.auth.userId;
       const normalizedUsername = input.username?.toLowerCase().trim();
+      const existingProfile = await ctx.db.query.users.findFirst({
+        where: eq(users.id, userId),
+        columns: { avatarImageUrl: true },
+      });
 
       if (normalizedUsername !== undefined) {
         if (isReservedUsername(normalizedUsername)) {
@@ -496,7 +508,10 @@ export const userRouter = router({
         }
 
         const existingUser = await ctx.db.query.users.findFirst({
-          where: and(eq(users.username, normalizedUsername), ne(users.id, userId)),
+          where: and(
+            eq(users.username, normalizedUsername),
+            ne(users.id, userId)
+          ),
         });
 
         if (existingUser) {
@@ -505,7 +520,6 @@ export const userRouter = router({
             message: "Username is already taken",
           });
         }
-
       }
 
       // Build update object with only provided fields
@@ -539,11 +553,24 @@ export const userRouter = router({
       }
 
       // Update in our database
-      const [updatedUser] = await ctx.db
-        .update(users)
-        .set(updateData)
-        .where(eq(users.id, userId))
-        .returning();
+      const [updatedUser] = await withStoredImageReplacements({
+        db: ctx.db,
+        replacements: [
+          {
+            oldUrl: existingProfile?.avatarImageUrl,
+            newUrl:
+              input.avatarImageUrl === undefined
+                ? existingProfile?.avatarImageUrl
+                : input.avatarImageUrl,
+          },
+        ],
+        persist: () =>
+          ctx.db
+            .update(users)
+            .set(updateData)
+            .where(eq(users.id, userId))
+            .returning(),
+      });
 
       if (!updatedUser) {
         throw new TRPCError({

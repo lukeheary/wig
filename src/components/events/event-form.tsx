@@ -348,7 +348,7 @@ export function EventForm({
     const uploadFormData = new FormData();
     uploadFormData.append("file", file);
     uploadFormData.append("folder", folder);
-    uploadFormData.append("filename", "cover-image.png");
+    uploadFormData.append("filename", "cover-image.jpg");
 
     const uploadResponse = await fetch("/api/upload", {
       method: "POST",
@@ -500,7 +500,7 @@ export function EventForm({
           try {
             const uploadedCoverImageUrl = await uploadCoverImage(
               deferredCoverImageFile,
-              `event-series/${createdSeries.seriesId}`
+              `event-series/${createdSeries.seriesId}/cover-images`
             );
 
             await setEventSeriesCoverImageMutation.mutateAsync({
@@ -530,7 +530,7 @@ export function EventForm({
         try {
           const uploadedCoverImageUrl = await uploadCoverImage(
             deferredCoverImageFile,
-            `events/${createdEvent.id}`
+            `events/${createdEvent.id}/cover-images`
           );
 
           await setEventCoverImageMutation.mutateAsync({
@@ -733,7 +733,7 @@ export function EventForm({
             <div className="space-y-2">
               <Label htmlFor="image">Event Image</Label>
               <S3Uploader
-                fileName="cover-image.png"
+                fileName="cover-image.jpg"
                 currentImageUrl={formData.coverImageUrl}
                 deferUpload
                 onDeferredFileChange={setDeferredCoverImageFile}

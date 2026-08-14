@@ -2199,7 +2199,7 @@ private struct LatestFromFollowsCard: View {
 
             VStack(alignment: .leading, spacing: 3) {
                 Text(update.event.title)
-                    .font(.system(size: 14, weight: .semibold))
+                    .font(.system(size: 13, weight: .semibold))
                     .foregroundStyle(.white)
                     .multilineTextAlignment(.leading)
                     .lineLimit(2)
@@ -2211,20 +2211,33 @@ private struct LatestFromFollowsCard: View {
                     .lineLimit(1)
                     .minimumScaleFactor(0.82)
 
-                Text(update.event.primaryLocation)
-                    .font(.system(size: 12, weight: .medium))
-                    .foregroundStyle(.white.opacity(0.58))
-                    .lineLimit(1)
-                    .minimumScaleFactor(0.82)
+                HStack(spacing: 8) {
+                    Text(update.event.primaryLocation)
+                        .font(.system(size: 12, weight: .medium))
+                        .foregroundStyle(.white.opacity(0.58))
+                        .lineLimit(1)
+                        .minimumScaleFactor(0.82)
+
+                    Spacer(minLength: 4)
+
+                    if interestedCount > 0 {
+                        HStack(spacing: 3) {
+                            Image(systemName: "star.fill")
+                                .font(.system(size: 10, weight: .semibold))
+                            Text("\(interestedCount)")
+                        }
+                        .font(.system(size: 11, weight: .semibold))
+                        .foregroundStyle(.yellow)
+                        .fixedSize()
+                    }
+                }
             }
             .padding(.top, 8)
         }
         .frame(width: 164, alignment: .leading)
         .contentShape(Rectangle())
         .accessibilityElement(children: .ignore)
-        .accessibilityLabel(
-            "\(update.kind.title), \(update.event.title), \(update.event.formattedCardStart), \(update.event.primaryLocation)"
-        )
+        .accessibilityLabel(accessibilityDescription)
         .accessibilityHint("Opens event details")
         .task(id: update.event.id) {
             await refreshSocialEvent()
@@ -2247,6 +2260,19 @@ private struct LatestFromFollowsCard: View {
 
     private var totalGoingCount: Int {
         max(update.event.goingCount ?? 0, socialEvent.friendsGoing.count)
+    }
+
+    private var interestedCount: Int {
+        socialEvent.friendsInterested.filter {
+            $0.user.isCurrentUser || $0.user.isFriend
+        }.count
+    }
+
+    private var accessibilityDescription: String {
+        let eventDescription = "\(update.kind.title), \(update.event.title), \(update.event.formattedCardStart), \(update.event.primaryLocation)"
+        guard interestedCount > 0 else { return eventDescription }
+
+        return "\(eventDescription), \(interestedCount) \(interestedCount == 1 ? "person" : "people") interested"
     }
 
     private var socialEvent: EventFeedItem {

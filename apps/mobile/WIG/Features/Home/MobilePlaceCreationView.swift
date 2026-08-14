@@ -641,7 +641,7 @@ struct MobilePlaceCreationView: View {
 
                 do {
                     if let uploadedLogoURL = try await uploadedLogoImageURLIfNeeded(
-                        folder: "places/\(savedPlace.id.uuidString.lowercased())"
+                        folder: "places/\(savedPlace.id.uuidString.lowercased())/logos"
                     ) {
                         try await apiClient.send(
                             APIClient.mobileSetPlaceLogoImage(
@@ -655,7 +655,7 @@ struct MobilePlaceCreationView: View {
                 }
             case .edit(let place):
                 let uploadedLogoURL = try await uploadedLogoImageURLIfNeeded(
-                    folder: "places/\(place.id.uuidString.lowercased())"
+                    folder: "places/\(place.id.uuidString.lowercased())/logos"
                 )
                 savedPlace = try await apiClient.send(
                     APIClient.mobileUpdatePlace(
@@ -723,7 +723,7 @@ struct MobilePlaceCreationView: View {
             APIClient.mobileUploadImage(
                 imageData: imageData,
                 folder: folder,
-                fileName: "logo-image.jpg"
+                fileName: "logo-image.png"
             )
         )
 

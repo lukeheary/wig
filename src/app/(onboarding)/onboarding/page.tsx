@@ -242,8 +242,8 @@ export default function OnboardingPage() {
                 onRemoveImage={() =>
                   setFormData({ ...formData, avatarImageUrl: "" })
                 }
-                folder={`users/${avatarUploadUserId}`}
-                fileName="avatar-image.png"
+                folder={`users/${avatarUploadUserId}/avatars`}
+                fileName="avatar-image.jpg"
                 className="w-full max-w-[200px]"
               />
             ) : (

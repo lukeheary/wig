@@ -2798,6 +2798,7 @@ private struct FriendRequestsView: View {
             VStack(alignment: .leading, spacing: 14) {
                 RelationshipFilterPills(
                     titles: RequestsPageSection.allCases.map(\.title),
+                    counts: [receivedRequests.count, sentRequests.count],
                     selection: Binding(
                         get: { RequestsPageSection.allCases.firstIndex(of: selectedSection) ?? 0 },
                         set: { selectedSection = RequestsPageSection.allCases[$0] }
@@ -3022,7 +3023,7 @@ private enum RequestsPageSection: CaseIterable {
 
     var title: String {
         switch self {
-        case .received: "Received"
+        case .received: "Requests"
         case .sent: "Sent"
         }
     }
@@ -3340,6 +3341,7 @@ private struct RelationshipListScreen<Content: View>: View {
 
 private struct RelationshipFilterPills: View {
     let titles: [String]
+    var counts: [Int]? = nil
     @Binding var selection: Int
 
     var body: some View {
@@ -3347,6 +3349,9 @@ private struct RelationshipFilterPills: View {
             ForEach(titles.indices, id: \.self) { index in
                 ScopePill(
                     title: titles[index],
+                    count: counts.flatMap { values in
+                        values.indices.contains(index) ? values[index] : nil
+                    },
                     isSelected: selection == index
                 ) {
                     selection = index

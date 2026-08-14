@@ -4,7 +4,6 @@ import { eq } from "drizzle-orm";
 import EventPageClient from "./event-page-client";
 import { db } from "@/server/db";
 import { events } from "@/server/db/schema";
-import { withImageVersion } from "@/components/events/event-card-helpers";
 import { formatEventDate, formatEventTime } from "@/lib/utils";
 
 function getEventMetaDescription(event: {
@@ -58,7 +57,7 @@ export async function generateMetadata({
   }
 
   const imageUrl =
-    withImageVersion(event.coverImageUrl, event.updatedAt) ||
+    event.coverImageUrl ||
     event.venue?.logoImageUrl ||
     event.organizer?.logoImageUrl ||
     undefined;

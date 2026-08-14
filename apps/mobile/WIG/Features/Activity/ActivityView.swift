@@ -3,6 +3,8 @@ import UIKit
 
 struct ActivityView: View {
     let resetFiltersTrigger: Int
+    var showsBackButton = false
+    var onBack: () -> Void = {}
 
     @Environment(\.apiClient) private var apiClient
     @EnvironmentObject private var appSession: AppSession
@@ -17,8 +19,14 @@ struct ActivityView: View {
     private let background = AppTheme.background
     private static let activityPageSize = 20
 
-    init(resetFiltersTrigger: Int = 0) {
+    init(
+        resetFiltersTrigger: Int = 0,
+        showsBackButton: Bool = false,
+        onBack: @escaping () -> Void = {}
+    ) {
         self.resetFiltersTrigger = resetFiltersTrigger
+        self.showsBackButton = showsBackButton
+        self.onBack = onBack
     }
 
     var body: some View {
@@ -28,7 +36,11 @@ struct ActivityView: View {
                 .topStatusBarScrim()
                 .toolbar(.hidden, for: .navigationBar)
                 .overlay(alignment: .top) {
-                    ActivityNavigationTitle(visibility: headerVisibility)
+                    ActivityNavigationTitle(
+                        visibility: headerVisibility,
+                        showsBackButton: showsBackButton,
+                        onBack: onBack
+                    )
                 }
                 .onAppear {
                     Task {
@@ -162,7 +174,9 @@ struct ActivityView: View {
                         }
                     }
                 }
-                .padding(.top, 56)
+                // Match Places' 46-point header plus its 14-point breathing room
+                // so switching tabs keeps filter pills on the same baseline.
+                .padding(.top, 60)
                 .padding(.bottom, 18)
             }
             .scrollIndicators(.hidden)
@@ -354,15 +368,28 @@ struct ActivityView: View {
 
 private struct ActivityNavigationTitle: View {
     let visibility: ScrollableHeaderVisibility
+    let showsBackButton: Bool
+    let onBack: () -> Void
 
     var body: some View {
-        Text("Activity")
-            .font(.system(size: 17, weight: .semibold))
-            .foregroundStyle(.white)
+        ZStack {
+            Text("Activity")
+                .font(.system(size: 17, weight: .semibold))
+                .foregroundStyle(.white)
+
+            if showsBackButton {
+                HStack {
+                    FloatingGlassIconButton(systemImage: "chevron.left", action: onBack)
+
+                    Spacer()
+                }
+                .padding(.horizontal, 16)
+            }
+        }
             .frame(maxWidth: .infinity)
             .frame(height: 46)
             .opacity(visibility.isVisible ? 1 : 0)
-            .allowsHitTesting(false)
+            .allowsHitTesting(visibility.isVisible)
     }
 }
 

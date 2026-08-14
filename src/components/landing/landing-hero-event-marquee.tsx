@@ -4,7 +4,6 @@ import Image from "next/image";
 import { useMemo } from "react";
 import { trpc } from "@/lib/trpc";
 import { cn } from "@/lib/utils";
-import { withImageVersion } from "@/components/events/event-card-helpers";
 
 type LandingHeroEventMarqueeProps = {
   className?: string;
@@ -33,7 +32,7 @@ function getEventImageUrl(event: {
   organizer?: { logoImageUrl?: string | null } | null;
 }) {
   return (
-    withImageVersion(event.coverImageUrl, event.updatedAt) ||
+    event.coverImageUrl ||
     event.venue?.logoImageUrl ||
     event.organizer?.logoImageUrl ||
     null

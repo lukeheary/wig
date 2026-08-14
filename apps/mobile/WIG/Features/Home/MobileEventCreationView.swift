@@ -893,7 +893,7 @@ struct MobileEventCreationView: View {
                             let uploadedImage = try await apiClient.send(
                                 APIClient.mobileUploadImage(
                                     imageData: imageData,
-                                    folder: "event-series/\(createdSeries.seriesId.uuidString.lowercased())",
+                                    folder: "event-series/\(createdSeries.seriesId.uuidString.lowercased())/cover-images",
                                     fileName: "cover-image.jpg"
                                 )
                             )
@@ -939,7 +939,7 @@ struct MobileEventCreationView: View {
                             let uploadedImage = try await apiClient.send(
                                 APIClient.mobileUploadImage(
                                     imageData: imageData,
-                                    folder: "events/\(createdEvent.id.uuidString.lowercased())",
+                                    folder: "events/\(createdEvent.id.uuidString.lowercased())/cover-images",
                                     fileName: "cover-image.jpg"
                                 )
                             )
@@ -1030,9 +1030,9 @@ struct MobileEventCreationView: View {
             // Creation uploads after the event or series has its permanent ID.
             return nil
         case .edit(let event):
-            folder = "events/\(event.id.uuidString.lowercased())"
+            folder = "events/\(event.id.uuidString.lowercased())/cover-images"
         case .editSeries(let series):
-            folder = "event-series/\(series.id.uuidString.lowercased())"
+            folder = "event-series/\(series.id.uuidString.lowercased())/cover-images"
         }
 
         let uploadedImage = try await apiClient.send(

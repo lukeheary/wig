@@ -43,7 +43,6 @@ import {
   type EventStatus,
 } from "@/lib/event-status";
 import { resolveBackHref, withReturnTo } from "@/lib/navigation";
-import { withImageVersion } from "@/components/events/event-card-helpers";
 
 export default function EditEventPage() {
   const params = useParams();
@@ -421,12 +420,9 @@ export default function EditEventPage() {
             <div className="space-y-2 pt-6">
               <Label htmlFor="image">Event Image</Label>
               <S3Uploader
-                folder={`events/${eventId}`}
-                fileName="cover-image.png"
-                currentImageUrl={
-                  withImageVersion(formData.coverImageUrl, event?.updatedAt) ||
-                  undefined
-                }
+                folder={`events/${eventId}/cover-images`}
+                fileName="cover-image.jpg"
+                currentImageUrl={formData.coverImageUrl || undefined}
                 onUploadComplete={(url) =>
                   setFormData({ ...formData, coverImageUrl: url })
                 }

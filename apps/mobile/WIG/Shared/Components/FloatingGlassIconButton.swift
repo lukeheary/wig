@@ -93,9 +93,15 @@ struct ScopePillBar<Content: View>: View {
 
 struct ScopePill: View {
     let title: String
+    var count: Int? = nil
     let isSelected: Bool
     var canDeselect = false
     let action: () -> Void
+
+    private var visibleCount: Int? {
+        guard let count, count > 0 else { return nil }
+        return count
+    }
 
     var body: some View {
         Button {
@@ -103,7 +109,14 @@ struct ScopePill: View {
             UISelectionFeedbackGenerator().selectionChanged()
             action()
         } label: {
-            Text(title)
+            HStack(spacing: 5) {
+                Text(title)
+
+                if let visibleCount {
+                    Text("(\(visibleCount))")
+                        .fontWeight(.semibold)
+                }
+            }
                 .font(.system(size: 12, weight: .medium))
                 .foregroundStyle(isSelected ? .black : .white)
                 .padding(.horizontal, 15)
@@ -114,6 +127,9 @@ struct ScopePill: View {
                 )
         }
         .buttonStyle(.plain)
+        .accessibilityLabel(
+            visibleCount.map { "\(title), \($0)" } ?? title
+        )
     }
 }
 

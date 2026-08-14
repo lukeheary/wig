@@ -3,6 +3,7 @@ import { asc, eq } from "drizzle-orm";
 import { NextRequest, NextResponse } from "next/server";
 import { db } from "@/server/db";
 import { events, users } from "@/server/db/schema";
+import { withStoredImageReplacements } from "@/server/utils/stored-image-lifecycle";
 
 async function currentMobileUserId() {
   const { userId } = await auth();
@@ -53,6 +54,7 @@ export async function POST(
       columns: {
         id: true,
         createdByUserId: true,
+        coverImageUrl: true,
       },
     });
 
@@ -77,17 +79,19 @@ export async function POST(
       );
     }
 
-    const [updatedEvent] = await db
-      .update(events)
-      .set({
-        coverImageUrl,
-        updatedAt: new Date(),
-      })
-      .where(eq(events.id, eventId))
-      .returning({
-        id: events.id,
-        coverImageUrl: events.coverImageUrl,
-      });
+    const [updatedEvent] = await withStoredImageReplacements({
+      db,
+      replacements: [{ oldUrl: event.coverImageUrl, newUrl: coverImageUrl }],
+      persist: () =>
+        db
+          .update(events)
+          .set({ coverImageUrl, updatedAt: new Date() })
+          .where(eq(events.id, eventId))
+          .returning({
+            id: events.id,
+            coverImageUrl: events.coverImageUrl,
+          }),
+    });
 
     if (!updatedEvent) {
       return NextResponse.json(

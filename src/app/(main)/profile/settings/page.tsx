@@ -556,8 +556,8 @@ export default function ProfilePage() {
             />
             <div className="space-y-2">
               <S3Uploader
-                folder={`users/${user.id}`}
-                fileName="avatar-image.png"
+                folder={`users/${user.id}/avatars`}
+                fileName="avatar-image.jpg"
                 onUploadComplete={handleImageUpload}
                 variant="button"
                 buttonText="Upload Profile Image"

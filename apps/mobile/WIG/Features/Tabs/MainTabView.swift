@@ -16,6 +16,7 @@ struct MainTabView: View {
     @State private var homeResetTrigger = 0
     @State private var venuesResetTrigger = 0
     @State private var activityResetTrigger = 0
+    @State private var activityBackDestination: AppTab?
     @State private var profileResetTrigger = 0
     @State private var profileAddPhotoTrigger = 0
     @State private var pendingFriendRequestCount = 0
@@ -103,7 +104,7 @@ struct MainTabView: View {
 
                 if isAuthenticated {
                     Tab("", systemImage: "bolt", value: AppTab.activity) {
-                        ActivityView(resetFiltersTrigger: activityResetTrigger)
+                        activityView
                     }
 
                     Tab("", systemImage: "magnifyingglass", value: AppTab.search) {
@@ -136,6 +137,10 @@ struct MainTabView: View {
         .tint(AppTheme.accentBlue)
         .onChange(of: selectedTab) { oldValue, newValue in
             resetFilters(for: oldValue, whenSwitchingTo: newValue)
+
+            if newValue != .activity {
+                activityBackDestination = nil
+            }
 
             if oldValue != .search {
                 previousNonSearchTab = oldValue
@@ -224,7 +229,7 @@ struct MainTabView: View {
                     .tag(AppTab.venues)
 
                 if isAuthenticated {
-                    ActivityView(resetFiltersTrigger: activityResetTrigger)
+                    activityView
                         .tabItem {
                             Image(systemName: "bolt")
                         }
@@ -266,6 +271,10 @@ struct MainTabView: View {
         .tint(AppTheme.accentBlue)
         .onChange(of: selectedTab) { oldValue, newValue in
             resetFilters(for: oldValue, whenSwitchingTo: newValue)
+
+            if newValue != .activity {
+                activityBackDestination = nil
+            }
 
             if oldValue != .search {
                 previousNonSearchTab = oldValue
@@ -331,6 +340,14 @@ struct MainTabView: View {
             showsSearchBackButton: searchSourceTab == .home || searchSourceTab == .venues,
             onSearchBack: returnFromContextualSearch,
             shouldAutoFocusSearch: searchSourceTab == .home || searchSourceTab == .venues
+        )
+    }
+
+    private var activityView: some View {
+        ActivityView(
+            resetFiltersTrigger: activityResetTrigger,
+            showsBackButton: activityBackDestination != nil,
+            onBack: returnFromContextualActivity
         )
     }
 
@@ -560,10 +577,17 @@ struct MainTabView: View {
 
     private func showActivityOrAuth() {
         if isAuthenticated {
+            activityBackDestination = .home
             selectedTab = .activity
         } else {
             isAuthPagePresented = true
         }
+    }
+
+    private func returnFromContextualActivity() {
+        guard let activityBackDestination else { return }
+        self.activityBackDestination = nil
+        selectedTab = activityBackDestination
     }
 }
 
