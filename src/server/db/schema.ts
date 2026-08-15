@@ -181,7 +181,7 @@ export const users = pgTable(
     username: varchar("username", { length: 50 }).notNull().unique(),
     firstName: varchar("first_name", { length: 100 }),
     lastName: varchar("last_name", { length: 100 }),
-    avatarImageUrl: storedImage("avatar_image_url"),
+    avatarImageUrl: storedImage("avatar_image"),
     city: varchar("city", { length: 100 }),
     state: varchar("state", { length: 2 }),
     gender: genderEnum("gender"),
@@ -461,8 +461,8 @@ export const places = pgTable(
     name: varchar("name", { length: 255 }).notNull(),
     aliases: text("aliases").array().notNull().default([]),
     description: text("description"),
-    logoImageUrl: storedImage("logo_image_url"),
-    coverImageUrl: storedImage("banner_image_url"), // Optional banner image for place profile
+    logoImageUrl: storedImage("logo_image"),
+    coverImageUrl: storedImage("banner_image"), // Optional banner image for place profile
     address: text("address"), // primarily for venues
     city: varchar("city", { length: 100 }),
     state: varchar("state", { length: 2 }),
@@ -735,7 +735,7 @@ export const eventSeries = pgTable(
       .references(() => users.id, { onDelete: "cascade" }),
     title: varchar("title", { length: 255 }).notNull(),
     description: text("description"),
-    coverImageUrl: storedImage("cover_image_url"),
+    coverImageUrl: storedImage("cover_image"),
     eventUrl: text("event_url"),
     source: varchar("source", { length: 50 }),
     externalId: text("external_id"),
@@ -803,7 +803,7 @@ export const events = pgTable(
       .references(() => users.id, { onDelete: "cascade" }),
     title: varchar("title", { length: 255 }).notNull(),
     description: text("description"),
-    coverImageUrl: storedImage("cover_image_url"),
+    coverImageUrl: storedImage("cover_image"),
     sourceImageUrl: text("source_image_url"),
     eventUrl: text("event_url"),
     source: varchar("source", { length: 50 }),

@@ -1276,7 +1276,7 @@ export const eventRouter = router({
                 coverImageUrl: sql`case
                   when ${events.sourceImageUrl} is not null
                     and ${events.sourceImageUrl} is distinct from excluded.source_image_url
-                  then excluded.cover_image_url
+                  then excluded.cover_image
                   else ${events.coverImageUrl}
                 end`,
                 sourceImageUrl: sql`excluded.source_image_url`,

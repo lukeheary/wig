@@ -373,6 +373,12 @@
       "when": 1786744800000,
       "tag": "0060_add_place_aliases",
       "breakpoints": true
+    },
+    {
+      "idx": 62,
+      "when": 1786831200000,
+      "tag": "0061_rename_stored_image_columns",
+      "breakpoints": true
     }
   ]
 }
