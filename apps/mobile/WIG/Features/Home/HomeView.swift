@@ -786,7 +786,6 @@ struct HomeView: View {
                 .scrollIndicators(.hidden)
             }
             .padding(.horizontal, 16)
-            .padding(.top, 6)
         }
     }
 
@@ -2189,21 +2188,23 @@ private struct LatestFromFollowsCard: View {
             .overlay(alignment: .topTrailing) {
                 EventSocialOverlayView(
                     attendees: goingAttendees,
-                    size: .card,
-                    maximumVisibleAttendees: 3,
-                    totalAttendeeCount: totalGoingCount
+                    size: .card
                 )
                 .padding(8)
             }
             .clipShape(RoundedRectangle(cornerRadius: 12, style: .continuous))
+            .overlay {
+                RoundedRectangle(cornerRadius: 12, style: .continuous)
+                    .strokeBorder(Color.white.opacity(0.08), lineWidth: 1)
+            }
 
             VStack(alignment: .leading, spacing: 3) {
                 Text(update.event.title)
                     .font(.system(size: 13, weight: .semibold))
                     .foregroundStyle(.white)
                     .multilineTextAlignment(.leading)
-                    .lineLimit(2)
-                    .lineSpacing(1)
+                    .lineLimit(1)
+                    .truncationMode(.tail)
 
                 Text(update.event.formattedCardStart)
                     .font(.system(size: 12, weight: .medium))
@@ -2256,10 +2257,6 @@ private struct LatestFromFollowsCard: View {
                 }?.user.isCurrentUser ?? false
                 return lhsIsCurrentUser && !rhsIsCurrentUser
             }
-    }
-
-    private var totalGoingCount: Int {
-        max(update.event.goingCount ?? 0, socialEvent.friendsGoing.count)
     }
 
     private var interestedCount: Int {

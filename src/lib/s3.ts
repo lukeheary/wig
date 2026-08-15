@@ -10,8 +10,6 @@ import { generateNanoId } from "./nano-id";
 
 const R2_BUCKET = process.env.R2_BUCKET!;
 const rawR2Endpoint = process.env.R2_ENDPOINT!;
-const AWS_BUCKET = process.env.AWS_S3_BUCKET!;
-const AWS_REGION = process.env.AWS_REGION!;
 
 function trimTrailingSlashes(value: string): string {
   return value.replace(/\/+$/, "");
@@ -44,9 +42,16 @@ function getR2PublicBaseUrl(endpoint: string, bucket: string): string {
 
 const R2_PUBLIC_BASE_URL = getR2PublicBaseUrl(rawR2Endpoint, R2_BUCKET);
 const R2_PUBLIC_URL = new URL(`${R2_PUBLIC_BASE_URL}/`);
-const AWS_PUBLIC_URL = new URL(
-  `https://${AWS_BUCKET}.s3.${AWS_REGION}.amazonaws.com/`
-);
+const LEGACY_AWS_PUBLIC_URLS = [
+  new URL("https://whoisgoing.s3.us-east-2.amazonaws.com/"),
+  ...(process.env.AWS_S3_BUCKET && process.env.AWS_REGION
+    ? [
+        new URL(
+          `https://${process.env.AWS_S3_BUCKET}.s3.${process.env.AWS_REGION}.amazonaws.com/`
+        ),
+      ]
+    : []),
+];
 
 // Cloudflare R2 exposes an S3-compatible API, so the AWS SDK remains the client.
 export const r2Client = new S3Client({
@@ -58,20 +63,7 @@ export const r2Client = new S3Client({
   },
 });
 
-export const awsS3Client = new S3Client({
-  region: AWS_REGION,
-  credentials: {
-    accessKeyId: process.env.AWS_ACCESS_KEY_ID!,
-    secretAccessKey: process.env.AWS_SECRET_ACCESS_KEY!,
-  },
-});
-
 export const BUCKET_NAME = R2_BUCKET;
-
-const STORAGE_TARGETS = [
-  { name: "R2", client: r2Client, bucket: R2_BUCKET },
-  { name: "S3", client: awsS3Client, bucket: AWS_BUCKET },
-] as const;
 
 const IMAGE_CONTENT_TYPE_TO_EXT: Record<string, string> = {
   "image/jpeg": "jpg",
@@ -123,11 +115,12 @@ export function generateUniqueFilename(originalName: string): string {
 }
 
 /**
- * Get the preferred public URL for a stored object. Objects are dual-written,
- * but S3 is the read origin while the R2 migration is in progress.
+ * Get the public R2 URL for a stored object.
+ *
+ * The legacy function name is retained to avoid changing every caller.
  */
 export function getS3Url(key: string): string {
-  return new URL(key.replace(/^\/+/, ""), AWS_PUBLIC_URL).toString();
+  return new URL(key.replace(/^\/+/, ""), R2_PUBLIC_URL).toString();
 }
 
 function keyFromBaseUrl(url: string, baseUrl: URL): string | null {
@@ -150,7 +143,11 @@ function keyFromBaseUrl(url: string, baseUrl: URL): string | null {
 function getStorageKey(url: string): string | null {
   try {
     return (
-      keyFromBaseUrl(url, R2_PUBLIC_URL) || keyFromBaseUrl(url, AWS_PUBLIC_URL)
+      keyFromBaseUrl(url, R2_PUBLIC_URL) ||
+      LEGACY_AWS_PUBLIC_URLS.reduce<string | null>(
+        (key, baseUrl) => key || keyFromBaseUrl(url, baseUrl),
+        null
+      )
     );
   } catch {
     return null;
@@ -173,89 +170,40 @@ export function isPendingStorageUrl(url: string): boolean {
   return key?.split("/").includes("pending") ?? false;
 }
 
-async function writeToBothStorageProviders(
+async function writeToStorage(
   key: string,
   body: Buffer,
   contentType: string
 ): Promise<void> {
-  const results = await Promise.allSettled(
-    STORAGE_TARGETS.map(({ client, bucket }) =>
-      client.send(
-        new PutObjectCommand({
-          Bucket: bucket,
-          Key: key,
-          Body: body,
-          ContentType: contentType,
-          CacheControl: "public, max-age=31536000, immutable",
-        })
-      )
-    )
-  );
-  const failedWrites = results
-    .map((result, index) => ({ result, target: STORAGE_TARGETS[index] }))
-    .filter(
-      (
-        item
-      ): item is {
-        result: PromiseRejectedResult;
-        target: (typeof STORAGE_TARGETS)[number];
-      } => item.result.status === "rejected"
-    );
-
-  if (failedWrites.length === 0) return;
-
-  // Best-effort rollback prevents a reported failure from silently leaving only
-  // one provider with the object.
-  await Promise.allSettled(
-    results.flatMap((result, index) =>
-      result.status === "fulfilled"
-        ? [
-            STORAGE_TARGETS[index]!.client.send(
-              new DeleteObjectCommand({
-                Bucket: STORAGE_TARGETS[index]!.bucket,
-                Key: key,
-              })
-            ),
-          ]
-        : []
-    )
-  );
-
-  throw new AggregateError(
-    failedWrites.map(({ result }) => result.reason),
-    `Image upload failed for ${failedWrites.map(({ target }) => target.name).join(" and ")}`
+  await r2Client.send(
+    new PutObjectCommand({
+      Bucket: R2_BUCKET,
+      Key: key,
+      Body: body,
+      ContentType: contentType,
+      CacheControl: "public, max-age=31536000, immutable",
+    })
   );
 }
 
-async function readFromEitherStorageProvider(key: string): Promise<{
+async function readFromStorage(key: string): Promise<{
   body: Buffer;
   contentType: string;
 }> {
-  const failures: unknown[] = [];
+  const object = await r2Client.send(
+    new GetObjectCommand({ Bucket: R2_BUCKET, Key: key })
+  );
+  if (!object.Body) throw new Error("Storage object has no body");
 
-  for (const { client, bucket } of STORAGE_TARGETS) {
-    try {
-      const object = await client.send(
-        new GetObjectCommand({ Bucket: bucket, Key: key })
-      );
-      if (!object.Body) throw new Error("Storage object has no body");
-
-      return {
-        body: Buffer.from(await object.Body.transformToByteArray()),
-        contentType: object.ContentType || "image/png",
-      };
-    } catch (error) {
-      failures.push(error);
-    }
-  }
-
-  throw new AggregateError(failures, `Could not read ${key} from R2 or S3`);
+  return {
+    body: Buffer.from(await object.Body.transformToByteArray()),
+    contentType: object.ContentType || "image/png",
+  };
 }
 
 /**
- * Copy an existing R2/S3 object to a new environment-relative key in both
- * providers. The source is not deleted until the caller has persisted the new
- * database value.
+ * Copy an existing R2 object to a new environment-relative key. The source is
+ * not deleted until the caller has persisted the new database value.
  */
 export async function copyStorageObject(
   sourceUrl: string,
@@ -266,14 +214,14 @@ export async function copyStorageObject(
   if (!sourceKey) throw new Error("Invalid source storage URL");
 
   const targetKey = `${getStoragePath(targetFolder)}/${targetFileName}`;
-  const source = await readFromEitherStorageProvider(sourceKey);
-  await writeToBothStorageProviders(targetKey, source.body, source.contentType);
+  const source = await readFromStorage(sourceKey);
+  await writeToStorage(targetKey, source.body, source.contentType);
 
   return getS3Url(targetKey);
 }
 
 /**
- * Convert a stored image to JPEG and write it to a new key in both providers.
+ * Convert a stored image to JPEG and write it to a new R2 key.
  * Existing JPEG bytes are copied without recompression.
  */
 export async function convertStorageImageToJpeg(
@@ -285,17 +233,17 @@ export async function convertStorageImageToJpeg(
   if (!sourceKey) throw new Error("Invalid source storage URL");
 
   const targetKey = `${getStoragePath(targetFolder)}/${targetFileName}`;
-  const source = await readFromEitherStorageProvider(sourceKey);
+  const source = await readFromStorage(sourceKey);
   const metadata = await sharp(source.body).metadata();
   const body =
     metadata.format === "jpeg" ? source.body : await jpegBuffer(source.body);
 
-  await writeToBothStorageProviders(targetKey, body, "image/jpeg");
+  await writeToStorage(targetKey, body, "image/jpeg");
   return getS3Url(targetKey);
 }
 
 /**
- * Convert a stored image to PNG and write it to a new key in both providers.
+ * Convert a stored image to PNG and write it to a new R2 key.
  * Existing PNG bytes are copied without recompression.
  */
 export async function convertStorageImageToPng(
@@ -307,17 +255,17 @@ export async function convertStorageImageToPng(
   if (!sourceKey) throw new Error("Invalid source storage URL");
 
   const targetKey = `${getStoragePath(targetFolder)}/${targetFileName}`;
-  const source = await readFromEitherStorageProvider(sourceKey);
+  const source = await readFromStorage(sourceKey);
   const metadata = await sharp(source.body).metadata();
   const body =
     metadata.format === "png" ? source.body : await pngBuffer(source.body);
 
-  await writeToBothStorageProviders(targetKey, body, "image/png");
+  await writeToStorage(targetKey, body, "image/png");
   return getS3Url(targetKey);
 }
 
 /**
- * Upload a file to R2 and S3, returning the preferred S3 public URL.
+ * Upload a file to R2 and return its public R2 URL.
  * Automatically adds environment prefix (production/development) to the path
  */
 export async function uploadToS3(
@@ -341,13 +289,13 @@ export async function uploadToS3(
     contentType = "image/png";
   }
 
-  await writeToBothStorageProviders(key, buffer, contentType);
+  await writeToStorage(key, buffer, contentType);
 
   return getS3Url(key);
 }
 
 /**
- * Download an image from a URL and upload it to R2 and S3.
+ * Download an image from a URL and upload it to R2.
  * Useful for re-hosting scraped event images on our own bucket.
  */
 export async function uploadImageFromUrl(
@@ -425,13 +373,13 @@ export async function uploadImageFromUrl(
     outputContentType = "image/png";
   }
 
-  await writeToBothStorageProviders(key, buffer, outputContentType);
+  await writeToStorage(key, buffer, outputContentType);
 
   return getS3Url(key);
 }
 
 /**
- * Delete a file from both R2 and S3.
+ * Delete a file from R2.
  */
 export async function deleteFromS3(url: string): Promise<void> {
   const key = getStorageKey(url);
@@ -439,19 +387,5 @@ export async function deleteFromS3(url: string): Promise<void> {
     throw new Error("Invalid storage URL");
   }
 
-  const results = await Promise.allSettled(
-    STORAGE_TARGETS.map(({ client, bucket }) =>
-      client.send(new DeleteObjectCommand({ Bucket: bucket, Key: key }))
-    )
-  );
-  const failures = results.filter(
-    (result): result is PromiseRejectedResult => result.status === "rejected"
-  );
-
-  if (failures.length > 0) {
-    throw new AggregateError(
-      failures.map((failure) => failure.reason),
-      "Failed to delete image from every storage provider"
-    );
-  }
+  await r2Client.send(new DeleteObjectCommand({ Bucket: R2_BUCKET, Key: key }));
 }

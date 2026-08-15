@@ -62,7 +62,7 @@ const nextConfig = {
   images: {
     remotePatterns: [
       ...(storageImagePattern ? [storageImagePattern] : []),
-      // Keep previously persisted S3 images renderable during the R2 migration.
+      // Keep any legacy fully-qualified S3 image values renderable.
       {
         protocol: "https",
         hostname: "whoisgoing.s3.us-east-2.amazonaws.com",

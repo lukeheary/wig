@@ -5,6 +5,8 @@ function trimTrailingSlashes(value: string): string {
 }
 
 const ENVIRONMENT_KEY_PREFIX = /^(?:production|development|test)\/+/;
+const LEGACY_S3_PUBLIC_BASE_URL =
+  "https://whoisgoing.s3.us-east-2.amazonaws.com";
 
 function stripEnvironmentPrefix(key: string): string {
   return key.replace(/^\/+/, "").replace(ENVIRONMENT_KEY_PREFIX, "");
@@ -21,6 +23,7 @@ function configuredStorageBaseUrls(): URL[] {
     process.env.R2_PUBLIC_BASE_URL,
     process.env.R2_PUBLIC_URL,
     process.env.R2_ENDPOINT,
+    LEGACY_S3_PUBLIC_BASE_URL,
     process.env.AWS_S3_BUCKET && process.env.AWS_REGION
       ? `https://${process.env.AWS_S3_BUCKET}.s3.${process.env.AWS_REGION}.amazonaws.com`
       : undefined,
@@ -83,26 +86,26 @@ export function normalizeStoredImageValue(value: string): string {
  */
 export function resolveStoredImageValue(value: string): string {
   const trimmed = value.trim();
+  const knownStorageKey = keyFromKnownStorageUrl(trimmed);
 
-  try {
-    const parsed = new URL(trimmed);
-    if (parsed.protocol === "http:" || parsed.protocol === "https:") {
-      return trimmed;
+  if (!knownStorageKey) {
+    try {
+      const parsed = new URL(trimmed);
+      if (parsed.protocol === "http:" || parsed.protocol === "https:") {
+        return trimmed;
+      }
+    } catch {
+      // A non-URL value is an object key.
     }
-  } catch {
-    // A non-URL value is an object key.
   }
 
-  // Prefer S3 while the R2 migration is in progress. The database remains
-  // provider-independent, so switching this preference later requires no data
-  // migration.
+  // Stored keys are provider-independent; R2 is now the sole read origin.
   const publicBaseUrl =
-    process.env.AWS_S3_BUCKET && process.env.AWS_REGION
-      ? `https://${process.env.AWS_S3_BUCKET}.s3.${process.env.AWS_REGION}.amazonaws.com`
-      : process.env.R2_PUBLIC_BASE_URL ||
-        process.env.R2_PUBLIC_URL ||
-        process.env.R2_ENDPOINT;
+    process.env.R2_PUBLIC_BASE_URL ||
+    process.env.R2_PUBLIC_URL ||
+    process.env.R2_ENDPOINT;
 
   if (!publicBaseUrl) return trimmed;
-  return `${trimTrailingSlashes(publicBaseUrl)}/${addCurrentEnvironmentPrefix(trimmed)}`;
+  const key = knownStorageKey || trimmed;
+  return `${trimTrailingSlashes(publicBaseUrl)}/${addCurrentEnvironmentPrefix(key)}`;
 }

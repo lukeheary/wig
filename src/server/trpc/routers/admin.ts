@@ -57,6 +57,30 @@ function normalizeMatchText(value: string | null | undefined) {
     .trim();
 }
 
+function normalizeStreetAddress(value: string | null | undefined) {
+  return normalizeMatchText(value?.split(",")[0])
+    .split(" ")
+    .map(
+      (word) =>
+        ({
+          avenue: "ave",
+          boulevard: "blvd",
+          circle: "cir",
+          court: "ct",
+          drive: "dr",
+          highway: "hwy",
+          lane: "ln",
+          parkway: "pkwy",
+          place: "pl",
+          road: "rd",
+          square: "sq",
+          street: "st",
+          terrace: "ter",
+        })[word] ?? word
+    )
+    .join(" ");
+}
+
 function getWordSet(...values: Array<string | null | undefined>) {
   return new Set(
     values
@@ -89,7 +113,10 @@ function scoreScrapedVenueMatch(
     (alias) => normalizeMatchText(alias) === scrapedName
   );
 
-  if (!scrapedName || !placeName) {
+  if (
+    (!scrapedName && !normalizeStreetAddress(scraped.address)) ||
+    !placeName
+  ) {
     return -1;
   }
 
@@ -97,6 +124,8 @@ function scoreScrapedVenueMatch(
   const scrapedState = normalizeMatchText(scraped.state);
   const placeCity = normalizeMatchText(place.city);
   const placeState = normalizeMatchText(place.state);
+  const scrapedAddress = normalizeStreetAddress(scraped.address);
+  const placeAddress = normalizeStreetAddress(place.address);
 
   if (scrapedState && placeState && scrapedState !== placeState) {
     return -1;
@@ -121,7 +150,12 @@ function scoreScrapedVenueMatch(
   const scrapedCore = stripLocationWords(scrapedName);
   const placeCore = stripLocationWords(placeName);
 
-  let score = aliasMatch ? 1000 : -1;
+  let score =
+    scrapedAddress && placeAddress && scrapedAddress === placeAddress
+      ? 980
+      : aliasMatch
+        ? 1000
+        : -1;
 
   if (scrapedName === placeName) {
     score = 1000;
@@ -701,7 +735,9 @@ export const adminRouter = router({
           .filter((id) => !incomingIds.includes(id));
 
         if (scraperIdsToDelete.length > 0) {
-          await tx.delete(scrapers).where(inArray(scrapers.id, scraperIdsToDelete));
+          await tx
+            .delete(scrapers)
+            .where(inArray(scrapers.id, scraperIdsToDelete));
         }
 
         const nextScrapers = [];

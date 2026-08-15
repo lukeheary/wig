@@ -112,6 +112,30 @@ function normalizeMatchText(value: string | null | undefined) {
     .trim();
 }
 
+function normalizeStreetAddress(value: string | null | undefined) {
+  return normalizeMatchText(value?.split(",")[0])
+    .split(" ")
+    .map(
+      (word) =>
+        ({
+          avenue: "ave",
+          boulevard: "blvd",
+          circle: "cir",
+          court: "ct",
+          drive: "dr",
+          highway: "hwy",
+          lane: "ln",
+          parkway: "pkwy",
+          place: "pl",
+          road: "rd",
+          square: "sq",
+          street: "st",
+          terrace: "ter",
+        })[word] ?? word
+    )
+    .join(" ");
+}
+
 function getWordSet(...values: Array<string | null | undefined>) {
   return new Set(
     values
@@ -157,7 +181,10 @@ function scoreScrapedVenueMatch(
     (alias) => normalizeMatchText(alias) === scrapedName
   );
 
-  if (!scrapedName || !placeName) {
+  if (
+    (!scrapedName && !normalizeStreetAddress(scraped.address)) ||
+    !placeName
+  ) {
     return -1;
   }
 
@@ -165,6 +192,8 @@ function scoreScrapedVenueMatch(
   const scrapedState = normalizeMatchText(scraped.state);
   const placeCity = normalizeMatchText(place.city);
   const placeState = normalizeMatchText(place.state);
+  const scrapedAddress = normalizeStreetAddress(scraped.address);
+  const placeAddress = normalizeStreetAddress(place.address);
 
   if (scrapedState && placeState && scrapedState !== placeState) {
     return -1;
@@ -189,7 +218,12 @@ function scoreScrapedVenueMatch(
   const scrapedCore = stripLocationWords(scrapedName);
   const placeCore = stripLocationWords(placeName);
 
-  let score = aliasMatch ? 1000 : -1;
+  let score =
+    scrapedAddress && placeAddress && scrapedAddress === placeAddress
+      ? 980
+      : aliasMatch
+        ? 1000
+        : -1;
 
   if (scrapedName === placeName) {
     score = 1000;
@@ -307,9 +341,11 @@ async function runSelectedScraper(
 
       const bestMatch = scoredMatches[0];
       const secondMatch = scoredMatches[1];
-      if (bestMatch &&
+      if (
+        bestMatch &&
         bestMatch.score >= 900 &&
-        (!secondMatch || secondMatch.score < bestMatch.score)) {
+        (!secondMatch || secondMatch.score < bestMatch.score)
+      ) {
         return bestMatch.place;
       }
 
@@ -318,7 +354,8 @@ async function runSelectedScraper(
       // still preferring any explicit event-venue match above.
       if (
         !event.address ||
-        normalizeMatchText(event.venueName) !== normalizeMatchText(event.address)
+        normalizeMatchText(event.venueName) !==
+          normalizeMatchText(event.address)
       ) {
         return null;
       }
@@ -327,7 +364,8 @@ async function runSelectedScraper(
         (place) =>
           (!event.state ||
             !place.state ||
-            normalizeMatchText(event.state) === normalizeMatchText(place.state)) &&
+            normalizeMatchText(event.state) ===
+              normalizeMatchText(place.state)) &&
           place.aliases.some(
             (alias) => normalizeMatchText(alias) === organizerName
           )

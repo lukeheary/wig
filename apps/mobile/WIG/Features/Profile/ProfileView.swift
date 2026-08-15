@@ -2559,12 +2559,10 @@ private struct PartnerPickerSheet: View {
 
                     if friends.isEmpty {
                         EmptyRelationshipCard(
-                            systemImage: "person.2",
                             message: "No accepted friends available"
                         )
                     } else if filteredFriends.isEmpty {
                         EmptyRelationshipCard(
-                            systemImage: "magnifyingglass",
                             message: "No friends found"
                         )
                     } else {
@@ -2700,7 +2698,6 @@ private struct FollowingPlacesView: View {
         RelationshipListScreen(title: "Following") {
             if places.isEmpty {
                 EmptyRelationshipCard(
-                    systemImage: "building.2",
                     message: "No followed places yet"
                 )
             } else {
@@ -2717,7 +2714,6 @@ private struct FriendsListViewContent: View {
     var body: some View {
         if friends.isEmpty {
             EmptyRelationshipCard(
-                systemImage: "person.2",
                 message: "No friends yet"
             )
         } else {
@@ -3395,28 +3391,34 @@ private struct RelationshipCard<Content: View>: View {
 }
 
 private struct EmptyRelationshipCard: View {
-    let systemImage: String
     let message: String
 
     var body: some View {
-        VStack(spacing: 18) {
-            Image(systemName: systemImage)
-                .font(.system(size: 42, weight: .medium))
-                .foregroundStyle(.white.opacity(0.56))
-
-            Text(message)
-                .font(.system(size: 17, weight: .medium))
-                .foregroundStyle(.white.opacity(0.58))
-        }
-        .frame(maxWidth: .infinity, minHeight: 172)
-        .background(
-            RoundedRectangle(cornerRadius: 18, style: .continuous)
-                .fill(ProfileTheme.cardBackground)
-        )
-        .overlay(
-            RoundedRectangle(cornerRadius: 18, style: .continuous)
-                .stroke(.white.opacity(0.08), lineWidth: 1)
-        )
+        RoundedRectangle(cornerRadius: 20, style: .continuous)
+            .fill(Color.clear)
+            .frame(maxWidth: .infinity)
+            .frame(height: 140)
+            .overlay {
+                Text(message)
+                    .font(.system(size: 15, weight: .medium))
+                    .foregroundStyle(.white.opacity(0.58))
+                    .multilineTextAlignment(.center)
+                    .padding(.horizontal, 24)
+            }
+            .overlay {
+                RoundedRectangle(cornerRadius: 20, style: .continuous)
+                    .strokeBorder(
+                        style: StrokeStyle(
+                            lineWidth: 1,
+                            dash: [5, 5]
+                        )
+                    )
+                    .foregroundStyle(.white.opacity(0.10))
+            }
+            .background(
+                RoundedRectangle(cornerRadius: 20, style: .continuous)
+                    .fill(Color.white.opacity(0.015))
+            )
     }
 }
 

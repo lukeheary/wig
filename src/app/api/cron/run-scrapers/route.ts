@@ -1,7 +1,13 @@
 import { NextRequest, NextResponse } from "next/server";
 import { db } from "@/server/db";
 import { generateNanoId } from "@/lib/nano-id";
-import { scrapers, scraperLogs, events, places, users } from "@/server/db/schema";
+import {
+  scrapers,
+  scraperLogs,
+  events,
+  places,
+  users,
+} from "@/server/db/schema";
 import { and, eq, isNull, ne, or } from "drizzle-orm";
 import {
   filterExistingCategoryKeys,
@@ -161,6 +167,29 @@ async function runScraper(
       .replace(/\s+/g, " ")
       .trim();
 
+  const normalizeStreetAddress = (value: string | null | undefined) =>
+    normalizeVenueName(value?.split(",")[0])
+      .split(" ")
+      .map(
+        (word) =>
+          ({
+            avenue: "ave",
+            boulevard: "blvd",
+            circle: "cir",
+            court: "ct",
+            drive: "dr",
+            highway: "hwy",
+            lane: "ln",
+            parkway: "pkwy",
+            place: "pl",
+            road: "rd",
+            square: "sq",
+            street: "st",
+            terrace: "ter",
+          })[word] ?? word
+      )
+      .join(" ");
+
   const organizerVenues = organizerId
     ? await db
         .select({
@@ -169,6 +198,7 @@ async function runScraper(
           aliases: places.aliases,
           city: places.city,
           state: places.state,
+          address: places.address,
         })
         .from(places)
         .where(eq(places.type, "venue"))
@@ -176,7 +206,7 @@ async function runScraper(
 
   const resolveOrganizerVenueId = (event: ScrapedEvent) => {
     const scrapedName = normalizeVenueName(event.venueName);
-    if (!scrapedName) return null;
+    if (!scrapedName && !normalizeStreetAddress(event.address)) return null;
 
     const matches = organizerVenues.filter((place) => {
       if (
@@ -187,8 +217,13 @@ async function runScraper(
         return false;
       }
 
-      return [place.name, ...place.aliases].some(
-        (name) => normalizeVenueName(name) === scrapedName
+      return (
+        [place.name, ...place.aliases].some(
+          (name) => normalizeVenueName(name) === scrapedName
+        ) ||
+        (Boolean(normalizeStreetAddress(event.address)) &&
+          normalizeStreetAddress(event.address) ===
+            normalizeStreetAddress(place.address))
       );
     });
 
