@@ -577,7 +577,7 @@
 				CODE_SIGN_ENTITLEMENTS = WIG/Support/WIG.entitlements;
 				CODE_SIGN_IDENTITY = "iPhone Developer";
 				CODE_SIGN_STYLE = Automatic;
-				CURRENT_PROJECT_VERSION = 22;
+				CURRENT_PROJECT_VERSION = 23;
 				DEVELOPMENT_TEAM = V347D294CZ;
 				INFOPLIST_FILE = WIG/Support/Info.plist;
 				INFOPLIST_KEY_CFBundleDisplayName = "Who Is Going";
@@ -668,7 +668,7 @@
 				CODE_SIGN_ENTITLEMENTS = WIG/Support/WIG.entitlements;
 				CODE_SIGN_IDENTITY = "iPhone Developer";
 				CODE_SIGN_STYLE = Automatic;
-				CURRENT_PROJECT_VERSION = 22;
+				CURRENT_PROJECT_VERSION = 23;
 				DEVELOPMENT_TEAM = V347D294CZ;
 				INFOPLIST_FILE = WIG/Support/Info.plist;
 				INFOPLIST_KEY_CFBundleDisplayName = "Who Is Going";
@@ -695,7 +695,7 @@
 				CODE_SIGN_ENTITLEMENTS = WIG/Support/WIG.entitlements;
 				CODE_SIGN_IDENTITY = "iPhone Developer";
 				CODE_SIGN_STYLE = Automatic;
-				CURRENT_PROJECT_VERSION = 22;
+				CURRENT_PROJECT_VERSION = 23;
 				DEVELOPMENT_TEAM = V347D294CZ;
 				INFOPLIST_FILE = WIG/Support/Info.plist;
 				INFOPLIST_KEY_CFBundleDisplayName = "Who Is Going";

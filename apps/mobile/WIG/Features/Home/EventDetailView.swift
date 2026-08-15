@@ -525,7 +525,7 @@ struct EventDetailView: View {
             } label: {
                 Image(systemName: "square.and.pencil")
                     .font(.system(size: 17, weight: .semibold))
-                    .foregroundStyle(.white)
+                    .foregroundStyle(.white.opacity(0.76))
                     .frame(width: heroControlButtonSize, height: heroControlButtonSize)
                     .contentShape(Circle())
                     .eventDetailLiquidGlass(in: Circle())
@@ -1112,7 +1112,7 @@ struct EventDetailView: View {
 
                 Text(markdownDescription(description))
                     .font(.system(size: 14, weight: .regular))
-                    .foregroundStyle(.white.opacity(0.64))
+                    .foregroundStyle(.white)
                     .tint(AppTheme.accentBlue)
                     .lineSpacing(4)
             }
