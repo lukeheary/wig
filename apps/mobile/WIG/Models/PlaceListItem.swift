@@ -6,8 +6,8 @@ struct MobilePlacesResponse: Decodable, Hashable, Sendable {
     let currentUserLocation: EventCity?
 }
 
-struct PlaceListItem: Decodable, Identifiable, Hashable, Sendable {
-    enum PlaceType: String, Decodable, Hashable, Identifiable, Sendable {
+struct PlaceListItem: Codable, Identifiable, Hashable, Sendable {
+    enum PlaceType: String, Codable, Hashable, Identifiable, Sendable {
         case venue
         case organizer
 
@@ -124,6 +124,30 @@ struct PlaceListItem: Decodable, Identifiable, Hashable, Sendable {
 }
 
 extension PlaceListItem {
+    func encode(to encoder: Encoder) throws {
+        var container = encoder.container(keyedBy: CodingKeys.self)
+        try container.encode(id, forKey: .id)
+        try container.encode(type, forKey: .type)
+        try container.encode(slug, forKey: .slug)
+        try container.encode(name, forKey: .name)
+        try container.encodeIfPresent(logoImageURL?.absoluteString, forKey: .logoImageURL)
+        try container.encodeIfPresent(address, forKey: .address)
+        try container.encodeIfPresent(city, forKey: .city)
+        try container.encodeIfPresent(state, forKey: .state)
+        try container.encodeIfPresent(website?.absoluteString, forKey: .website)
+        try container.encodeIfPresent(instagram, forKey: .instagram)
+        try container.encodeIfPresent(metroAreaCity, forKey: .metroAreaCity)
+        try container.encodeIfPresent(metroAreaState, forKey: .metroAreaState)
+        try container.encode(upcomingEventCount, forKey: .upcomingEventCount)
+        try container.encode(followerCount, forKey: .followerCount)
+        try container.encode(memberCount, forKey: .memberCount)
+        try container.encodeIfPresent(updatedAt, forKey: .updatedAt)
+        try container.encode(isFollowed, forKey: .isFollowed)
+        try container.encode(isMember, forKey: .isMember)
+        try container.encode(categories, forKey: .categories)
+        try container.encode(categoryLabels, forKey: .categoryLabels)
+    }
+
     init(from decoder: Decoder) throws {
         let container = try decoder.container(keyedBy: CodingKeys.self)
 

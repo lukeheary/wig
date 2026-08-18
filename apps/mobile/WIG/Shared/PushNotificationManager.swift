@@ -24,6 +24,10 @@ final class PushNotificationManager: NSObject, ObservableObject {
             return
         }
 
+        // Registration is also required for silent data-refresh pushes and does
+        // not itself display a notification permission prompt.
+        UIApplication.shared.registerForRemoteNotifications()
+
         UNUserNotificationCenter.current().getNotificationSettings { [weak self] settings in
             guard let self else { return }
 
@@ -113,6 +117,13 @@ final class PushNotificationManager: NSObject, ObservableObject {
 final class WIGAppDelegate: NSObject, UIApplicationDelegate {
     func application(
         _ application: UIApplication,
+        didFinishLaunchingWithOptions launchOptions: [UIApplication.LaunchOptionsKey: Any]? = nil
+    ) -> Bool {
+        true
+    }
+
+    func application(
+        _ application: UIApplication,
         didRegisterForRemoteNotificationsWithDeviceToken deviceToken: Data
     ) {
         Task { @MainActor in
@@ -125,5 +136,27 @@ final class WIGAppDelegate: NSObject, UIApplicationDelegate {
         didFailToRegisterForRemoteNotificationsWithError error: Error
     ) {
         print("Failed to register for remote notifications:", error.localizedDescription)
+    }
+
+    func application(
+        _ application: UIApplication,
+        didReceiveRemoteNotification userInfo: [AnyHashable: Any],
+        fetchCompletionHandler completionHandler: @escaping (UIBackgroundFetchResult) -> Void
+    ) {
+        guard let data = userInfo["data"] as? [String: Any],
+              data["type"] as? String == "profile_updated"
+        else {
+            completionHandler(.noData)
+            return
+        }
+
+        Task { @MainActor in
+            NotificationCenter.default.post(
+                name: .appDataDidChange,
+                object: nil,
+                userInfo: data
+            )
+            completionHandler(.newData)
+        }
     }
 }

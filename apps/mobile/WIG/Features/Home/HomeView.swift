@@ -219,7 +219,7 @@ struct HomeView: View {
     @State private var pendingPostEventDetail: EventFeedItem?
     @State private var completedPostEventFeedbackIDs = Set<String>()
     @State private var selectedSearchFilter: GlobalSearchFilter
-    @AppStorage("globalSearchRecentQueries") private var recentSearchQueriesData = "[]"
+    @AppStorage("globalSearchRecentDestinations") private var recentSearchDestinationsData = "[]"
 
     private static let sectionTitleFormatter: DateFormatter = {
         let formatter = DateFormatter()
@@ -554,8 +554,6 @@ struct HomeView: View {
             } else {
                 NativeLoadingView()
                     .frame(maxWidth: .infinity, maxHeight: .infinity)
-                    .tint(.white)
-                    .foregroundStyle(.white)
                     .background(feedBackground)
             }
 
@@ -729,8 +727,6 @@ struct HomeView: View {
 
             if showsCenteredSearchLoadingState {
                 NativeLoadingView()
-                    .tint(.white)
-                    .foregroundStyle(.white)
                     .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .center)
                     .allowsHitTesting(false)
             }
@@ -755,35 +751,59 @@ struct HomeView: View {
 
     @ViewBuilder
     private var recentSearchesSection: some View {
-        if !recentSearchQueries.isEmpty {
+        if !filteredRecentSearchDestinations.isEmpty {
             VStack(alignment: .leading, spacing: 9) {
                 HStack {
                     SearchSectionHeader(title: "Recent")
                     Spacer()
-                    Button("Clear") { recentSearchQueriesData = "[]" }
+                    Button("Clear") { recentSearchDestinationsData = "[]" }
                         .font(.system(size: 13, weight: .semibold))
                         .foregroundStyle(.white.opacity(0.58))
                 }
 
-                ScrollView(.horizontal) {
-                    HStack(spacing: 8) {
-                        ForEach(recentSearchQueries, id: \.self) { query in
-                            Button {
-                                searchText = query
-                                isSearchFieldFocused = true
+                VStack(alignment: .leading, spacing: 8) {
+                    ForEach(filteredRecentSearchDestinations) { destination in
+                        switch destination {
+                        case .person(let user):
+                            NavigationLink {
+                                UserProfileView(userID: user.id)
                             } label: {
-                                Label(query, systemImage: "clock.arrow.circlepath")
-                                    .font(.system(size: 14, weight: .medium))
-                                    .foregroundStyle(.white.opacity(0.84))
-                                    .padding(.horizontal, 12)
-                                    .frame(height: 34)
-                                    .background(.white.opacity(0.08), in: Capsule())
+                                SearchUserRow(user: user)
+                                    .frame(maxWidth: .infinity, alignment: .leading)
+                                    .contentShape(Rectangle())
                             }
                             .buttonStyle(.plain)
+                            .simultaneousGesture(
+                                TapGesture().onEnded {
+                                    rememberSearchDestination(.person(user))
+                                }
+                            )
+
+                        case .place(let place):
+                            NavigationLink {
+                                PlaceDetailView(place: place)
+                            } label: {
+                                PlaceRowView(place: place, style: .plain)
+                            }
+                            .buttonStyle(.plain)
+                            .simultaneousGesture(
+                                TapGesture().onEnded {
+                                    rememberSearchDestination(.place(place))
+                                }
+                            )
+
+                        case .event(let event):
+                            EventDetailNavigationLink(
+                                event: event,
+                                onOpen: { rememberSearchDestination(.event($0)) }
+                            ) {
+                                SearchEventRow(event: event)
+                                    .frame(maxWidth: .infinity, alignment: .leading)
+                                    .contentShape(Rectangle())
+                            }
                         }
                     }
                 }
-                .scrollIndicators(.hidden)
             }
             .padding(.horizontal, 16)
         }
@@ -834,7 +854,10 @@ struct HomeView: View {
         if !users.isEmpty {
             VStack(alignment: .leading, spacing: 8) {
                 SearchSectionHeader(title: title)
-                SearchUsersList(users: users)
+                SearchUsersList(
+                    users: users,
+                    onSelect: { rememberSearchResult(.person($0)) }
+                )
             }
             .padding(.horizontal, 16)
         }
@@ -847,7 +870,10 @@ struct HomeView: View {
                 SearchSectionHeader(title: title)
                 LazyVGrid(columns: [GridItem(.flexible(), spacing: 12), GridItem(.flexible(), spacing: 12)], spacing: 12) {
                     ForEach(events) { event in
-                        EventDetailNavigationLink(event: event) {
+                        EventDetailNavigationLink(
+                            event: event,
+                            onOpen: { rememberSearchResult(.event($0)) }
+                        ) {
                             EventCardView(event: event, cardHeight: 238)
                                 .frame(maxWidth: .infinity)
                         }
@@ -863,7 +889,10 @@ struct HomeView: View {
         if !places.isEmpty {
             VStack(alignment: .leading, spacing: 8) {
                 SearchSectionHeader(title: title)
-                CompactPlaceListView(places: places)
+                CompactPlaceListView(
+                    places: places,
+                    onSelect: { rememberSearchResult(.place($0)) }
+                )
             }
             .padding(.horizontal, 16)
         }
@@ -971,8 +1000,6 @@ struct HomeView: View {
         if (homeEventSearchViewModel.isLoading || !homeEventSearchViewModel.hasLoadedResults) && homeEventSearchResults.isEmpty {
             NativeLoadingView(fillsAvailableSpace: false)
                 .frame(maxWidth: .infinity)
-                .tint(.white)
-                .foregroundStyle(.white)
                 .padding(.top, 28)
         } else if homeEventSearchResults.isEmpty {
             ContentUnavailableView {
@@ -1023,10 +1050,6 @@ struct HomeView: View {
                     .autocorrectionDisabled()
                     .submitLabel(.search)
                     .focused($isSearchFieldFocused)
-                    .onSubmit {
-                        guard !normalizedSearchQuery.isEmpty else { return }
-                        rememberSearch(normalizedSearchQuery)
-                    }
 
                 if !searchText.isEmpty {
                     Button {
@@ -1542,13 +1565,20 @@ struct HomeView: View {
         searchText.trimmingCharacters(in: .whitespacesAndNewlines)
     }
 
-    private var recentSearchQueries: [String] {
-        let searches = (try? JSONDecoder().decode([String].self, from: Data(recentSearchQueriesData.utf8))) ?? []
+    private var recentSearchDestinations: [RecentSearchDestination] {
+        (try? JSONDecoder().decode(
+            [RecentSearchDestination].self,
+            from: Data(recentSearchDestinationsData.utf8)
+        )) ?? []
+    }
 
-        return searches.filter { candidate in
-            !searches.contains { other in
-                other.count > candidate.count &&
-                    other.range(of: candidate, options: [.anchored, .caseInsensitive]) != nil
+    private var filteredRecentSearchDestinations: [RecentSearchDestination] {
+        recentSearchDestinations.filter { destination in
+            switch (selectedSearchFilter, destination) {
+            case (.all, _), (.people, .person), (.places, .place), (.events, .event):
+                return true
+            default:
+                return false
             }
         }
     }
@@ -1583,18 +1613,20 @@ struct HomeView: View {
         }
     }
 
-    private func rememberSearch(_ query: String) {
-        var searches = recentSearchQueries.filter {
-            $0.localizedCaseInsensitiveCompare(query) != .orderedSame &&
-                query.range(of: $0, options: [.anchored, .caseInsensitive]) == nil
-        }
-        searches.insert(query, at: 0)
-        searches = Array(searches.prefix(8))
+    private func rememberSearchDestination(_ destination: RecentSearchDestination) {
+        var destinations = recentSearchDestinations.filter { $0.id != destination.id }
+        destinations.insert(destination, at: 0)
+        destinations = Array(destinations.prefix(4))
 
-        if let data = try? JSONEncoder().encode(searches),
+        if let data = try? JSONEncoder().encode(destinations),
            let encoded = String(data: data, encoding: .utf8) {
-            recentSearchQueriesData = encoded
+            recentSearchDestinationsData = encoded
         }
+    }
+
+    private func rememberSearchResult(_ destination: RecentSearchDestination) {
+        guard !normalizedSearchQuery.isEmpty else { return }
+        rememberSearchDestination(destination)
     }
 
     private func moveWeek(by offset: Int) {
@@ -3089,6 +3121,23 @@ private struct RecentActivitySelectedUserProfile: Identifiable, Hashable {
     let id: String
 }
 
+private enum RecentSearchDestination: Codable, Identifiable {
+    case person(FriendUserSummary)
+    case place(PlaceListItem)
+    case event(EventFeedItem)
+
+    var id: String {
+        switch self {
+        case .person(let user):
+            return "person:\(user.id)"
+        case .place(let place):
+            return "place:\(place.listRowID)"
+        case .event(let event):
+            return "event:\(event.id.uuidString)"
+        }
+    }
+}
+
 private struct SearchSectionHeader: View {
     let title: String
 
@@ -3119,8 +3168,22 @@ private struct SearchUserRow: View {
     }
 }
 
+private struct SearchEventRow: View {
+    let event: EventFeedItem
+
+    var body: some View {
+        CompactUserListRowView(
+            imageURL: event.posterImageURL,
+            name: event.title,
+            subtitle: "\(event.primaryLocation) • \(event.formattedCardStart)",
+            identityKey: event.id.uuidString
+        )
+    }
+}
+
 private struct SearchUsersList: View {
     let users: [FriendUserSummary]
+    var onSelect: (FriendUserSummary) -> Void = { _ in }
     @Environment(\.apiClient) private var apiClient
 
     var body: some View {
@@ -3134,6 +3197,11 @@ private struct SearchUsersList: View {
                         .contentShape(Rectangle())
                 }
                 .buttonStyle(.plain)
+                .simultaneousGesture(
+                    TapGesture().onEnded {
+                        onSelect(user)
+                    }
+                )
                 .task {
                     await UserProfileViewModel.preload(userID: user.id, using: apiClient)
                 }

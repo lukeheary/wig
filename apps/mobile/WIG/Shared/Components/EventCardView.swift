@@ -29,6 +29,7 @@ extension EnvironmentValues {
 // when the reverse zoom begins instead of being rebuilt after a navigation pop.
 struct EventDetailNavigationLink<Label: View>: View {
     let event: EventFeedItem
+    let onOpen: (EventFeedItem) -> Void
     private let label: Label
 
     @Environment(\.eventDetailTransitionNamespace) private var transitionNamespace
@@ -36,13 +37,19 @@ struct EventDetailNavigationLink<Label: View>: View {
     @EnvironmentObject private var appSession: AppSession
     @State private var transitionSourceID = UUID()
 
-    init(event: EventFeedItem, @ViewBuilder label: () -> Label) {
+    init(
+        event: EventFeedItem,
+        onOpen: @escaping (EventFeedItem) -> Void = { _ in },
+        @ViewBuilder label: () -> Label
+    ) {
         self.event = event
+        self.onOpen = onOpen
         self.label = label()
     }
 
     var body: some View {
         Button {
+            onOpen(event)
             let sourceID = transitionNamespace == nil ? nil : transitionSourceID
 
             if let presentationAction {

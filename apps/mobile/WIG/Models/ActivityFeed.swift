@@ -155,6 +155,17 @@ struct ActivityEventSummary: Decodable, Identifiable, Hashable, Sendable {
         return "\(city), \(state)"
     }
 
+    var isBeforeToday: Bool {
+        var calendar = Calendar(identifier: .gregorian)
+        if let timeZone, let eventTimeZone = TimeZone(identifier: timeZone) {
+            calendar.timeZone = eventTimeZone
+        } else {
+            calendar.timeZone = TimeZone.usStateFallback(for: state) ?? .autoupdatingCurrent
+        }
+
+        return calendar.startOfDay(for: startAt) < calendar.startOfDay(for: .now)
+    }
+
     var eventFeedItem: EventFeedItem {
         EventFeedItem(
             id: id,

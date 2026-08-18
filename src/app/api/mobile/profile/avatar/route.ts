@@ -1,9 +1,10 @@
 import { auth } from "@clerk/nextjs/server";
-import { eq } from "drizzle-orm";
+import { and, eq, or } from "drizzle-orm";
 import { NextRequest, NextResponse } from "next/server";
 import { uploadToS3 } from "@/lib/s3";
 import { db } from "@/server/db";
-import { users } from "@/server/db/schema";
+import { userFriends, users } from "@/server/db/schema";
+import { sendBackgroundPushToUsers } from "@/server/utils/push-notifications";
 import { recordActivationActionBestEffort } from "@/server/utils/user-activation";
 import { withStoredImageReplacements } from "@/server/utils/stored-image-lifecycle";
 
@@ -69,6 +70,38 @@ export async function POST(request: NextRequest) {
       "add_profile_photo",
       "profile_photo"
     );
+
+    try {
+      const friendships = await db.query.userFriends.findMany({
+        where: and(
+          eq(userFriends.status, "accepted"),
+          or(
+            eq(userFriends.userId, userId),
+            eq(userFriends.friendUserId, userId)
+          )
+        ),
+        columns: {
+          userId: true,
+          friendUserId: true,
+        },
+      });
+      const friendUserIds = friendships.map((friendship) =>
+        friendship.userId === userId
+          ? friendship.friendUserId
+          : friendship.userId
+      );
+
+      await sendBackgroundPushToUsers(friendUserIds, {
+        data: {
+          type: "profile_updated",
+          userId,
+        },
+      });
+    } catch (error) {
+      // The avatar update is already complete. A failed refresh hint should not
+      // turn a successful upload into an error for the user who changed it.
+      console.error("Profile update background push failed", error);
+    }
 
     return NextResponse.json({
       avatarImageUrl: updatedUser.avatarImageUrl,

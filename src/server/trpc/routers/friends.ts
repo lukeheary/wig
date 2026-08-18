@@ -5,6 +5,7 @@ import {
   eventRsvps,
   users,
   userFriends,
+  userFriendsMutedNotifications,
   userActivity,
   userPartners,
 } from "../../db/schema";
@@ -302,7 +303,29 @@ export const friendsRouter = router({
         });
       }
 
-      await ctx.db.delete(userFriends).where(eq(userFriends.id, input.friendRequestId));
+      const otherUserId =
+        friendRequest.userId === ctx.auth.userId
+          ? friendRequest.friendUserId
+          : friendRequest.userId;
+
+      await ctx.db
+        .delete(userFriends)
+        .where(eq(userFriends.id, input.friendRequestId));
+
+      await ctx.db
+        .delete(userFriendsMutedNotifications)
+        .where(
+          or(
+            and(
+              eq(userFriendsMutedNotifications.userId, ctx.auth.userId),
+              eq(userFriendsMutedNotifications.friendUserId, otherUserId)
+            ),
+            and(
+              eq(userFriendsMutedNotifications.userId, otherUserId),
+              eq(userFriendsMutedNotifications.friendUserId, ctx.auth.userId)
+            )
+          )
+        );
 
       await deleteNotificationsForEntity(
         {
@@ -480,15 +503,16 @@ export const friendsRouter = router({
       const friendIds = userFriendships.map((f) =>
         f.userId === ctx.auth.userId ? f.friendUserId : f.userId
       );
-      const currentPartnerRelationship = await ctx.db.query.userPartners.findFirst({
-        where: and(
-          eq(userPartners.status, "accepted"),
-          or(
-            eq(userPartners.requesterId, ctx.auth.userId),
-            eq(userPartners.recipientId, ctx.auth.userId)
-          )
-        ),
-      });
+      const currentPartnerRelationship =
+        await ctx.db.query.userPartners.findFirst({
+          where: and(
+            eq(userPartners.status, "accepted"),
+            or(
+              eq(userPartners.requesterId, ctx.auth.userId),
+              eq(userPartners.recipientId, ctx.auth.userId)
+            )
+          ),
+        });
       const currentPartnerUserId = currentPartnerRelationship
         ? currentPartnerRelationship.requesterId === ctx.auth.userId
           ? currentPartnerRelationship.recipientId
@@ -500,7 +524,10 @@ export const friendsRouter = router({
         friendIds.length > 0
           ? await ctx.db.query.userActivity.findMany({
               where: inArray(userActivity.actorUserId, friendIds),
-              orderBy: [desc(userActivity.updatedAt), desc(userActivity.createdAt)],
+              orderBy: [
+                desc(userActivity.updatedAt),
+                desc(userActivity.createdAt),
+              ],
               limit: feedWindow,
               with: {
                 actor: true,
@@ -524,10 +551,14 @@ export const friendsRouter = router({
           ((activity.metadata as { includePartner?: boolean } | null)
             ?.includePartner ?? false) === true;
         const isPartnerMirroredRsvp =
-          (activity.type === "rsvp_going" || activity.type === "rsvp_interested") &&
+          (activity.type === "rsvp_going" ||
+            activity.type === "rsvp_interested") &&
           includePartner;
 
-        if (isPartnerMirroredRsvp && activity.actorUserId === currentPartnerUserId) {
+        if (
+          isPartnerMirroredRsvp &&
+          activity.actorUserId === currentPartnerUserId
+        ) {
           return false;
         }
 
@@ -542,8 +573,8 @@ export const friendsRouter = router({
                 (activity.type === "rsvp_going" ||
                   activity.type === "rsvp_interested" ||
                   activity.type === "rsvp_not_going") &&
-                ((activity.metadata as { includePartner?: boolean } | null)
-                  ?.includePartner === true)
+                (activity.metadata as { includePartner?: boolean } | null)
+                  ?.includePartner === true
             )
             .map((activity) => activity.actorUserId)
         ),
@@ -618,53 +649,55 @@ export const friendsRouter = router({
 
       // 3. Add event updates for events the current user is following via RSVP
       const normalizedEventUpdates = input.includeEventUpdates
-        ? (
-            await (async () => {
-              const subscribedRsvps = await ctx.db.query.eventRsvps.findMany({
-                where: and(
-                  eq(eventRsvps.userId, ctx.auth.userId),
-                  inArray(eventRsvps.status, ["going", "interested"])
-                ),
-                columns: {
-                  eventId: true,
-                },
-              });
+        ? await (async () => {
+            const subscribedRsvps = await ctx.db.query.eventRsvps.findMany({
+              where: and(
+                eq(eventRsvps.userId, ctx.auth.userId),
+                inArray(eventRsvps.status, ["going", "interested"])
+              ),
+              columns: {
+                eventId: true,
+              },
+            });
 
-              const subscribedEventIds = [
-                ...new Set(subscribedRsvps.map((rsvp) => rsvp.eventId)),
-              ];
+            const subscribedEventIds = [
+              ...new Set(subscribedRsvps.map((rsvp) => rsvp.eventId)),
+            ];
 
-              if (subscribedEventIds.length === 0) {
-                return [];
-              }
+            if (subscribedEventIds.length === 0) {
+              return [];
+            }
 
-              const eventUpdates = await ctx.db.query.eventActivity.findMany({
-                where: inArray(eventActivity.eventId, subscribedEventIds),
-                orderBy: [desc(eventActivity.createdAt)],
-                limit: feedWindow,
-                with: {
-                  actor: true,
-                  event: {
-                    with: {
-                      venue: true,
-                    },
+            const eventUpdates = await ctx.db.query.eventActivity.findMany({
+              where: inArray(eventActivity.eventId, subscribedEventIds),
+              orderBy: [desc(eventActivity.createdAt)],
+              limit: feedWindow,
+              with: {
+                actor: true,
+                event: {
+                  with: {
+                    venue: true,
                   },
                 },
-              });
+              },
+            });
 
-              return eventUpdates
-                .filter((update) => Boolean(update.event) && update.type !== "created")
-                .map((update) => ({
-                  ...update,
-                  entityType: "event" as const,
-                  entityId: update.eventId,
-                }));
-            })()
-          )
+            return eventUpdates
+              .filter(
+                (update) => Boolean(update.event) && update.type !== "created"
+              )
+              .map((update) => ({
+                ...update,
+                entityType: "event" as const,
+                entityId: update.eventId,
+              }));
+          })()
         : [];
 
       const getActivityTimestamp = (
-        activity: (typeof friendFeed)[number] | (typeof normalizedEventUpdates)[number]
+        activity:
+          | (typeof friendFeed)[number]
+          | (typeof normalizedEventUpdates)[number]
       ) => ("updatedAt" in activity ? activity.updatedAt : activity.createdAt);
 
       return [...friendFeed, ...normalizedEventUpdates]

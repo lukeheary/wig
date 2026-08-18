@@ -14,6 +14,7 @@ import {
   boolean,
   integer,
   customType,
+  primaryKey,
 } from "drizzle-orm/pg-core";
 import { RSVP_DECLINE_REASON_VALUES } from "@/lib/rsvp";
 import {
@@ -218,7 +219,12 @@ export const usersRelations = relations(users, ({ many }) => ({
     relationName: "notificationActor",
   }),
   pushTokens: many(userPushTokens),
-  notificationPreferences: many(userNotificationPreferences),
+  mutedFriendNotifications: many(userFriendsMutedNotifications, {
+    relationName: "mutedFriendNotificationsOwner",
+  }),
+  friendNotificationMutes: many(userFriendsMutedNotifications, {
+    relationName: "mutedFriendNotificationsTarget",
+  }),
   surfaceStates: many(userSurfaceState),
   activationTasks: many(userActivationTasks),
   activationTaskActions: many(userActivationTaskActions),
@@ -226,32 +232,37 @@ export const usersRelations = relations(users, ({ many }) => ({
   supportTicketActivities: many(supportTicketActivity),
 }));
 
-export const userNotificationPreferences = pgTable(
-  "user_notification_preferences",
+export const userFriendsMutedNotifications = pgTable(
+  "user_friends_muted_notifications",
   {
     userId: text("user_id")
-      .primaryKey()
       .notNull()
       .references(() => users.id, { onDelete: "cascade" }),
-    friendRsvpPushEnabled: boolean("friend_rsvp_push_enabled")
+    friendUserId: text("friend_user_id")
       .notNull()
-      .default(true),
+      .references(() => users.id, { onDelete: "cascade" }),
     createdAt: timestamp("created_at").defaultNow().notNull(),
-    updatedAt: timestamp("updated_at").defaultNow().notNull(),
   },
   (table) => ({
-    friendRsvpPushIdx: index(
-      "user_notification_preferences_friend_rsvp_idx"
-    ).on(table.friendRsvpPushEnabled),
+    pk: primaryKey({ columns: [table.userId, table.friendUserId] }),
+    friendUserIdx: index("user_friends_muted_notifications_friend_user_idx").on(
+      table.friendUserId
+    ),
   })
 );
 
-export const userNotificationPreferencesRelations = relations(
-  userNotificationPreferences,
+export const userFriendsMutedNotificationsRelations = relations(
+  userFriendsMutedNotifications,
   ({ one }) => ({
     user: one(users, {
-      fields: [userNotificationPreferences.userId],
+      fields: [userFriendsMutedNotifications.userId],
       references: [users.id],
+      relationName: "mutedFriendNotificationsOwner",
+    }),
+    friend: one(users, {
+      fields: [userFriendsMutedNotifications.friendUserId],
+      references: [users.id],
+      relationName: "mutedFriendNotificationsTarget",
     }),
   })
 );

@@ -47,6 +47,7 @@ struct EventDetailView: View {
     @State private var rsvpConfirmationToken = UUID()
     @State private var isRSVPConfirmationVisible = false
     @State private var pendingRSVPNotificationToken = UUID()
+    @State private var locallyExcludedPartnerRSVPUserID: String?
     @State private var currentUserReview: MobileEventReview?
     @State private var attendeeReviewRatings = [String: EventReviewRating]()
     @State private var hasLoadedCurrentUserReview = false
@@ -1319,6 +1320,8 @@ struct EventDetailView: View {
             return
         }
 
+        let previousExcludedPartnerRSVPUserID = locallyExcludedPartnerRSVPUserID
+        locallyExcludedPartnerRSVPUserID = nextValue ? nil : partnerRelationship?.partner.id
         rsvpViewModel.setIncludePartner(nextValue)
 
         guard let currentStatus = rsvpViewModel.status else {
@@ -1338,6 +1341,8 @@ struct EventDetailView: View {
 
             if didUpdate {
                 handleSuccessfulRSVPChange()
+            } else {
+                locallyExcludedPartnerRSVPUserID = previousExcludedPartnerRSVPUserID
             }
         }
     }
@@ -1548,6 +1553,13 @@ struct EventDetailView: View {
             displayedEvent = displayedEvent.updatingSocialRSVP(
                 for: partnerSocialUser,
                 status: status
+            )
+        } else if let partnerSocialUser,
+                  locallyExcludedPartnerRSVPUserID == partnerSocialUser.id
+        {
+            displayedEvent = displayedEvent.updatingSocialRSVP(
+                for: partnerSocialUser,
+                status: nil
             )
         }
 
@@ -2840,8 +2852,6 @@ struct EventSeriesEditSheet: View {
             case .loading:
                 NativeLoadingView()
                     .frame(maxWidth: .infinity, maxHeight: .infinity)
-                    .tint(.white)
-                    .foregroundStyle(.white)
                     .background(AppTheme.background)
 
             case .loaded(let series):

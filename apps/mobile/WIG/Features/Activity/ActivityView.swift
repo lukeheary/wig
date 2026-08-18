@@ -99,8 +99,6 @@ struct ActivityView: View {
         case .idle, .loading:
             NativeLoadingView()
                 .frame(maxWidth: .infinity, maxHeight: .infinity)
-                .tint(.white)
-                .foregroundStyle(.white)
                 .background(background)
 
         case .failed(let message):
@@ -579,7 +577,7 @@ private enum ActivityFeedFilter: String, CaseIterable, Identifiable {
                 }
 
                 guard let event = activity.event else { return true }
-                return event.startAt >= .now
+                return !event.isBeforeToday
             }
         case .past:
             return activities.filter { activity in
@@ -588,7 +586,7 @@ private enum ActivityFeedFilter: String, CaseIterable, Identifiable {
                 }
 
                 guard let event = activity.event else { return false }
-                return event.startAt < .now
+                return event.isBeforeToday
             }
         }
     }

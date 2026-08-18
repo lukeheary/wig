@@ -346,8 +346,7 @@ struct MobilePlaceCreationView: View {
         Section("Categories") {
             if viewModel.isLoadingCategories {
                 NativeLoadingView(fillsAvailableSpace: false)
-                    .tint(AppTheme.accentBlue)
-                .frame(maxWidth: .infinity, alignment: .leading)
+                    .frame(maxWidth: .infinity, alignment: .leading)
             } else if viewModel.categories.isEmpty {
                 VStack(alignment: .leading, spacing: 8) {
                     Text("No categories are available right now.")
@@ -1093,8 +1092,6 @@ struct GooglePlaceSearchSheet: View {
         if viewModel.isLoading && viewModel.predictions.isEmpty {
             NativeLoadingView()
                 .frame(maxWidth: .infinity, minHeight: 220)
-                .tint(.white)
-                .foregroundStyle(.white)
         } else if let loadError = viewModel.loadError, viewModel.predictions.isEmpty {
             ContentUnavailableView {
                 Label(title, systemImage: "wifi.exclamationmark")

@@ -65,8 +65,8 @@ struct UserProfileResponse: Decodable, Sendable {
     }
 }
 
-struct FriendUserSummary: Decodable, Identifiable, Hashable, Sendable {
-    enum FriendStatus: String, Decodable, Hashable, Sendable {
+struct FriendUserSummary: Codable, Identifiable, Hashable, Sendable {
+    enum FriendStatus: String, Codable, Hashable, Sendable {
         case none
         case accepted
         case pendingSent = "pending_sent"
@@ -81,6 +81,7 @@ struct FriendUserSummary: Decodable, Identifiable, Hashable, Sendable {
     let city: String?
     let state: String?
     let friendStatus: FriendStatus?
+    let notificationsMuted: Bool
 
     enum CodingKeys: String, CodingKey {
         case id
@@ -91,6 +92,7 @@ struct FriendUserSummary: Decodable, Identifiable, Hashable, Sendable {
         case city
         case state
         case friendStatus
+        case notificationsMuted
     }
 
     init(
@@ -101,7 +103,8 @@ struct FriendUserSummary: Decodable, Identifiable, Hashable, Sendable {
         avatarImageURL: URL?,
         city: String? = nil,
         state: String? = nil,
-        friendStatus: FriendStatus? = nil
+        friendStatus: FriendStatus? = nil,
+        notificationsMuted: Bool = false
     ) {
         self.id = id
         self.friendshipID = friendshipID
@@ -111,6 +114,7 @@ struct FriendUserSummary: Decodable, Identifiable, Hashable, Sendable {
         self.city = city
         self.state = state
         self.friendStatus = friendStatus
+        self.notificationsMuted = notificationsMuted
     }
 
     var usernameText: String {
@@ -163,7 +167,8 @@ extension FriendUserSummary {
             avatarImageURL: avatarImageURL,
             city: city,
             state: state,
-            friendStatus: friendStatus
+            friendStatus: friendStatus,
+            notificationsMuted: notificationsMuted
         )
     }
 }
@@ -180,6 +185,23 @@ extension FriendUserSummary {
         city = try container.decodeIfPresent(String.self, forKey: .city)
         state = try container.decodeIfPresent(String.self, forKey: .state)
         friendStatus = try container.decodeIfPresent(FriendStatus.self, forKey: .friendStatus)
+        notificationsMuted = try container.decodeIfPresent(Bool.self, forKey: .notificationsMuted) ?? false
+    }
+}
+
+extension FriendUserSummary {
+    func updatingNotificationsMuted(_ notificationsMuted: Bool) -> FriendUserSummary {
+        FriendUserSummary(
+            id: id,
+            friendshipID: friendshipID,
+            name: name,
+            username: username,
+            avatarImageURL: avatarImageURL,
+            city: city,
+            state: state,
+            friendStatus: friendStatus,
+            notificationsMuted: notificationsMuted
+        )
     }
 }
 

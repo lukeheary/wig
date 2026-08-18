@@ -280,7 +280,8 @@ final class ProfileViewModel: ObservableObject {
             avatarImageURL: user.avatarImageURL,
             city: user.city,
             state: user.state,
-            friendStatus: status
+            friendStatus: status,
+            notificationsMuted: user.notificationsMuted
         )
 
         if isPending {

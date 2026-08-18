@@ -9,17 +9,19 @@ import {
   metroAreas,
   placeFollows,
   userFriends,
+  userFriendsMutedNotifications,
   users,
 } from "@/server/db/schema";
-import {
-  createMobileMetroResolver,
-} from "@/app/api/mobile/metro";
+import { createMobileMetroResolver } from "@/app/api/mobile/metro";
 import {
   canEditMobileEvent,
   resolveMobileEventEditPermissions,
 } from "@/app/api/mobile/event-edit-permissions";
 import { eventTimeZone } from "@/lib/utils";
-import { mapEventCategoryData, mapPlaceCategoryData } from "@/server/utils/categories";
+import {
+  mapEventCategoryData,
+  mapPlaceCategoryData,
+} from "@/server/utils/categories";
 
 const DEFAULT_MOBILE_FEED_TIME_ZONE = "America/New_York";
 const timeZoneFormatterCache = new Map<string, Intl.DateTimeFormat>();
@@ -126,7 +128,9 @@ function startOfDayInTimeZone(date: Date, timeZone: string) {
     return fallback;
   }
 
-  const naiveUtcMidnight = new Date(Date.UTC(parts.year, parts.month - 1, parts.day));
+  const naiveUtcMidnight = new Date(
+    Date.UTC(parts.year, parts.month - 1, parts.day)
+  );
   const offset = getTimeZoneOffsetMs(naiveUtcMidnight, timeZone) ?? 0;
 
   return new Date(naiveUtcMidnight.getTime() - offset);
@@ -200,7 +204,10 @@ export async function GET(_request: Request, context: RouteContext) {
     );
   }
 
-  const resolveMetroArea = createMobileMetroResolver(availableMetroAreas, cityCoordinates);
+  const resolveMetroArea = createMobileMetroResolver(
+    availableMetroAreas,
+    cityCoordinates
+  );
   const targetMetroArea =
     targetUser.city && targetUser.state
       ? resolveMetroArea({ city: targetUser.city, state: targetUser.state })
@@ -224,87 +231,123 @@ export async function GET(_request: Request, context: RouteContext) {
 
   const friends = friendships
     .map((friendship) =>
-      friendship.userId === id ? userSummary(friendship.friend) : userSummary(friendship.user)
+      friendship.userId === id
+        ? userSummary(friendship.friend)
+        : userSummary(friendship.user)
     )
     .filter((friend): friend is NonNullable<typeof friend> => Boolean(friend));
 
-  const [upcomingRsvps, pastRsvps, targetFollowedPlaces, followedPlaceIds, editPermissions, viewerFriendships, viewerTargetFriendship] =
-    await Promise.all([
-      db.query.eventRsvps.findMany({
-        where: and(eq(eventRsvps.userId, id), inArray(eventRsvps.status, ["going", "interested"])),
-        with: {
-          event: {
-            with: {
-              venue: true,
-              organizer: true,
-              categoryLinks: {
-                with: {
-                  category: true,
-                },
+  const [
+    upcomingRsvps,
+    pastRsvps,
+    targetFollowedPlaces,
+    followedPlaceIds,
+    editPermissions,
+    viewerFriendships,
+    viewerTargetFriendship,
+    viewerNotificationMute,
+  ] = await Promise.all([
+    db.query.eventRsvps.findMany({
+      where: and(
+        eq(eventRsvps.userId, id),
+        inArray(eventRsvps.status, ["going", "interested"])
+      ),
+      with: {
+        event: {
+          with: {
+            venue: true,
+            organizer: true,
+            categoryLinks: {
+              with: {
+                category: true,
               },
             },
           },
         },
-        orderBy: [asc(eventRsvps.updatedAt)],
-      }),
-      db.query.eventRsvps.findMany({
-        where: and(eq(eventRsvps.userId, id), inArray(eventRsvps.status, ["going", "interested"])),
-        with: {
-          event: {
-            with: {
-              venue: true,
-              organizer: true,
-              categoryLinks: {
-                with: {
-                  category: true,
-                },
+      },
+      orderBy: [asc(eventRsvps.updatedAt)],
+    }),
+    db.query.eventRsvps.findMany({
+      where: and(
+        eq(eventRsvps.userId, id),
+        inArray(eventRsvps.status, ["going", "interested"])
+      ),
+      with: {
+        event: {
+          with: {
+            venue: true,
+            organizer: true,
+            categoryLinks: {
+              with: {
+                category: true,
               },
             },
           },
         },
-        orderBy: [desc(eventRsvps.updatedAt)],
-      }),
-      db.query.placeFollows.findMany({
-        where: eq(placeFollows.userId, id),
-        with: {
-          place: {
-            with: {
-              categoryLinks: {
-                with: {
-                  category: true,
-                },
+      },
+      orderBy: [desc(eventRsvps.updatedAt)],
+    }),
+    db.query.placeFollows.findMany({
+      where: eq(placeFollows.userId, id),
+      with: {
+        place: {
+          with: {
+            categoryLinks: {
+              with: {
+                category: true,
               },
             },
           },
         },
-        orderBy: [desc(placeFollows.createdAt)],
-      }),
-      viewerUserId
-        ? db.query.placeFollows.findMany({
-            where: eq(placeFollows.userId, viewerUserId),
-            columns: {
-              placeId: true,
-            },
-          })
-        : Promise.resolve([]),
-      resolveMobileEventEditPermissions(viewerUserId),
-      viewerUserId
-        ? db.query.userFriends.findMany({
-            where: and(
-              or(eq(userFriends.userId, viewerUserId), eq(userFriends.friendUserId, viewerUserId)),
-              eq(userFriends.status, "accepted")
+      },
+      orderBy: [desc(placeFollows.createdAt)],
+    }),
+    viewerUserId
+      ? db.query.placeFollows.findMany({
+          where: eq(placeFollows.userId, viewerUserId),
+          columns: {
+            placeId: true,
+          },
+        })
+      : Promise.resolve([]),
+    resolveMobileEventEditPermissions(viewerUserId),
+    viewerUserId
+      ? db.query.userFriends.findMany({
+          where: and(
+            or(
+              eq(userFriends.userId, viewerUserId),
+              eq(userFriends.friendUserId, viewerUserId)
             ),
-          })
-        : Promise.resolve([]),
-      viewerUserId
-        ? db.query.userFriends.findFirst({
-            where: or(
-              and(eq(userFriends.userId, viewerUserId), eq(userFriends.friendUserId, id)),
-              and(eq(userFriends.userId, id), eq(userFriends.friendUserId, viewerUserId))
+            eq(userFriends.status, "accepted")
+          ),
+        })
+      : Promise.resolve([]),
+    viewerUserId
+      ? db.query.userFriends.findFirst({
+          where: or(
+            and(
+              eq(userFriends.userId, viewerUserId),
+              eq(userFriends.friendUserId, id)
             ),
-          })
-        : Promise.resolve(null),
-    ]);
+            and(
+              eq(userFriends.userId, id),
+              eq(userFriends.friendUserId, viewerUserId)
+            )
+          ),
+        })
+      : Promise.resolve(null),
+    viewerUserId && viewerUserId !== id
+      ? db.query.userFriendsMutedNotifications.findFirst({
+          where: and(
+            eq(userFriendsMutedNotifications.userId, viewerUserId),
+            eq(userFriendsMutedNotifications.friendUserId, id)
+          ),
+          columns: {
+            userId: true,
+          },
+        })
+      : Promise.resolve(null),
+  ]);
 
   const upcomingEventsRaw = upcomingRsvps
     .map((rsvp) => rsvp.event)
@@ -315,10 +358,14 @@ export async function GET(_request: Request, context: RouteContext) {
     .filter((event): event is NonNullable<typeof event> => Boolean(event))
     .filter((event) => event.startAt < today);
 
-  const followedPlaceIdSet = new Set(followedPlaceIds.map((follow) => follow.placeId));
+  const followedPlaceIdSet = new Set(
+    followedPlaceIds.map((follow) => follow.placeId)
+  );
   const viewerFriendIds = new Set(
     viewerFriendships.map((friendship) =>
-      friendship.userId === viewerUserId ? friendship.friendUserId : friendship.userId
+      friendship.userId === viewerUserId
+        ? friendship.friendUserId
+        : friendship.userId
     )
   );
 
@@ -347,7 +394,10 @@ export async function GET(_request: Request, context: RouteContext) {
     viewerUserId && allEventIds.length > 0
       ? await Promise.all([
           db.query.eventRsvps.findMany({
-            where: and(inArray(eventRsvps.eventId, allEventIds), eq(eventRsvps.userId, viewerUserId)),
+            where: and(
+              inArray(eventRsvps.eventId, allEventIds),
+              eq(eventRsvps.userId, viewerUserId)
+            ),
             with: {
               user: true,
             },
@@ -379,7 +429,10 @@ export async function GET(_request: Request, context: RouteContext) {
 
   const viewerRsvpMap = new Map<
     string,
-    { status: "going" | "interested" | "not_going"; notGoingReason: string | null }
+    {
+      status: "going" | "interested" | "not_going";
+      notGoingReason: string | null;
+    }
   >();
   for (const rsvp of viewerRsvps) {
     viewerRsvpMap.set(rsvp.eventId, {
@@ -395,10 +448,15 @@ export async function GET(_request: Request, context: RouteContext) {
     }
 
     const attendees = socialRsvpsMap.get(rsvp.eventId)!;
-    const existingIndex = attendees.findIndex((attendee: any) => attendee.userId === rsvp.userId);
+    const existingIndex = attendees.findIndex(
+      (attendee: any) => attendee.userId === rsvp.userId
+    );
 
     if (existingIndex >= 0) {
-      if (attendees[existingIndex].status === "interested" && rsvp.status === "going") {
+      if (
+        attendees[existingIndex].status === "interested" &&
+        rsvp.status === "going"
+      ) {
         attendees[existingIndex] = rsvp;
       }
       return;
@@ -407,8 +465,17 @@ export async function GET(_request: Request, context: RouteContext) {
     attendees.push(rsvp);
   };
 
-  for (const rsvp of [...viewerRsvps, ...mirroredPartnerRsvps, ...friendRsvps]) {
-    if (!rsvp.user || (rsvp.status !== "going" && rsvp.status !== "interested" && rsvp.status !== "not_going")) {
+  for (const rsvp of [
+    ...viewerRsvps,
+    ...mirroredPartnerRsvps,
+    ...friendRsvps,
+  ]) {
+    if (
+      !rsvp.user ||
+      (rsvp.status !== "going" &&
+        rsvp.status !== "interested" &&
+        rsvp.status !== "not_going")
+    ) {
       continue;
     }
 
@@ -429,7 +496,7 @@ export async function GET(_request: Request, context: RouteContext) {
     });
   }
 
-  const mapMobileEvent = (event: typeof upcomingEventsRaw[number]) => {
+  const mapMobileEvent = (event: (typeof upcomingEventsRaw)[number]) => {
     const mapped = mapEventCategoryData(event);
     const socialRsvps = socialRsvpsMap.get(mapped.id) ?? [];
     const viewerRsvp = viewerRsvpMap.get(mapped.id) ?? null;
@@ -472,14 +539,21 @@ export async function GET(_request: Request, context: RouteContext) {
       }),
       isFollowed:
         (mapped.venueId ? followedPlaceIdSet.has(mapped.venueId) : false) ||
-        (mapped.organizerId ? followedPlaceIdSet.has(mapped.organizerId) : false),
-      isCreatedByCurrentUser: Boolean(viewerUserId) && mapped.createdByUserId === viewerUserId,
+        (mapped.organizerId
+          ? followedPlaceIdSet.has(mapped.organizerId)
+          : false),
+      isCreatedByCurrentUser:
+        Boolean(viewerUserId) && mapped.createdByUserId === viewerUserId,
       userRsvpStatus: viewerRsvp?.status ?? null,
       userRsvpNotGoingReason: viewerRsvp?.notGoingReason ?? null,
       currentUserReview: viewerReviewMap.get(mapped.id) ?? null,
       friendsGoing: socialRsvps.filter((rsvp: any) => rsvp.status === "going"),
-      friendsInterested: socialRsvps.filter((rsvp: any) => rsvp.status === "interested"),
-      friendsNotGoing: socialRsvps.filter((rsvp: any) => rsvp.status === "not_going"),
+      friendsInterested: socialRsvps.filter(
+        (rsvp: any) => rsvp.status === "interested"
+      ),
+      friendsNotGoing: socialRsvps.filter(
+        (rsvp: any) => rsvp.status === "not_going"
+      ),
     };
   };
 
@@ -495,13 +569,17 @@ export async function GET(_request: Request, context: RouteContext) {
                 ? "pending_sent"
                 : "pending_received"
             : "none",
+          notificationsMuted: Boolean(viewerNotificationMute),
         }
       : null,
     friendCount: friends.length,
     followingCount: targetFollowedPlaces.length,
     followedPlaces: targetFollowedPlaces.map(({ place }) => {
       const mappedPlace = mapPlaceCategoryData(place);
-      const metroArea = resolveMetroArea({ city: place.city, state: place.state });
+      const metroArea = resolveMetroArea({
+        city: place.city,
+        state: place.state,
+      });
 
       return {
         id: mappedPlace.id,

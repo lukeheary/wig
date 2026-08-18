@@ -23,6 +23,7 @@ import {
   createMobileMetroResolver,
   mobileMetroAreas,
 } from "@/app/api/mobile/metro";
+import { eventTimeZone } from "@/lib/utils";
 
 const HOME_RECENT_ACTIVITY_SURFACE = "home_recent_activity";
 const HOME_ACTIVITY_WINDOW_DAYS = 1;
@@ -55,6 +56,30 @@ function activityTimestamp(activity: {
   createdAt: Date;
 }) {
   return activity.updatedAt ?? activity.createdAt;
+}
+
+function localDateKey(date: Date, timeZone: string) {
+  const parts = new Intl.DateTimeFormat("en-US", {
+    timeZone,
+    year: "numeric",
+    month: "2-digit",
+    day: "2-digit",
+  }).formatToParts(date);
+  const values = Object.fromEntries(
+    parts
+      .filter((part) => part.type !== "literal")
+      .map((part) => [part.type, part.value])
+  );
+
+  return `${values.year}-${values.month}-${values.day}`;
+}
+
+function isCurrentOrFutureEventDay(
+  event: { startAt: Date; timeZone: string | null; state: string },
+  now: Date
+) {
+  const timeZone = eventTimeZone(event.timeZone, event.state) ?? "America/New_York";
+  return localDateKey(event.startAt, timeZone) >= localDateKey(now, timeZone);
 }
 
 function getNotGoingReason(metadata: unknown) {
@@ -209,7 +234,9 @@ export async function GET(request: Request) {
         return false;
       }
 
-      return activity.event.startAt > now;
+      // Match the web home preview: activity for an event remains visible for
+      // the event's entire local calendar day, even after its start time.
+      return isCurrentOrFutureEventDay(activity.event, now);
     })
     .sort((a, b) => activityTimestamp(b).getTime() - activityTimestamp(a).getTime());
 

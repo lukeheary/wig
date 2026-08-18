@@ -12,6 +12,10 @@ type PushPayload = {
   data?: Record<string, unknown>;
 };
 
+type BackgroundPushPayload = {
+  data: Record<string, unknown>;
+};
+
 const APNS_KEY_ID = process.env.APNS_KEY_ID;
 const APNS_TEAM_ID = process.env.APNS_TEAM_ID;
 const APNS_PRIVATE_KEY = process.env.APNS_PRIVATE_KEY;
@@ -19,7 +23,9 @@ const APNS_BUNDLE_ID = process.env.APNS_BUNDLE_ID;
 const APNS_USE_SANDBOX = process.env.APNS_USE_SANDBOX === "true";
 
 function isConfigured() {
-  return Boolean(APNS_KEY_ID && APNS_TEAM_ID && APNS_PRIVATE_KEY && APNS_BUNDLE_ID);
+  return Boolean(
+    APNS_KEY_ID && APNS_TEAM_ID && APNS_PRIVATE_KEY && APNS_BUNDLE_ID
+  );
 }
 
 function apnsPrivateKey() {
@@ -102,7 +108,10 @@ async function sendApnsRequest(
     request.setEncoding("utf8");
     request.on("response", (headers) => {
       const headerStatus = headers[http2.constants.HTTP2_HEADER_STATUS];
-      status = typeof headerStatus === "number" ? headerStatus : Number(headerStatus ?? 0);
+      status =
+        typeof headerStatus === "number"
+          ? headerStatus
+          : Number(headerStatus ?? 0);
     });
     request.on("data", (chunk) => {
       responseBody += chunk;
@@ -126,6 +135,63 @@ async function sendApnsRequest(
           sound: "default",
         },
         ...(payload.data ? { data: payload.data } : {}),
+      })
+    );
+  });
+}
+
+async function sendBackgroundApnsRequest(
+  deviceToken: string,
+  jwt: string,
+  payload: BackgroundPushPayload
+) {
+  const authority = APNS_USE_SANDBOX
+    ? "https://api.sandbox.push.apple.com"
+    : "https://api.push.apple.com";
+
+  return new Promise<{ status: number; body: string }>((resolve, reject) => {
+    const client = http2.connect(authority);
+    client.on("error", reject);
+
+    const request = client.request({
+      ":method": "POST",
+      ":path": `/3/device/${deviceToken}`,
+      authorization: `bearer ${jwt}`,
+      "apns-topic": APNS_BUNDLE_ID!,
+      "apns-push-type": "background",
+      "apns-priority": "5",
+      "content-type": "application/json",
+    });
+
+    let responseBody = "";
+    let status = 0;
+
+    request.setEncoding("utf8");
+    request.on("response", (headers) => {
+      const headerStatus = headers[http2.constants.HTTP2_HEADER_STATUS];
+      status =
+        typeof headerStatus === "number"
+          ? headerStatus
+          : Number(headerStatus ?? 0);
+    });
+    request.on("data", (chunk) => {
+      responseBody += chunk;
+    });
+    request.on("end", () => {
+      client.close();
+      resolve({ status, body: responseBody });
+    });
+    request.on("error", (error) => {
+      client.close();
+      reject(error);
+    });
+
+    request.end(
+      JSON.stringify({
+        aps: {
+          "content-available": 1,
+        },
+        data: payload.data,
       })
     );
   });
@@ -208,4 +274,59 @@ export async function sendPushNotificationToUsers(
     successCount,
     revokedTokenCount: invalidTokens.length,
   });
+}
+
+export async function sendBackgroundPushToUsers(
+  userIds: string[],
+  payload: BackgroundPushPayload,
+  database: DatabaseClient = db
+) {
+  if (!isConfigured() || userIds.length === 0) {
+    return;
+  }
+
+  const uniqueUserIds = [...new Set(userIds)];
+  const tokens = await database.query.userPushTokens.findMany({
+    where: and(
+      inArray(userPushTokens.userId, uniqueUserIds),
+      isNull(userPushTokens.revokedAt)
+    ),
+    columns: {
+      token: true,
+    },
+  });
+
+  if (tokens.length === 0) {
+    return;
+  }
+
+  const jwt = createApnsJwt();
+  const invalidTokens: string[] = [];
+
+  await Promise.all(
+    tokens.map(async ({ token }) => {
+      const response = await sendBackgroundApnsRequest(token, jwt, payload);
+
+      if (response.status >= 200 && response.status < 300) {
+        return;
+      }
+
+      const shouldRevoke =
+        response.status === 410 ||
+        response.body.includes("BadDeviceToken") ||
+        response.body.includes("Unregistered") ||
+        response.body.includes("DeviceTokenNotForTopic");
+
+      if (shouldRevoke) {
+        invalidTokens.push(token);
+      } else {
+        console.error("APNs background push failed", {
+          status: response.status,
+          body: response.body,
+        });
+      }
+    })
+  );
+
+  await revokeTokens(invalidTokens, database);
 }

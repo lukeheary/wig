@@ -379,6 +379,12 @@
       "when": 1786831200000,
       "tag": "0061_rename_stored_image_columns",
       "breakpoints": true
+    },
+    {
+      "idx": 63,
+      "when": 1787025600000,
+      "tag": "0062_add_friend_notification_mutes",
+      "breakpoints": true
     }
   ]
 }

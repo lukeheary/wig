@@ -421,6 +421,19 @@ struct APIClient: Sendable {
         )
     }
 
+    static func setMobileFriendNotificationsMuted(
+        friendUserID: String,
+        muted: Bool
+    ) -> Endpoint<MobileFriendNotificationMuteResponse> {
+        Endpoint(
+            path: "/api/mobile/friends/\(friendUserID)/notifications",
+            method: muted ? .post : .delete,
+            requiresAuthentication: false,
+            includesAuthenticationIfAvailable: true,
+            notifiesDataChange: false
+        )
+    }
+
     static func registerMobilePushToken(token: String, platform: String) throws -> Endpoint<EmptyResponse> {
         Endpoint(
             path: "/api/mobile/push-token",
@@ -1286,6 +1299,10 @@ struct MobileSearchResponse: Decodable, Hashable, Sendable {
 struct MobileFriendRequestResponse: Decodable, Hashable, Sendable {
     let success: Bool
     let friendStatus: FriendUserSummary.FriendStatus
+}
+
+struct MobileFriendNotificationMuteResponse: Decodable, Hashable, Sendable {
+    let notificationsMuted: Bool
 }
 
 struct MobileAdminStatusResponse: Decodable, Hashable, Sendable {

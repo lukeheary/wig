@@ -6,6 +6,7 @@ import {
   notificationEntityTypeEnum,
   notificationTypeEnum,
   userFriends,
+  userFriendsMutedNotifications,
   users,
 } from "../db/schema";
 import { sendPushNotificationToUsers } from "./push-notifications";
@@ -214,6 +215,21 @@ export async function notifyFriendsOfRsvp(
     return [];
   }
 
+  const mutedRecipients =
+    await database.query.userFriendsMutedNotifications.findMany({
+      where: and(
+        eq(userFriendsMutedNotifications.friendUserId, actorUserId),
+        inArray(userFriendsMutedNotifications.userId, recipientIds)
+      ),
+      columns: {
+        userId: true,
+      },
+    });
+  const mutedRecipientIds = new Set(mutedRecipients.map((mute) => mute.userId));
+  const pushRecipientIds = recipientIds.filter(
+    (userId) => !mutedRecipientIds.has(userId)
+  );
+
   const actorName =
     [actor?.firstName, actor?.lastName].filter(Boolean).join(" ").trim() ||
     actor?.username ||
@@ -255,7 +271,7 @@ export async function notifyFriendsOfRsvp(
   );
 
   await sendPushNotificationToUsers(
-    recipientIds,
+    pushRecipientIds,
     {
       title,
       body,

@@ -533,8 +533,7 @@ struct MobileEventCreationView: View {
             Section("Categories") {
                 if viewModel.isLoadingCategories {
                     NativeLoadingView(fillsAvailableSpace: false)
-                        .tint(AppTheme.accentBlue)
-                    .frame(maxWidth: .infinity, alignment: .leading)
+                        .frame(maxWidth: .infinity, alignment: .leading)
                 } else if viewModel.categories.isEmpty {
                     VStack(alignment: .leading, spacing: 8) {
                         Text("No categories are available right now.")
@@ -1923,8 +1922,6 @@ private struct PlaceLookupSheet: View {
         if viewModel.isLoading && viewModel.places.isEmpty {
             NativeLoadingView()
                 .frame(maxWidth: .infinity, minHeight: 220)
-                .tint(.white)
-                .foregroundStyle(.white)
         } else if viewModel.places.isEmpty {
             ContentUnavailableView {
                 Label(kind.title, systemImage: kind.type == .venue ? "building.2" : "person.badge.plus")

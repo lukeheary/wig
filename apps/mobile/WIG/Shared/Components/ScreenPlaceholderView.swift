@@ -26,17 +26,17 @@ struct NativeLoadingView: View {
         VStack(spacing: 12) {
             ProgressView()
                 .controlSize(.regular)
+                .tint(.white)
 
             Text("Loading…")
                 .font(.system(size: 15, weight: .medium))
+                .foregroundStyle(.white.opacity(0.64))
         }
-        .tint(.primary)
-        .foregroundStyle(.secondary)
-            .frame(
-                maxWidth: .infinity,
-                maxHeight: fillsAvailableSpace ? .infinity : nil
-            )
-            .accessibilityAddTraits(.updatesFrequently)
+        .frame(
+            maxWidth: .infinity,
+            maxHeight: fillsAvailableSpace ? .infinity : nil
+        )
+        .accessibilityAddTraits(.updatesFrequently)
     }
 }
 

@@ -15,6 +15,8 @@ struct ProfileView: View {
     @State private var isAvatarSourceDialogPresented = false
     @State private var isAvatarPhotoPickerPresented = false
     @State private var isAvatarCameraPresented = false
+    @State private var pendingCameraAvatarImage: UIImage?
+    @State private var avatarCropSelection: AvatarCropSelection?
     @State private var selectedEventsTab: ProfileEventsTab = .upcoming
     @State private var selectedEventsRSVPFilter: ProfileEventsRSVPFilter = .all
     @State private var partnerRelationship: MobilePartnerRelationship?
@@ -97,13 +99,18 @@ struct ProfileView: View {
                     selection: $selectedAvatarPhotoItem,
                     matching: .images
                 )
-                .sheet(isPresented: $isAvatarCameraPresented) {
+                .sheet(isPresented: $isAvatarCameraPresented, onDismiss: presentPendingCameraCrop) {
                     CameraImagePicker { image in
-                        Task {
-                            await uploadAvatarImage(image)
-                        }
+                        pendingCameraAvatarImage = image
                     }
                     .ignoresSafeArea()
+                }
+                .fullScreenCover(item: $avatarCropSelection) { selection in
+                    AvatarCropView(image: selection.image) { croppedImage in
+                        Task {
+                            await uploadAvatarImage(croppedImage)
+                        }
+                    }
                 }
                 .onChange(of: selectedAvatarPhotoItem) { _, item in
                     guard let item else { return }
@@ -427,10 +434,16 @@ struct ProfileView: View {
                 return
             }
 
-            await uploadAvatarImage(image)
+            avatarCropSelection = AvatarCropSelection(image: image.normalizedForAvatarCropping())
         } catch {
             viewModel.avatarUploadError = error.localizedDescription
         }
+    }
+
+    private func presentPendingCameraCrop() {
+        guard let image = pendingCameraAvatarImage else { return }
+        pendingCameraAvatarImage = nil
+        avatarCropSelection = AvatarCropSelection(image: image.normalizedForAvatarCropping())
     }
 
     private func uploadAvatarImage(_ image: UIImage) async {
@@ -658,7 +671,8 @@ struct ProfileView: View {
                             avatarImageURL: resolvedRequest.avatarImageURL,
                             city: resolvedRequest.city,
                             state: resolvedRequest.state,
-                            friendStatus: .accepted
+                            friendStatus: .accepted,
+                            notificationsMuted: resolvedRequest.notificationsMuted
                         )
                     ],
                     receivedRequests: current.receivedRequests.filter { $0.id != resolvedRequest.id },
@@ -921,6 +935,7 @@ struct UserProfileView: View {
     @State private var selectedEventsRSVPFilter: ProfileEventsRSVPFilter = .all
     @State private var isSendingFriendRequest = false
     @State private var isRespondingToFriendRequest = false
+    @State private var isUpdatingFriendNotificationMute = false
     @State private var pendingUnfriendProfile: FriendUserSummary?
     @State private var profileShareURL: URL?
     @State private var headerVisibility = ScrollableHeaderVisibility()
@@ -1131,16 +1146,11 @@ struct UserProfileView: View {
                 receivedFriendRequestAction(response: response)
             }
         } else if displaysFriendActions, let profile = response.profile {
-            if profile.friendStatus == .accepted, selectedEventsTab == .past {
-                HStack(spacing: 10) {
-                    ProfileEventsPeriodFilterButton(
-                        selection: $selectedEventsTab,
-                        rsvpFilter: $selectedEventsRSVPFilter
-                    )
-                    ProfilePastEventsFilterButton(rsvpFilter: $selectedEventsRSVPFilter)
-                }
-                .id("friend-past-event-controls")
-                .transaction(disablingProfileEventControlAnimations)
+            if profile.friendStatus == .accepted {
+                CurrentUserProfileEventsControls(
+                    selection: $selectedEventsTab,
+                    rsvpFilter: $selectedEventsRSVPFilter
+                )
             } else {
                 HStack(spacing: 10) {
                     ProfileEventsPeriodFilterButton(
@@ -1215,6 +1225,25 @@ struct UserProfileView: View {
             }
             .tint(.white)
 
+            Button {
+                setNotificationsMuted(!profile.notificationsMuted, for: profile)
+            } label: {
+                Label(
+                    profile.notificationsMuted ? "Unmute Notifications" : "Mute Notifications",
+                    systemImage: profile.notificationsMuted ? "bell" : "bell.slash"
+                )
+                .foregroundStyle(.white)
+            }
+            .tint(.white)
+
+            Button(role: .destructive) {
+                UIImpactFeedbackGenerator(style: .light).impactOccurred()
+                pendingUnfriendProfile = profile
+            } label: {
+                Label("Unfriend", systemImage: "person.badge.minus")
+                    .foregroundStyle(.red)
+            }
+            .tint(.red)
         } label: {
             Image(systemName: "ellipsis")
                 .font(.system(size: 18, weight: .bold))
@@ -1224,7 +1253,7 @@ struct UserProfileView: View {
                 .profileLiquidGlass(in: Circle())
         }
         .buttonStyle(.plain)
-        .disabled(isRespondingToFriendRequest)
+        .disabled(isRespondingToFriendRequest || isUpdatingFriendNotificationMute)
     }
 
     @ViewBuilder
@@ -1259,24 +1288,7 @@ struct UserProfileView: View {
                 )
                 .disabled(true)
         case .accepted:
-            Button {
-                UIImpactFeedbackGenerator(style: .light).impactOccurred()
-                pendingUnfriendProfile = profile
-            } label: {
-                Text("Friends")
-                    .frame(maxWidth: .infinity)
-                    .frame(height: 40)
-                    .contentShape(RoundedRectangle(cornerRadius: 12, style: .continuous))
-            }
-            .profileActionButtonStyle(
-                kind: .secondary,
-                isDisabled: isRespondingToFriendRequest,
-                fillsAvailableWidth: true,
-                fontWeight: .semibold,
-                cornerRadius: 12,
-                fontSize: 14
-            )
-            .disabled(isRespondingToFriendRequest)
+            EmptyView()
         case .pendingReceived:
             EmptyView()
         }
@@ -1336,7 +1348,8 @@ struct UserProfileView: View {
             avatarImageURL: profile.avatarImageURL,
             city: profile.city,
             state: profile.state,
-            friendStatus: .pendingSent
+            friendStatus: .pendingSent,
+            notificationsMuted: profile.notificationsMuted
         )
 
         ConfirmationHaptic.play()
@@ -1352,7 +1365,8 @@ struct UserProfileView: View {
                         avatarImageURL: $0.avatarImageURL,
                         city: $0.city,
                         state: $0.state,
-                        friendStatus: .pendingSent
+                        friendStatus: .pendingSent,
+                        notificationsMuted: $0.notificationsMuted
                     )
                 },
                 friendCount: current.friendCount,
@@ -1389,7 +1403,8 @@ struct UserProfileView: View {
                                 avatarImageURL: $0.avatarImageURL,
                                 city: $0.city,
                                 state: $0.state,
-                                friendStatus: response.friendStatus
+                                friendStatus: response.friendStatus,
+                                notificationsMuted: $0.notificationsMuted
                             )
                         },
                         friendCount: current.friendCount,
@@ -1444,7 +1459,8 @@ struct UserProfileView: View {
                         avatarImageURL: $0.avatarImageURL,
                         city: $0.city,
                         state: $0.state,
-                        friendStatus: optimisticStatus
+                        friendStatus: optimisticStatus,
+                        notificationsMuted: $0.notificationsMuted
                     )
                 },
                 friendCount: current.friendCount,
@@ -1511,7 +1527,8 @@ struct UserProfileView: View {
                         avatarImageURL: $0.avatarImageURL,
                         city: $0.city,
                         state: $0.state,
-                        friendStatus: FriendUserSummary.FriendStatus.none
+                        friendStatus: FriendUserSummary.FriendStatus.none,
+                        notificationsMuted: false
                     )
                 },
                 friendCount: max(current.friendCount - 1, 0),
@@ -1539,6 +1556,60 @@ struct UserProfileView: View {
                     viewModel.restoreLoadedResponse(previousResponse)
                 }
                 postFriendStatusChange(userID: profile.id, status: .accepted)
+            }
+        }
+    }
+
+    private func setNotificationsMuted(_ muted: Bool, for profile: FriendUserSummary) {
+        guard !isUpdatingFriendNotificationMute else {
+            return
+        }
+
+        isUpdatingFriendNotificationMute = true
+        let previousResponse = viewModel.snapshotLoadedResponse()
+
+        viewModel.updateLoadedResponse { current in
+            UserProfileResponse(
+                profile: current.profile?.updatingNotificationsMuted(muted),
+                friendCount: current.friendCount,
+                followingCount: current.followingCount,
+                followedPlaces: current.followedPlaces,
+                friends: current.friends,
+                upcomingEvents: current.upcomingEvents,
+                pastEvents: current.pastEvents
+            )
+        }
+
+        Task {
+            defer {
+                isUpdatingFriendNotificationMute = false
+            }
+
+            do {
+                let response = try await apiClient.send(
+                    APIClient.setMobileFriendNotificationsMuted(
+                        friendUserID: profile.id,
+                        muted: muted
+                    )
+                )
+
+                viewModel.updateLoadedResponse { current in
+                    UserProfileResponse(
+                        profile: current.profile?.updatingNotificationsMuted(
+                            response.notificationsMuted
+                        ),
+                        friendCount: current.friendCount,
+                        followingCount: current.followingCount,
+                        followedPlaces: current.followedPlaces,
+                        friends: current.friends,
+                        upcomingEvents: current.upcomingEvents,
+                        pastEvents: current.pastEvents
+                    )
+                }
+            } catch {
+                if let previousResponse {
+                    viewModel.restoreLoadedResponse(previousResponse)
+                }
             }
         }
     }
@@ -3206,7 +3277,8 @@ struct RequestsPageView: View {
                             avatarImageURL: resolvedRequest.avatarImageURL,
                             city: resolvedRequest.city,
                             state: resolvedRequest.state,
-                            friendStatus: .accepted
+                            friendStatus: .accepted,
+                            notificationsMuted: resolvedRequest.notificationsMuted
                         )
                     ],
                     receivedRequests: current.receivedRequests.filter { $0.id != resolvedRequest.id },
@@ -3978,7 +4050,6 @@ private struct AdminScrapersView: View {
 
             if viewModel.isLoadingRows && viewModel.scraperRows.isEmpty {
                 NativeLoadingView(fillsAvailableSpace: false)
-                    .foregroundStyle(.white.opacity(0.56))
                     .frame(minHeight: 64)
             } else if viewModel.scraperRows.isEmpty {
                 Text("No scraper rows found. Configure them from a venue or organizer first.")
@@ -4457,6 +4528,247 @@ private struct ProfileActionButtonStyle: ButtonStyle {
     }
 }
 
+private struct AvatarCropSelection: Identifiable {
+    let id = UUID()
+    let image: UIImage
+}
+
+private struct AvatarCropView: View {
+    private let minimumZoom: CGFloat = 1
+    private let maximumZoom: CGFloat = 5
+
+    let image: UIImage
+    let onCrop: (UIImage) -> Void
+
+    @Environment(\.dismiss) private var dismiss
+    @State private var zoom: CGFloat = 1
+    @State private var settledZoom: CGFloat = 1
+    @State private var offset: CGSize = .zero
+    @State private var settledOffset: CGSize = .zero
+    @State private var cropSide: CGFloat = 1
+
+    var body: some View {
+        NavigationStack {
+            GeometryReader { proxy in
+                let availableCropSide = min(proxy.size.width, proxy.size.height * 0.58)
+
+                VStack(spacing: 0) {
+                    Spacer(minLength: 24)
+
+                    cropArea(side: availableCropSide)
+
+                    Spacer(minLength: 28)
+
+                    VStack(spacing: 18) {
+                        Text("Move and scale")
+                            .font(.system(size: 15, weight: .medium))
+                            .foregroundStyle(.white.opacity(0.76))
+
+                        HStack(spacing: 14) {
+                            Image(systemName: "photo")
+                                .font(.system(size: 14, weight: .semibold))
+
+                            Slider(
+                                value: Binding(
+                                    get: { zoom },
+                                    set: { newValue in
+                                        let zoomRatio = newValue / max(zoom, minimumZoom)
+                                        let centeredOffset = CGSize(
+                                            width: offset.width * zoomRatio,
+                                            height: offset.height * zoomRatio
+                                        )
+                                        zoom = newValue
+                                        offset = clampedOffset(
+                                            centeredOffset,
+                                            side: availableCropSide,
+                                            zoom: newValue
+                                        )
+                                        settledOffset = offset
+                                        settledZoom = newValue
+                                    }
+                                ),
+                                in: minimumZoom...maximumZoom
+                            )
+                            .tint(.white)
+                            .accessibilityLabel("Photo zoom")
+
+                            Image(systemName: "photo.fill")
+                                .font(.system(size: 20, weight: .semibold))
+                        }
+                        .foregroundStyle(.white)
+                        .padding(.horizontal, 30)
+                    }
+
+                    Spacer(minLength: 24)
+                }
+                .frame(maxWidth: .infinity, maxHeight: .infinity)
+                .onAppear {
+                    cropSide = availableCropSide
+                }
+                .onChange(of: availableCropSide) { _, newValue in
+                    cropSide = newValue
+                    offset = clampedOffset(offset, side: newValue, zoom: zoom)
+                    settledOffset = offset
+                }
+            }
+            .background(Color.black.ignoresSafeArea())
+            .navigationTitle("Crop Photo")
+            .navigationBarTitleDisplayMode(.inline)
+            .toolbarColorScheme(.dark, for: .navigationBar)
+            .toolbarBackground(.hidden, for: .navigationBar)
+            .toolbar {
+                ToolbarItem(placement: .topBarLeading) {
+                    glassToolbarButton("Cancel") {
+                        dismiss()
+                    }
+                }
+
+                ToolbarItem(placement: .topBarTrailing) {
+                    glassToolbarButton("Done") {
+                        guard let croppedImage = croppedImage(side: cropSide) else { return }
+                        onCrop(croppedImage)
+                        dismiss()
+                    }
+                }
+            }
+        }
+    }
+
+    @ViewBuilder
+    private func glassToolbarButton(_ title: String, action: @escaping () -> Void) -> some View {
+        if #available(iOS 26.0, *) {
+            Button(title, action: action)
+                .font(.system(size: 16, weight: .semibold))
+                .foregroundStyle(.white)
+        } else {
+            Button(title, action: action)
+                .font(.system(size: 16, weight: .semibold))
+                .foregroundStyle(.white)
+                .padding(.horizontal, 14)
+                .frame(height: 38)
+                .background(.ultraThinMaterial, in: Capsule())
+        }
+    }
+
+    private func cropArea(side: CGFloat) -> some View {
+        let imageScale = aspectFillScale(side: side) * zoom
+        let renderedSize = CGSize(
+            width: image.size.width * imageScale,
+            height: image.size.height * imageScale
+        )
+
+        return Image(uiImage: image)
+            .resizable()
+            .frame(width: renderedSize.width, height: renderedSize.height)
+            .offset(offset)
+            .frame(width: side, height: side)
+            .overlay {
+                Circle()
+                    .strokeBorder(.white.opacity(0.9), lineWidth: 2)
+                    .padding(1)
+                    .allowsHitTesting(false)
+            }
+            .contentShape(Rectangle())
+            .gesture(
+                DragGesture()
+                    .onChanged { value in
+                        let proposed = CGSize(
+                            width: settledOffset.width + value.translation.width,
+                            height: settledOffset.height + value.translation.height
+                        )
+                        offset = clampedOffset(proposed, side: side, zoom: zoom)
+                    }
+                    .onEnded { _ in
+                        settledOffset = offset
+                    }
+            )
+            .simultaneousGesture(
+                MagnificationGesture()
+                    .onChanged { value in
+                        let newZoom = min(max(settledZoom * value, minimumZoom), maximumZoom)
+                        let zoomRatio = newZoom / max(settledZoom, minimumZoom)
+                        let centeredOffset = CGSize(
+                            width: settledOffset.width * zoomRatio,
+                            height: settledOffset.height * zoomRatio
+                        )
+                        zoom = newZoom
+                        offset = clampedOffset(centeredOffset, side: side, zoom: newZoom)
+                    }
+                    .onEnded { _ in
+                        settledZoom = zoom
+                        offset = clampedOffset(offset, side: side, zoom: zoom)
+                        settledOffset = offset
+                    }
+            )
+            .accessibilityLabel("Profile photo crop area")
+            .accessibilityHint("Drag to reposition the photo and pinch to zoom")
+    }
+
+    private func aspectFillScale(side: CGFloat) -> CGFloat {
+        max(side / image.size.width, side / image.size.height)
+    }
+
+    private func clampedOffset(_ proposed: CGSize, side: CGFloat, zoom: CGFloat) -> CGSize {
+        let scale = aspectFillScale(side: side) * zoom
+        let horizontalLimit = max(0, (image.size.width * scale - side) / 2)
+        let verticalLimit = max(0, (image.size.height * scale - side) / 2)
+
+        return CGSize(
+            width: min(max(proposed.width, -horizontalLimit), horizontalLimit),
+            height: min(max(proposed.height, -verticalLimit), verticalLimit)
+        )
+    }
+
+    private func croppedImage(side: CGFloat) -> UIImage? {
+        guard let cgImage = image.cgImage else { return nil }
+
+        let scale = aspectFillScale(side: side) * zoom
+        let renderedOrigin = CGPoint(
+            x: (side - image.size.width * scale) / 2 + offset.width,
+            y: (side - image.size.height * scale) / 2 + offset.height
+        )
+        let cropRect = CGRect(
+            x: -renderedOrigin.x / scale,
+            y: -renderedOrigin.y / scale,
+            width: side / scale,
+            height: side / scale
+        ).intersection(CGRect(origin: .zero, size: image.size))
+
+        let pixelScaleX = CGFloat(cgImage.width) / image.size.width
+        let pixelScaleY = CGFloat(cgImage.height) / image.size.height
+        let pixelCropRect = CGRect(
+            x: cropRect.origin.x * pixelScaleX,
+            y: cropRect.origin.y * pixelScaleY,
+            width: cropRect.width * pixelScaleX,
+            height: cropRect.height * pixelScaleY
+        ).integral
+
+        guard let croppedCGImage = cgImage.cropping(to: pixelCropRect) else { return nil }
+        return UIImage(cgImage: croppedCGImage, scale: 1, orientation: .up)
+    }
+}
+
+private extension UIImage {
+    func normalizedForAvatarCropping() -> UIImage {
+        guard let cgImage else { return self }
+
+        let pixelSize: CGSize
+        switch imageOrientation {
+        case .left, .leftMirrored, .right, .rightMirrored:
+            pixelSize = CGSize(width: cgImage.height, height: cgImage.width)
+        default:
+            pixelSize = CGSize(width: cgImage.width, height: cgImage.height)
+        }
+
+        let format = UIGraphicsImageRendererFormat()
+        format.scale = 1
+        format.opaque = false
+        return UIGraphicsImageRenderer(size: pixelSize, format: format).image { _ in
+            draw(in: CGRect(origin: .zero, size: pixelSize))
+        }
+    }
+}
+
 private struct CameraImagePicker: UIViewControllerRepresentable {
     let onImagePicked: (UIImage) -> Void
     @Environment(\.dismiss) private var dismiss
@@ -4464,7 +4776,7 @@ private struct CameraImagePicker: UIViewControllerRepresentable {
     func makeUIViewController(context: Context) -> UIImagePickerController {
         let picker = UIImagePickerController()
         picker.sourceType = .camera
-        picker.allowsEditing = true
+        picker.allowsEditing = false
         picker.delegate = context.coordinator
         return picker
     }
@@ -4491,7 +4803,7 @@ private struct CameraImagePicker: UIViewControllerRepresentable {
             _ picker: UIImagePickerController,
             didFinishPickingMediaWithInfo info: [UIImagePickerController.InfoKey: Any]
         ) {
-            let image = (info[.editedImage] ?? info[.originalImage]) as? UIImage
+            let image = info[.originalImage] as? UIImage
 
             if let image {
                 onImagePicked(image)

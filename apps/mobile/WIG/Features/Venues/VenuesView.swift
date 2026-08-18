@@ -756,6 +756,7 @@ private extension View {
 
 struct CompactPlaceListView: View {
     let places: [PlaceListItem]
+    var onSelect: (PlaceListItem) -> Void = { _ in }
 
     private var sortedPlaces: [PlaceListItem] {
         places.sorted { lhs, rhs in
@@ -782,6 +783,11 @@ struct CompactPlaceListView: View {
                     PlaceRowView(place: place, style: .plain)
                 }
                 .buttonStyle(.plain)
+                .simultaneousGesture(
+                    TapGesture().onEnded {
+                        onSelect(place)
+                    }
+                )
             }
         }
     }

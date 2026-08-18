@@ -2,7 +2,11 @@ import { auth } from "@clerk/nextjs/server";
 import { and, asc, eq, or } from "drizzle-orm";
 import { NextResponse } from "next/server";
 import { db } from "@/server/db";
-import { userFriends, users } from "@/server/db/schema";
+import {
+  userFriends,
+  userFriendsMutedNotifications,
+  users,
+} from "@/server/db/schema";
 import { deleteNotificationsForEntity } from "@/server/utils/notifications";
 
 async function currentMobileUserId() {
@@ -58,17 +62,43 @@ export async function DELETE(_: Request, context: RouteContext) {
   const friendRequest = await resolvePendingFriendRequest(id, userId);
 
   if (!friendRequest) {
-    return NextResponse.json({ error: "Friend request not found" }, { status: 404 });
+    return NextResponse.json(
+      { error: "Friend request not found" },
+      { status: 404 }
+    );
   }
 
-  if (friendRequest.friendUserId !== userId && friendRequest.userId !== userId) {
+  if (
+    friendRequest.friendUserId !== userId &&
+    friendRequest.userId !== userId
+  ) {
     return NextResponse.json(
       { error: "You cannot reject this request" },
       { status: 403 }
     );
   }
 
+  const otherUserId =
+    friendRequest.userId === userId
+      ? friendRequest.friendUserId
+      : friendRequest.userId;
+
   await db.delete(userFriends).where(eq(userFriends.id, friendRequest.id));
+
+  await db
+    .delete(userFriendsMutedNotifications)
+    .where(
+      or(
+        and(
+          eq(userFriendsMutedNotifications.userId, userId),
+          eq(userFriendsMutedNotifications.friendUserId, otherUserId)
+        ),
+        and(
+          eq(userFriendsMutedNotifications.userId, otherUserId),
+          eq(userFriendsMutedNotifications.friendUserId, userId)
+        )
+      )
+    );
 
   await deleteNotificationsForEntity(
     {
