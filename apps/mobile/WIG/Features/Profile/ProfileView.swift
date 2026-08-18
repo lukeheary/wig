@@ -923,6 +923,20 @@ private struct ProfileShareSheet: UIViewControllerRepresentable {
     func updateUIViewController(_ uiViewController: UIActivityViewController, context: Context) {}
 }
 
+private enum UserProfileConfirmation: Identifiable {
+    case mute(FriendUserSummary)
+    case unfriend(FriendUserSummary)
+
+    var id: String {
+        switch self {
+        case .mute(let profile):
+            return "mute-\(profile.id)"
+        case .unfriend(let profile):
+            return "unfriend-\(profile.id)"
+        }
+    }
+}
+
 struct UserProfileView: View {
     let userID: String
     var showsFriendAction = true
@@ -936,7 +950,7 @@ struct UserProfileView: View {
     @State private var isSendingFriendRequest = false
     @State private var isRespondingToFriendRequest = false
     @State private var isUpdatingFriendNotificationMute = false
-    @State private var pendingUnfriendProfile: FriendUserSummary?
+    @State private var pendingConfirmation: UserProfileConfirmation?
     @State private var profileShareURL: URL?
     @State private var headerVisibility = ScrollableHeaderVisibility()
 
@@ -969,15 +983,27 @@ struct UserProfileView: View {
                     await viewModel.load(userID: userID, using: apiClient, forceRefresh: true)
                 }
             }
-            .alert(item: $pendingUnfriendProfile) { profile in
-                Alert(
-                    title: Text("Unfriend \(profile.name)?"),
-                    message: Text("Are you sure you want to unfriend \(profile.name)?"),
-                    primaryButton: .destructive(Text("Unfriend")) {
-                        unfriend(profile: profile)
-                    },
-                    secondaryButton: .cancel()
-                )
+            .alert(item: $pendingConfirmation) { confirmation in
+                switch confirmation {
+                case .mute(let profile):
+                    Alert(
+                        title: Text("Mute notifications from \(profile.name)?"),
+                        message: Text("You won't receive push notifications about \(profile.name)'s event activity."),
+                        primaryButton: .default(Text("Mute")) {
+                            setNotificationsMuted(true, for: profile)
+                        },
+                        secondaryButton: .cancel()
+                    )
+                case .unfriend(let profile):
+                    Alert(
+                        title: Text("Unfriend \(profile.name)?"),
+                        message: Text("Are you sure you want to unfriend \(profile.name)?"),
+                        primaryButton: .destructive(Text("Unfriend")) {
+                            unfriend(profile: profile)
+                        },
+                        secondaryButton: .cancel()
+                    )
+                }
             }
             .sheet(
                 isPresented: Binding(
@@ -1226,7 +1252,11 @@ struct UserProfileView: View {
             .tint(.white)
 
             Button {
-                setNotificationsMuted(!profile.notificationsMuted, for: profile)
+                if profile.notificationsMuted {
+                    setNotificationsMuted(false, for: profile)
+                } else {
+                    pendingConfirmation = .mute(profile)
+                }
             } label: {
                 Label(
                     profile.notificationsMuted ? "Unmute Notifications" : "Mute Notifications",
@@ -1238,7 +1268,7 @@ struct UserProfileView: View {
 
             Button(role: .destructive) {
                 UIImpactFeedbackGenerator(style: .light).impactOccurred()
-                pendingUnfriendProfile = profile
+                pendingConfirmation = .unfriend(profile)
             } label: {
                 Label("Unfriend", systemImage: "person.badge.minus")
                     .foregroundStyle(.red)
