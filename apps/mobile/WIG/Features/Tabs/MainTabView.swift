@@ -8,6 +8,8 @@ struct MainTabView: View {
     @EnvironmentObject private var appSession: AppSession
     @StateObject private var activityRequestStore = ActivityRequestStore()
     @StateObject private var guestGoogleAuthController = GuestGoogleAuthController()
+    @AppStorage("wig.auth.last-sign-in-method") private var lastSignInMethod = ""
+    @State private var pendingSignInMethod: SignInMethod?
     @State private var selectedTab: AppTab = .home
     @State private var previousNonSearchTab: AppTab = .home
     @State private var isAuthPagePresented = false
@@ -41,12 +43,22 @@ struct MainTabView: View {
         .environmentObject(activityRequestStore)
         .environment(\.eventDetailTransitionNamespace, eventDetailTransitionNamespace)
         .blur(radius: !isAuthenticated && isGuestWelcomePresented ? 1.25 : 0)
+        .animation(.easeInOut(duration: 0.16), value: isAuthenticated)
         .overlay {
             guestWelcomeOverlay
         }
-        .fullScreenCover(isPresented: $isAuthPagePresented) {
+        .fullScreenCover(isPresented: $isAuthPagePresented, onDismiss: {
+            if !isAuthenticated {
+                pendingSignInMethod = nil
+            }
+        }) {
             WIGAuthSheetView(isDismissible: true)
                 .background(AppTheme.background.ignoresSafeArea())
+        }
+        .onChange(of: isAuthenticated) { _, isAuthenticated in
+            guard isAuthenticated, let pendingSignInMethod else { return }
+            lastSignInMethod = pendingSignInMethod.rawValue
+            self.pendingSignInMethod = nil
         }
         .fullScreenCover(item: $appSession.presentedEventDetail) { presentation in
             eventDetailOverlay(for: presentation)
@@ -55,14 +67,18 @@ struct MainTabView: View {
 
     @ViewBuilder
     private func eventDetailOverlay(for presentation: EventDetailPresentation) -> some View {
+        let preloadedRSVPState = clerk.user.flatMap { user in
+            EventRSVPPrefetchCache.state(eventID: presentation.event.id, userID: user.id)
+        }
+
         Group {
             if #available(iOS 18.0, *), let sourceID = presentation.transitionSourceID {
-                EventDetailView(event: presentation.event)
+                EventDetailView(event: presentation.event, preloadedRSVPState: preloadedRSVPState)
                     .navigationTransition(
                         .zoom(sourceID: sourceID, in: eventDetailTransitionNamespace)
                     )
             } else {
-                EventDetailView(event: presentation.event)
+                EventDetailView(event: presentation.event, preloadedRSVPState: preloadedRSVPState)
             }
         }
         // The event content itself is opaque at full size. Keeping only the
@@ -134,7 +150,6 @@ struct MainTabView: View {
         .background(AppTheme.background.ignoresSafeArea())
         .toolbarColorScheme(.dark, for: .tabBar)
         .toolbarBackground(AppTheme.background, for: .tabBar)
-        .tint(AppTheme.accentBlue)
         .onChange(of: selectedTab) { oldValue, newValue in
             resetFilters(for: oldValue, whenSwitchingTo: newValue)
 
@@ -268,7 +283,6 @@ struct MainTabView: View {
         .background(AppTheme.background.ignoresSafeArea())
         .toolbarColorScheme(.dark, for: .tabBar)
         .toolbarBackground(AppTheme.background, for: .tabBar)
-        .tint(AppTheme.accentBlue)
         .onChange(of: selectedTab) { oldValue, newValue in
             resetFilters(for: oldValue, whenSwitchingTo: newValue)
 
@@ -442,7 +456,9 @@ struct MainTabView: View {
         if !isAuthenticated && isGuestWelcomePresented {
             GuestWelcomeView(
                 googleAuthController: guestGoogleAuthController,
+                lastSignInMethod: SignInMethod(rawValue: lastSignInMethod),
                 onContinueWithGoogle: continueWithGoogle,
+                onContinueWithApple: continueWithApple,
                 onUseEmail: presentAuthenticationFromGuestWelcome
             )
             .transition(.opacity)
@@ -456,12 +472,29 @@ struct MainTabView: View {
 
     private func presentAuthenticationFromGuestWelcome() {
         guard !isAuthenticated else { return }
+        pendingSignInMethod = .email
         isAuthPagePresented = true
     }
 
     private func continueWithGoogle() {
+        pendingSignInMethod = .google
         Task {
             let outcome = await guestGoogleAuthController.signIn(using: clerk)
+            if outcome == .cancelled || outcome == .failed {
+                pendingSignInMethod = nil
+            }
+            guard outcome == .needsContinuation, !isAuthenticated else { return }
+            isAuthPagePresented = true
+        }
+    }
+
+    private func continueWithApple() {
+        pendingSignInMethod = .apple
+        Task {
+            let outcome = await guestGoogleAuthController.signInWithApple(using: clerk)
+            if outcome == .cancelled || outcome == .failed {
+                pendingSignInMethod = nil
+            }
             guard outcome == .needsContinuation, !isAuthenticated else { return }
             isAuthPagePresented = true
         }
@@ -593,7 +626,9 @@ struct MainTabView: View {
 
 private struct GuestWelcomeView: View {
     @ObservedObject var googleAuthController: GuestGoogleAuthController
+    let lastSignInMethod: SignInMethod?
     let onContinueWithGoogle: () -> Void
+    let onContinueWithApple: () -> Void
     let onUseEmail: () -> Void
 
     @Environment(Clerk.self) private var clerk
@@ -617,7 +652,6 @@ private struct GuestWelcomeView: View {
                     .frame(width: 92, height: 92)
                     .clipShape(RoundedRectangle(cornerRadius: 20, style: .continuous))
                     .shadow(color: .black.opacity(0.30), radius: 18, y: 8)
-                    .padding(.top, 18)
 
                 Spacer()
 
@@ -629,22 +663,24 @@ private struct GuestWelcomeView: View {
                     .frame(maxWidth: .infinity)
                     .padding(.bottom, 20)
 
-                VStack(spacing: 12) {
-                    Button(action: onContinueWithGoogle) {
+                VStack(spacing: 10) {
+                    Button(action: onContinueWithApple) {
                         ZStack(alignment: .leading) {
-                            Text("Continue with Google")
-                                .font(.system(size: 17, weight: .semibold))
+                            Text("Continue with Apple")
+                                .font(.system(size: 16, weight: .semibold))
                                 .frame(maxWidth: .infinity)
 
-                            googleProviderIcon
+                            Image(systemName: "apple.logo")
+                                .font(.system(size: 20, weight: .medium))
+                                .frame(width: 21, height: 21)
                                 .padding(.leading, 20)
                         }
                         .foregroundStyle(.black.opacity(0.88))
-                        .frame(maxWidth: .infinity, minHeight: 58)
-                        .background(.white, in: RoundedRectangle(cornerRadius: 18, style: .continuous))
+                        .frame(maxWidth: .infinity, minHeight: 52)
+                        .background(.white, in: RoundedRectangle(cornerRadius: 12, style: .continuous))
                         .overlay {
-                            if googleAuthController.isLoading {
-                                RoundedRectangle(cornerRadius: 18, style: .continuous)
+                            if googleAuthController.isAppleLoading {
+                                RoundedRectangle(cornerRadius: 12, style: .continuous)
                                     .fill(.white.opacity(0.90))
 
                                 ProgressView()
@@ -653,12 +689,43 @@ private struct GuestWelcomeView: View {
                         }
                     }
                     .buttonStyle(.plain)
-                    .disabled(googleAuthController.isLoading)
+                    .disabled(googleAuthController.isLoading || googleAuthController.isAppleLoading)
+                    .overlay(alignment: .topTrailing) {
+                        lastUsedBadge(for: .apple)
+                    }
+
+                    Button(action: onContinueWithGoogle) {
+                        ZStack(alignment: .leading) {
+                            Text("Continue with Google")
+                                .font(.system(size: 16, weight: .semibold))
+                                .frame(maxWidth: .infinity)
+
+                            googleProviderIcon
+                                .padding(.leading, 20)
+                        }
+                        .foregroundStyle(.black.opacity(0.88))
+                        .frame(maxWidth: .infinity, minHeight: 52)
+                        .background(.white, in: RoundedRectangle(cornerRadius: 12, style: .continuous))
+                        .overlay {
+                            if googleAuthController.isLoading {
+                                RoundedRectangle(cornerRadius: 12, style: .continuous)
+                                    .fill(.white.opacity(0.90))
+
+                                ProgressView()
+                                    .tint(.black)
+                            }
+                        }
+                    }
+                    .buttonStyle(.plain)
+                    .disabled(googleAuthController.isLoading || googleAuthController.isAppleLoading)
+                    .overlay(alignment: .topTrailing) {
+                        lastUsedBadge(for: .google)
+                    }
 
                     Button(action: onUseEmail) {
                         ZStack(alignment: .leading) {
                             Text("Continue with email")
-                                .font(.system(size: 17, weight: .semibold))
+                                .font(.system(size: 16, weight: .semibold))
                                 .frame(maxWidth: .infinity)
 
                             Image(systemName: "envelope.fill")
@@ -667,23 +734,27 @@ private struct GuestWelcomeView: View {
                                 .padding(.leading, 20)
                         }
                         .foregroundStyle(.white)
-                        .frame(maxWidth: .infinity, minHeight: 56)
-                        .background(.white.opacity(0.08), in: RoundedRectangle(cornerRadius: 18, style: .continuous))
+                        .frame(maxWidth: .infinity, minHeight: 52)
+                        .background(.black, in: RoundedRectangle(cornerRadius: 12, style: .continuous))
                         .overlay {
-                            RoundedRectangle(cornerRadius: 18, style: .continuous)
+                            RoundedRectangle(cornerRadius: 12, style: .continuous)
                                 .strokeBorder(.white.opacity(0.18), lineWidth: 1)
                         }
                     }
                     .buttonStyle(.plain)
+                    .overlay(alignment: .topTrailing) {
+                        lastUsedBadge(for: .email)
+                    }
 
                 }
             }
             .padding(.horizontal, 24)
-            .padding(.bottom, 54)
+            .padding(.bottom, 48)
+            .ignoresSafeArea(.container, edges: .bottom)
         }
         .accessibilityElement(children: .contain)
         .alert(
-            "Couldn't Continue with Google",
+            "Couldn't Continue",
             isPresented: Binding(
                 get: { googleAuthController.errorMessage != nil },
                 set: { isPresented in
@@ -696,6 +767,20 @@ private struct GuestWelcomeView: View {
             Button("OK", role: .cancel) {}
         } message: {
             Text(googleAuthController.errorMessage ?? "Please try again.")
+        }
+    }
+
+    @ViewBuilder
+    private func lastUsedBadge(for method: SignInMethod) -> some View {
+        if lastSignInMethod == method {
+            Text("Last used")
+                .font(.system(size: 10, weight: .bold))
+                .foregroundStyle(.black)
+                .padding(.horizontal, 8)
+                .padding(.vertical, 4)
+                .background(AppTheme.accentBlue, in: RoundedRectangle(cornerRadius: 6, style: .continuous))
+                .offset(x: 4, y: -10)
+                .accessibilityLabel("Last used sign-in method")
         }
     }
 
@@ -745,6 +830,12 @@ private struct GuestWelcomeView: View {
         .ignoresSafeArea()
         .allowsHitTesting(false)
     }
+}
+
+private enum SignInMethod: String {
+    case apple
+    case google
+    case email
 }
 
 private enum AppTab: Hashable {

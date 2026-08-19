@@ -761,7 +761,7 @@ struct HomeView: View {
                         .foregroundStyle(.white.opacity(0.58))
                 }
 
-                VStack(alignment: .leading, spacing: 8) {
+                VStack(alignment: .leading, spacing: 6) {
                     ForEach(filteredRecentSearchDestinations) { destination in
                         switch destination {
                         case .person(let user):
@@ -795,6 +795,7 @@ struct HomeView: View {
                         case .event(let event):
                             EventDetailNavigationLink(
                                 event: event,
+                                preloadsRSVP: true,
                                 onOpen: { rememberSearchDestination(.event($0)) }
                             ) {
                                 SearchEventRow(event: event)
@@ -825,7 +826,24 @@ struct HomeView: View {
             )
         }
         if selectedSearchFilter == .all || selectedSearchFilter == .events {
-            searchEventsSection(events: Array(searchViewModel.upcomingEvents.prefix(selectedSearchFilter == .events ? 10 : 8)), title: "Events")
+            searchEventsSection(
+                events: Array(metroAreaEventRecommendations.prefix(selectedSearchFilter == .events ? 10 : 8)),
+                title: "Events"
+            )
+        }
+    }
+
+    private var metroAreaEventRecommendations: [EventFeedItem] {
+        guard let currentUserLocation else {
+            return []
+        }
+
+        return searchViewModel.upcomingEvents.filter { event in
+            let eventCity = event.metroAreaCity ?? event.city
+            let eventState = event.metroAreaState ?? event.state
+
+            return eventCity.localizedCaseInsensitiveCompare(currentUserLocation.city) == .orderedSame &&
+                eventState.localizedCaseInsensitiveCompare(currentUserLocation.state) == .orderedSame
         }
     }
 
@@ -866,16 +884,19 @@ struct HomeView: View {
     @ViewBuilder
     private func searchEventsSection(events: [EventFeedItem], title: String) -> some View {
         if !events.isEmpty {
-            VStack(alignment: .leading, spacing: 10) {
+            VStack(alignment: .leading, spacing: 8) {
                 SearchSectionHeader(title: title)
-                LazyVGrid(columns: [GridItem(.flexible(), spacing: 12), GridItem(.flexible(), spacing: 12)], spacing: 12) {
+
+                VStack(alignment: .leading, spacing: 6) {
                     ForEach(events) { event in
                         EventDetailNavigationLink(
                             event: event,
+                            preloadsRSVP: true,
                             onOpen: { rememberSearchResult(.event($0)) }
                         ) {
-                            EventCardView(event: event, cardHeight: 238)
-                                .frame(maxWidth: .infinity)
+                            SearchEventRow(event: event)
+                                .frame(maxWidth: .infinity, alignment: .leading)
+                                .contentShape(Rectangle())
                         }
                     }
                 }
@@ -891,6 +912,8 @@ struct HomeView: View {
                 SearchSectionHeader(title: title)
                 CompactPlaceListView(
                     places: places,
+                    logoCornerRadius: 8,
+                    rowSpacing: 6,
                     onSelect: { rememberSearchResult(.place($0)) }
                 )
             }
@@ -2208,7 +2231,7 @@ private struct LatestFromFollowsCard: View {
 
     var body: some View {
         VStack(alignment: .leading, spacing: 0) {
-            RemoteImageView(url: update.event.displayImageURL) { image in
+            RemoteImageView(url: versionedArtworkURL) { image in
                 image
                     .resizable()
                     .scaledToFill()
@@ -2272,9 +2295,30 @@ private struct LatestFromFollowsCard: View {
         .accessibilityElement(children: .ignore)
         .accessibilityLabel(accessibilityDescription)
         .accessibilityHint("Opens event details")
-        .task(id: update.event.id) {
+        .task(id: latestUpdateIdentity) {
             await refreshSocialEvent()
         }
+    }
+
+    private var latestUpdateIdentity: String {
+        "\(update.event.id.uuidString)-\(update.event.updatedAt?.timeIntervalSince1970 ?? 0)"
+    }
+
+    private var versionedArtworkURL: URL? {
+        guard let artworkURL = socialEvent.displayImageURL,
+              let updatedAt = socialEvent.updatedAt,
+              var components = URLComponents(url: artworkURL, resolvingAgainstBaseURL: false)
+        else {
+            return socialEvent.displayImageURL
+        }
+
+        var queryItems = components.queryItems ?? []
+        queryItems.removeAll { $0.name == "wigUpdatedAt" }
+        queryItems.append(
+            URLQueryItem(name: "wigUpdatedAt", value: String(updatedAt.timeIntervalSince1970))
+        )
+        components.queryItems = queryItems
+        return components.url
     }
 
     private var goingAttendees: [EventSocialAttendee] {
@@ -2310,6 +2354,8 @@ private struct LatestFromFollowsCard: View {
 
     @MainActor
     private func refreshSocialEvent() async {
+        refreshedSocialEvent = nil
+
         do {
             let event = try await apiClient.send(
                 APIClient.mobileEventDetail(eventPublicID: update.event.publicID)
@@ -3171,13 +3217,83 @@ private struct SearchUserRow: View {
 private struct SearchEventRow: View {
     let event: EventFeedItem
 
+    @Environment(Clerk.self) private var clerk
+    @Environment(\.apiClient) private var apiClient
+
     var body: some View {
-        CompactUserListRowView(
-            imageURL: event.posterImageURL,
-            name: event.title,
-            subtitle: "\(event.primaryLocation) • \(event.formattedCardStart)",
-            identityKey: event.id.uuidString
-        )
+        HStack(spacing: 12) {
+            RemoteImageView(url: event.posterImageURL) { image in
+                image
+                    .resizable()
+                    .scaledToFill()
+            } placeholder: {
+                Color.white.opacity(0.08)
+                    .overlay {
+                        Image(systemName: "calendar")
+                            .font(.system(size: 16, weight: .semibold))
+                            .foregroundStyle(.white.opacity(0.64))
+                    }
+            }
+            .frame(width: 42, height: 42)
+            .clipShape(RoundedRectangle(cornerRadius: 8, style: .continuous))
+            .overlay {
+                RoundedRectangle(cornerRadius: 8, style: .continuous)
+                    .strokeBorder(.white.opacity(0.14), lineWidth: 1)
+            }
+            .overlay(alignment: .topTrailing) {
+                EventSocialOverlayView(
+                    attendees: goingAttendees,
+                    size: .recentSearchRow
+                )
+                .padding(2)
+            }
+
+            VStack(alignment: .leading, spacing: 3) {
+                Text(event.title)
+                    .font(.system(size: 14, weight: .medium))
+                    .foregroundStyle(.white)
+                    .lineLimit(1)
+
+                HStack(spacing: 5) {
+                    Text("\(event.primaryLocation) • \(event.formattedCardStart)")
+                        .font(.system(size: 10, weight: .medium))
+                        .foregroundStyle(.white.opacity(0.58))
+                        .lineLimit(1)
+
+                    Spacer(minLength: 2)
+
+                    if interestedCount > 0 {
+                        HStack(spacing: 2) {
+                            Image(systemName: "star.fill")
+                            Text("\(interestedCount)")
+                        }
+                        .font(.system(size: 9, weight: .semibold))
+                        .foregroundStyle(.yellow)
+                        .fixedSize()
+                    }
+                }
+            }
+            .frame(maxWidth: .infinity, alignment: .leading)
+        }
+        .padding(.vertical, 5)
+        .task(id: "\(event.id.uuidString)-\(clerk.user?.id ?? "guest")") {
+            guard let userID = clerk.user?.id else { return }
+            await EventRSVPPrefetchCache.preload(
+                eventID: event.id,
+                userID: userID,
+                using: apiClient
+            )
+        }
+    }
+
+    private var goingAttendees: [EventSocialAttendee] {
+        event.socialAttendees.filter { $0.status == .going }
+    }
+
+    private var interestedCount: Int {
+        event.friendsInterested.filter {
+            $0.user.isCurrentUser || $0.user.isFriend
+        }.count
     }
 }
 

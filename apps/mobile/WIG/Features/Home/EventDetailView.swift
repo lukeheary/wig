@@ -60,15 +60,17 @@ struct EventDetailView: View {
     private let placeNavigationAnimation = Animation.easeInOut(duration: 0.30)
     private let routeNavigationAnimation = Animation.easeInOut(duration: 0.24)
 
-    init(event: EventFeedItem) {
+    init(event: EventFeedItem, preloadedRSVPState: EventRSVPState? = nil) {
         self.event = event
 
         let cachedReview = EventReviewCache.review(for: event.id)
+        let initialRSVPStatus = preloadedRSVPState?.status ?? event.userRsvpStatus
+        let initialRSVPNotGoingReason = preloadedRSVPState?.notGoingReason ?? event.userRsvpNotGoingReason
 
         _rsvpViewModel = StateObject(
             wrappedValue: EventRSVPViewModel(
-                status: event.userRsvpStatus,
-                notGoingReason: event.userRsvpNotGoingReason
+                status: initialRSVPStatus,
+                notGoingReason: initialRSVPNotGoingReason
             )
         )
         _currentUserReview = State(initialValue: cachedReview ?? event.currentUserReview)
@@ -1353,6 +1355,18 @@ struct EventDetailView: View {
     ) {
         ProfileViewModel.invalidateCache()
         UserProfileViewModel.invalidateAllCaches()
+        if let userID = clerk.user?.id {
+            EventRSVPPrefetchCache.store(
+                EventRSVPState(
+                    status: rsvpViewModel.status,
+                    notGoingReason: rsvpViewModel.notGoingReason,
+                    includePartner: rsvpViewModel.includePartner,
+                    updatedAt: .now
+                ),
+                eventID: currentEvent.id,
+                userID: userID
+            )
+        }
         NotificationCenter.default.post(name: .eventRSVPDidChange, object: currentEvent.id)
 
         if showConfirmation, let status = rsvpViewModel.status {
@@ -2600,6 +2614,51 @@ private struct RSVPMenuNavigationButton: View {
         }
         .buttonStyle(.plain)
         .disabled(isLoading)
+    }
+}
+
+@MainActor
+enum EventRSVPPrefetchCache {
+    private struct Key: Hashable {
+        let eventID: UUID
+        let userID: String
+    }
+
+    private static var states = [Key: EventRSVPState]()
+    private static var inFlightLoads = [Key: Task<EventRSVPState, Error>]()
+
+    static func state(eventID: UUID, userID: String) -> EventRSVPState? {
+        states[Key(eventID: eventID, userID: userID)]
+    }
+
+    static func store(_ state: EventRSVPState, eventID: UUID, userID: String) {
+        states[Key(eventID: eventID, userID: userID)] = state
+    }
+
+    static func preload(eventID: UUID, userID: String, using apiClient: APIClient) async {
+        let key = Key(eventID: eventID, userID: userID)
+
+        if states[key] != nil {
+            return
+        }
+
+        if let inFlightLoad = inFlightLoads[key] {
+            if let state = try? await inFlightLoad.value {
+                states[key] = state
+            }
+            return
+        }
+
+        let loadTask = Task {
+            try await apiClient.send(APIClient.mobileEventRSVP(eventID: eventID))
+        }
+        inFlightLoads[key] = loadTask
+
+        if let state = try? await loadTask.value {
+            states[key] = state
+        }
+
+        inFlightLoads[key] = nil
     }
 }
 

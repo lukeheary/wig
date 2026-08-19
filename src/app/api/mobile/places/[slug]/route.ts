@@ -9,6 +9,7 @@ import {
   inArray,
   isNotNull,
   lt,
+  ne,
   or,
   sql,
 } from "drizzle-orm";
@@ -39,12 +40,20 @@ import {
 import {
   INSTAGRAM_HANDLE_ERROR,
   INSTAGRAM_HANDLE_REGEX,
+  PLACE_SLUG_ERROR,
+  PLACE_SLUG_REGEX,
 } from "@/lib/place-identifiers";
 import { goingRsvpCountsForEventIds } from "@/app/api/mobile/event-rsvp-counts";
 import { withStoredImageReplacements } from "@/server/utils/stored-image-lifecycle";
 
 const mobileUpdatePlaceSchema = z
   .object({
+    slug: z
+      .string()
+      .trim()
+      .min(3)
+      .max(100)
+      .regex(PLACE_SLUG_REGEX, PLACE_SLUG_ERROR),
     type: z.enum(["venue", "organizer"]),
     name: z.string().trim().min(1).max(255),
     aliases: z.array(z.string().trim().min(1).max(255)).max(25).optional().default([]),
@@ -526,7 +535,7 @@ export async function PATCH(
 
     const place = await db.query.places.findFirst({
       where: eq(places.slug, slug),
-      columns: { id: true, logoImageUrl: true },
+      columns: { id: true, slug: true, logoImageUrl: true },
     });
 
     if (!place) {
@@ -539,6 +548,20 @@ export async function PATCH(
     }
 
     const body = mobileUpdatePlaceSchema.parse(await request.json());
+    if (body.slug !== place.slug) {
+      const placeWithSlug = await db.query.places.findFirst({
+        where: and(eq(places.slug, body.slug), ne(places.id, place.id)),
+        columns: { id: true },
+      });
+
+      if (placeWithSlug) {
+        return NextResponse.json(
+          { error: "That Who Is Going username is already in use" },
+          { status: 409 }
+        );
+      }
+    }
+
     const validCategories = await filterExistingCategoryKeys(
       db,
       body.categories,
@@ -557,6 +580,7 @@ export async function PATCH(
         db
           .update(places)
           .set({
+            slug: body.slug,
             type: body.type,
             name: body.name.trim(),
             aliases: body.type === "venue" ? body.aliases : [],
@@ -581,7 +605,7 @@ export async function PATCH(
       activeOnly: true,
     });
 
-    return NextResponse.json({ id: place.id, slug });
+    return NextResponse.json({ id: place.id, slug: body.slug });
   } catch (error) {
     if (error instanceof z.ZodError) {
       return NextResponse.json(

@@ -21,6 +21,7 @@ struct MobilePlaceCreationView: View {
     @State private var didRemoveExistingLogo = false
     @State private var selectedGooglePlaceName: String?
     @State private var name = ""
+    @State private var slugText = ""
     @State private var aliasesText = ""
     @State private var descriptionText = ""
     @State private var address = ""
@@ -50,6 +51,7 @@ struct MobilePlaceCreationView: View {
 
         if case .edit(let place) = mode {
             _name = State(initialValue: place.name)
+            _slugText = State(initialValue: place.slug)
             _aliasesText = State(initialValue: place.aliases.joined(separator: "\n"))
             _descriptionText = State(initialValue: place.description ?? "")
             _address = State(initialValue: place.address ?? "")
@@ -276,6 +278,19 @@ struct MobilePlaceCreationView: View {
             TextField("\(type.displayName) Name", text: $name)
                 .textInputAutocapitalization(.words)
                 .autocorrectionDisabled()
+
+            if case .edit = mode {
+                VStack(alignment: .leading, spacing: 4) {
+                    TextField("Who Is Going username", text: $slugText)
+                        .textInputAutocapitalization(.never)
+                        .autocorrectionDisabled()
+                        .keyboardType(.asciiCapable)
+
+                    Text("Lowercase letters, numbers, periods, hyphens, and underscores only.")
+                        .font(.footnote)
+                        .foregroundStyle(.secondary)
+                }
+            }
 
             VStack(alignment: .leading, spacing: 8) {
                 Text("Description")
@@ -581,6 +596,9 @@ struct MobilePlaceCreationView: View {
         }
 
         let trimmedName = name.trimmingCharacters(in: .whitespacesAndNewlines)
+        let trimmedSlug = slugText
+            .trimmingCharacters(in: .whitespacesAndNewlines)
+            .replacingOccurrences(of: "@", with: "")
         let trimmedDescription = descriptionText.trimmingCharacters(in: .whitespacesAndNewlines)
         let trimmedAddress = address.trimmingCharacters(in: .whitespacesAndNewlines)
         let trimmedCity = city.trimmingCharacters(in: .whitespacesAndNewlines)
@@ -593,6 +611,16 @@ struct MobilePlaceCreationView: View {
         guard !trimmedName.isEmpty else {
             alertMessage = "Please enter a \(type.displayName.lowercased()) name."
             return
+        }
+
+        if case .edit = mode {
+            let slugPattern = #"^[a-z0-9._-]+$"#
+            guard (3...100).contains(trimmedSlug.count),
+                  trimmedSlug.range(of: slugPattern, options: .regularExpression) != nil
+            else {
+                alertMessage = "Who Is Going username must be 3–100 characters using lowercase letters, numbers, periods, hyphens, or underscores."
+                return
+            }
         }
 
         if isVenue {
@@ -681,6 +709,7 @@ struct MobilePlaceCreationView: View {
                 savedPlace = try await apiClient.send(
                     APIClient.mobileUpdatePlace(
                         slug: place.slug,
+                        updatedSlug: trimmedSlug,
                         type: type,
                         name: trimmedName,
                         aliases: aliases,

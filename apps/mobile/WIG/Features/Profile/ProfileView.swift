@@ -3,6 +3,22 @@ import PhotosUI
 import SwiftUI
 import UIKit
 
+private struct SignOutConfirmationAlertModifier: ViewModifier {
+    @Binding var isPresented: Bool
+    let onSignOut: () -> Void
+
+    func body(content: Content) -> some View {
+        content
+            .alert("Sign Out?", isPresented: $isPresented) {
+                Button("Cancel", role: .cancel) {}
+                Button("Sign Out", role: .destructive, action: onSignOut)
+            } message: {
+                Text("Are you sure you want to sign out?")
+            }
+            .tint(.white)
+    }
+}
+
 struct ProfileView: View {
     let resetFiltersTrigger: Int
     let addPhotoTrigger: Int
@@ -181,17 +197,16 @@ struct ProfileView: View {
                 } message: {
                     Text(friendRequestActionErrorMessage ?? "Please try again.")
                 }
-                .alert("Sign Out?", isPresented: $isSignOutConfirmationPresented) {
-                    Button("Cancel", role: .cancel) {}
-
-                    Button("Sign Out", role: .destructive) {
+                .modifier(
+                    SignOutConfirmationAlertModifier(
+                        isPresented: $isSignOutConfirmationPresented,
+                        onSignOut: {
                         Task {
                             try? await clerk.auth.signOut(sessionId: clerk.session?.id)
                         }
-                    }
-                } message: {
-                    Text("Are you sure you want to sign out?")
-                }
+                        }
+                    )
+                )
                 .sheet(isPresented: $isPartnerPickerPresented) {
                     if case .loaded(let response) = viewModel.state {
                         PartnerPickerSheet(

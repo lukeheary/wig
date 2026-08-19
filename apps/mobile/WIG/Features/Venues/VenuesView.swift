@@ -141,7 +141,11 @@ struct VenuesView: View {
                             .frame(maxWidth: .infinity)
                             .padding(.top, 40)
                         } else {
-                            CompactPlaceListView(places: places)
+                            CompactPlaceListView(
+                                places: places,
+                                logoCornerRadius: 8,
+                                rowSpacing: 6
+                            )
                         }
                     }
                     .padding(.horizontal, 16)
@@ -756,6 +760,8 @@ private extension View {
 
 struct CompactPlaceListView: View {
     let places: [PlaceListItem]
+    var logoCornerRadius: CGFloat? = nil
+    var rowSpacing: CGFloat = 2
     var onSelect: (PlaceListItem) -> Void = { _ in }
 
     private var sortedPlaces: [PlaceListItem] {
@@ -775,12 +781,12 @@ struct CompactPlaceListView: View {
     var body: some View {
         // Keep eager layout here: LazyVStack previously caused NavigationLink hit
         // targets to drift onto adjacent rows as their final heights resolved.
-        VStack(alignment: .leading, spacing: 2) {
+        VStack(alignment: .leading, spacing: rowSpacing) {
             ForEach(sortedPlaces, id: \.listRowID) { place in
                 NavigationLink {
                     PlaceDetailView(place: place)
                 } label: {
-                    PlaceRowView(place: place, style: .plain)
+                    PlaceRowView(place: place, style: .plain, logoCornerRadius: logoCornerRadius)
                 }
                 .buttonStyle(.plain)
                 .simultaneousGesture(
@@ -801,6 +807,7 @@ struct PlaceRowView: View {
 
     let place: PlaceListItem
     let style: Style
+    let logoCornerRadius: CGFloat?
 
     @Environment(Clerk.self) private var clerk
 
@@ -815,9 +822,10 @@ struct PlaceRowView: View {
     private var logoSide: CGFloat { style == .plain ? 42 : 84 }
     private var rowHeight: CGFloat { style == .plain ? 52 : 102 }
 
-    init(place: PlaceListItem, style: Style = .card) {
+    init(place: PlaceListItem, style: Style = .card, logoCornerRadius: CGFloat? = nil) {
         self.place = place
         self.style = style
+        self.logoCornerRadius = logoCornerRadius
     }
 
     var body: some View {
@@ -951,9 +959,9 @@ struct PlaceRowView: View {
             }
         }
         .frame(width: logoSide, height: logoSide)
-        .clipShape(RoundedRectangle(cornerRadius: style == .plain ? 10 : 15, style: .continuous))
+        .clipShape(RoundedRectangle(cornerRadius: resolvedLogoCornerRadius, style: .continuous))
         .overlay(
-            RoundedRectangle(cornerRadius: style == .plain ? 10 : 15, style: .continuous)
+            RoundedRectangle(cornerRadius: resolvedLogoCornerRadius, style: .continuous)
                 .strokeBorder(Color.white.opacity(0.14), lineWidth: 1)
         )
         .shadow(
@@ -962,6 +970,10 @@ struct PlaceRowView: View {
             x: 0,
             y: style == .plain ? 0 : 4
         )
+    }
+
+    private var resolvedLogoCornerRadius: CGFloat {
+        logoCornerRadius ?? (style == .plain ? 10 : 15)
     }
 
     private var logoPlaceholder: some View {

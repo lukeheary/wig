@@ -695,6 +695,7 @@ struct APIClient: Sendable {
 
     static func mobileUpdatePlace(
         slug: String,
+        updatedSlug: String,
         type: PlaceListItem.PlaceType,
         name: String,
         aliases: [String] = [],
@@ -711,6 +712,7 @@ struct APIClient: Sendable {
         isEnabled: Bool? = nil
     ) throws -> Endpoint<MobilePlaceCreateResponse> {
         let request = MobilePlaceUpdateRequest(
+            slug: updatedSlug,
             type: type.rawValue,
             name: name,
             aliases: aliases,
@@ -1764,6 +1766,7 @@ private struct MobilePlaceCreateRequest: Encodable {
 }
 
 private struct MobilePlaceUpdateRequest: Encodable {
+    let slug: String
     let type: String
     let name: String
     let aliases: [String]

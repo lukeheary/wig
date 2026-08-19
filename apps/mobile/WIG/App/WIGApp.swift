@@ -40,12 +40,15 @@ struct WIGApp: App {
         UIWindow.appearance().backgroundColor = AppTheme.uiBackground
         UINavigationBar.appearance().overrideUserInterfaceStyle = .dark
         UITabBar.appearance().overrideUserInterfaceStyle = .dark
+        UITabBar.appearance().tintColor = UIColor(AppTheme.accentBlue)
+        UIView.appearance(whenContainedInInstancesOf: [UIAlertController.self]).tintColor = .white
     }
 
     var body: some Scene {
         WindowGroup {
             ConfiguredAppRootView()
                 .preferredColorScheme(.dark)
+                .tint(.white)
                 .environment(Clerk.shared)
                 .environment(\.apiClient, apiClient)
                 .environmentObject(appSession)

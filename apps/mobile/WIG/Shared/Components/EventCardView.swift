@@ -29,9 +29,12 @@ extension EnvironmentValues {
 // when the reverse zoom begins instead of being rebuilt after a navigation pop.
 struct EventDetailNavigationLink<Label: View>: View {
     let event: EventFeedItem
+    let preloadsRSVP: Bool
     let onOpen: (EventFeedItem) -> Void
     private let label: Label
 
+    @Environment(Clerk.self) private var clerk
+    @Environment(\.apiClient) private var apiClient
     @Environment(\.eventDetailTransitionNamespace) private var transitionNamespace
     @Environment(\.eventDetailPresentationAction) private var presentationAction
     @EnvironmentObject private var appSession: AppSession
@@ -39,28 +42,45 @@ struct EventDetailNavigationLink<Label: View>: View {
 
     init(
         event: EventFeedItem,
+        preloadsRSVP: Bool = false,
         onOpen: @escaping (EventFeedItem) -> Void = { _ in },
         @ViewBuilder label: () -> Label
     ) {
         self.event = event
+        self.preloadsRSVP = preloadsRSVP
         self.onOpen = onOpen
         self.label = label()
     }
 
     var body: some View {
         Button {
-            onOpen(event)
-            let sourceID = transitionNamespace == nil ? nil : transitionSourceID
-
-            if let presentationAction {
-                presentationAction(event, sourceID)
+            if preloadsRSVP, let userID = clerk.user?.id {
+                Task {
+                    await EventRSVPPrefetchCache.preload(
+                        eventID: event.id,
+                        userID: userID,
+                        using: apiClient
+                    )
+                    openEvent()
+                }
             } else {
-                appSession.presentEventDetail(event, transitionSourceID: sourceID)
+                openEvent()
             }
         } label: {
             source
         }
         .buttonStyle(.plain)
+    }
+
+    private func openEvent() {
+        onOpen(event)
+        let sourceID = transitionNamespace == nil ? nil : transitionSourceID
+
+        if let presentationAction {
+            presentationAction(event, sourceID)
+        } else {
+            appSession.presentEventDetail(event, transitionSourceID: sourceID)
+        }
     }
 
     @ViewBuilder
@@ -878,6 +898,7 @@ struct EventSocialOverlayView: View {
         case card
         case detail
         case searchRow
+        case recentSearchRow
         case summaryRow
 
         var avatarSize: CGFloat {
@@ -888,6 +909,8 @@ struct EventSocialOverlayView: View {
                 return 54
             case .searchRow:
                 return 24
+            case .recentSearchRow:
+                return 14
             case .summaryRow:
                 return 52
             }
@@ -901,13 +924,20 @@ struct EventSocialOverlayView: View {
                 return -14
             case .searchRow:
                 return -8
+            case .recentSearchRow:
+                return -5
             case .summaryRow:
                 return -16
             }
         }
 
         var showsStatusRing: Bool {
-            self != .card
+            switch self {
+            case .card, .recentSearchRow:
+                return false
+            case .detail, .searchRow, .summaryRow:
+                return true
+            }
         }
 
         var maxDisplay: Int {
@@ -915,6 +945,8 @@ struct EventSocialOverlayView: View {
             case .card:
                 return 4
             case .searchRow:
+                return 2
+            case .recentSearchRow:
                 return 2
             case .summaryRow:
                 return 3
@@ -929,7 +961,7 @@ struct EventSocialOverlayView: View {
                 return false
             case .detail:
                 return false
-            case .searchRow:
+            case .searchRow, .recentSearchRow:
                 return false
             case .summaryRow:
                 return false
@@ -942,7 +974,7 @@ struct EventSocialOverlayView: View {
                 return 0
             case .detail:
                 return 0
-            case .searchRow:
+            case .searchRow, .recentSearchRow:
                 return 0
             case .summaryRow:
                 return 0
@@ -955,7 +987,7 @@ struct EventSocialOverlayView: View {
                 return 0
             case .detail:
                 return 0
-            case .searchRow:
+            case .searchRow, .recentSearchRow:
                 return 0
             case .summaryRow:
                 return 0
@@ -970,6 +1002,8 @@ struct EventSocialOverlayView: View {
                 return 15
             case .searchRow:
                 return 10
+            case .recentSearchRow:
+                return 7
             case .summaryRow:
                 return 16
             }
@@ -981,7 +1015,7 @@ struct EventSocialOverlayView: View {
                 return .clear
             case .detail:
                 return .black.opacity(0.42)
-            case .searchRow:
+            case .searchRow, .recentSearchRow:
                 return .black.opacity(0.42)
             case .summaryRow:
                 return .clear
@@ -996,6 +1030,8 @@ struct EventSocialOverlayView: View {
                 return 12
             case .searchRow:
                 return 6
+            case .recentSearchRow:
+                return 2
             case .summaryRow:
                 return 0
             }
@@ -1009,6 +1045,8 @@ struct EventSocialOverlayView: View {
                 return 6
             case .searchRow:
                 return 3
+            case .recentSearchRow:
+                return 1
             case .summaryRow:
                 return 0
             }

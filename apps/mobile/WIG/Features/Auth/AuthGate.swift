@@ -33,41 +33,31 @@ struct AuthGate: View {
     @Environment(\.apiClient) private var apiClient
     @EnvironmentObject private var appSession: AppSession
     @StateObject private var viewModel = MobileAuthGateViewModel()
-    @State private var isHomePreloadReady = false
 
     var body: some View {
         Group {
-            if !requiresOnboardingGate {
-                MainTabView()
-            } else {
-                switch viewModel.state {
-                case .idle, .loading:
-                    MobileOnboardingLoadingView()
-
-                case .failed(let message):
-                    MobileOnboardingGateErrorView(message: message) {
-                        Task {
-                            await viewModel.load(using: apiClient)
-                        }
-                    }
-
-                case .loaded(let onboardingState):
-                    if onboardingState.isOnboarding {
-                        MobileOnboardingView(initialState: onboardingState) {
-                            ProfileViewModel.invalidateCache()
-                            UserProfileViewModel.invalidateAllCaches()
-                            viewModel.markCompleted()
-                        }
-                    } else if !isHomePreloadReady {
-                        MobileOnboardingLoadingView()
-                    } else {
-                        MainTabView()
+            if requiresOnboardingGate,
+               case .failed(let message) = viewModel.state
+            {
+                MobileOnboardingGateErrorView(message: message) {
+                    Task {
+                        await viewModel.load(using: apiClient)
                     }
                 }
+            } else if requiresOnboardingGate,
+                      case .loaded(let onboardingState) = viewModel.state,
+                      onboardingState.isOnboarding
+            {
+                MobileOnboardingView(initialState: onboardingState) {
+                    ProfileViewModel.invalidateCache()
+                    UserProfileViewModel.invalidateAllCaches()
+                    viewModel.markCompleted()
+                }
+            } else {
+                MainTabView()
             }
         }
         .task(id: gateTaskID) {
-            isHomePreloadReady = false
             async let homePreload: Void = EventFeedViewModel.preload(
                 using: apiClient,
                 cacheIdentity: eventFeedCacheIdentity
@@ -79,7 +69,6 @@ struct AuthGate: View {
             }
 
             _ = await (homePreload, recentActivityPreload)
-            isHomePreloadReady = true
             await Task.yield()
             onReady()
         }
@@ -119,13 +108,6 @@ struct AuthGate: View {
             using: apiClient,
             cacheIdentity: eventFeedCacheIdentity
         )
-    }
-}
-
-private struct MobileOnboardingLoadingView: View {
-    var body: some View {
-        LaunchLoadingView()
-            .background(AppTheme.background.ignoresSafeArea())
     }
 }
 
@@ -228,6 +210,7 @@ struct MobileOnboardingView: View {
     @State private var errorMessage: String?
     @State private var isCitySearchPresented = false
     @State private var isBirthdayPickerPresented = false
+    @State private var isEmailEditorPresented = false
     @FocusState private var focusedInput: OnboardingInputField?
 
     private var normalizedUsername: String {
@@ -274,6 +257,9 @@ struct MobileOnboardingView: View {
                     header
                 }
                 nameSection
+                if mode == .editing {
+                    emailSection
+                }
                 usernameSection
                 citySection
                 genderSection
@@ -320,6 +306,9 @@ struct MobileOnboardingView: View {
         }
         .sheet(isPresented: $isBirthdayPickerPresented) {
             birthdayPickerSheet
+        }
+        .sheet(isPresented: $isEmailEditorPresented) {
+            ProfileEmailEditorView()
         }
     }
 
@@ -434,6 +423,48 @@ struct MobileOnboardingView: View {
                     capitalization: .words
                 )
             }
+        }
+    }
+
+    private var emailSection: some View {
+        VStack(alignment: .leading, spacing: 8) {
+            Text("Email")
+                .font(.system(size: 14, weight: .semibold))
+                .foregroundStyle(.white.opacity(0.78))
+
+            Button {
+                focusedInput = nil
+                isEmailEditorPresented = true
+            } label: {
+                HStack(spacing: 12) {
+                    Image(systemName: "envelope")
+                        .font(.system(size: 15, weight: .semibold))
+                        .foregroundStyle(.white.opacity(0.62))
+
+                    Text(clerk.user?.primaryEmailAddress?.emailAddress ?? "Add an email address")
+                        .font(.system(size: 15, weight: .medium))
+                        .foregroundStyle(clerk.user?.primaryEmailAddress == nil ? .white.opacity(0.46) : .white)
+                        .lineLimit(1)
+
+                    Spacer()
+
+                    Image(systemName: "chevron.right")
+                        .font(.system(size: 12, weight: .semibold))
+                        .foregroundStyle(.white.opacity(0.34))
+                }
+                .padding(.horizontal, 16)
+                .frame(maxWidth: .infinity, alignment: .leading)
+                .frame(height: 48)
+                .background(fieldBackground)
+                .contentShape(Rectangle())
+            }
+            .buttonStyle(.plain)
+            .frame(maxWidth: .infinity)
+            .contentShape(Rectangle())
+
+            Text("Used to sign in and receive account emails")
+                .font(.system(size: 12, weight: .medium))
+                .foregroundStyle(.white.opacity(0.42))
         }
     }
 

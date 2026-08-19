@@ -12,6 +12,7 @@ final class GuestGoogleAuthController: ObservableObject {
     }
 
     @Published private(set) var isLoading = false
+    @Published private(set) var isAppleLoading = false
     @Published var errorMessage: String?
 
     func signIn(using clerk: Clerk) async -> Outcome {
@@ -26,6 +27,29 @@ final class GuestGoogleAuthController: ObservableObject {
                 provider: .google,
                 transferable: true
             )
+
+            switch result {
+            case .signIn(let signIn):
+                return signIn.status == .complete ? .completed : .needsContinuation
+            case .signUp(let signUp):
+                return signUp.status == .complete ? .completed : .needsContinuation
+            }
+        } catch {
+            guard !Self.isCancellation(error) else { return .cancelled }
+            errorMessage = error.localizedDescription
+            return .failed
+        }
+    }
+
+    func signInWithApple(using clerk: Clerk) async -> Outcome {
+        guard !isAppleLoading else { return .cancelled }
+
+        isAppleLoading = true
+        errorMessage = nil
+        defer { isAppleLoading = false }
+
+        do {
+            let result = try await clerk.auth.signInWithApple()
 
             switch result {
             case .signIn(let signIn):
