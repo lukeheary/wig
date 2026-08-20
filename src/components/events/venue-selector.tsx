@@ -85,10 +85,7 @@ export function VenueSelector({
     longitude?: number;
   }) => {
     // Generate slug from venue name
-    const slug = place.name
-      .toLowerCase()
-      .replace(/[^a-z0-9]+/g, "-")
-      .replace(/^-+|-+$/g, "");
+    const slug = place.name.toLowerCase().replace(/[^a-z0-9]+/g, "");
 
     onVenueSelect({
       name: place.name,
@@ -97,8 +94,8 @@ export function VenueSelector({
       state: place.state,
       latitude: place.latitude,
       longitude: place.longitude,
-      slug: slug.length >= 3 ? slug : `venue-${slug}`,
-      instagram: (slug.length >= 3 ? slug : `venue-${slug}`).replace(/-/g, ""),
+      slug: slug.length >= 3 ? slug : `venue${slug}`,
+      instagram: slug.length >= 3 ? slug : `venue${slug}`,
     });
     setGooglePlacesInput(place.name);
   };
@@ -303,7 +300,7 @@ export function VenueSelector({
                   }
                   isSynced={isSlugSynced}
                   onSyncedChange={setIsSlugSynced}
-                  slugPlaceholder="venue-name"
+                  slugPlaceholder="venuename"
                   idPrefix="venue"
                   error={errors?.slug}
                 />

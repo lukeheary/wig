@@ -1,5 +1,5 @@
 import { auth } from "@clerk/nextjs/server";
-import { asc, eq } from "drizzle-orm";
+import { and, asc, eq } from "drizzle-orm";
 import { NextResponse } from "next/server";
 import { db } from "@/server/db";
 import { userPartners, users } from "@/server/db/schema";
@@ -45,7 +45,10 @@ export async function POST(_: Request, context: RouteContext) {
   });
 
   if (!partnerRequest) {
-    return NextResponse.json({ error: "Partner request not found" }, { status: 404 });
+    return NextResponse.json(
+      { error: "Partner request not found" },
+      { status: 404 }
+    );
   }
 
   if (partnerRequest.recipientId !== userId) {
@@ -55,71 +58,98 @@ export async function POST(_: Request, context: RouteContext) {
     );
   }
 
-  if (partnerRequest.status !== "pending") {
-    return NextResponse.json(
-      { error: "This partner request has already been processed" },
-      { status: 400 }
-    );
+  if (partnerRequest.status === "accepted") {
+    return NextResponse.json({});
   }
 
-  await db
+  const [updatedRelationship] = await db
     .update(userPartners)
     .set({
       status: "accepted",
       updatedAt: new Date(),
     })
-    .where(eq(userPartners.id, id));
+    .where(and(eq(userPartners.id, id), eq(userPartners.status, "pending")))
+    .returning({ id: userPartners.id });
 
-  await deleteNotificationsForEntity(
-    {
-      userId,
-      entityType: "partner_request",
-      entityIds: [id],
-    },
-    db
-  );
+  if (!updatedRelationship) {
+    const currentRelationship = await db.query.userPartners.findFirst({
+      where: eq(userPartners.id, id),
+      columns: { status: true },
+    });
 
-  const currentUser = await db.query.users.findFirst({
-    where: eq(users.id, userId),
-    columns: {
-      firstName: true,
-      lastName: true,
-      username: true,
-    },
-  });
+    if (currentRelationship?.status === "accepted") {
+      return NextResponse.json({});
+    }
 
-  const accepterName =
-    [currentUser?.firstName, currentUser?.lastName].filter(Boolean).join(" ").trim() ||
-    currentUser?.username ||
-    "Someone";
+    return NextResponse.json(
+      { error: "This partner request changed before it could be accepted" },
+      { status: 409 }
+    );
+  }
 
-  await createNotification(
-    {
-      userId: partnerRequest.requesterId,
-      actorUserId: userId,
-      type: "partner_request_accepted",
-      entityType: "partner_request",
-      entityId: id,
+  try {
+    await deleteNotificationsForEntity(
+      {
+        userId,
+        entityType: "partner_request",
+        entityIds: [id],
+      },
+      db
+    );
+
+    const currentUser = await db.query.users.findFirst({
+      where: eq(users.id, userId),
+      columns: {
+        firstName: true,
+        lastName: true,
+        username: true,
+      },
+    });
+
+    const accepterName =
+      [currentUser?.firstName, currentUser?.lastName]
+        .filter(Boolean)
+        .join(" ")
+        .trim() ||
+      currentUser?.username ||
+      "Someone";
+
+    await createNotification(
+      {
+        userId: partnerRequest.requesterId,
+        actorUserId: userId,
+        type: "partner_request_accepted",
+        entityType: "partner_request",
+        entityId: id,
+        title: accepterName,
+        body: "Is now your partner",
+        actionUrl: "/profile",
+        metadata: {
+          requestId: id,
+          requestType: "partner",
+        },
+      },
+      db
+    );
+
+    await sendPushNotificationToUsers([partnerRequest.requesterId], {
       title: accepterName,
       body: "Is now your partner",
-      actionUrl: "/profile",
-      metadata: {
-        requestId: id,
-        requestType: "partner",
+      data: {
+        type: "partner_request_accepted",
+        entityId: id,
+        actionUrl: "/profile",
       },
-    },
-    db
-  );
-
-  await sendPushNotificationToUsers([partnerRequest.requesterId], {
-    title: accepterName,
-    body: "Is now your partner",
-    data: {
-      type: "partner_request_accepted",
-      entityId: id,
-      actionUrl: "/profile",
-    },
-  });
+    });
+  } catch (error) {
+    console.error(
+      "Partner request accepted, but notification delivery failed",
+      {
+        partnerRequestId: id,
+        error,
+      }
+    );
+  }
 
   return NextResponse.json({});
 }

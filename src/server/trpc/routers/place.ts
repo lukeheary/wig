@@ -168,12 +168,9 @@ export const placeRouter = router({
     )
     .mutation(async ({ ctx, input }) => {
       // Generate initial slug
-      let slug = input.name
-        .toLowerCase()
-        .replace(/[^a-z0-9]+/g, "-")
-        .replace(/^-+|-+$/g, "");
+      let slug = input.name.toLowerCase().replace(/[^a-z0-9]+/g, "");
 
-      if (slug.length < 3) slug = `${input.type}-${slug}`;
+      if (slug.length < 3) slug = `${input.type}${slug}`;
 
       // Check for collision
       const existing = await ctx.db.query.places.findFirst({
@@ -181,7 +178,7 @@ export const placeRouter = router({
       });
 
       if (existing) {
-        slug = `${slug}-${Math.random().toString(36).substring(2, 7)}`;
+        slug = `${slug}${Math.random().toString(36).substring(2, 7)}`;
       }
 
       const [place] = await ctx.db

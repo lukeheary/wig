@@ -44,8 +44,14 @@ export async function ensureDbUser(
     });
   }
 
-  let generatedUsername =
-    clerkUser.username?.toLowerCase().trim() || `user_${userId.slice(-8)}`;
+  let generatedUsername = (clerkUser.username ?? "")
+    .toLowerCase()
+    .trim()
+    .replace(/[^a-z0-9_]/g, "");
+
+  if (generatedUsername.length < 3) {
+    generatedUsername = `user_${userId.slice(-8).toLowerCase()}`;
+  }
 
   const usernameConflict = await database.query.users.findFirst({
     where: eq(users.username, generatedUsername),

@@ -351,13 +351,10 @@ export async function POST(request: Request) {
 
     let slug = cleanedInstagram
       ? cleanedInstagram.toLowerCase()
-      : cleanedName
-          .toLowerCase()
-          .replace(/[^a-z0-9]+/g, "-")
-          .replace(/^-+|-+$/g, "");
+      : cleanedName.toLowerCase().replace(/[^a-z0-9]+/g, "");
 
     if (slug.length < 3) {
-      slug = `${body.type}-${slug}`;
+      slug = `${body.type}${slug}`;
     }
 
     const existing = await db.query.places.findFirst({
@@ -366,7 +363,7 @@ export async function POST(request: Request) {
     });
 
     if (existing) {
-      slug = `${slug}-${Math.random().toString(36).slice(2, 7)}`;
+      slug = `${slug}${Math.random().toString(36).slice(2, 7)}`;
     }
 
     const validCategories = await filterExistingCategoryKeys(

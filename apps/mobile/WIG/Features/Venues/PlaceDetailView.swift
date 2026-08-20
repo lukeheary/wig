@@ -128,13 +128,8 @@ struct PlaceDetailView: View {
         }
         .navigationBarBackButtonHidden()
         .toolbar(.hidden, for: .navigationBar)
-        .overlay(alignment: .topLeading) {
-            leadingTopControls
-        }
-        .overlay(alignment: .topTrailing) {
-            placeActionsMenu(for: displayedDetail)
-                .padding(.trailing, 16)
-                .padding(.top, 0)
+        .overlay(alignment: .top) {
+            placeTopControls
         }
         .alert(unfollowAlertTitle, isPresented: $isUnfollowConfirmationPresented) {
             if case .loaded(let detail) = viewModel.state {
@@ -245,15 +240,17 @@ struct PlaceDetailView: View {
         }
     }
 
-    private var leadingTopControls: some View {
+    private var placeTopControls: some View {
         HStack(spacing: 10) {
             FloatingGlassIconButton(systemImage: "chevron.left") {
                 closePlaceDetail()
             }
 
             PlaceTopSlug(slug: displayedSlug)
+
+            placeActionsMenu(for: displayedDetail)
         }
-        .padding(.leading, 16)
+        .padding(.horizontal, 16)
         .padding(.top, 0)
     }
 
@@ -608,8 +605,9 @@ private struct PlaceTopSlug: View {
             .font(.system(size: 17, weight: .bold))
             .foregroundStyle(.white)
             .lineLimit(1)
-            .minimumScaleFactor(0.72)
-            .frame(maxWidth: 150, alignment: .leading)
+            .truncationMode(.tail)
+            .frame(maxWidth: .infinity, alignment: .leading)
+            .layoutPriority(1)
             .allowsHitTesting(false)
             .accessibilityAddTraits(.isHeader)
     }

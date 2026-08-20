@@ -27,7 +27,7 @@ export function SlugInstagramInput({
   onBothChange,
   isSynced,
   onSyncedChange,
-  slugPlaceholder = "venue-name",
+  slugPlaceholder = "venuename",
   idPrefix = "slug",
   required = true,
   error,
@@ -108,7 +108,7 @@ export function SlugInstagramInput({
         <Label htmlFor={`${idPrefix}-instagram`}>Instagram</Label>
         <Input
           id={`${idPrefix}-instagram`}
-          placeholder={slugPlaceholder.replace(/-/g, "")}
+          placeholder={slugPlaceholder}
           value={instagram}
           onChange={(e) => onInstagramChange(e.target.value)}
           className="mt-2"

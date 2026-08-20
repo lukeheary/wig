@@ -188,11 +188,8 @@ export const partnersRouter = router({
         });
       }
 
-      if (partnerRequest.status !== "pending") {
-        throw new TRPCError({
-          code: "BAD_REQUEST",
-          message: "This partner request has already been processed",
-        });
+      if (partnerRequest.status === "accepted") {
+        return partnerRequest;
       }
 
       const [updatedRelationship] = await ctx.db
@@ -201,66 +198,96 @@ export const partnersRouter = router({
           status: "accepted",
           updatedAt: new Date(),
         })
-        .where(eq(userPartners.id, input.partnerId))
+        .where(
+          and(
+            eq(userPartners.id, input.partnerId),
+            eq(userPartners.status, "pending")
+          )
+        )
         .returning();
 
-      await deleteNotificationsForEntity(
-        {
-          userId: ctx.auth.userId,
-          entityType: "partner_request",
-          entityIds: [input.partnerId],
-        },
-        ctx.db
-      );
+      if (!updatedRelationship) {
+        const currentRelationship = await ctx.db.query.userPartners.findFirst({
+          where: eq(userPartners.id, input.partnerId),
+        });
 
-      const currentUser = await ctx.db.query.users.findFirst({
-        where: eq(users.id, ctx.auth.userId),
-        columns: {
-          firstName: true,
-          lastName: true,
-          username: true,
-        },
-      });
+        if (currentRelationship?.status === "accepted") {
+          return currentRelationship;
+        }
 
-      const accepterName =
-        [currentUser?.firstName, currentUser?.lastName]
-          .filter(Boolean)
-          .join(" ")
-          .trim() ||
-        currentUser?.username ||
-        "Someone";
+        throw new TRPCError({
+          code: "CONFLICT",
+          message: "This partner request changed before it could be accepted",
+        });
+      }
 
-      await createNotification(
-        {
-          userId: partnerRequest.requesterId,
-          actorUserId: ctx.auth.userId,
-          type: "partner_request_accepted",
-          entityType: "partner_request",
-          entityId: input.partnerId,
-          title: accepterName,
-          body: "Is now your partner",
-          actionUrl: "/profile",
-          metadata: {
-            requestId: input.partnerId,
-            requestType: "partner",
+      try {
+        await deleteNotificationsForEntity(
+          {
+            userId: ctx.auth.userId,
+            entityType: "partner_request",
+            entityIds: [input.partnerId],
           },
-        },
-        ctx.db
-      );
+          ctx.db
+        );
 
-      await sendPushNotificationToUsers(
-        [partnerRequest.requesterId],
-        {
-          title: accepterName,
-          body: "Is now your partner",
-          data: {
+        const currentUser = await ctx.db.query.users.findFirst({
+          where: eq(users.id, ctx.auth.userId),
+          columns: {
+            firstName: true,
+            lastName: true,
+            username: true,
+          },
+        });
+
+        const accepterName =
+          [currentUser?.firstName, currentUser?.lastName]
+            .filter(Boolean)
+            .join(" ")
+            .trim() ||
+          currentUser?.username ||
+          "Someone";
+
+        await createNotification(
+          {
+            userId: partnerRequest.requesterId,
+            actorUserId: ctx.auth.userId,
             type: "partner_request_accepted",
+            entityType: "partner_request",
             entityId: input.partnerId,
+            title: accepterName,
+            body: "Is now your partner",
             actionUrl: "/profile",
+            metadata: {
+              requestId: input.partnerId,
+              requestType: "partner",
+            },
           },
-        },
-        ctx.db
-      );
+          ctx.db
+        );
+
+        await sendPushNotificationToUsers(
+          [partnerRequest.requesterId],
+          {
+            title: accepterName,
+            body: "Is now your partner",
+            data: {
+              type: "partner_request_accepted",
+              entityId: input.partnerId,
+              actionUrl: "/profile",
+            },
+          },
+          ctx.db
+        );
+      } catch (error) {
+        console.error(
+          "Partner request accepted, but notification delivery failed",
+          {
+            partnerRequestId: input.partnerId,
+            error,
+          }
+        );
+      }
 
       return updatedRelationship;
     }),
@@ -289,7 +316,9 @@ export const partnersRouter = router({
         });
       }
 
-      await ctx.db.delete(userPartners).where(eq(userPartners.id, input.partnerId));
+      await ctx.db
+        .delete(userPartners)
+        .where(eq(userPartners.id, input.partnerId));
 
       await deleteNotificationsForEntity(
         {

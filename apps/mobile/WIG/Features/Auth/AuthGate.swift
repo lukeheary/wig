@@ -111,6 +111,150 @@ struct AuthGate: View {
     }
 }
 
+private struct DeleteAccountVerificationSheet: View {
+    @Environment(Clerk.self) private var clerk
+    @Environment(\.apiClient) private var apiClient
+    @Environment(\.dismiss) private var dismiss
+    @State private var confirmationText = ""
+    @State private var isDeleting = false
+    @State private var errorMessage: String?
+    @FocusState private var isConfirmationFocused: Bool
+
+    private var isConfirmed: Bool {
+        confirmationText == "DELETE"
+    }
+
+    var body: some View {
+        NavigationStack {
+            ScrollView {
+                VStack(alignment: .leading, spacing: 20) {
+                    Image(systemName: "exclamationmark.triangle.fill")
+                        .font(.system(size: 28, weight: .semibold))
+                        .foregroundStyle(.red)
+
+                    VStack(alignment: .leading, spacing: 8) {
+                        Text("This is permanent")
+                            .font(.system(size: 22, weight: .bold))
+                            .foregroundStyle(.white)
+
+                        Text("Your profile, personal information, RSVPs, friendships, follows, notifications, and content you created will be permanently deleted. You will not be able to recover this account.")
+                            .font(.system(size: 14, weight: .medium))
+                            .foregroundStyle(.white.opacity(0.62))
+                            .lineSpacing(3)
+                            .fixedSize(horizontal: false, vertical: true)
+                    }
+
+                    VStack(alignment: .leading, spacing: 8) {
+                        Text("Type DELETE to confirm")
+                            .font(.system(size: 14, weight: .semibold))
+                            .foregroundStyle(.white.opacity(0.78))
+
+                        TextField("DELETE", text: $confirmationText)
+                            .font(.system(size: 16, weight: .semibold))
+                            .foregroundStyle(.white)
+                            .textInputAutocapitalization(.characters)
+                            .autocorrectionDisabled()
+                            .padding(.horizontal, 16)
+                            .frame(height: 50)
+                            .background(
+                                RoundedRectangle(cornerRadius: 14, style: .continuous)
+                                    .fill(Color.white.opacity(0.07))
+                            )
+                            .overlay(
+                                RoundedRectangle(cornerRadius: 14, style: .continuous)
+                                    .strokeBorder(Color.white.opacity(0.10), lineWidth: 1)
+                            )
+                            .focused($isConfirmationFocused)
+                            .disabled(isDeleting)
+                    }
+
+                    if let errorMessage {
+                        Text(errorMessage)
+                            .font(.system(size: 13, weight: .medium))
+                            .foregroundStyle(.red.opacity(0.92))
+                            .fixedSize(horizontal: false, vertical: true)
+                    }
+
+                    Button {
+                        Task {
+                            await deleteAccount()
+                        }
+                    } label: {
+                        HStack(spacing: 8) {
+                            if isDeleting {
+                                ProgressView()
+                                    .tint(.white)
+                            }
+
+                            Text(isDeleting ? "Deleting Account…" : "Permanently Delete Account")
+                                .font(.system(size: 15, weight: .bold))
+                        }
+                        .foregroundStyle(.white)
+                        .frame(maxWidth: .infinity)
+                        .frame(height: 50)
+                        .background(
+                            RoundedRectangle(cornerRadius: 14, style: .continuous)
+                                .fill(Color.red)
+                        )
+                    }
+                    .buttonStyle(.plain)
+                    .disabled(!isConfirmed || isDeleting)
+                    .opacity(isConfirmed && !isDeleting ? 1 : 0.34)
+                }
+                .padding(24)
+            }
+            .scrollDismissesKeyboard(.interactively)
+            .background(AppTheme.background.ignoresSafeArea())
+            .navigationTitle("Delete Account")
+            .navigationBarTitleDisplayMode(.inline)
+            .toolbar {
+                ToolbarItem(placement: .cancellationAction) {
+                    Button("Cancel") {
+                        dismiss()
+                    }
+                    .foregroundStyle(.white)
+                    .disabled(isDeleting)
+                }
+            }
+        }
+        .preferredColorScheme(.dark)
+        .presentationDragIndicator(.visible)
+        .presentationDetents([.large])
+        .interactiveDismissDisabled(isDeleting)
+        .task {
+            await Task.yield()
+            isConfirmationFocused = true
+        }
+    }
+
+    @MainActor
+    private func deleteAccount() async {
+        guard isConfirmed, !isDeleting else {
+            return
+        }
+
+        guard let user = clerk.user else {
+            errorMessage = "We couldn't verify your signed-in account. Please close this screen and try again."
+            return
+        }
+
+        isConfirmationFocused = false
+        isDeleting = true
+        errorMessage = nil
+
+        do {
+            _ = try await apiClient.send(APIClient.mobileDeleteAccount())
+            try await user.delete()
+            ProfileViewModel.invalidateCache()
+            UserProfileViewModel.invalidateAllCaches()
+            dismiss()
+        } catch {
+            errorMessage = error.localizedDescription
+            isDeleting = false
+        }
+    }
+}
+
 @MainActor
 private final class MobileAuthGateViewModel: ObservableObject {
     enum State {
@@ -211,6 +355,8 @@ struct MobileOnboardingView: View {
     @State private var isCitySearchPresented = false
     @State private var isBirthdayPickerPresented = false
     @State private var isEmailEditorPresented = false
+    @State private var isDeleteAccountWarningPresented = false
+    @State private var isDeleteAccountVerificationPresented = false
     @FocusState private var focusedInput: OnboardingInputField?
 
     private var normalizedUsername: String {
@@ -277,6 +423,8 @@ struct MobileOnboardingView: View {
 
                 if mode == .onboarding {
                     signOutButton
+                } else {
+                    deleteAccountSection
                 }
             }
             .padding(.horizontal, mode == .editing ? 16 : 18)
@@ -309,6 +457,18 @@ struct MobileOnboardingView: View {
         }
         .sheet(isPresented: $isEmailEditorPresented) {
             ProfileEmailEditorView()
+        }
+        .alert("Delete your account?", isPresented: $isDeleteAccountWarningPresented) {
+            Button("Cancel", role: .cancel) {}
+            Button("Continue", role: .destructive) {
+                isDeleteAccountVerificationPresented = true
+            }
+        } message: {
+            Text("This permanently deletes your profile, RSVPs, friendships, follows, notifications, and content you created. This cannot be undone.")
+        }
+        .tint(.white)
+        .sheet(isPresented: $isDeleteAccountVerificationPresented) {
+            DeleteAccountVerificationSheet()
         }
     }
 
@@ -716,6 +876,41 @@ struct MobileOnboardingView: View {
                 .frame(height: 38)
         }
         .buttonStyle(.plain)
+    }
+
+    private var deleteAccountSection: some View {
+        VStack(alignment: .leading, spacing: 10) {
+            Text("Delete Account")
+                .font(.system(size: 14, weight: .semibold))
+                .foregroundStyle(.red.opacity(0.92))
+
+            Text("Permanently removes your account and all associated data. This action cannot be reversed.")
+                .font(.system(size: 12, weight: .medium))
+                .foregroundStyle(.white.opacity(0.46))
+                .fixedSize(horizontal: false, vertical: true)
+
+            Button {
+                focusedInput = nil
+                isDeleteAccountWarningPresented = true
+            } label: {
+                Text("Delete Account")
+                    .font(.system(size: 15, weight: .bold))
+                    .foregroundStyle(.red)
+                    .frame(maxWidth: .infinity)
+                    .frame(height: 48)
+                    .background(
+                        RoundedRectangle(cornerRadius: 14, style: .continuous)
+                            .fill(Color.red.opacity(0.12))
+                    )
+                    .overlay(
+                        RoundedRectangle(cornerRadius: 14, style: .continuous)
+                            .strokeBorder(Color.red.opacity(0.34), lineWidth: 1)
+                    )
+            }
+            .buttonStyle(.plain)
+            .accessibilityHint("Begins the permanent account deletion process")
+        }
+        .padding(.top, 12)
     }
 
     private func submit() {

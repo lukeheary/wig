@@ -187,9 +187,11 @@ struct MobilePlaceCreationView: View {
 
     private var venueAliasesSection: some View {
         Section("Alternate Venue Names") {
-            TextField("One alternate name per line", text: $aliasesText, axis: .vertical)
-                .lineLimit(2...6)
-                .textInputAutocapitalization(.words)
+            PersistentFormField("Alternate names") {
+                TextField("One per line", text: $aliasesText, axis: .vertical)
+                    .lineLimit(2...6)
+                    .textInputAutocapitalization(.words)
+            }
 
             Text("Scraped events using one of these names will be linked to this venue.")
                 .font(.footnote)
@@ -275,18 +277,22 @@ struct MobilePlaceCreationView: View {
     @ViewBuilder
     private var detailsSection: some View {
         Section("Details") {
-            TextField("\(type.displayName) Name", text: $name)
-                .textInputAutocapitalization(.words)
-                .autocorrectionDisabled()
+            PersistentFormField("\(type.displayName) name") {
+                TextField("", text: $name)
+                    .textInputAutocapitalization(.words)
+                    .autocorrectionDisabled()
+                    .accessibilityLabel("\(type.displayName) name")
+            }
 
             if case .edit = mode {
-                VStack(alignment: .leading, spacing: 4) {
-                    TextField("Who Is Going username", text: $slugText)
+                PersistentFormField("Who Is Going username") {
+                    TextField("", text: $slugText)
                         .textInputAutocapitalization(.never)
                         .autocorrectionDisabled()
                         .keyboardType(.asciiCapable)
+                        .accessibilityLabel("Who Is Going username")
 
-                    Text("Lowercase letters, numbers, periods, hyphens, and underscores only.")
+                    Text("Lowercase letters, numbers, periods, and underscores only.")
                         .font(.footnote)
                         .foregroundStyle(.secondary)
                 }
@@ -303,14 +309,20 @@ struct MobilePlaceCreationView: View {
                     .padding(.horizontal, 2)
             }
 
-            TextField("Website", text: $websiteText)
-                .keyboardType(.URL)
-                .textInputAutocapitalization(.never)
-                .autocorrectionDisabled()
+            PersistentFormField("Website") {
+                TextField("", text: $websiteText)
+                    .keyboardType(.URL)
+                    .textInputAutocapitalization(.never)
+                    .autocorrectionDisabled()
+                    .accessibilityLabel("Website")
+            }
 
-            TextField("Instagram", text: $instagramText)
-                .textInputAutocapitalization(.never)
-                .autocorrectionDisabled()
+            PersistentFormField("Instagram") {
+                TextField("", text: $instagramText)
+                    .textInputAutocapitalization(.never)
+                    .autocorrectionDisabled()
+                    .accessibilityLabel("Instagram")
+            }
         }
     }
 
@@ -320,24 +332,35 @@ struct MobilePlaceCreationView: View {
             if isVenue {
                 venueGooglePlacesButton
 
-                TextField("Address", text: $address)
-                    .textInputAutocapitalization(.words)
-                    .autocorrectionDisabled()
+                PersistentFormField("Address") {
+                    TextField("", text: $address)
+                        .textInputAutocapitalization(.words)
+                        .autocorrectionDisabled()
+                        .accessibilityLabel("Address")
+                }
             }
 
-            TextField("City\(isVenue ? "" : " (Optional)")", text: $city)
-                .textInputAutocapitalization(.words)
-                .autocorrectionDisabled()
+            let cityLabel = "City\(isVenue ? "" : " (optional)")"
+            PersistentFormField(cityLabel) {
+                TextField("", text: $city)
+                    .textInputAutocapitalization(.words)
+                    .autocorrectionDisabled()
+                    .accessibilityLabel(cityLabel)
+            }
 
-            TextField("State\(isVenue ? "" : " (Optional)")", text: $state)
-                .textInputAutocapitalization(.characters)
-                .autocorrectionDisabled()
-                .onChange(of: state) { _, newValue in
-                    let uppercase = String(newValue.uppercased().prefix(2))
-                    if uppercase != newValue {
-                        state = uppercase
+            let stateLabel = "State\(isVenue ? "" : " (optional)")"
+            PersistentFormField(stateLabel) {
+                TextField("", text: $state)
+                    .textInputAutocapitalization(.characters)
+                    .autocorrectionDisabled()
+                    .accessibilityLabel(stateLabel)
+                    .onChange(of: state) { _, newValue in
+                        let uppercase = String(newValue.uppercased().prefix(2))
+                        if uppercase != newValue {
+                            state = uppercase
+                        }
                     }
-                }
+            }
 
             if isVenue {
                 Text("Venues need a city and state so events can be placed correctly.")
@@ -614,11 +637,11 @@ struct MobilePlaceCreationView: View {
         }
 
         if case .edit = mode {
-            let slugPattern = #"^[a-z0-9._-]+$"#
+            let slugPattern = #"^[a-z0-9._]+$"#
             guard (3...100).contains(trimmedSlug.count),
                   trimmedSlug.range(of: slugPattern, options: .regularExpression) != nil
             else {
-                alertMessage = "Who Is Going username must be 3–100 characters using lowercase letters, numbers, periods, hyphens, or underscores."
+                alertMessage = "Who Is Going username must be 3–100 characters using lowercase letters, numbers, periods, or underscores."
                 return
             }
         }

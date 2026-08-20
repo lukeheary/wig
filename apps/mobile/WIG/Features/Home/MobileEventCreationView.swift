@@ -1680,6 +1680,27 @@ private enum ActiveAlert: Identifiable {
     }
 }
 
+struct PersistentFormField<Content: View>: View {
+    let title: String
+    @ViewBuilder let content: () -> Content
+
+    init(_ title: String, @ViewBuilder content: @escaping () -> Content) {
+        self.title = title
+        self.content = content
+    }
+
+    var body: some View {
+        VStack(alignment: .leading, spacing: 4) {
+            Text(title)
+                .font(.system(size: 11, weight: .semibold))
+                .foregroundStyle(.secondary)
+
+            content()
+        }
+        .listRowInsets(EdgeInsets(top: 6, leading: 16, bottom: 6, trailing: 16))
+    }
+}
+
 struct ClearableInputField: View {
     let title: String
     @Binding var text: String
@@ -1690,18 +1711,22 @@ struct ClearableInputField: View {
     }
 
     var body: some View {
-        HStack(spacing: 8) {
-            TextField(title, text: $text)
+        PersistentFormField(title) {
+            HStack(spacing: 8) {
+                TextField("", text: $text)
+                    .accessibilityLabel(title)
 
-            if !text.isEmpty {
-                Button {
-                    text = ""
-                } label: {
-                    Image(systemName: "xmark.circle.fill")
-                        .font(.system(size: 15, weight: .semibold))
-                        .foregroundStyle(.tertiary)
+                if !text.isEmpty {
+                    Button {
+                        text = ""
+                    } label: {
+                        Image(systemName: "xmark.circle.fill")
+                            .font(.system(size: 15, weight: .semibold))
+                            .foregroundStyle(.tertiary)
+                    }
+                    .buttonStyle(.plain)
+                    .accessibilityLabel("Clear \(title.lowercased())")
                 }
-                .buttonStyle(.plain)
             }
         }
     }

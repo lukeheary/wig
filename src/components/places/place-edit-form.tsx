@@ -204,10 +204,7 @@ export function PlaceEditForm({
       openingHours?: google.maps.places.PlaceOpeningHours;
     }) => {
       // Generate slug from place name
-      const slug = place.name
-        .toLowerCase()
-        .replace(/[^a-z0-9]+/g, "-")
-        .replace(/^-+|-+$/g, "");
+      const slug = place.name.toLowerCase().replace(/[^a-z0-9]+/g, "");
 
       // Convert Google opening_hours to our VenueHours format
       let hours: VenueHours | null = null;
@@ -277,7 +274,7 @@ export function PlaceEditForm({
 
       setFormData((prev) => ({
         ...prev,
-        slug: slug.length >= 3 ? slug : `${prev.type}-${slug}`,
+        slug: slug.length >= 3 ? slug : `${prev.type}${slug}`,
         name: nameOverride.trim() || place.name,
         address: place.address,
         city: place.city,
@@ -287,7 +284,9 @@ export function PlaceEditForm({
         longitude: place.longitude || null,
         hours: hours ?? prev.hours,
         instagram: isSlugSynced
-          ? (slug.length >= 3 ? slug : `${prev.type}-${slug}`).replace(/-/g, "")
+          ? slug.length >= 3
+            ? slug
+            : `${prev.type}${slug}`
           : prev.instagram,
       }));
       setGooglePlaceName(place.name);
@@ -448,7 +447,7 @@ export function PlaceEditForm({
         }
         isSynced={isSlugSynced}
         onSyncedChange={setIsSlugSynced}
-        slugPlaceholder={isVenue ? "big-night-live" : "after-brunch"}
+        slugPlaceholder={isVenue ? "bignightlive" : "afterbrunch"}
         idPrefix="place"
       />
 

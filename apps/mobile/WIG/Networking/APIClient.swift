@@ -934,6 +934,13 @@ struct APIClient: Sendable {
         )
     }
 
+    static func mobileDeleteAccount() -> Endpoint<DeleteSuccessResponse> {
+        Endpoint(
+            path: "/api/mobile/account",
+            method: .delete
+        )
+    }
+
     static func mobileEventRSVP(eventID: UUID) -> Endpoint<EventRSVPState> {
         Endpoint(
             path: "/api/mobile/events/\(eventID.uuidString)/rsvp",

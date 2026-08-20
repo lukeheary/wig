@@ -200,12 +200,8 @@ export const friendsRouter = router({
         });
       }
 
-      // Verify status is pending
-      if (friendRequest.status !== "pending") {
-        throw new TRPCError({
-          code: "BAD_REQUEST",
-          message: "This request has already been processed",
-        });
+      if (friendRequest.status === "accepted") {
+        return friendRequest;
       }
 
       const [updatedFriendship] = await ctx.db
@@ -214,66 +210,96 @@ export const friendsRouter = router({
           status: "accepted",
           updatedAt: new Date(),
         })
-        .where(eq(userFriends.id, input.friendRequestId))
+        .where(
+          and(
+            eq(userFriends.id, input.friendRequestId),
+            eq(userFriends.status, "pending")
+          )
+        )
         .returning();
 
-      await deleteNotificationsForEntity(
-        {
-          userId: ctx.auth.userId,
-          entityType: "friend_request",
-          entityIds: [input.friendRequestId],
-        },
-        ctx.db
-      );
+      if (!updatedFriendship) {
+        const currentFriendship = await ctx.db.query.userFriends.findFirst({
+          where: eq(userFriends.id, input.friendRequestId),
+        });
 
-      const currentUser = await ctx.db.query.users.findFirst({
-        where: eq(users.id, ctx.auth.userId),
-        columns: {
-          firstName: true,
-          lastName: true,
-          username: true,
-        },
-      });
+        if (currentFriendship?.status === "accepted") {
+          return currentFriendship;
+        }
 
-      const accepterName =
-        [currentUser?.firstName, currentUser?.lastName]
-          .filter(Boolean)
-          .join(" ")
-          .trim() ||
-        currentUser?.username ||
-        "Someone";
+        throw new TRPCError({
+          code: "CONFLICT",
+          message: "This friend request changed before it could be accepted",
+        });
+      }
 
-      await createNotification(
-        {
-          userId: friendRequest.userId,
-          actorUserId: ctx.auth.userId,
-          type: "friend_request_accepted",
-          entityType: "friend_request",
-          entityId: input.friendRequestId,
-          title: accepterName,
-          body: "Added you as a friend",
-          actionUrl: "/activity?view=list",
-          metadata: {
-            requestId: input.friendRequestId,
-            requestType: "friend",
+      try {
+        await deleteNotificationsForEntity(
+          {
+            userId: ctx.auth.userId,
+            entityType: "friend_request",
+            entityIds: [input.friendRequestId],
           },
-        },
-        ctx.db
-      );
+          ctx.db
+        );
 
-      await sendPushNotificationToUsers(
-        [friendRequest.userId],
-        {
-          title: accepterName,
-          body: "Added you as a friend",
-          data: {
+        const currentUser = await ctx.db.query.users.findFirst({
+          where: eq(users.id, ctx.auth.userId),
+          columns: {
+            firstName: true,
+            lastName: true,
+            username: true,
+          },
+        });
+
+        const accepterName =
+          [currentUser?.firstName, currentUser?.lastName]
+            .filter(Boolean)
+            .join(" ")
+            .trim() ||
+          currentUser?.username ||
+          "Someone";
+
+        await createNotification(
+          {
+            userId: friendRequest.userId,
+            actorUserId: ctx.auth.userId,
             type: "friend_request_accepted",
+            entityType: "friend_request",
             entityId: input.friendRequestId,
+            title: accepterName,
+            body: "Added you as a friend",
             actionUrl: "/activity?view=list",
+            metadata: {
+              requestId: input.friendRequestId,
+              requestType: "friend",
+            },
           },
-        },
-        ctx.db
-      );
+          ctx.db
+        );
+
+        await sendPushNotificationToUsers(
+          [friendRequest.userId],
+          {
+            title: accepterName,
+            body: "Added you as a friend",
+            data: {
+              type: "friend_request_accepted",
+              entityId: input.friendRequestId,
+              actionUrl: "/activity?view=list",
+            },
+          },
+          ctx.db
+        );
+      } catch (error) {
+        console.error(
+          "Friend request accepted, but notification delivery failed",
+          {
+            friendRequestId: input.friendRequestId,
+            error,
+          }
+        );
+      }
 
       return updatedFriendship;
     }),

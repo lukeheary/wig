@@ -92,9 +92,13 @@ export async function POST(req: Request) {
         return null;
       }
 
-      let finalUsername = (username || `user_${id.slice(-8)}`)
+      let finalUsername = (username ?? "")
         .toLowerCase()
-        .trim();
+        .trim()
+        .replace(/[^a-z0-9_]/g, "");
+      if (finalUsername.length < 3) {
+        finalUsername = `user_${id.slice(-8).toLowerCase()}`;
+      }
       const usernameConflict = await tx.query.users.findFirst({
         where: eq(users.username, finalUsername),
       });
