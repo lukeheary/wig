@@ -19,6 +19,7 @@ struct PlaceDetailView: View {
     @State private var isHideFromHomeConfirmationPresented = false
     @State private var presentedWebsite: PlaceWebsiteDestination?
     @State private var creationDestination: PlaceEventCreationDestination?
+    @State private var headerOpacity: CGFloat = 1
     private let eventCardWidth: CGFloat = 220
 
     var body: some View {
@@ -117,6 +118,7 @@ struct PlaceDetailView: View {
                 .padding(.bottom, 18)
                 .frame(maxWidth: .infinity, alignment: .topLeading)
         }
+        .modifier(ScrollableHeaderFadeTrackingModifier(opacity: $headerOpacity))
         .background(AppTheme.background.ignoresSafeArea())
         .background {
             // When embedded over an event, UIKit's native pop gesture targets the
@@ -246,7 +248,7 @@ struct PlaceDetailView: View {
                 closePlaceDetail()
             }
 
-            PlaceTopSlug(slug: displayedSlug)
+            PlaceTopSlug(slug: displayedSlug, opacity: headerOpacity)
 
             placeActionsMenu(for: displayedDetail)
         }
@@ -508,16 +510,14 @@ struct PlaceDetailView: View {
     }
 
     private func placeProfileActionRow(for detail: PlaceDetail) -> some View {
-        HStack(spacing: 10) {
-            PlaceEventFilterDropdown(selection: $selectedTab)
-
+        Group {
             if isAuthenticated {
                 placeFollowProfileButton(for: detail)
             }
         }
     }
 
-    private struct PlaceEventFilterDropdown: View {
+    private struct PlaceEventFilterTextMenu: View {
         @Binding var selection: PlaceEventsTab
 
         var body: some View {
@@ -536,27 +536,39 @@ struct PlaceDetailView: View {
                     }
                 }
             } label: {
-                HStack(spacing: 6) {
+                HStack(spacing: 5) {
                     Text(selection.title)
                         .lineLimit(1)
 
                     Image(systemName: "chevron.down")
-                        .font(.system(size: 11, weight: .bold))
+                        .font(.system(size: 10, weight: .bold))
                 }
-                .font(.system(size: 14, weight: .semibold))
-                .foregroundStyle(.white)
-                .frame(maxWidth: .infinity)
-                .frame(height: 40)
-                .background(
-                    RoundedRectangle(cornerRadius: 12, style: .continuous)
-                        .fill(Color.white.opacity(0.08))
-                )
-                .overlay(
-                    RoundedRectangle(cornerRadius: 12, style: .continuous)
-                        .strokeBorder(.white.opacity(0.08), lineWidth: 1)
-                )
+                .font(.system(size: 14, weight: .medium))
+                .foregroundStyle(.white.opacity(0.72))
+                .contentShape(Rectangle())
             }
             .buttonStyle(.plain)
+            .accessibilityLabel("Event period")
+            .accessibilityValue(selection.title)
+        }
+    }
+
+    private struct PlaceEventsSectionHeader: View {
+        let title: String
+        @Binding var selection: PlaceEventsTab
+
+        var body: some View {
+            HStack(alignment: .center, spacing: 12) {
+                Text(title)
+                    .font(AppTheme.contentHeaderFont)
+                    .foregroundStyle(.white)
+                    .lineLimit(1)
+
+                Spacer(minLength: 12)
+
+                PlaceEventFilterTextMenu(selection: $selection)
+            }
+            .frame(maxWidth: .infinity, alignment: .leading)
         }
     }
 
@@ -570,16 +582,26 @@ struct PlaceDetailView: View {
         let groups = PlaceEventGrouper.groups(for: events, mode: selectedTab)
 
         if groups.isEmpty {
-            ProfileEmptyEventsPlaceholder(
-                message: "There aren’t any \(selectedTab.emptyStateName) events for this place yet."
-            )
+            VStack(alignment: .leading, spacing: 18) {
+                PlaceEventsSectionHeader(
+                    title: selectedTab.title,
+                    selection: $selectedTab
+                )
+
+                ProfileEmptyEventsPlaceholder(
+                    message: "There aren’t any \(selectedTab.emptyStateName) events for this place yet."
+                )
+            }
         } else {
             VStack(alignment: .leading, spacing: 18) {
                 ForEach(groups) { group in
                     EventCardCarousel(
                         events: group.events,
                         cardWidth: eventCardWidth,
-                        verticalSpacing: 10
+                        verticalSpacing: 10,
+                        headerTrailing: group.id == groups.first?.id
+                            ? AnyView(PlaceEventFilterTextMenu(selection: $selectedTab))
+                            : nil
                     ) {
                         Text(group.label)
                             .font(AppTheme.contentHeaderFont)
@@ -599,11 +621,13 @@ struct PlaceDetailView: View {
 
 private struct PlaceTopSlug: View {
     let slug: String
+    var opacity: CGFloat = 1
 
     var body: some View {
         Text(slug)
             .font(.system(size: 17, weight: .bold))
             .foregroundStyle(.white)
+            .opacity(opacity)
             .lineLimit(1)
             .truncationMode(.tail)
             .frame(maxWidth: .infinity, alignment: .leading)
@@ -857,6 +881,7 @@ private struct PlaceFollowersView: View {
     @State private var followers: [FriendUserSummary] = []
     @State private var isLoading = true
     @State private var failed = false
+    @State private var headerOpacity: CGFloat = 1
 
     var body: some View {
         ScrollView {
@@ -895,12 +920,13 @@ private struct PlaceFollowersView: View {
             .padding(.top, 60)
             .padding(.bottom, 18)
         }
+        .modifier(ScrollableHeaderFadeTrackingModifier(opacity: $headerOpacity))
         .background(AppTheme.background.ignoresSafeArea())
         .background(SwipeBackEnabler())
         .toolbar(.hidden, for: .navigationBar)
         .navigationBarBackButtonHidden()
         .overlay(alignment: .top) {
-            PlaceRelationshipNavigation(title: "Followers") { dismiss() }
+            PlaceRelationshipNavigation(title: "Followers", opacity: headerOpacity) { dismiss() }
         }
         .task {
             await load()
@@ -928,6 +954,7 @@ private struct PlaceMembersView: View {
     @State private var members: [PlaceMemberListItem] = []
     @State private var isLoading = true
     @State private var failed = false
+    @State private var headerOpacity: CGFloat = 1
 
     var body: some View {
         ScrollView {
@@ -965,12 +992,13 @@ private struct PlaceMembersView: View {
             .padding(.top, 60)
             .padding(.bottom, 18)
         }
+        .modifier(ScrollableHeaderFadeTrackingModifier(opacity: $headerOpacity))
         .background(AppTheme.background.ignoresSafeArea())
         .background(SwipeBackEnabler())
         .toolbar(.hidden, for: .navigationBar)
         .navigationBarBackButtonHidden()
         .overlay(alignment: .top) {
-            PlaceRelationshipNavigation(title: "Members") { dismiss() }
+            PlaceRelationshipNavigation(title: "Members", opacity: headerOpacity) { dismiss() }
         }
         .task {
             await load()
@@ -992,6 +1020,7 @@ private struct PlaceMembersView: View {
 
 private struct PlaceRelationshipNavigation: View {
     let title: String
+    var opacity: CGFloat = 1
     let onBack: () -> Void
 
     var body: some View {
@@ -999,6 +1028,7 @@ private struct PlaceRelationshipNavigation: View {
             Text(title)
                 .font(.system(size: 17, weight: .semibold))
                 .foregroundStyle(.white)
+                .opacity(opacity)
                 .lineLimit(1)
                 .accessibilityAddTraits(.isHeader)
 

@@ -15,6 +15,12 @@ import { USER_SURFACE_VALUES } from "@/lib/user-surface-state";
 import { isReservedUsername } from "@/lib/reserved-usernames";
 import { mapEventCategoryData } from "@/server/utils/categories";
 import { withStoredImageReplacements } from "@/server/utils/stored-image-lifecycle";
+import { isAtLeastMinimumAge } from "@/lib/age-requirement";
+
+const minimumAgeDateSchema = z
+  .string()
+  .regex(/^\d{4}-\d{2}-\d{2}$/, "Date of birth must be YYYY-MM-DD")
+  .refine(isAtLeastMinimumAge, "You must be at least 13 years old to use WIG");
 
 export const userRouter = router({
   isAdmin: protectedProcedure.query(async ({ ctx }) => {
@@ -76,10 +82,7 @@ export const userRouter = router({
         city: z.string().optional(),
         state: z.string().optional(),
         gender: z.enum(["male", "female", "other"]).optional(),
-        dateOfBirth: z
-          .string()
-          .regex(/^\d{4}-\d{2}-\d{2}$/, "Date of birth must be YYYY-MM-DD")
-          .optional(),
+        dateOfBirth: minimumAgeDateSchema.optional(),
         avatarImageUrl: z.string().optional(),
       })
     )
@@ -485,10 +488,7 @@ export const userRouter = router({
         city: z.string().optional(),
         state: z.string().optional(),
         gender: z.enum(["male", "female", "other"]).optional(),
-        dateOfBirth: z
-          .string()
-          .regex(/^\d{4}-\d{2}-\d{2}$/, "Date of birth must be YYYY-MM-DD")
-          .optional(),
+        dateOfBirth: minimumAgeDateSchema.optional(),
       })
     )
     .mutation(async ({ ctx, input }) => {

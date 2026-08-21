@@ -357,6 +357,7 @@ struct MobileOnboardingView: View {
     @State private var isEmailEditorPresented = false
     @State private var isDeleteAccountWarningPresented = false
     @State private var isDeleteAccountVerificationPresented = false
+    @State private var headerOpacity: CGFloat = 1
     @FocusState private var focusedInput: OnboardingInputField?
 
     private var normalizedUsername: String {
@@ -429,9 +430,10 @@ struct MobileOnboardingView: View {
             }
             .padding(.horizontal, mode == .editing ? 16 : 18)
             .padding(.top, mode == .editing ? 74 : 20)
-            .padding(.bottom, 6)
+            .padding(.bottom, 24)
         }
         .scrollIndicators(.hidden)
+        .modifier(ScrollableHeaderFadeTrackingModifier(opacity: $headerOpacity))
         .background(onboardingBackground)
         .toolbar(.hidden, for: .navigationBar)
         .overlay(alignment: .top) {
@@ -510,6 +512,7 @@ struct MobileOnboardingView: View {
             Text("Edit Profile")
                 .font(.system(size: 17, weight: .semibold))
                 .foregroundStyle(.white)
+                .opacity(headerOpacity)
                 .frame(height: 46)
                 .allowsHitTesting(false)
 
@@ -734,6 +737,10 @@ struct MobileOnboardingView: View {
                 .font(.system(size: 14, weight: .semibold))
                 .foregroundStyle(.white.opacity(0.78))
 
+            Text("You must be at least 13 years old to use WIG.")
+                .font(.system(size: 11, weight: .medium))
+                .foregroundStyle(.white.opacity(0.42))
+
             Button {
                 focusedInput = nil
                 birthdayPickerDate = dateOfBirth ?? Self.defaultDateOfBirth
@@ -879,14 +886,14 @@ struct MobileOnboardingView: View {
     }
 
     private var deleteAccountSection: some View {
-        VStack(alignment: .leading, spacing: 10) {
+        VStack(alignment: .leading, spacing: 6) {
             Text("Delete Account")
                 .font(.system(size: 14, weight: .semibold))
-                .foregroundStyle(.red.opacity(0.92))
+                .foregroundStyle(.white.opacity(0.78))
 
             Text("Permanently removes your account and all associated data. This action cannot be reversed.")
-                .font(.system(size: 12, weight: .medium))
-                .foregroundStyle(.white.opacity(0.46))
+                .font(.system(size: 11, weight: .medium))
+                .foregroundStyle(.white.opacity(0.36))
                 .fixedSize(horizontal: false, vertical: true)
 
             Button {
@@ -894,18 +901,9 @@ struct MobileOnboardingView: View {
                 isDeleteAccountWarningPresented = true
             } label: {
                 Text("Delete Account")
-                    .font(.system(size: 15, weight: .bold))
-                    .foregroundStyle(.red)
-                    .frame(maxWidth: .infinity)
-                    .frame(height: 48)
-                    .background(
-                        RoundedRectangle(cornerRadius: 14, style: .continuous)
-                            .fill(Color.red.opacity(0.12))
-                    )
-                    .overlay(
-                        RoundedRectangle(cornerRadius: 14, style: .continuous)
-                            .strokeBorder(Color.red.opacity(0.34), lineWidth: 1)
-                    )
+                    .font(.system(size: 13, weight: .semibold))
+                    .foregroundStyle(.red.opacity(0.72))
+                    .frame(height: 34)
             }
             .buttonStyle(.plain)
             .accessibilityHint("Begins the permanent account deletion process")
@@ -942,6 +940,11 @@ struct MobileOnboardingView: View {
 
         guard let dateOfBirth else {
             errorMessage = "Please select your birthday."
+            return
+        }
+
+        guard dateOfBirth <= Self.maximumDateOfBirth else {
+            errorMessage = "You must be at least 13 years old to use WIG."
             return
         }
 
@@ -995,7 +998,13 @@ struct MobileOnboardingView: View {
         Calendar(identifier: .gregorian).date(byAdding: .year, value: -24, to: .now) ?? .now
     }()
 
-    private static let maximumDateOfBirth: Date = .now
+    private static var maximumDateOfBirth: Date {
+        Calendar(identifier: .gregorian).date(
+            byAdding: .year,
+            value: -13,
+            to: .now
+        ) ?? .now
+    }
 
     private static let minimumDateOfBirth: Date = {
         Calendar(identifier: .gregorian).date(from: DateComponents(year: 1900, month: 1, day: 1)) ?? .distantPast

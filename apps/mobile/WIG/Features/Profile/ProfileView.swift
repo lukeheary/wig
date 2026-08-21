@@ -43,6 +43,7 @@ struct ProfileView: View {
     @State private var friendRequestActionErrorMessage: String?
     @State private var isAdminSettingsPresented = false
     @State private var isEditProfilePresented = false
+    @State private var isHelpAndFeedbackPresented = false
     @State private var isSignOutConfirmationPresented = false
     @State private var profileShareURL: URL?
     @State private var handledAddPhotoTrigger = 0
@@ -234,6 +235,9 @@ struct ProfileView: View {
                         isEditProfilePresented = false
                     }
                 }
+                .navigationDestination(isPresented: $isHelpAndFeedbackPresented) {
+                    MobileHelpAndFeedbackView()
+                }
                 .sheet(
                     isPresented: Binding(
                         get: { profileShareURL != nil },
@@ -341,11 +345,6 @@ struct ProfileView: View {
                             )
                         }
 
-                        CurrentUserProfileEventsControls(
-                            selection: $selectedEventsTab,
-                            rsvpFilter: $selectedEventsRSVPFilter
-                        )
-                            .padding(.top, 8)
                     }
                     .padding(.bottom, 8)
 
@@ -404,6 +403,12 @@ struct ProfileView: View {
 
         VStack(alignment: .leading, spacing: 18) {
             if groups.isEmpty {
+                ProfileEventsSectionHeader(
+                    title: selectedEventsTab.title,
+                    selection: $selectedEventsTab,
+                    rsvpFilter: $selectedEventsRSVPFilter
+                )
+
                 ProfileEmptyEventsPlaceholder(
                     message: "There aren’t any \(selectedEventsTab.emptyStateName) events to show yet."
                 )
@@ -412,7 +417,15 @@ struct ProfileView: View {
                     EventCardCarousel(
                         events: group.events,
                         cardWidth: 220,
-                        verticalSpacing: 10
+                        verticalSpacing: 10,
+                        headerTrailing: group.id == groups.first?.id
+                            ? AnyView(
+                                ProfileEventsInlineFilters(
+                                    selection: $selectedEventsTab,
+                                    rsvpFilter: $selectedEventsRSVPFilter
+                                )
+                            )
+                            : nil
                     ) {
                         Text(group.label)
                             .font(AppTheme.contentHeaderFont)
@@ -789,6 +802,14 @@ struct ProfileView: View {
                 .tint(.white)
             }
 
+            Button {
+                isHelpAndFeedbackPresented = true
+            } label: {
+                Label("Help & Feedback", systemImage: "questionmark.bubble")
+                    .foregroundStyle(.white)
+            }
+            .tint(.white)
+
             Button(role: .destructive) {
                 isSignOutConfirmationPresented = true
             } label: {
@@ -1075,7 +1096,7 @@ struct UserProfileView: View {
                             UserRelationshipSummaryRow(response: response)
                         }
 
-                        userProfileEventActions(response: response)
+                        userProfileRelationshipAction(response: response)
                             .padding(.top, 8)
                     }
                     .padding(.bottom, 8)
@@ -1172,48 +1193,15 @@ struct UserProfileView: View {
     }
 
     @ViewBuilder
-    private func userProfileEventActions(response: UserProfileResponse) -> some View {
-        if isCurrentUserProfile {
-            CurrentUserProfileEventsControls(
-                selection: $selectedEventsTab,
-                rsvpFilter: $selectedEventsRSVPFilter
-            )
-        } else if displaysReceivedFriendRequestActions {
-            VStack(spacing: 10) {
-                ProfileEventsPeriodFilterButton(
-                    selection: $selectedEventsTab,
-                    rsvpFilter: $selectedEventsRSVPFilter
-                )
-                receivedFriendRequestAction(response: response)
-            }
-        } else if displaysFriendActions, let profile = response.profile {
-            if profile.friendStatus == .accepted {
-                CurrentUserProfileEventsControls(
-                    selection: $selectedEventsTab,
-                    rsvpFilter: $selectedEventsRSVPFilter
-                )
-            } else {
-                HStack(spacing: 10) {
-                    ProfileEventsPeriodFilterButton(
-                        selection: $selectedEventsTab,
-                        rsvpFilter: $selectedEventsRSVPFilter
-                    )
-                    userFriendProfileAction(for: profile)
-                }
-                .id("friend-upcoming-event-controls")
-                .transaction(disablingProfileEventControlAnimations)
-            }
-        } else {
-            ProfileEventsPeriodFilterButton(
-                selection: $selectedEventsTab,
-                rsvpFilter: $selectedEventsRSVPFilter
-            )
+    private func userProfileRelationshipAction(response: UserProfileResponse) -> some View {
+        if displaysReceivedFriendRequestActions {
+            receivedFriendRequestAction(response: response)
+        } else if displaysFriendActions,
+                  let profile = response.profile,
+                  profile.friendStatus != .accepted
+        {
+            userFriendProfileAction(for: profile)
         }
-    }
-
-    private func disablingProfileEventControlAnimations(_ transaction: inout Transaction) {
-        transaction.animation = nil
-        transaction.disablesAnimations = true
     }
 
     private func currentUserMenu(for profile: FriendUserSummary) -> some View {
@@ -1719,39 +1707,57 @@ private enum ProfileEventsTab: String, CaseIterable, Identifiable {
     }
 }
 
-private struct CurrentUserProfileEventsControls: View {
+private struct ProfileEventsSectionHeader: View {
+    let title: String
     @Binding var selection: ProfileEventsTab
     @Binding var rsvpFilter: ProfileEventsRSVPFilter
 
     var body: some View {
-        if selection == .past {
-            HStack(spacing: 10) {
-                ProfileEventsPeriodFilterButton(
-                    selection: $selection,
-                    rsvpFilter: $rsvpFilter
-                )
+        HStack(alignment: .firstTextBaseline, spacing: 12) {
+            Text(title)
+                .font(AppTheme.contentHeaderFont)
+                .foregroundStyle(.white)
+                .lineLimit(1)
 
-                ProfilePastEventsFilterButton(rsvpFilter: $rsvpFilter)
-            }
-            .id("past-event-controls")
-            .transaction(disablingAnimations)
-        } else {
-            ProfileEventsPeriodFilterButton(
+            Spacer(minLength: 12)
+
+            ProfileEventsInlineFilters(
                 selection: $selection,
                 rsvpFilter: $rsvpFilter
             )
-            .id("upcoming-event-controls")
-            .transaction(disablingAnimations)
         }
-    }
-
-    private func disablingAnimations(_ transaction: inout Transaction) {
-        transaction.animation = nil
-        transaction.disablesAnimations = true
+        .frame(maxWidth: .infinity, alignment: .leading)
+        .transaction { transaction in
+            transaction.animation = nil
+            transaction.disablesAnimations = true
+        }
     }
 }
 
-private struct ProfileEventsPeriodFilterButton: View {
+private struct ProfileEventsInlineFilters: View {
+    @Binding var selection: ProfileEventsTab
+    @Binding var rsvpFilter: ProfileEventsRSVPFilter
+
+    var body: some View {
+        HStack(spacing: 14) {
+            ProfileEventsPeriodTextMenu(
+                selection: $selection,
+                rsvpFilter: $rsvpFilter
+            )
+
+            if selection == .past {
+                ProfilePastEventsTextMenu(rsvpFilter: $rsvpFilter)
+            }
+        }
+        .fixedSize(horizontal: true, vertical: false)
+        .transaction { transaction in
+            transaction.animation = nil
+            transaction.disablesAnimations = true
+        }
+    }
+}
+
+private struct ProfileEventsPeriodTextMenu: View {
     @Binding var selection: ProfileEventsTab
     @Binding var rsvpFilter: ProfileEventsRSVPFilter
 
@@ -1760,26 +1766,10 @@ private struct ProfileEventsPeriodFilterButton: View {
             filterButton(title: "Upcoming", tab: .upcoming, filter: .all)
             filterButton(title: "Past", tab: .past, filter: .going)
         } label: {
-            HStack(spacing: 6) {
-                Text(selection.title)
-                    .lineLimit(1)
-
-                Image(systemName: "chevron.down")
-                    .font(.system(size: 11, weight: .bold))
-            }
-            .frame(maxWidth: .infinity)
-            .frame(height: 40)
-            .contentShape(RoundedRectangle(cornerRadius: 12, style: .continuous))
+            ProfileEventsTextMenuLabel(title: selection.title)
         }
-        .accessibilityLabel("Event filter")
-        .accessibilityValue("\(selection.title), \(rsvpFilter.title(for: selection))")
-        .profileActionButtonStyle(
-            kind: .secondary,
-            fillsAvailableWidth: true,
-            fontWeight: .semibold,
-            cornerRadius: 12,
-            fontSize: 14
-        )
+        .accessibilityLabel("Event period")
+        .accessibilityValue(selection.title)
     }
 
     @ViewBuilder
@@ -1797,7 +1787,7 @@ private struct ProfileEventsPeriodFilterButton: View {
                 rsvpFilter = filter
             }
         } label: {
-            if tab == selection, filter == rsvpFilter {
+            if tab == selection {
                 Label(title, systemImage: "checkmark")
             } else {
                 Text(title)
@@ -1806,7 +1796,7 @@ private struct ProfileEventsPeriodFilterButton: View {
     }
 }
 
-private struct ProfilePastEventsFilterButton: View {
+private struct ProfilePastEventsTextMenu: View {
     @Binding var rsvpFilter: ProfileEventsRSVPFilter
 
     var body: some View {
@@ -1814,25 +1804,12 @@ private struct ProfilePastEventsFilterButton: View {
             filterButton(title: "Attended", filter: .going)
             filterButton(title: "Interested", filter: .interested)
         } label: {
-            HStack(spacing: 6) {
-                Text(rsvpFilter == .interested ? "Interested" : "Attended")
-                    .lineLimit(1)
-
-                Image(systemName: "chevron.down")
-                    .font(.system(size: 11, weight: .bold))
-            }
-            .frame(maxWidth: .infinity)
-            .frame(height: 40)
-            .contentShape(RoundedRectangle(cornerRadius: 12, style: .continuous))
+            ProfileEventsTextMenuLabel(
+                title: rsvpFilter == .interested ? "Interested" : "Attended"
+            )
         }
         .accessibilityLabel("Past event filter")
-        .profileActionButtonStyle(
-            kind: .secondary,
-            fillsAvailableWidth: true,
-            fontWeight: .semibold,
-            cornerRadius: 12,
-            fontSize: 14
-        )
+        .accessibilityValue(rsvpFilter == .interested ? "Interested" : "Attended")
     }
 
     @ViewBuilder
@@ -1851,6 +1828,23 @@ private struct ProfilePastEventsFilterButton: View {
                 Text(title)
             }
         }
+    }
+}
+
+private struct ProfileEventsTextMenuLabel: View {
+    let title: String
+
+    var body: some View {
+        HStack(spacing: 5) {
+            Text(title)
+                .lineLimit(1)
+
+            Image(systemName: "chevron.down")
+                .font(.system(size: 10, weight: .bold))
+        }
+        .font(.system(size: 14, weight: .medium))
+        .foregroundStyle(.white.opacity(0.72))
+        .contentShape(Rectangle())
     }
 }
 
@@ -2053,6 +2047,12 @@ private struct UserProfileEventsSection: View {
 
         VStack(alignment: .leading, spacing: 18) {
             if groups.isEmpty {
+                ProfileEventsSectionHeader(
+                    title: selectedEventsTab.title,
+                    selection: $selectedEventsTab,
+                    rsvpFilter: $selectedEventsRSVPFilter
+                )
+
                 ProfileEmptyEventsPlaceholder(
                     message: "There aren’t any \(selectedEventsTab.emptyStateName) events to show yet."
                 )
@@ -2061,10 +2061,18 @@ private struct UserProfileEventsSection: View {
                     EventCardCarousel(
                         events: group.events,
                         cardWidth: 220,
-                        verticalSpacing: 10
+                        verticalSpacing: 10,
+                        headerTrailing: group.id == groups.first?.id
+                            ? AnyView(
+                                ProfileEventsInlineFilters(
+                                    selection: $selectedEventsTab,
+                                    rsvpFilter: $selectedEventsRSVPFilter
+                                )
+                            )
+                            : nil
                     ) {
                         Text(group.label)
-                            .font(.system(size: 20, weight: .bold))
+                            .font(AppTheme.contentHeaderFont)
                             .foregroundStyle(.white)
                     } card: { event in
                         if canViewEventDetails {
@@ -3408,6 +3416,7 @@ private struct RelationshipListScreen<Content: View>: View {
     let title: String?
     let content: Content
     @Environment(\.dismiss) private var dismiss
+    @State private var headerOpacity: CGFloat = 1
 
     init(title: String? = nil, @ViewBuilder content: () -> Content) {
         self.title = title
@@ -3423,6 +3432,7 @@ private struct RelationshipListScreen<Content: View>: View {
             .padding(.top, 60)
             .padding(.bottom, 18)
         }
+        .modifier(ScrollableHeaderFadeTrackingModifier(opacity: $headerOpacity))
         .background(ProfileTheme.background.ignoresSafeArea())
         .background(SwipeBackEnabler())
         .toolbar(.hidden, for: .navigationBar)
@@ -3435,6 +3445,7 @@ private struct RelationshipListScreen<Content: View>: View {
                         .font(.system(size: 17, weight: .semibold))
                         .foregroundStyle(.white)
                         .lineLimit(1)
+                        .opacity(headerOpacity)
                         .accessibilityAddTraits(.isHeader)
                 }
 
@@ -3741,6 +3752,227 @@ private extension String {
     }
 }
 
+private struct MobileHelpAndFeedbackView: View {
+    @Environment(\.apiClient) private var apiClient
+    @Environment(\.dismiss) private var dismiss
+    @FocusState private var focusedField: Field?
+    @State private var ticketType: MobileSupportTicketType = .help
+    @State private var severity: MobileSupportTicketSeverity = .low
+    @State private var subject = ""
+    @State private var message = ""
+    @State private var isSubmitting = false
+    @State private var errorMessage: String?
+    @State private var isSuccessPresented = false
+    @State private var headerOpacity: CGFloat = 1
+
+    private enum Field {
+        case subject
+        case message
+    }
+
+    var body: some View {
+        ScrollView {
+            VStack(alignment: .leading, spacing: 22) {
+                VStack(spacing: 0) {
+                    HStack {
+                        Text("Request Type")
+                            .font(.system(size: 12, weight: .semibold))
+                            .foregroundStyle(.white.opacity(0.52))
+
+                        Spacer()
+
+                        Picker("Request Type", selection: $ticketType) {
+                            ForEach(MobileSupportTicketType.allCases) { option in
+                                Text(option.title).tag(option)
+                            }
+                        }
+                        .labelsHidden()
+                        .font(.system(size: 16, weight: .medium))
+                        .foregroundStyle(.white)
+                        .tint(.white)
+                    }
+                    .padding(.horizontal, 16)
+                    .padding(.vertical, 14)
+
+                    Divider().overlay(Color.white.opacity(0.1))
+
+                    VStack(alignment: .leading, spacing: 10) {
+                        Text("Priority")
+                            .font(.system(size: 12, weight: .semibold))
+                            .foregroundStyle(.white.opacity(0.52))
+
+                        Picker("Priority", selection: $severity) {
+                            ForEach(MobileSupportTicketSeverity.allCases) { option in
+                                Text(option.title).tag(option)
+                            }
+                        }
+                        .pickerStyle(.segmented)
+                    }
+                    .padding(.horizontal, 16)
+                    .padding(.vertical, 14)
+
+                    Divider().overlay(Color.white.opacity(0.1))
+
+                    VStack(alignment: .leading, spacing: 7) {
+                        Text("Subject")
+                            .font(.system(size: 12, weight: .semibold))
+                            .foregroundStyle(.white.opacity(0.52))
+
+                        TextField("Briefly describe what you need", text: $subject)
+                            .font(.system(size: 16))
+                            .foregroundStyle(.white)
+                            .focused($focusedField, equals: .subject)
+                            .submitLabel(.next)
+                            .onSubmit { focusedField = .message }
+
+                        Text("\(subject.count)/255")
+                            .font(.system(size: 11, weight: .medium))
+                            .foregroundStyle(.white.opacity(0.4))
+                            .frame(maxWidth: .infinity, alignment: .trailing)
+                    }
+                    .padding(.horizontal, 16)
+                    .padding(.vertical, 14)
+
+                    Divider().overlay(Color.white.opacity(0.1))
+
+                    VStack(alignment: .leading, spacing: 7) {
+                        Text("Details")
+                            .font(.system(size: 12, weight: .semibold))
+                            .foregroundStyle(.white.opacity(0.52))
+
+                        ZStack(alignment: .topLeading) {
+                            if message.isEmpty {
+                                Text("Tell us what happened or what you’d like to see")
+                                    .font(.system(size: 16))
+                                    .foregroundStyle(.white.opacity(0.32))
+                                    .allowsHitTesting(false)
+                            }
+
+                            TextEditor(text: $message)
+                                .font(.system(size: 16))
+                                .foregroundStyle(.white)
+                                .scrollContentBackground(.hidden)
+                                .frame(minHeight: 150)
+                                .focused($focusedField, equals: .message)
+                        }
+
+                        Text("\(message.count)/5000")
+                            .font(.system(size: 11, weight: .medium))
+                            .foregroundStyle(.white.opacity(0.4))
+                            .frame(maxWidth: .infinity, alignment: .trailing)
+                    }
+                    .padding(.horizontal, 16)
+                    .padding(.vertical, 14)
+                }
+                .background(ProfileTheme.cardBackground, in: RoundedRectangle(cornerRadius: 20, style: .continuous))
+
+                if let errorMessage {
+                    Label(errorMessage, systemImage: "exclamationmark.circle")
+                        .font(.system(size: 14, weight: .medium))
+                        .foregroundStyle(Color.red.opacity(0.9))
+                }
+
+                Button {
+                    submit()
+                } label: {
+                    HStack(spacing: 9) {
+                        if isSubmitting {
+                            ProgressView().tint(.black)
+                        }
+
+                        Text(isSubmitting ? "Sending…" : "Send to Support")
+                            .font(.system(size: 16, weight: .bold))
+                    }
+                    .foregroundStyle(.black)
+                    .frame(maxWidth: .infinity)
+                    .frame(height: 52)
+                    .background(AppTheme.accentBlue, in: RoundedRectangle(cornerRadius: 16, style: .continuous))
+                }
+                .buttonStyle(.plain)
+                .disabled(!canSubmit || isSubmitting)
+                .opacity(canSubmit && !isSubmitting ? 1 : 0.45)
+
+                Link("Privacy Policy", destination: URL(string: "https://www.whoisgoing.com/privacy")!)
+                    .font(.system(size: 14, weight: .semibold))
+                    .foregroundStyle(.white.opacity(0.7))
+                    .frame(maxWidth: .infinity)
+                    .accessibilityHint("Opens the Who Is Going privacy policy in your browser")
+            }
+            .padding(.horizontal, 16)
+            .padding(.top, 70)
+            .padding(.bottom, 32)
+        }
+        .scrollDismissesKeyboard(.interactively)
+        .scrollIndicators(.hidden)
+        .modifier(ScrollableHeaderFadeTrackingModifier(opacity: $headerOpacity))
+        .background(ProfileTheme.background.ignoresSafeArea())
+        .background(SwipeBackEnabler())
+        .toolbar(.hidden, for: .navigationBar)
+        .navigationBarBackButtonHidden()
+        .overlay(alignment: .top) {
+            ZStack {
+                Text("Help & Feedback")
+                    .font(.system(size: 17, weight: .semibold))
+                    .foregroundStyle(.white)
+                    .opacity(headerOpacity)
+
+                HStack {
+                    FloatingGlassIconButton(systemImage: "chevron.left") {
+                        dismiss()
+                    }
+                    Spacer()
+                }
+            }
+            .padding(.horizontal, 16)
+        }
+        .alert("Message Sent", isPresented: $isSuccessPresented) {
+            Button("Done") { dismiss() }
+        } message: {
+            Text("Thanks for reaching out. Your request was sent to our support team.")
+        }
+        .tint(.white)
+    }
+
+    private var trimmedSubject: String {
+        subject.trimmingCharacters(in: .whitespacesAndNewlines)
+    }
+
+    private var trimmedMessage: String {
+        message.trimmingCharacters(in: .whitespacesAndNewlines)
+    }
+
+    private var canSubmit: Bool {
+        (3 ... 255).contains(trimmedSubject.count) &&
+            (10 ... 5_000).contains(trimmedMessage.count)
+    }
+
+    private func submit() {
+        guard canSubmit, !isSubmitting else { return }
+
+        focusedField = nil
+        errorMessage = nil
+        isSubmitting = true
+
+        Task {
+            do {
+                _ = try await apiClient.send(
+                    APIClient.submitMobileSupportTicket(
+                        type: ticketType,
+                        severity: severity,
+                        subject: trimmedSubject,
+                        message: trimmedMessage
+                    )
+                )
+                isSubmitting = false
+                isSuccessPresented = true
+            } catch {
+                isSubmitting = false
+                errorMessage = error.localizedDescription
+            }
+        }
+    }
+}
+
 private struct AdminSettingsView: View {
     @Environment(\.dismiss) private var dismiss
     @State private var presentedPlaceCreationType: PlaceListItem.PlaceType?
@@ -3748,6 +3980,7 @@ private struct AdminSettingsView: View {
     @State private var isEventSeriesCreationSheetPresented = false
     @State private var isMetroAreaSheetPresented = false
     @State private var isAdminScrapersPresented = false
+    @State private var headerOpacity: CGFloat = 1
 
     var body: some View {
         ScrollView {
@@ -3799,6 +4032,7 @@ private struct AdminSettingsView: View {
             .padding(.bottom, 18)
         }
         .scrollIndicators(.hidden)
+        .modifier(ScrollableHeaderFadeTrackingModifier(opacity: $headerOpacity))
         .background(ProfileTheme.background.ignoresSafeArea())
         .background(SwipeBackEnabler())
         .toolbar(.hidden, for: .navigationBar)
@@ -3808,6 +4042,7 @@ private struct AdminSettingsView: View {
                 Text("Admin Settings")
                     .font(.system(size: 17, weight: .semibold))
                     .foregroundStyle(.white)
+                    .opacity(headerOpacity)
 
                 HStack {
                     FloatingGlassIconButton(systemImage: "chevron.left") {

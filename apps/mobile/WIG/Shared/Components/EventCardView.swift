@@ -100,6 +100,7 @@ struct EventCardCarousel<Header: View, Card: View>: View {
     let snapsToCards: Bool
     let showsCounter: Bool
     private let header: Header
+    private let headerTrailing: AnyView?
     private let card: (EventFeedItem) -> Card
 
     @State private var currentEventID: UUID?
@@ -114,6 +115,7 @@ struct EventCardCarousel<Header: View, Card: View>: View {
         verticalSpacing: CGFloat = 12,
         snapsToCards: Bool = true,
         showsCounter: Bool = true,
+        headerTrailing: AnyView? = nil,
         @ViewBuilder header: () -> Header,
         @ViewBuilder card: @escaping (EventFeedItem) -> Card
     ) {
@@ -123,13 +125,14 @@ struct EventCardCarousel<Header: View, Card: View>: View {
         self.snapsToCards = snapsToCards
         self.showsCounter = showsCounter
         self.header = header()
+        self.headerTrailing = headerTrailing
         self.card = card
         _currentEventID = State(initialValue: events.first?.id)
     }
 
     var body: some View {
         VStack(alignment: .leading, spacing: verticalSpacing) {
-            HStack(alignment: .firstTextBaseline, spacing: 12) {
+            HStack(alignment: .center, spacing: 12) {
                 Button(action: scrollToStart) {
                     header
                         .contentShape(Rectangle())
@@ -146,6 +149,10 @@ struct EventCardCarousel<Header: View, Card: View>: View {
                         .foregroundStyle(.white.opacity(0.52))
                         .opacity(isCountVisible && events.count > 1 ? 1 : 0)
                         .accessibilityHidden(!isCountVisible || events.count <= 1)
+                }
+
+                if let headerTrailing {
+                    headerTrailing
                 }
             }
             .padding(.horizontal, 16)

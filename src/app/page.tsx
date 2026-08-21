@@ -64,6 +64,12 @@ export default async function LandingPage() {
                   <h2 className="font-space-grotesk text-3xl font-semibold leading-[0.98] tracking-tight md:text-4xl">
                     <span>See who is going.</span>
                   </h2>
+                  <Link
+                    href="/privacy"
+                    className="inline-block text-sm text-muted-foreground underline-offset-4 transition-colors hover:text-foreground hover:underline"
+                  >
+                    Privacy Policy
+                  </Link>
                 </div>
 
                 <div className="flex w-full flex-row gap-3 md:ml-auto md:w-auto md:flex-none">

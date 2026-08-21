@@ -4,38 +4,16 @@ import { NextRequest, NextResponse } from "next/server";
 import { db } from "@/server/db";
 import { users } from "@/server/db/schema";
 import { isReservedUsername } from "@/lib/reserved-usernames";
+import { isAtLeastMinimumAge, isValidIsoDate } from "@/lib/age-requirement";
 
 const USERNAME_PATTERN = /^[a-zA-Z0-9_]{3,20}$/;
-const DATE_OF_BIRTH_PATTERN = /^\d{4}-\d{2}-\d{2}$/;
-
 function isValidDateOfBirth(value: string): boolean {
-  if (!DATE_OF_BIRTH_PATTERN.test(value)) {
-    return false;
-  }
-
-  const [yearString, monthString, dayString] = value.split("-");
-  const year = Number.parseInt(yearString, 10);
-  const month = Number.parseInt(monthString, 10);
-  const day = Number.parseInt(dayString, 10);
-
-  if (!year || !month || !day) {
-    return false;
-  }
-
-  if (year < 1900 || year > new Date().getUTCFullYear()) {
-    return false;
-  }
-
-  const candidate = new Date(Date.UTC(year, month - 1, day));
-
-  return (
-    candidate.getUTCFullYear() === year &&
-    candidate.getUTCMonth() === month - 1 &&
-    candidate.getUTCDate() === day
-  );
+  return isValidIsoDate(value) && isAtLeastMinimumAge(value);
 }
 
-function preferredOnboardingUsername(username: string | null | undefined): string {
+function preferredOnboardingUsername(
+  username: string | null | undefined
+): string {
   if (!username) {
     return "";
   }
@@ -54,13 +32,13 @@ function hasCompletedMobileProfile(user: {
 }): boolean {
   return Boolean(
     user.firstName &&
-      user.lastName &&
-      user.username &&
-      !user.username.startsWith("user_") &&
-      user.city &&
-      user.state &&
-      user.gender &&
-      user.dateOfBirth
+    user.lastName &&
+    user.username &&
+    !user.username.startsWith("user_") &&
+    user.city &&
+    user.state &&
+    user.gender &&
+    user.dateOfBirth
   );
 }
 
@@ -216,7 +194,10 @@ export async function POST(request: NextRequest) {
     }
 
     if (isReservedUsername(normalizedUsername)) {
-      return NextResponse.json({ error: "Username is already taken" }, { status: 400 });
+      return NextResponse.json(
+        { error: "Username is already taken" },
+        { status: 400 }
+      );
     }
 
     if (!city || city.length > 100 || state.length !== 2) {
@@ -234,7 +215,10 @@ export async function POST(request: NextRequest) {
     }
 
     if (!isValidDateOfBirth(dateOfBirth)) {
-      return NextResponse.json({ error: "Please enter a valid date of birth" }, { status: 400 });
+      return NextResponse.json(
+        { error: "You must be at least 13 years old to use WIG" },
+        { status: 400 }
+      );
     }
 
     const existingUserWithUsername = await db.query.users.findFirst({
@@ -242,7 +226,10 @@ export async function POST(request: NextRequest) {
     });
 
     if (existingUserWithUsername) {
-      return NextResponse.json({ error: "Username is already taken" }, { status: 400 });
+      return NextResponse.json(
+        { error: "Username is already taken" },
+        { status: 400 }
+      );
     }
 
     const existingUser = await db.query.users.findFirst({
@@ -411,7 +398,7 @@ export async function PATCH(request: NextRequest) {
 
     if (!isValidDateOfBirth(dateOfBirth)) {
       return NextResponse.json(
-        { error: "Please enter a valid date of birth" },
+        { error: "You must be at least 13 years old to use WIG" },
         { status: 400 }
       );
     }
@@ -435,7 +422,8 @@ export async function PATCH(request: NextRequest) {
     }
 
     const shouldUpdateClerkName =
-      existingUser.firstName !== firstName || existingUser.lastName !== lastName;
+      existingUser.firstName !== firstName ||
+      existingUser.lastName !== lastName;
     const clerk = await clerkClient();
 
     if (shouldUpdateClerkName) {

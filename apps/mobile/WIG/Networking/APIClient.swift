@@ -134,6 +134,27 @@ struct APIClient: Sendable {
         Endpoint(path: "/api/mobile/activation")
     }
 
+    static func submitMobileSupportTicket(
+        type: MobileSupportTicketType,
+        severity: MobileSupportTicketSeverity,
+        subject: String,
+        message: String
+    ) throws -> Endpoint<MobileSupportTicketSubmissionResponse> {
+        Endpoint(
+            path: "/api/mobile/support",
+            method: .post,
+            body: try JSONEncoder().encode(
+                MobileSupportTicketSubmissionRequest(
+                    type: type,
+                    severity: severity,
+                    subject: subject,
+                    message: message
+                )
+            ),
+            notifiesDataChange: false
+        )
+    }
+
     static func mobileCategories() -> Endpoint<MobileCategoriesResponse> {
         Endpoint(
             path: "/api/mobile/categories",
@@ -1219,6 +1240,45 @@ private extension String {
 }
 
 struct EmptyResponse: Decodable, Sendable {}
+
+enum MobileSupportTicketType: String, Codable, CaseIterable, Identifiable, Sendable {
+    case help
+    case bug
+    case featureRequest = "feature-request"
+    case feedback
+
+    var id: String { rawValue }
+
+    var title: String {
+        switch self {
+        case .help: "Get Help"
+        case .bug: "Report a Bug"
+        case .featureRequest: "Request a Feature"
+        case .feedback: "Share Feedback"
+        }
+    }
+}
+
+enum MobileSupportTicketSeverity: String, Codable, CaseIterable, Identifiable, Sendable {
+    case low
+    case medium
+    case high
+
+    var id: String { rawValue }
+    var title: String { rawValue.capitalized }
+}
+
+private struct MobileSupportTicketSubmissionRequest: Encodable, Sendable {
+    let type: MobileSupportTicketType
+    let severity: MobileSupportTicketSeverity
+    let subject: String
+    let message: String
+}
+
+struct MobileSupportTicketSubmissionResponse: Decodable, Sendable {
+    let success: Bool
+    let ticketId: UUID
+}
 
 struct PlaceFollowState: Decodable, Hashable, Sendable {
     let isFollowed: Bool

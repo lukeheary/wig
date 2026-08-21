@@ -60,6 +60,7 @@ struct ManagePlaceView: View {
     @State private var editingMember: PlaceMemberListItem?
     @State private var editingSeries: PlaceEventSeriesSummary?
     @State private var creationDestination: PlaceEventCreationDestination?
+    @State private var headerOpacity: CGFloat = 1
 
     var body: some View {
         ScrollView {
@@ -72,6 +73,7 @@ struct ManagePlaceView: View {
             .padding(.top, 84)
             .padding(.bottom, 30)
         }
+        .modifier(ScrollableHeaderFadeTrackingModifier(opacity: $headerOpacity))
         .background(AppTheme.background.ignoresSafeArea())
         .navigationBarBackButtonHidden()
         .toolbar(.hidden, for: .navigationBar)
@@ -148,6 +150,7 @@ struct ManagePlaceView: View {
             Text("Manage Place")
                 .font(.system(size: 17, weight: .bold))
                 .foregroundStyle(.white)
+                .opacity(headerOpacity)
                 .lineLimit(1)
                 .minimumScaleFactor(0.72)
                 .allowsHitTesting(false)

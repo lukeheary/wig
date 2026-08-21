@@ -28,6 +28,7 @@ import { S3Uploader } from "@/components/ui/s3-uploader";
 import { UserAvatar } from "@/components/ui/user-avatar";
 import { DateOfBirthInput } from "@/components/ui/date-of-birth-input";
 import { isReservedUsername as isReservedUsernameValue } from "@/lib/reserved-usernames";
+import { isAtLeastMinimumAge } from "@/lib/age-requirement";
 
 export default function OnboardingPage() {
   const router = useRouter();
@@ -92,10 +93,12 @@ export default function OnboardingPage() {
     if (day < 1 || day > 31) return false;
 
     const candidate = new Date(Date.UTC(year, month - 1, day));
+    const dateOfBirth = `${String(year).padStart(4, "0")}-${String(month).padStart(2, "0")}-${String(day).padStart(2, "0")}`;
     return (
       candidate.getUTCFullYear() === year &&
       candidate.getUTCMonth() === month - 1 &&
-      candidate.getUTCDate() === day
+      candidate.getUTCDate() === day &&
+      isAtLeastMinimumAge(dateOfBirth)
     );
   };
   const isDobValid = isValidDateOfBirth();
@@ -164,7 +167,7 @@ export default function OnboardingPage() {
     if (!isDobValid) {
       toast({
         title: "Validation Error",
-        description: "Please enter a valid date of birth",
+        description: "You must be at least 13 years old to use WIG",
         variant: "destructive",
       });
       return;
