@@ -138,7 +138,9 @@ struct APIClient: Sendable {
         type: MobileSupportTicketType,
         severity: MobileSupportTicketSeverity,
         subject: String,
-        message: String
+        message: String,
+        reportedEntityType: MobileSupportReportedEntityType? = nil,
+        reportedEntityID: String? = nil
     ) throws -> Endpoint<MobileSupportTicketSubmissionResponse> {
         Endpoint(
             path: "/api/mobile/support",
@@ -148,7 +150,9 @@ struct APIClient: Sendable {
                     type: type,
                     severity: severity,
                     subject: subject,
-                    message: message
+                    message: message,
+                    reportedEntityType: reportedEntityType,
+                    reportedEntityID: reportedEntityID
                 )
             ),
             notifiesDataChange: false
@@ -1268,11 +1272,36 @@ enum MobileSupportTicketSeverity: String, Codable, CaseIterable, Identifiable, S
     var title: String { rawValue.capitalized }
 }
 
+enum MobileSupportReportedEntityType: String, Codable, Sendable {
+    case user
+    case place
+    case event
+}
+
+struct MobileSupportReportContext: Hashable, Identifiable, Sendable {
+    let subject: String
+    let entityType: MobileSupportReportedEntityType
+    let entityID: String
+
+    var id: String { "\(entityType.rawValue)-\(entityID)" }
+}
+
 private struct MobileSupportTicketSubmissionRequest: Encodable, Sendable {
     let type: MobileSupportTicketType
     let severity: MobileSupportTicketSeverity
     let subject: String
     let message: String
+    let reportedEntityType: MobileSupportReportedEntityType?
+    let reportedEntityID: String?
+
+    enum CodingKeys: String, CodingKey {
+        case type
+        case severity
+        case subject
+        case message
+        case reportedEntityType
+        case reportedEntityID = "reportedEntityId"
+    }
 }
 
 struct MobileSupportTicketSubmissionResponse: Decodable, Sendable {

@@ -19,6 +19,7 @@ struct PlaceDetailView: View {
     @State private var isHideFromHomeConfirmationPresented = false
     @State private var presentedWebsite: PlaceWebsiteDestination?
     @State private var creationDestination: PlaceEventCreationDestination?
+    @State private var reportContext: MobileSupportReportContext?
     @State private var headerOpacity: CGFloat = 1
     private let eventCardWidth: CGFloat = 220
 
@@ -185,6 +186,9 @@ struct PlaceDetailView: View {
                     onPlaceDeleted: { dismiss() }
                 )
             }
+        }
+        .navigationDestination(item: $reportContext) { context in
+            MobileHelpAndFeedbackView(reportContext: context)
         }
         .sheet(item: $presentedWebsite) { destination in
             PlaceWebsiteBrowser(url: destination.url)
@@ -426,6 +430,19 @@ struct PlaceDetailView: View {
                     .tint(.white)
                 }
 
+                Divider()
+
+                Button(role: .destructive) {
+                    reportContext = MobileSupportReportContext(
+                        subject: "Report \(detail.name) \(detail.type.displayName)",
+                        entityType: .place,
+                        entityID: detail.id.uuidString
+                    )
+                } label: {
+                    Label("Report Profile", systemImage: "exclamationmark.bubble")
+                        .foregroundStyle(.red)
+                }
+                .tint(.red)
             }
         } label: {
             placeActionIcon("ellipsis", isAvailable: true)

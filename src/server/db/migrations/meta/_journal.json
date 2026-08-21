@@ -385,6 +385,13 @@
       "when": 1787025600000,
       "tag": "0062_add_friend_notification_mutes",
       "breakpoints": true
+    },
+    {
+      "idx": 64,
+      "version": "7",
+      "when": 1787326373752,
+      "tag": "0064_add_support_ticket_reported_entity",
+      "breakpoints": true
     }
   ]
 }

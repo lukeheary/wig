@@ -988,6 +988,7 @@ struct UserProfileView: View {
     @State private var isUpdatingFriendNotificationMute = false
     @State private var pendingConfirmation: UserProfileConfirmation?
     @State private var profileShareURL: URL?
+    @State private var reportContext: MobileSupportReportContext?
     @State private var headerVisibility = ScrollableHeaderVisibility()
 
     var body: some View {
@@ -998,6 +999,9 @@ struct UserProfileView: View {
             .navigationBarBackButtonHidden()
             .overlay(alignment: .top) {
                 topControls
+            }
+            .navigationDestination(item: $reportContext) { context in
+                MobileHelpAndFeedbackView(reportContext: context)
             }
             .task(id: userID) {
                 if case .loaded(let response) = viewModel.state,
@@ -1197,8 +1201,7 @@ struct UserProfileView: View {
         if displaysReceivedFriendRequestActions {
             receivedFriendRequestAction(response: response)
         } else if displaysFriendActions,
-                  let profile = response.profile,
-                  profile.friendStatus != .accepted
+                  let profile = response.profile
         {
             userFriendProfileAction(for: profile)
         }
@@ -1233,6 +1236,10 @@ struct UserProfileView: View {
                     .foregroundStyle(.white)
             }
             .tint(.white)
+
+            Divider()
+
+            reportProfileButton(for: profile)
         } label: {
             Image(systemName: "ellipsis")
                 .font(.system(size: 18, weight: .bold))
@@ -1269,14 +1276,9 @@ struct UserProfileView: View {
             }
             .tint(.white)
 
-            Button(role: .destructive) {
-                UIImpactFeedbackGenerator(style: .light).impactOccurred()
-                pendingConfirmation = .unfriend(profile)
-            } label: {
-                Label("Unfriend", systemImage: "person.badge.minus")
-                    .foregroundStyle(.red)
-            }
-            .tint(.red)
+            Divider()
+
+            reportProfileButton(for: profile)
         } label: {
             Image(systemName: "ellipsis")
                 .font(.system(size: 18, weight: .bold))
@@ -1287,6 +1289,20 @@ struct UserProfileView: View {
         }
         .buttonStyle(.plain)
         .disabled(isRespondingToFriendRequest || isUpdatingFriendNotificationMute)
+    }
+
+    private func reportProfileButton(for profile: FriendUserSummary) -> some View {
+        Button(role: .destructive) {
+            reportContext = MobileSupportReportContext(
+                subject: "Report \(profile.username) User",
+                entityType: .user,
+                entityID: profile.id
+            )
+        } label: {
+            Label("Report Profile", systemImage: "exclamationmark.bubble")
+                .foregroundStyle(.red)
+        }
+        .tint(.red)
     }
 
     @ViewBuilder
@@ -1321,7 +1337,23 @@ struct UserProfileView: View {
                 )
                 .disabled(true)
         case .accepted:
-            EmptyView()
+            Button {
+                pendingConfirmation = .unfriend(profile)
+            } label: {
+                Text("Friends")
+                    .frame(maxWidth: .infinity)
+                    .frame(height: 40)
+                    .contentShape(RoundedRectangle(cornerRadius: 12, style: .continuous))
+            }
+            .profileActionButtonStyle(
+                kind: .secondary,
+                isDisabled: isRespondingToFriendRequest,
+                fillsAvailableWidth: true,
+                fontWeight: .semibold,
+                cornerRadius: 12,
+                fontSize: 14
+            )
+            .disabled(isRespondingToFriendRequest)
         case .pendingReceived:
             EmptyView()
         }
@@ -2115,61 +2147,35 @@ private enum ProfileEventGrouper {
     }
 
     private static func label(for event: EventFeedItem, mode: ProfileEventsTab) -> String {
-        if mode == .upcoming, EventFeedDisplayWindow.isLastNight(event) {
-            return "Last Night"
-        }
-
         var calendar = Calendar(identifier: .gregorian)
         calendar.timeZone = event.displayTimeZone
-        calendar.firstWeekday = 2
         let now = Date()
-        let currentWeekStart = calendar.dateInterval(of: .weekOfYear, for: now)?.start ?? now
-        let eventWeekStart = calendar.dateInterval(of: .weekOfYear, for: event.startAt)?.start ?? event.startAt
         let currentMonthStart = calendar.dateInterval(of: .month, for: now)?.start ?? now
         let eventMonthStart = calendar.dateInterval(of: .month, for: event.startAt)?.start ?? event.startAt
 
-        let weekDifference = calendar.dateComponents(
-            [.weekOfYear],
-            from: currentWeekStart,
-            to: eventWeekStart
-        ).weekOfYear ?? 0
         let monthDifference = calendar.dateComponents(
             [.month],
             from: currentMonthStart,
             to: eventMonthStart
         ).month ?? 0
-        let weeksFromNow = abs(weekDifference)
-        let monthsFromNow = abs(monthDifference)
-
-        if weeksFromNow <= 3 {
-            return mode == .past
-                ? pastWeekLabel(weeksAgo: weeksFromNow)
-                : weekLabel(weeksAway: weeksFromNow)
-        }
+        let monthsFromCurrent = mode == .past
+            ? max(0, -monthDifference)
+            : max(0, monthDifference)
 
         return mode == .past
-            ? pastMonthLabel(monthsAgo: monthsFromNow)
-            : monthLabel(monthsAway: monthsFromNow)
-    }
-
-    private static func weekLabel(weeksAway: Int) -> String {
-        if weeksAway <= 0 { return "This Week" }
-        if weeksAway == 1 { return "Next Week" }
-        return "In \(weeksAway) Weeks"
+            ? pastMonthLabel(monthsAgo: monthsFromCurrent)
+            : monthLabel(monthsAway: monthsFromCurrent)
     }
 
     private static func monthLabel(monthsAway: Int) -> String {
-        if monthsAway <= 1 { return "Next Month" }
+        if monthsAway <= 0 { return "This Month" }
+        if monthsAway == 1 { return "Next Month" }
         return "In \(monthsAway) Months"
     }
 
-    private static func pastWeekLabel(weeksAgo: Int) -> String {
-        if weeksAgo <= 1 { return "Last Week" }
-        return "\(weeksAgo) Weeks Ago"
-    }
-
     private static func pastMonthLabel(monthsAgo: Int) -> String {
-        if monthsAgo <= 1 { return "Last Month" }
+        if monthsAgo <= 0 { return "This Month" }
+        if monthsAgo == 1 { return "Last Month" }
         return "\(monthsAgo) Months Ago"
     }
 }
@@ -3752,22 +3758,36 @@ private extension String {
     }
 }
 
-private struct MobileHelpAndFeedbackView: View {
+struct MobileHelpAndFeedbackView: View {
     @Environment(\.apiClient) private var apiClient
     @Environment(\.dismiss) private var dismiss
     @FocusState private var focusedField: Field?
     @State private var ticketType: MobileSupportTicketType = .help
     @State private var severity: MobileSupportTicketSeverity = .low
-    @State private var subject = ""
+    @State private var subject: String
     @State private var message = ""
     @State private var isSubmitting = false
     @State private var errorMessage: String?
     @State private var isSuccessPresented = false
     @State private var headerOpacity: CGFloat = 1
+    private let reportedEntityType: MobileSupportReportedEntityType?
+    private let reportedEntityID: String?
 
     private enum Field {
         case subject
         case message
+    }
+
+    init(initialSubject: String = "") {
+        _subject = State(initialValue: String(initialSubject.prefix(255)))
+        reportedEntityType = nil
+        reportedEntityID = nil
+    }
+
+    init(reportContext: MobileSupportReportContext) {
+        _subject = State(initialValue: String(reportContext.subject.prefix(255)))
+        reportedEntityType = reportContext.entityType
+        reportedEntityID = reportContext.entityID
     }
 
     var body: some View {
@@ -3891,12 +3911,6 @@ private struct MobileHelpAndFeedbackView: View {
                 .buttonStyle(.plain)
                 .disabled(!canSubmit || isSubmitting)
                 .opacity(canSubmit && !isSubmitting ? 1 : 0.45)
-
-                Link("Privacy Policy", destination: URL(string: "https://www.whoisgoing.com/privacy")!)
-                    .font(.system(size: 14, weight: .semibold))
-                    .foregroundStyle(.white.opacity(0.7))
-                    .frame(maxWidth: .infinity)
-                    .accessibilityHint("Opens the Who Is Going privacy policy in your browser")
             }
             .padding(.horizontal, 16)
             .padding(.top, 70)
@@ -3921,6 +3935,23 @@ private struct MobileHelpAndFeedbackView: View {
                         dismiss()
                     }
                     Spacer()
+
+                    Menu {
+                        Link(destination: URL(string: "https://www.whoisgoing.com/privacy")!) {
+                            Label("Privacy Policy", systemImage: "hand.raised")
+                                .foregroundStyle(.white)
+                        }
+                        .tint(.white)
+                    } label: {
+                        Image(systemName: "ellipsis")
+                            .font(.system(size: 18, weight: .bold))
+                            .foregroundStyle(.white)
+                            .frame(width: 46, height: 46)
+                            .contentShape(Circle())
+                            .profileLiquidGlass(in: Circle())
+                    }
+                    .buttonStyle(.plain)
+                    .accessibilityLabel("More help options")
                 }
             }
             .padding(.horizontal, 16)
@@ -3960,7 +3991,9 @@ private struct MobileHelpAndFeedbackView: View {
                         type: ticketType,
                         severity: severity,
                         subject: trimmedSubject,
-                        message: trimmedMessage
+                        message: trimmedMessage,
+                        reportedEntityType: reportedEntityType,
+                        reportedEntityID: reportedEntityID
                     )
                 )
                 isSubmitting = false

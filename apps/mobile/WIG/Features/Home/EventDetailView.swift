@@ -34,8 +34,7 @@ struct EventDetailView: View {
     @State private var isShareSheetPresented = false
     @State private var isImageViewerPresented = false
     @State private var isEditEventPresented = false
-    @State private var editingSeriesRoute: EventSeriesEditRoute?
-    @State private var isCalendarComposerPresented = false
+    @State private var reportContext: MobileSupportReportContext?
     @State private var isRSVPMenuExpanded = false
     @State private var isRSVPMenuHitTestingEnabled = false
     @State private var rsvpMenuMode: RSVPMenuMode = .rsvp
@@ -279,8 +278,8 @@ struct EventDetailView: View {
                 }
             )
         }
-        .sheet(item: $editingSeriesRoute) { route in
-            EventSeriesEditSheet(seriesID: route.id, seriesPublicID: route.publicID)
+        .navigationDestination(item: $reportContext) { context in
+            MobileHelpAndFeedbackView(reportContext: context)
         }
         .fullScreenCover(isPresented: $isImageViewerPresented) {
             if let posterImageURL = currentEvent.posterImageURL {
@@ -470,78 +469,59 @@ struct EventDetailView: View {
     }
 
     private var topTrailingControls: some View {
-        HStack(spacing: 12) {
-            if currentEvent.eventURL != nil {
-                FloatingGlassIconButton(
-                    systemImage: "arrow.up.right",
-                    size: heroControlButtonSize
-                ) {
+        Menu {
+            if let sourceName = currentEvent.externalSourceName,
+               currentEvent.eventURL != nil
+            {
+                Button {
                     openExternalEvent()
+                } label: {
+                    Label("View on \(sourceName)", systemImage: "arrow.up.right")
                 }
             }
 
-            FloatingGlassIconButton(
-                systemImage: "square.and.arrow.up",
-                size: heroControlButtonSize
-            ) {
+            Button {
                 isShareSheetPresented = true
+            } label: {
+                Label("Share Event", systemImage: "square.and.arrow.up")
             }
 
-            if appSession.isAdmin {
-                editButton
-            }
-        }
-        .sheet(isPresented: $isCalendarComposerPresented) {
-            AppleCalendarComposerView(
-                title: currentEvent.title,
-                startDate: currentEvent.startAt,
-                endDate: currentEvent.endAt ?? currentEvent.startAt.addingTimeInterval(2 * 60 * 60),
-                timeZone: currentEvent.displayTimeZone,
-                location: currentEvent.primaryLocation,
-                notes: currentEvent.description,
-                url: currentEvent.eventURL
-            )
-        }
-    }
-
-    @ViewBuilder
-    private var editButton: some View {
-        if let seriesID = currentEvent.seriesID,
-           let seriesPublicID = currentEvent.seriesPublicID {
-            Menu {
+            if currentEvent.canEdit || appSession.isAdmin {
                 Button {
                     closeRSVPMenu()
                     isEditEventPresented = true
                 } label: {
                     Label("Edit Event", systemImage: "calendar")
                 }
+            }
 
-                Button {
-                    closeRSVPMenu()
-                    editingSeriesRoute = EventSeriesEditRoute(
-                        id: seriesID,
-                        publicID: seriesPublicID
+            Divider()
+
+            Button(role: .destructive) {
+                if isAuthenticated {
+                    reportContext = MobileSupportReportContext(
+                        subject: "Report \(currentEvent.title) Event",
+                        entityType: .event,
+                        entityID: currentEvent.id.uuidString
                     )
-                } label: {
-                    Label("Edit Event Series", systemImage: "calendar.badge.clock")
+                } else {
+                    isAuthSheetPresented = true
                 }
             } label: {
-                Image(systemName: "square.and.pencil")
-                    .font(.system(size: 17, weight: .semibold))
-                    .foregroundStyle(.white.opacity(0.76))
-                    .frame(width: heroControlButtonSize, height: heroControlButtonSize)
-                    .contentShape(Circle())
-                    .eventDetailLiquidGlass(in: Circle())
+                Label("Report Event", systemImage: "exclamationmark.bubble")
+                    .foregroundStyle(.red)
             }
-            .buttonStyle(.plain)
-        } else {
-            FloatingGlassIconButton(
-                systemImage: "square.and.pencil",
-                size: heroControlButtonSize
-            ) {
-                isEditEventPresented = true
-            }
+            .tint(.red)
+        } label: {
+            Image(systemName: "ellipsis")
+                .font(.system(size: 18, weight: .bold))
+                .foregroundStyle(.white)
+                .frame(width: heroControlButtonSize, height: heroControlButtonSize)
+                .contentShape(Circle())
+                .eventDetailLiquidGlass(in: Circle())
         }
+        .buttonStyle(.plain)
+        .accessibilityLabel("More event actions")
     }
 
     private var guestRSVPButton: some View {
@@ -2890,11 +2870,6 @@ private extension View {
                 .shadow(color: .black.opacity(0.30), radius: 22, x: 0, y: 12)
         }
     }
-}
-
-private struct EventSeriesEditRoute: Identifiable {
-    let id: UUID
-    let publicID: String
 }
 
 struct EventSeriesEditSheet: View {

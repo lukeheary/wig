@@ -233,6 +233,8 @@ export const adminRouter = router({
           status: supportTickets.status,
           subject: supportTickets.subject,
           message: supportTickets.message,
+          reportedEntityType: supportTickets.reportedEntityType,
+          reportedEntityId: supportTickets.reportedEntityId,
           createdAt: supportTickets.createdAt,
           updatedAt: supportTickets.updatedAt,
           userEmail: users.email,

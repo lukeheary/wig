@@ -1,4 +1,4 @@
-import { relations } from "drizzle-orm";
+import { relations, sql } from "drizzle-orm";
 import {
   pgTable,
   text,
@@ -15,6 +15,7 @@ import {
   integer,
   customType,
   primaryKey,
+  check,
 } from "drizzle-orm/pg-core";
 import { RSVP_DECLINE_REASON_VALUES } from "@/lib/rsvp";
 import {
@@ -158,6 +159,11 @@ export const supportTicketSeverityEnum = pgEnum("support_ticket_severity", [
   "medium",
   "high",
 ]);
+
+export const supportTicketReportedEntityTypeEnum = pgEnum(
+  "support_ticket_reported_entity_type",
+  ["user", "place", "event"]
+);
 
 export const supportTicketActivityTypeEnum = pgEnum(
   "support_ticket_activity_type",
@@ -1254,6 +1260,10 @@ export const supportTickets = pgTable(
     severity: supportTicketSeverityEnum("severity").notNull().default("low"),
     subject: varchar("subject", { length: 255 }).notNull(),
     message: text("message").notNull(),
+    reportedEntityType: supportTicketReportedEntityTypeEnum(
+      "reported_entity_type"
+    ),
+    reportedEntityId: text("reported_entity_id"),
     createdAt: timestamp("created_at").defaultNow().notNull(),
     updatedAt: timestamp("updated_at").defaultNow().notNull(),
   },
@@ -1264,6 +1274,14 @@ export const supportTickets = pgTable(
     ),
     statusIdx: index("support_tickets_status_idx").on(table.status),
     typeIdx: index("support_tickets_type_idx").on(table.type),
+    reportedEntityIdx: index("support_tickets_reported_entity_idx").on(
+      table.reportedEntityType,
+      table.reportedEntityId
+    ),
+    reportedEntityPairCheck: check(
+      "support_tickets_reported_entity_pair_check",
+      sql`(${table.reportedEntityType} IS NULL) = (${table.reportedEntityId} IS NULL)`
+    ),
   })
 );
 
