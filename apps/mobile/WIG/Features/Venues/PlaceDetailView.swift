@@ -434,9 +434,11 @@ struct PlaceDetailView: View {
 
                 Button(role: .destructive) {
                     reportContext = MobileSupportReportContext(
-                        subject: "Report \(detail.name) \(detail.type.displayName)",
+                        subject: "Report \(detail.type.displayName)",
                         entityType: .place,
-                        entityID: detail.id.uuidString
+                        entityID: detail.id.uuidString,
+                        entityName: detail.name,
+                        imageURL: detail.displayLogoURL
                     )
                 } label: {
                     Label("Report Profile", systemImage: "exclamationmark.bubble")

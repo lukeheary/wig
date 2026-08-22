@@ -20,12 +20,11 @@ export function withImageVersion(
   return imageUrl ?? null;
 }
 
-export function getSocialUsers(event: EventCardItem): SocialUser[] {
+export function getGoingSocialUsers(event: EventCardItem): SocialUser[] {
   const friendsGoing = event.friendsGoing ?? [];
-  const friendsInterested = event.friendsInterested ?? [];
 
-  return [...friendsGoing, ...friendsInterested].flatMap((rsvp) => {
-    if (rsvp.status !== "going" && rsvp.status !== "interested") {
+  return friendsGoing.flatMap((rsvp) => {
+    if (rsvp.status !== "going") {
       return [];
     }
 
@@ -36,6 +35,12 @@ export function getSocialUsers(event: EventCardItem): SocialUser[] {
       },
     ];
   });
+}
+
+export function getInterestedCount(event: EventCardItem) {
+  return (event.friendsInterested ?? []).filter(
+    (rsvp) => rsvp.status === "interested"
+  ).length;
 }
 
 export function getEventImageUrl(event: EventCardItem) {

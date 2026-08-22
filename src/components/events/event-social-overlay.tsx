@@ -52,11 +52,15 @@ export function EventSocialOverlay({
             ? "absolute left-1/2 top-4 z-20 -translate-x-1/2 drop-shadow-[0_8px_22px_rgba(0,0,0,0.45)]"
             : isTopRight
               ? "absolute right-2 top-2 z-20 drop-shadow-[0_8px_22px_rgba(0,0,0,0.45)]"
-            : "absolute bottom-2 right-2 drop-shadow-[0_6px_18px_rgba(0,0,0,0.45)]",
+              : "absolute bottom-2 right-2 drop-shadow-[0_6px_18px_rgba(0,0,0,0.45)]",
           stackClassName
         )}
       >
-        <AvatarStack users={users} maxDisplay={maxDisplay} size={size} />
+        <AvatarStack
+          users={users.map(({ rsvpStatus: _rsvpStatus, ...user }) => user)}
+          maxDisplay={maxDisplay}
+          size={size}
+        />
       </div>
     </>
   );

@@ -1153,6 +1153,48 @@ export const eventRouter = router({
       );
       await rehostExistingScrapedEventImages(scraperSources);
 
+      const reconciledEvents = await Promise.all(
+        input.events.map(async (event) => {
+          const venueId = event.venueId ?? input.venueId;
+          const organizerId = event.organizerId ?? input.organizerId;
+          if (!event.source || !event.externalId || !venueId) return event;
+
+          const externalIdMatch = await ctx.db.query.events.findFirst({
+            where: and(
+              eq(events.source, event.source),
+              eq(events.externalId, event.externalId)
+            ),
+            columns: { id: true },
+          });
+          if (externalIdMatch) return event;
+
+          const sameSlot = await ctx.db.query.events.findFirst({
+            where: and(
+              eq(events.venueId, venueId),
+              eq(events.startAt, event.startAt),
+              event.endAt ? eq(events.endAt, event.endAt) : isNull(events.endAt)
+            ),
+            columns: { id: true, source: true, externalId: true },
+            orderBy: [asc(events.createdAt)],
+          });
+          if (!sameSlot?.externalId) return event;
+
+          if (organizerId) {
+            await ctx.db
+              .update(events)
+              .set({ source: event.source, externalId: event.externalId })
+              .where(eq(events.id, sameSlot.id));
+            return event;
+          }
+
+          return {
+            ...event,
+            source: sameSlot.source ?? event.source,
+            externalId: sameSlot.externalId,
+          };
+        })
+      );
+
       const toEventKey = (event: {
         source?: string | null;
         externalId?: string | null;
@@ -1165,10 +1207,10 @@ export const eventRouter = router({
           ? `${event.source}::${event.externalId}`
           : `${event.title}::${event.startAt.toISOString()}::${event.city}::${event.state}`;
 
-      let dedupedEvents = input.events;
+      let dedupedEvents = reconciledEvents;
 
       if (!input.overrideExisting) {
-        const eventsWithExternal = input.events.filter(
+        const eventsWithExternal = reconciledEvents.filter(
           (event) => event.source && event.externalId
         );
 
@@ -1204,8 +1246,37 @@ export const eventRouter = router({
           }
         }
 
+        await Promise.all(
+          reconciledEvents
+            .filter(
+              (event) =>
+                event.source &&
+                event.externalId &&
+                (event.organizerId || input.organizerId)
+            )
+            .map((event) =>
+              ctx.db
+                .update(events)
+                .set({
+                  title: event.title,
+                  description: event.description ?? null,
+                  eventUrl: event.eventUrl ?? null,
+                  endAt: event.endAt ?? null,
+                  venueId: event.venueId ?? input.venueId ?? null,
+                  organizerId: event.organizerId ?? input.organizerId!,
+                  updatedAt: new Date(),
+                })
+                .where(
+                  and(
+                    eq(events.source, event.source!),
+                    eq(events.externalId, event.externalId!)
+                  )
+                )
+            )
+        );
+
         const seenKeys = new Set<string>();
-        dedupedEvents = input.events.filter((event) => {
+        dedupedEvents = reconciledEvents.filter((event) => {
           if (event.source && event.externalId) {
             const key = `${event.source}::${event.externalId}`;
             if (existingKeys.has(key)) return false;

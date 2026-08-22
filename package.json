@@ -13,6 +13,8 @@
     "db:migrate": "node src/server/db/migrate-http.mjs",
     "db:backfill-event-timezones": "tsx src/server/db/backfill-event-timezones.ts",
     "db:backfill-event-public-ids": "tsx src/server/db/backfill-event-public-ids.ts",
+    "db:dedupe-dice-events": "tsx src/server/db/dedupe-dice-events.ts",
+    "db:dedupe-organizer-venue-events": "tsx src/server/db/dedupe-organizer-venue-events.ts",
     "db:migrate-event-cover-filenames": "tsx src/server/db/migrate-event-cover-filenames.ts",
     "db:migrate-event-covers-to-jpeg": "tsx src/server/db/migrate-event-cover-images-to-jpeg.ts",
     "db:migrate-images-to-immutable-keys": "tsx src/server/db/migrate-images-to-immutable-keys.ts",

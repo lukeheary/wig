@@ -8,7 +8,7 @@ import {
   places,
   users,
 } from "@/server/db/schema";
-import { and, eq, isNull, ne, or } from "drizzle-orm";
+import { and, asc, eq, isNull, ne, or } from "drizzle-orm";
 import {
   filterExistingCategoryKeys,
   setEventCategoryKeys,
@@ -300,9 +300,53 @@ async function runScraper(
   // event, while still retaining it in `validScrapedValues` so an existing WIG
   // row can have its externally hosted image repaired below.
   const now = new Date();
-  const insertValues = validScrapedValues.filter(
+  let insertValues = validScrapedValues.filter(
     (value) =>
       scraperRow.scraper !== "posh" || value.startAt.getTime() >= now.getTime()
+  );
+
+  // Reconcile separate organizer and venue listings by exact venue, start,
+  // and end time, including when they came from different scraper sources.
+  insertValues = await Promise.all(
+    insertValues.map(async (value) => {
+      if (!value.source || !value.venueId || !value.externalId) return value;
+
+      const externalIdMatch = await db.query.events.findFirst({
+        where: and(
+          eq(events.source, value.source),
+          eq(events.externalId, value.externalId)
+        ),
+        columns: { id: true },
+      });
+      if (externalIdMatch) return value;
+
+      const sameSlot = await db.query.events.findFirst({
+        where: and(
+          eq(events.venueId, value.venueId),
+          eq(events.startAt, value.startAt),
+          value.endAt ? eq(events.endAt, value.endAt) : isNull(events.endAt)
+        ),
+        columns: { id: true, source: true, externalId: true },
+        orderBy: (event, { asc }) => [asc(event.createdAt)],
+      });
+      if (!sameSlot?.externalId || sameSlot.externalId === value.externalId) {
+        return value;
+      }
+
+      if (organizerId) {
+        await db
+          .update(events)
+          .set({ source: value.source, externalId: value.externalId })
+          .where(eq(events.id, sameSlot.id));
+        return value;
+      }
+
+      return {
+        ...value,
+        source: sameSlot.source ?? value.source,
+        externalId: sameSlot.externalId,
+      };
+    })
   );
 
   let upserted: {
@@ -390,6 +434,10 @@ async function runScraper(
         const updates: Partial<{
           venueId: string | null;
           organizerId: string | null;
+          title: string;
+          description: string | null;
+          eventUrl: string | null;
+          endAt: Date | null;
         }> = {};
         const missingLinkConditions = [];
 
@@ -401,6 +449,14 @@ async function runScraper(
         if (organizerId) {
           updates.organizerId = organizerId;
           missingLinkConditions.push(isNull(events.organizerId));
+
+          // Prefer organizer editorial fields regardless of which scraper ran
+          // first. The final update remains scoped to this source and ID.
+          updates.title = value.title;
+          updates.description = value.description;
+          updates.eventUrl = value.eventUrl;
+          updates.endAt = value.endAt;
+          missingLinkConditions.push(eq(events.source, value.source));
         }
 
         if (

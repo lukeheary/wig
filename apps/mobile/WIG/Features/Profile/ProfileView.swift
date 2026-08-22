@@ -1294,9 +1294,11 @@ struct UserProfileView: View {
     private func reportProfileButton(for profile: FriendUserSummary) -> some View {
         Button(role: .destructive) {
             reportContext = MobileSupportReportContext(
-                subject: "Report \(profile.username) User",
+                subject: "Report User",
                 entityType: .user,
-                entityID: profile.id
+                entityID: profile.id,
+                entityName: profile.name,
+                imageURL: profile.avatarImageURL
             )
         } label: {
             Label("Report Profile", systemImage: "exclamationmark.bubble")
@@ -2147,35 +2149,61 @@ private enum ProfileEventGrouper {
     }
 
     private static func label(for event: EventFeedItem, mode: ProfileEventsTab) -> String {
+        if mode == .upcoming, EventFeedDisplayWindow.isLastNight(event) {
+            return "Last Night"
+        }
+
         var calendar = Calendar(identifier: .gregorian)
         calendar.timeZone = event.displayTimeZone
+        calendar.firstWeekday = 2
         let now = Date()
+        let currentWeekStart = calendar.dateInterval(of: .weekOfYear, for: now)?.start ?? now
+        let eventWeekStart = calendar.dateInterval(of: .weekOfYear, for: event.startAt)?.start ?? event.startAt
         let currentMonthStart = calendar.dateInterval(of: .month, for: now)?.start ?? now
         let eventMonthStart = calendar.dateInterval(of: .month, for: event.startAt)?.start ?? event.startAt
 
+        let weekDifference = calendar.dateComponents(
+            [.weekOfYear],
+            from: currentWeekStart,
+            to: eventWeekStart
+        ).weekOfYear ?? 0
         let monthDifference = calendar.dateComponents(
             [.month],
             from: currentMonthStart,
             to: eventMonthStart
         ).month ?? 0
-        let monthsFromCurrent = mode == .past
-            ? max(0, -monthDifference)
-            : max(0, monthDifference)
+        let weeksFromNow = abs(weekDifference)
+        let monthsFromNow = abs(monthDifference)
+
+        if weeksFromNow <= 3 {
+            return mode == .past
+                ? pastWeekLabel(weeksAgo: weeksFromNow)
+                : weekLabel(weeksAway: weeksFromNow)
+        }
 
         return mode == .past
-            ? pastMonthLabel(monthsAgo: monthsFromCurrent)
-            : monthLabel(monthsAway: monthsFromCurrent)
+            ? pastMonthLabel(monthsAgo: monthsFromNow)
+            : monthLabel(monthsAway: monthsFromNow)
+    }
+
+    private static func weekLabel(weeksAway: Int) -> String {
+        if weeksAway <= 0 { return "This Week" }
+        if weeksAway == 1 { return "Next Week" }
+        return "In \(weeksAway) Weeks"
     }
 
     private static func monthLabel(monthsAway: Int) -> String {
-        if monthsAway <= 0 { return "This Month" }
-        if monthsAway == 1 { return "Next Month" }
+        if monthsAway <= 1 { return "Next Month" }
         return "In \(monthsAway) Months"
     }
 
+    private static func pastWeekLabel(weeksAgo: Int) -> String {
+        if weeksAgo <= 1 { return "Last Week" }
+        return "\(weeksAgo) Weeks Ago"
+    }
+
     private static func pastMonthLabel(monthsAgo: Int) -> String {
-        if monthsAgo <= 0 { return "This Month" }
-        if monthsAgo == 1 { return "Last Month" }
+        if monthsAgo <= 1 { return "Last Month" }
         return "\(monthsAgo) Months Ago"
     }
 }
@@ -3770,6 +3798,7 @@ struct MobileHelpAndFeedbackView: View {
     @State private var errorMessage: String?
     @State private var isSuccessPresented = false
     @State private var headerOpacity: CGFloat = 1
+    private let reportContext: MobileSupportReportContext?
     private let reportedEntityType: MobileSupportReportedEntityType?
     private let reportedEntityID: String?
 
@@ -3780,12 +3809,14 @@ struct MobileHelpAndFeedbackView: View {
 
     init(initialSubject: String = "") {
         _subject = State(initialValue: String(initialSubject.prefix(255)))
+        reportContext = nil
         reportedEntityType = nil
         reportedEntityID = nil
     }
 
     init(reportContext: MobileSupportReportContext) {
         _subject = State(initialValue: String(reportContext.subject.prefix(255)))
+        self.reportContext = reportContext
         reportedEntityType = reportContext.entityType
         reportedEntityID = reportContext.entityID
     }
@@ -3832,6 +3863,12 @@ struct MobileHelpAndFeedbackView: View {
                     .padding(.vertical, 14)
 
                     Divider().overlay(Color.white.opacity(0.1))
+
+                    if let reportContext {
+                        MobileSupportReportedEntityPreview(context: reportContext)
+
+                        Divider().overlay(Color.white.opacity(0.1))
+                    }
 
                     VStack(alignment: .leading, spacing: 7) {
                         Text("Subject")
@@ -4003,6 +4040,74 @@ struct MobileHelpAndFeedbackView: View {
                 errorMessage = error.localizedDescription
             }
         }
+    }
+}
+
+private struct MobileSupportReportedEntityPreview: View {
+    let context: MobileSupportReportContext
+
+    var body: some View {
+        HStack(spacing: 12) {
+            artwork
+
+            VStack(alignment: .leading, spacing: 3) {
+                Text(entityTypeTitle)
+                    .font(.system(size: 12, weight: .semibold))
+                    .foregroundStyle(.white.opacity(0.52))
+
+                Text(context.entityName)
+                    .font(.system(size: 16, weight: .semibold))
+                    .foregroundStyle(.white)
+                    .lineLimit(1)
+            }
+
+            Spacer(minLength: 0)
+        }
+        .padding(.horizontal, 16)
+        .padding(.vertical, 12)
+        .accessibilityElement(children: .combine)
+        .accessibilityLabel("Reporting \(context.entityName)")
+    }
+
+    private var entityTypeTitle: String {
+        let reportPrefix = "Report "
+        guard context.subject.hasPrefix(reportPrefix) else {
+            return context.subject
+        }
+
+        return String(context.subject.dropFirst(reportPrefix.count))
+    }
+
+    @ViewBuilder
+    private var artwork: some View {
+        if context.entityType == .user {
+            UserAvatarView(
+                imageURL: context.imageURL,
+                name: context.entityName,
+                size: 52,
+                identityKey: context.entityID
+            )
+        } else {
+            image
+                .clipShape(RoundedRectangle(cornerRadius: 10, style: .continuous))
+        }
+    }
+
+    private var image: some View {
+        RemoteImageView(url: context.imageURL) { loadedImage in
+            loadedImage
+                .resizable()
+                .scaledToFill()
+        } placeholder: {
+            ZStack {
+                Color.white.opacity(0.12)
+                Text(String(context.entityName.prefix(1)).uppercased())
+                    .font(.system(size: 19, weight: .bold))
+                    .foregroundStyle(.white.opacity(0.8))
+            }
+        }
+        .frame(width: 52, height: 52)
+        .clipped()
     }
 }
 

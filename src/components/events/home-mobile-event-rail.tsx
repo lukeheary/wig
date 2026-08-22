@@ -10,13 +10,14 @@ import {
 import Image from "next/image";
 import Link from "next/link";
 import { format } from "date-fns";
-import { Calendar, ChevronLeft, ChevronRight } from "lucide-react";
+import { Calendar, ChevronLeft, ChevronRight, Star } from "lucide-react";
 import { Card } from "@/components/ui/card";
 import { EventSocialOverlay } from "@/components/events/event-social-overlay";
 import { EventCardGrid } from "@/components/events/event-card-grid";
 import {
   getEventImageUrl,
-  getSocialUsers,
+  getGoingSocialUsers,
+  getInterestedCount,
   type EventCardItem,
 } from "@/components/events/event-card-helpers";
 import { EventCard } from "@/components/calendar/event-card";
@@ -224,7 +225,7 @@ function DesktopRailScroller({
               type="button"
               aria-label="Scroll events left"
               onClick={() => handleScroll("left")}
-              className="absolute inset-0 bg-gradient-to-r from-background via-background/95 via-40% to-transparent text-foreground transition-opacity duration-200 opacity-100"
+              className="absolute inset-0 bg-gradient-to-r from-background via-background/95 via-40% to-transparent text-foreground opacity-100 transition-opacity duration-200"
             >
               <ChevronLeft className="absolute left-4 top-1/2 h-6 w-6 -translate-y-1/2 drop-shadow-[0_2px_8px_rgba(0,0,0,0.55)]" />
             </button>
@@ -237,7 +238,7 @@ function DesktopRailScroller({
               type="button"
               aria-label="Scroll events right"
               onClick={() => handleScroll("right")}
-              className="absolute inset-0 bg-gradient-to-l from-background via-background/95 via-40% to-transparent text-foreground transition-opacity duration-200 opacity-100"
+              className="absolute inset-0 bg-gradient-to-l from-background via-background/95 via-40% to-transparent text-foreground opacity-100 transition-opacity duration-200"
             >
               <ChevronRight className="absolute right-4 top-1/2 h-6 w-6 -translate-y-1/2 drop-shadow-[0_2px_8px_rgba(0,0,0,0.55)]" />
             </button>
@@ -300,9 +301,14 @@ function MobileRailScroller({
 
 function HomeMiniEventCard({ event }: { event: EventCardItem }) {
   const { eventHref, handleClick } = useEventCardLink(event.publicId);
-  const dayOfWeek = formatEventDate(event.startAt, event.timeZone, event.state, {
-    weekday: "short",
-  });
+  const dayOfWeek = formatEventDate(
+    event.startAt,
+    event.timeZone,
+    event.state,
+    {
+      weekday: "short",
+    }
+  );
   const month = formatEventDate(event.startAt, event.timeZone, event.state, {
     month: "short",
   });
@@ -313,7 +319,8 @@ function HomeMiniEventCard({ event }: { event: EventCardItem }) {
   const { main: titleMain, trailingParenthetical } = splitTrailingParenthetical(
     event.title
   );
-  const socialUsers = getSocialUsers(event);
+  const socialUsers = getGoingSocialUsers(event);
+  const interestedCount = getInterestedCount(event);
   const hasInactiveStatus = event.status !== "active";
   const eventImageUrl = getEventImageUrl(event);
   const shelfColor = useImageDominantColor(eventImageUrl);
@@ -383,8 +390,19 @@ function HomeMiniEventCard({ event }: { event: EventCardItem }) {
               {dayOfWeek}, {month} {day} at {startTime}
             </div>
 
-            <div className="line-clamp-1 text-[13px] font-medium leading-tight text-white/75">
-              {subtitle}
+            <div className="flex min-w-0 items-center gap-2">
+              <div className="line-clamp-1 min-w-0 flex-1 text-[13px] font-medium leading-tight text-white/75">
+                {subtitle}
+              </div>
+              {interestedCount > 0 && (
+                <div
+                  className="flex shrink-0 items-center gap-1 text-[11px] font-semibold leading-none text-yellow-400"
+                  aria-label={`${interestedCount} ${interestedCount === 1 ? "person" : "people"} interested`}
+                >
+                  <Star className="h-3 w-3 fill-current" aria-hidden="true" />
+                  <span>{interestedCount}</span>
+                </div>
+              )}
             </div>
           </div>
         </div>

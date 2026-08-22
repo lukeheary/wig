@@ -1282,6 +1282,8 @@ struct MobileSupportReportContext: Hashable, Identifiable, Sendable {
     let subject: String
     let entityType: MobileSupportReportedEntityType
     let entityID: String
+    let entityName: String
+    let imageURL: URL?
 
     var id: String { "\(entityType.rawValue)-\(entityID)" }
 }

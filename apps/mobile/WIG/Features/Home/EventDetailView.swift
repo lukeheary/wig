@@ -500,9 +500,11 @@ struct EventDetailView: View {
             Button(role: .destructive) {
                 if isAuthenticated {
                     reportContext = MobileSupportReportContext(
-                        subject: "Report \(currentEvent.title) Event",
+                        subject: "Report Event",
                         entityType: .event,
-                        entityID: currentEvent.id.uuidString
+                        entityID: currentEvent.id.uuidString,
+                        entityName: currentEvent.title,
+                        imageURL: currentEvent.posterImageURL
                     )
                 } else {
                     isAuthSheetPresented = true

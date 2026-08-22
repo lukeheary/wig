@@ -9,12 +9,13 @@ import {
   formatEventTime,
   splitTrailingParenthetical,
 } from "@/lib/utils";
-import { Calendar } from "lucide-react";
+import { Calendar, Star } from "lucide-react";
 import { format } from "date-fns";
 import { EventSocialOverlay } from "@/components/events/event-social-overlay";
 import {
   getEventImageUrl,
-  getSocialUsers,
+  getGoingSocialUsers,
+  getInterestedCount,
   type EventCardItem,
 } from "@/components/events/event-card-helpers";
 import { useEventCardLink } from "@/components/events/use-event-card-link";
@@ -27,9 +28,14 @@ interface EventCardProps {
 
 export function EventCard({ event }: EventCardProps) {
   const { eventHref, handleClick } = useEventCardLink(event.publicId);
-  const dayOfWeek = formatEventDate(event.startAt, event.timeZone, event.state, {
-    weekday: "short",
-  });
+  const dayOfWeek = formatEventDate(
+    event.startAt,
+    event.timeZone,
+    event.state,
+    {
+      weekday: "short",
+    }
+  );
   const month = formatEventDate(event.startAt, event.timeZone, event.state, {
     month: "short",
   });
@@ -41,7 +47,8 @@ export function EventCard({ event }: EventCardProps) {
     event.title
   );
 
-  const socialUsers = getSocialUsers(event);
+  const socialUsers = getGoingSocialUsers(event);
+  const interestedCount = getInterestedCount(event);
   const hasInactiveStatus = event.status !== "active";
   const eventImageUrl = getEventImageUrl(event);
   const shelfColor = useImageDominantColor(eventImageUrl);
@@ -111,8 +118,22 @@ export function EventCard({ event }: EventCardProps) {
               {dayOfWeek}, {month} {day} at {startTime}
             </div>
 
-            <div className="line-clamp-1 text-sm font-medium leading-tight text-white/75">
-              {subtitle}
+            <div className="flex min-w-0 items-center gap-2">
+              <div className="line-clamp-1 min-w-0 flex-1 text-sm font-medium leading-tight text-white/75">
+                {subtitle}
+              </div>
+              {interestedCount > 0 && (
+                <div
+                  className="flex shrink-0 items-center gap-1 text-xs font-semibold leading-none text-yellow-400"
+                  aria-label={`${interestedCount} ${interestedCount === 1 ? "person" : "people"} interested`}
+                >
+                  <Star
+                    className="h-3.5 w-3.5 fill-current"
+                    aria-hidden="true"
+                  />
+                  <span>{interestedCount}</span>
+                </div>
+              )}
             </div>
           </div>
         </div>

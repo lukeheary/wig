@@ -71,14 +71,16 @@ struct MainTabView: View {
             EventRSVPPrefetchCache.state(eventID: presentation.event.id, userID: user.id)
         }
 
-        Group {
-            if #available(iOS 18.0, *), let sourceID = presentation.transitionSourceID {
-                EventDetailView(event: presentation.event, preloadedRSVPState: preloadedRSVPState)
-                    .navigationTransition(
-                        .zoom(sourceID: sourceID, in: eventDetailTransitionNamespace)
-                    )
-            } else {
-                EventDetailView(event: presentation.event, preloadedRSVPState: preloadedRSVPState)
+        NavigationStack {
+            Group {
+                if #available(iOS 18.0, *), let sourceID = presentation.transitionSourceID {
+                    EventDetailView(event: presentation.event, preloadedRSVPState: preloadedRSVPState)
+                        .navigationTransition(
+                            .zoom(sourceID: sourceID, in: eventDetailTransitionNamespace)
+                        )
+                } else {
+                    EventDetailView(event: presentation.event, preloadedRSVPState: preloadedRSVPState)
+                }
             }
         }
         // The event content itself is opaque at full size. Keeping only the
@@ -140,6 +142,7 @@ struct MainTabView: View {
                     }
                 }
             }
+            .tint(AppTheme.accentBlue)
             .tabBarMinimizeBehavior(.never)
 
             // Temporarily hidden: keep the admin creation control available for a
@@ -274,6 +277,7 @@ struct MainTabView: View {
                         .tag(AppTab.search)
                 }
             }
+            .tint(AppTheme.accentBlue)
 
             // Temporarily hidden: keep the admin creation control available for a
             // future restore without showing a fixed bottom-right button on every tab.

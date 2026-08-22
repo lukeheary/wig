@@ -172,9 +172,10 @@ struct ActivityView: View {
                         }
                     }
                 }
-                // Match Places' 46-point header plus its 14-point breathing room
-                // so switching tabs keeps filter pills on the same baseline.
-                .padding(.top, 60)
+                // The filter pill is taller than Home's Recent Activity heading.
+                // A 56-point inset keeps the first activity row on the same
+                // vertical baseline when switching between Home and Activity.
+                .padding(.top, 56)
                 .padding(.bottom, 18)
             }
             .scrollIndicators(.hidden)

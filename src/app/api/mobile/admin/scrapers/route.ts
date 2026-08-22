@@ -1,5 +1,5 @@
 import { auth } from "@clerk/nextjs/server";
-import { and, asc, desc, eq, gte, inArray, sql } from "drizzle-orm";
+import { and, asc, desc, eq, gte, inArray, isNull, sql } from "drizzle-orm";
 import { NextResponse } from "next/server";
 import { z } from "zod";
 import { resolveMobileEventEditPermissions } from "@/app/api/mobile/event-edit-permissions";
@@ -595,6 +595,50 @@ export async function PATCH(request: Request) {
       });
     }
 
+    parsedEvents = await Promise.all(
+      parsedEvents.map(async (event) => {
+        if (!event.source || !event.externalId || !event.venueId) {
+          return event;
+        }
+
+        const externalIdMatch = await db.query.events.findFirst({
+          where: and(
+            eq(events.source, event.source),
+            eq(events.externalId, event.externalId)
+          ),
+          columns: { id: true },
+        });
+        if (externalIdMatch) return event;
+
+        const sameSlot = await db.query.events.findFirst({
+          where: and(
+            eq(events.venueId, event.venueId),
+            eq(events.startAt, event.startAtDate),
+            event.endAtDate
+              ? eq(events.endAt, event.endAtDate)
+              : isNull(events.endAt)
+          ),
+          columns: { id: true, source: true, externalId: true },
+          orderBy: (storedEvent, { asc }) => [asc(storedEvent.createdAt)],
+        });
+        if (!sameSlot?.externalId) return event;
+
+        if (row.place.type === "organizer") {
+          await db
+            .update(events)
+            .set({ source: event.source, externalId: event.externalId })
+            .where(eq(events.id, sameSlot.id));
+          return event;
+        }
+
+        return {
+          ...event,
+          source: sameSlot.source ?? event.source,
+          externalId: sameSlot.externalId,
+        };
+      })
+    );
+
     let dedupedEvents = parsedEvents;
     const existingEventsByKey = new Map<
       string,
@@ -651,6 +695,32 @@ export async function PATCH(request: Request) {
           }
         });
       }
+    }
+
+    if (row.place.type === "organizer") {
+      await Promise.all(
+        parsedEvents
+          .filter((event) => event.source && event.externalId)
+          .map((event) =>
+            db
+              .update(events)
+              .set({
+                title: event.title,
+                description: event.description ?? null,
+                eventUrl: event.eventUrl ?? null,
+                endAt: event.endAtDate ?? null,
+                venueId: event.venueId ?? null,
+                organizerId: row.placeId,
+                updatedAt: new Date(),
+              })
+              .where(
+                and(
+                  eq(events.source, event.source!),
+                  eq(events.externalId, event.externalId!)
+                )
+              )
+          )
+      );
     }
 
     if (!body.overrideExisting) {
