@@ -24,6 +24,7 @@
 		4FE88C2815D0EAE2441402A7 /* UIImage+Upload.swift in Sources */ = {isa = PBXBuildFile; fileRef = 82C91109B59814E2F5A0DF89 /* UIImage+Upload.swift */; };
 		59B55CF727B8639151A845B1 /* VenuesView.swift in Sources */ = {isa = PBXBuildFile; fileRef = A55BD291C4FD0C9CAEB90B10 /* VenuesView.swift */; };
 		59D822A7D7ADCABFCF108A54 /* Assets.xcassets in Resources */ = {isa = PBXBuildFile; fileRef = C0D13CF91B0EECB51C7BEBC0 /* Assets.xcassets */; };
+		5A7D8E9F1029384756ABCDEF /* PrivacyInfo.xcprivacy in Resources */ = {isa = PBXBuildFile; fileRef = 5A7D8E9F1029384756ABCDE0 /* PrivacyInfo.xcprivacy */; };
 		5EC46501B348BC70CE9B7797 /* PlaceListItem.swift in Sources */ = {isa = PBXBuildFile; fileRef = AAD15E52E6FB10DA10806575 /* PlaceListItem.swift */; };
 		663912DD8C56BFB0C36CC551 /* MobileCategoryStore.swift in Sources */ = {isa = PBXBuildFile; fileRef = 1EFBA2EF2E31AA35C105FDAB /* MobileCategoryStore.swift */; };
 		68199AEF2370D451C6B2E824 /* HomeView.swift in Sources */ = {isa = PBXBuildFile; fileRef = FD0F542B4F30067E41ACD974 /* HomeView.swift */; };
@@ -77,6 +78,7 @@
 		3A87D39D7D4AE13FC019729E /* FloatingGlassIconButton.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = FloatingGlassIconButton.swift; sourceTree = "<group>"; };
 		426D21E06189626A1AF56246 /* GiftList.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = GiftList.swift; sourceTree = "<group>"; };
 		456417F474AB603C89D5B7D8 /* WIG.entitlements */ = {isa = PBXFileReference; lastKnownFileType = text.plist.entitlements; path = WIG.entitlements; sourceTree = "<group>"; };
+		5A7D8E9F1029384756ABCDE0 /* PrivacyInfo.xcprivacy */ = {isa = PBXFileReference; lastKnownFileType = text.xml; path = PrivacyInfo.xcprivacy; sourceTree = "<group>"; };
 		60631E843CC181797BD704F0 /* EventDetailHero.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = EventDetailHero.swift; sourceTree = "<group>"; };
 		67D77BC3A226DC29941244AF /* ScreenPlaceholderView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ScreenPlaceholderView.swift; sourceTree = "<group>"; };
 		68E5A730E47D03B7A196879B /* WIGApp.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = WIGApp.swift; sourceTree = "<group>"; };
@@ -197,6 +199,7 @@
 			children = (
 				C0D13CF91B0EECB51C7BEBC0 /* Assets.xcassets */,
 				205A0A05764438AFB15835AF /* Info.plist */,
+				5A7D8E9F1029384756ABCDE0 /* PrivacyInfo.xcprivacy */,
 				456417F474AB603C89D5B7D8 /* WIG.entitlements */,
 			);
 			path = Support;
@@ -388,6 +391,7 @@
 			buildActionMask = 2147483647;
 			files = (
 				59D822A7D7ADCABFCF108A54 /* Assets.xcassets in Resources */,
+				5A7D8E9F1029384756ABCDEF /* PrivacyInfo.xcprivacy in Resources */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};
