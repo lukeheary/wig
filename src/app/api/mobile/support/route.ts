@@ -35,11 +35,6 @@ export async function POST(request: Request) {
     const body = submissionSchema.parse(await request.json());
     await ensureDbUser(db, userId);
 
-    const admins = await db.query.users.findMany({
-      where: eq(users.role, "admin"),
-      columns: { id: true },
-    });
-
     const ticket = await db.transaction(async (transaction) => {
       const [createdTicket] = await transaction
         .insert(supportTickets)
@@ -71,28 +66,43 @@ export async function POST(request: Request) {
         },
       });
 
+      return createdTicket;
+    });
+
+    // Notification delivery must never roll back a successfully-created ticket.
+    // Keeping this outside the ticket transaction also makes deployments safe
+    // while the notification enum migration is rolling out.
+    try {
+      const admins = await db.query.users.findMany({
+        where: eq(users.role, "admin"),
+        columns: { id: true },
+      });
+
       if (admins.length > 0) {
-        await transaction.insert(notifications).values(
+        await db.insert(notifications).values(
           admins.map((admin) => ({
             userId: admin.id,
             actorUserId: userId,
             type: "support_ticket_created" as const,
             entityType: "support_ticket" as const,
-            entityId: createdTicket.id,
+            entityId: ticket.id,
             title: "New support request",
-            body: createdTicket.subject,
+            body: ticket.subject,
             actionUrl: "/admin/tickets",
             metadata: {
-              ticketId: createdTicket.id,
-              type: createdTicket.type,
-              severity: createdTicket.severity,
+              ticketId: ticket.id,
+              type: ticket.type,
+              severity: ticket.severity,
             },
           }))
         );
       }
-
-      return createdTicket;
-    });
+    } catch (notificationError) {
+      console.error(
+        "Support ticket created, but admin notification delivery failed:",
+        notificationError
+      );
+    }
 
     return NextResponse.json({ success: true, ticketId: ticket.id });
   } catch (error) {
