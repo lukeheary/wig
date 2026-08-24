@@ -3,6 +3,8 @@ import Foundation
 struct MobileEventsResponse: Codable, Hashable, Sendable {
     let events: [EventFeedItem]
     let latestFromFollows: [EventFeedItem]?
+    let latestFromPlaces: [EventFeedItem]?
+    let hasFollowedPlaces: Bool?
     let availableCities: [EventCity]
     let currentUserLocation: EventCity?
     let feedTimeZone: String?

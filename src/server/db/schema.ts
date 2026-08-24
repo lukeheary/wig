@@ -110,6 +110,7 @@ export const notificationTypeEnum = pgEnum("notification_type", [
   "friend_request_accepted",
   "partner_request",
   "partner_request_accepted",
+  "support_ticket_created",
   "support_ticket_status_changed",
 ]);
 

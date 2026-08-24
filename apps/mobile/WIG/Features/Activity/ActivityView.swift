@@ -705,6 +705,7 @@ private struct ActivityRowView: View {
     @State private var selectedVenue: PlaceListItem?
     @State private var selectedUserProfile: SelectedUserProfile?
     @State private var isRequestsPagePresented = false
+    @State private var isSupportRequestsPresented = false
 
     private static let relativeFormatter: RelativeDateTimeFormatter = {
         let formatter = RelativeDateTimeFormatter()
@@ -716,7 +717,10 @@ private struct ActivityRowView: View {
         HStack(alignment: .top, spacing: 12) {
             ActivityAvatarView(activity: activity)
 
-            if activity.type.isRequest {
+            if activity.type == .supportTicketCreated {
+                supportRequestContent
+                    .offset(y: -2)
+            } else if activity.type.isRequest {
                 requestContent
                     .offset(y: -2)
             } else {
@@ -758,6 +762,36 @@ private struct ActivityRowView: View {
         .navigationDestination(isPresented: $isRequestsPagePresented) {
             RequestsPageView()
         }
+        .navigationDestination(isPresented: $isSupportRequestsPresented) {
+            AdminSupportRequestsView()
+        }
+    }
+
+    private var supportRequestContent: some View {
+        VStack(alignment: .leading, spacing: 4) {
+            (
+                Text("New support request from ")
+                    .foregroundColor(.white.opacity(0.62))
+                + Text(activity.actorName)
+                    .fontWeight(.medium)
+                    .foregroundColor(.white)
+                + Text(activity.notificationBody.map { ": \($0)" } ?? "")
+                    .foregroundColor(.white.opacity(0.62))
+            )
+            .font(.system(size: 14))
+            .lineSpacing(3)
+
+            Text(
+                Self.relativeFormatter
+                    .localizedString(for: activity.timestamp, relativeTo: .now)
+                    .capitalizingRelativeAgo()
+            )
+            .font(.system(size: 11, weight: .medium))
+            .foregroundStyle(.white.opacity(0.42))
+        }
+        .frame(maxWidth: .infinity, alignment: .leading)
+        .contentShape(Rectangle())
+        .onTapGesture { isSupportRequestsPresented = true }
     }
 
     private var requestContent: some View {
@@ -1083,7 +1117,8 @@ struct InlineLinkedActivityText: UIViewRepresentable {
         case .friendRequestReceived,
              .partnerRequestReceived,
              .friendRequestAccepted,
-             .partnerRequestAccepted:
+             .partnerRequestAccepted,
+             .supportTicketCreated:
             return ""
         }
     }
@@ -1186,6 +1221,8 @@ struct ActivityAvatarView: View {
             return "person.badge.checkmark"
         case .partnerRequestAccepted:
             return "heart.circle.fill"
+        case .supportTicketCreated:
+            return "questionmark.bubble.fill"
         }
     }
 
@@ -1203,6 +1240,8 @@ struct ActivityAvatarView: View {
             return Color(red: 1.0, green: 0.43, blue: 0.66)
         case .partnerRequestAccepted:
             return Color(red: 1.0, green: 0.43, blue: 0.66)
+        case .supportTicketCreated:
+            return AppTheme.accentBlue
         }
     }
 

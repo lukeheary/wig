@@ -52,7 +52,9 @@ final class EventFeedViewModel: ObservableObject {
         // carousel artwork before the launch screen is dismissed so those cards do
         // not reveal their images later than the rest of Home. Keep this bounded so
         // a large update feed cannot materially extend launch time.
-        if let updates = viewModel.response(for: weekStart)?.latestFromFollows {
+        if let response = viewModel.response(for: weekStart),
+           let updates = response.latestFromPlaces ?? response.latestFromFollows
+        {
             await EventArtworkPrefetcher.prefetch(events: Array(updates.prefix(4)))
         }
     }

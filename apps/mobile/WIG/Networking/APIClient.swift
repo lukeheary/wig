@@ -361,6 +361,26 @@ struct APIClient: Sendable {
         )
     }
 
+    static func mobileAdminSupportTickets() -> Endpoint<MobileAdminSupportTicketsResponse> {
+        Endpoint(path: "/api/mobile/admin/support-tickets")
+    }
+
+    static func updateMobileAdminSupportTicket(
+        id: UUID,
+        status: MobileSupportTicketStatus
+    ) throws -> Endpoint<MobileAdminSupportTicketUpdateResponse> {
+        Endpoint(
+            path: "/api/mobile/admin/support-tickets",
+            method: .patch,
+            body: try JSONEncoder().encode(
+                MobileAdminSupportTicketUpdateRequest(
+                    ticketId: id.uuidString,
+                    status: status
+                )
+            )
+        )
+    }
+
     static func mobileAdminScrapers(search: String? = nil) -> Endpoint<MobileAdminScrapersResponse> {
         var queryItems: [URLQueryItem] = []
         if let search, !search.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty {
@@ -1292,6 +1312,26 @@ enum MobileSupportTicketSeverity: String, Codable, CaseIterable, Identifiable, S
     var title: String { rawValue.capitalized }
 }
 
+enum MobileSupportTicketStatus: String, Codable, CaseIterable, Identifiable, Sendable {
+    case open
+    case inReview = "in-review"
+    case planned
+    case resolved
+    case closed
+
+    var id: String { rawValue }
+
+    var title: String {
+        switch self {
+        case .open: "Open"
+        case .inReview: "In Review"
+        case .planned: "Planned"
+        case .resolved: "Resolved"
+        case .closed: "Closed"
+        }
+    }
+}
+
 enum MobileSupportReportedEntityType: String, Codable, Sendable {
     case user
     case place
@@ -1326,9 +1366,76 @@ private struct MobileSupportTicketSubmissionRequest: Encodable, Sendable {
     }
 }
 
+private struct MobileAdminSupportTicketUpdateRequest: Encodable, Sendable {
+    let ticketId: String
+    let status: MobileSupportTicketStatus
+}
+
 struct MobileSupportTicketSubmissionResponse: Decodable, Sendable {
     let success: Bool
     let ticketId: UUID
+}
+
+struct MobileAdminSupportTicketsResponse: Decodable, Sendable {
+    let tickets: [MobileAdminSupportTicket]
+}
+
+struct MobileAdminSupportTicketUpdateResponse: Decodable, Sendable {
+    let ticket: MobileAdminSupportTicketUpdate
+}
+
+struct MobileAdminSupportTicketUpdate: Decodable, Sendable {
+    let id: UUID
+    let status: MobileSupportTicketStatus
+    let updatedAt: Date
+}
+
+struct MobileAdminSupportTicket: Decodable, Identifiable, Hashable, Sendable {
+    let id: UUID
+    let userId: String
+    let type: MobileSupportTicketType
+    let severity: MobileSupportTicketSeverity
+    let status: MobileSupportTicketStatus
+    let subject: String
+    let message: String
+    let reportedEntityType: MobileSupportReportedEntityType?
+    let reportedEntityId: String?
+    let createdAt: Date
+    let updatedAt: Date
+    let userEmail: String?
+    let username: String?
+    let firstName: String?
+    let lastName: String?
+    let avatarImageUrl: URL?
+
+    var userName: String {
+        let fullName = [firstName, lastName]
+            .compactMap { $0 }
+            .joined(separator: " ")
+            .trimmingCharacters(in: .whitespacesAndNewlines)
+        return fullName.isEmpty ? (username ?? userEmail ?? "Unknown user") : fullName
+    }
+
+    func updating(status: MobileSupportTicketStatus, updatedAt: Date = .now) -> Self {
+        Self(
+            id: id,
+            userId: userId,
+            type: type,
+            severity: severity,
+            status: status,
+            subject: subject,
+            message: message,
+            reportedEntityType: reportedEntityType,
+            reportedEntityId: reportedEntityId,
+            createdAt: createdAt,
+            updatedAt: updatedAt,
+            userEmail: userEmail,
+            username: username,
+            firstName: firstName,
+            lastName: lastName,
+            avatarImageUrl: avatarImageUrl
+        )
+    }
 }
 
 struct PlaceFollowState: Decodable, Hashable, Sendable {

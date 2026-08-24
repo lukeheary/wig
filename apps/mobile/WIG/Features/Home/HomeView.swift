@@ -71,7 +71,7 @@ private final class LatestFromFollowsViewModel: ObservableObject {
             // this 31-day event range so the section also stays independent from
             // Home's weekly request while older API environments are still in use.
             var seenEventIDs = Set<UUID>()
-            events = ((response.latestFromFollows ?? []) + response.events)
+            events = ((response.latestFromPlaces ?? response.latestFromFollows ?? []) + response.events)
                 .filter { seenEventIDs.insert($0.id).inserted }
             loadedCacheIdentity = cacheIdentity
         } catch is CancellationError {
@@ -213,6 +213,7 @@ struct HomeView: View {
     @FocusState private var isHomeEventSearchFocused: Bool
     @State private var selectedLocationFilter: HomeLocationFilter?
     @State private var selectedEventFilter: HomeEventFilter = .all
+    @State private var selectedWhatsNewFilter: HomeWhatsNewFilter?
     @State private var selectedCategoryFilterID: String?
     @State private var postEventFeedbackEvent: MobileEventReviewPrompt?
     @State private var postEventFeedbackPrompt: MobileEventReviewPrompt?
@@ -367,6 +368,9 @@ struct HomeView: View {
                     Task {
                         await loadHome(for: weekStart, using: apiClient)
                     }
+                }
+                .onChange(of: clerk.user?.id) { _, _ in
+                    selectedWhatsNewFilter = nil
                 }
                 .onChange(of: viewModel.feedTimeZoneIdentifier) { oldIdentifier, newIdentifier in
                     guard let newIdentifier,
@@ -674,7 +678,13 @@ struct HomeView: View {
                         )
                     }
                     if index == 0, shouldShowLatestFromFollows {
-                        LatestFromFollowsSection(updates: latestFromFollows)
+                        WhatsNewSection(
+                            updates: visibleWhatsNewUpdates,
+                            selection: Binding(
+                                get: { effectiveWhatsNewFilter },
+                                set: { selectedWhatsNewFilter = $0 }
+                            )
+                        )
                             .padding(.bottom, 8)
                     }
                 }
@@ -1519,30 +1529,33 @@ struct HomeView: View {
             selectedEventFilter == .all &&
             effectiveCategoryFilterID == nil &&
             isViewingCurrentWeek &&
-            hasFollowedPlaces &&
-            !latestFromFollows.isEmpty
+            !allWhatsNewUpdates.isEmpty
     }
 
     private var hasFollowedPlaces: Bool {
-        latestFromFollowsSourceEvents.contains { event in
+        currentResponse?.hasFollowedPlaces ?? latestFromPlacesSourceEvents.contains { event in
             event.isFollowed || event.venueIsFollowed || event.organizerIsFollowed
         }
     }
 
-    private var latestFromFollowsSourceEvents: [EventFeedItem] {
+    private var effectiveWhatsNewFilter: HomeWhatsNewFilter {
+        selectedWhatsNewFilter ?? (hasFollowedPlaces ? .following : .allPlaces)
+    }
+
+    private var latestFromPlacesSourceEvents: [EventFeedItem] {
         latestFromFollowsViewModel.events +
-            (currentResponse?.latestFromFollows ?? []) +
+            (currentResponse?.latestFromPlaces ?? currentResponse?.latestFromFollows ?? []) +
             currentEvents
     }
 
-    private var latestFromFollows: [FollowedEventUpdate] {
+    private var allWhatsNewUpdates: [FollowedEventUpdate] {
         let cutoff = Date.now.addingTimeInterval(-14 * 24 * 60 * 60)
         var seenEventIDs = Set<UUID>()
-        let sourceEvents = latestFromFollowsSourceEvents
+        let sourceEvents = latestFromPlacesSourceEvents
             .filter { seenEventIDs.insert($0.id).inserted }
         let updates = sourceEvents.compactMap { event -> FollowedEventUpdate? in
-            guard effectiveLocationFilter.includes(event),
-                  event.isFollowed || event.venueIsFollowed || event.organizerIsFollowed
+            guard event.venueID != nil || event.organizerID != nil,
+                  effectiveLocationFilter.includes(event)
             else {
                 return nil
             }
@@ -1578,6 +1591,19 @@ struct HomeView: View {
         }
 
         return updates
+    }
+
+    private var visibleWhatsNewUpdates: [FollowedEventUpdate] {
+        allWhatsNewUpdates.filter { update in
+            switch effectiveWhatsNewFilter {
+            case .following:
+                return update.event.isFollowed ||
+                    update.event.venueIsFollowed ||
+                    update.event.organizerIsFollowed
+            case .allPlaces:
+                return true
+            }
+        }
     }
 
     private var isShowingSearchResults: Bool {
@@ -1697,9 +1723,9 @@ struct HomeView: View {
         // the same response as the weekly feed. Wait for that response first so
         // the carousel has its final contents before Home is revealed. Only use
         // the separate wide-range request as compatibility fallback for an older
-        // server that omits `latestFromFollows` entirely.
+        // server that omits the all-place `latestFromPlaces` collection.
         await eventLoad
-        if currentResponse?.latestFromFollows == nil {
+        if currentResponse?.latestFromPlaces == nil {
             await loadLatestFromFollows(
                 using: apiClient,
                 forceRefresh: forceRefresh
@@ -2193,8 +2219,23 @@ private struct FollowedEventUpdate: Identifiable {
     var id: UUID { event.id }
 }
 
-private struct LatestFromFollowsSection: View {
+private enum HomeWhatsNewFilter: String, CaseIterable, Identifiable {
+    case following
+    case allPlaces
+
+    var id: String { rawValue }
+
+    var title: String {
+        switch self {
+        case .following: "Following"
+        case .allPlaces: "All Places"
+        }
+    }
+}
+
+private struct WhatsNewSection: View {
     let updates: [FollowedEventUpdate]
+    @Binding var selection: HomeWhatsNewFilter
 
     @ViewBuilder
     var body: some View {
@@ -2204,11 +2245,10 @@ private struct LatestFromFollowsSection: View {
                 cardWidth: 164,
                 verticalSpacing: 10,
                 snapsToCards: false,
-                showsCounter: false
+                showsCounter: false,
+                headerTrailing: AnyView(filterMenu)
             ) {
-                Text("What’s New")
-                    .font(AppTheme.contentHeaderFont)
-                    .foregroundStyle(.white)
+                header
             } card: { event in
                 if let update = updates.first(where: { $0.event.id == event.id }) {
                     EventDetailNavigationLink(event: event) {
@@ -2219,7 +2259,62 @@ private struct LatestFromFollowsSection: View {
             }
             .accessibilityElement(children: .contain)
             .accessibilityLabel("What’s New")
+        } else {
+            VStack(alignment: .leading, spacing: 10) {
+                HStack(alignment: .center, spacing: 12) {
+                    header
+                    Spacer(minLength: 8)
+                    filterMenu
+                }
+                .padding(.horizontal, 16)
+
+                Text("No recent updates from places you follow.")
+                    .font(.system(size: 14, weight: .medium))
+                    .foregroundStyle(.white.opacity(0.52))
+                    .padding(.horizontal, 16)
+                    .padding(.vertical, 8)
+            }
         }
+    }
+
+    private var header: some View {
+        Text("What’s New")
+            .font(AppTheme.contentHeaderFont)
+            .foregroundStyle(.white)
+    }
+
+    private var filterMenu: some View {
+        Menu {
+            ForEach(HomeWhatsNewFilter.allCases) { filter in
+                Button {
+                    var transaction = Transaction(animation: nil)
+                    transaction.disablesAnimations = true
+
+                    withTransaction(transaction) {
+                        selection = filter
+                    }
+                } label: {
+                    if filter == selection {
+                        Label(filter.title, systemImage: "checkmark")
+                    } else {
+                        Text(filter.title)
+                    }
+                }
+            }
+        } label: {
+            HStack(spacing: 5) {
+                Text(selection.title)
+                    .lineLimit(1)
+
+                Image(systemName: "chevron.down")
+                    .font(.system(size: 10, weight: .bold))
+            }
+            .font(.system(size: 14, weight: .medium))
+            .foregroundStyle(.white.opacity(0.72))
+            .contentShape(Rectangle())
+        }
+        .accessibilityLabel("What’s New places filter")
+        .accessibilityValue(selection.title)
     }
 }
 

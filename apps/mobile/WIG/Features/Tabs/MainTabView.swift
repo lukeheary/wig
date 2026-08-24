@@ -71,14 +71,16 @@ struct MainTabView: View {
             EventRSVPPrefetchCache.state(eventID: presentation.event.id, userID: user.id)
         }
 
-        NavigationStack {
-            Group {
-                if #available(iOS 18.0, *), let sourceID = presentation.transitionSourceID {
+        Group {
+            if #available(iOS 18.0, *), let sourceID = presentation.transitionSourceID {
+                NavigationStack {
                     EventDetailView(event: presentation.event, preloadedRSVPState: preloadedRSVPState)
-                        .navigationTransition(
-                            .zoom(sourceID: sourceID, in: eventDetailTransitionNamespace)
-                        )
-                } else {
+                }
+                .navigationTransition(
+                    .zoom(sourceID: sourceID, in: eventDetailTransitionNamespace)
+                )
+            } else {
+                NavigationStack {
                     EventDetailView(event: presentation.event, preloadedRSVPState: preloadedRSVPState)
                 }
             }

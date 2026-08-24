@@ -6,6 +6,7 @@ import {
   cities,
   eventRsvps,
   metroAreas,
+  notifications,
   userActivity,
   userFriends,
   userPartners,
@@ -211,6 +212,18 @@ export async function GET(request: Request) {
     if (!friendIdSet.has(activity.actorUserId)) return false;
     return activity.event.visibility === "public" && activity.event.status === "active";
   });
+
+  const supportNotifications = userId
+    ? await db.query.notifications.findMany({
+        where: and(
+          eq(notifications.userId, userId),
+          eq(notifications.type, "support_ticket_created")
+        ),
+        orderBy: [desc(notifications.createdAt)],
+        limit: 50,
+        with: { actor: true },
+      })
+    : [];
 
   const eventIds = visibleActivities
     .map((activity) => activity.event?.id)
@@ -603,7 +616,35 @@ export async function GET(request: Request) {
       }),
   ];
 
-  const activities = [...requestActivities, ...eventActivities]
+  const supportActivities = supportNotifications.map((notification) => {
+    const actorName =
+      [notification.actor?.firstName, notification.actor?.lastName]
+        .filter(Boolean)
+        .join(" ")
+        .trim() ||
+      notification.actor?.username ||
+      "A user";
+
+    return {
+      id: notification.id,
+      type: "support_ticket_created",
+      actorUserId: notification.actorUserId ?? userId ?? "support",
+      actorName,
+      actorFirstName: notification.actor?.firstName ?? null,
+      actorGender: notification.actor?.gender ?? null,
+      actorAvatarImageUrl: notification.actor?.avatarImageUrl ?? null,
+      partnerFirstName: null,
+      partnerUserId: null,
+      notGoingReason: null,
+      createdAt: notification.createdAt,
+      updatedAt: null,
+      event: null,
+      supportTicketId: notification.entityId,
+      notificationBody: notification.body,
+    };
+  });
+
+  const activities = [...supportActivities, ...requestActivities, ...eventActivities]
     .sort(
       (lhs, rhs) =>
         new Date(rhs.updatedAt ?? rhs.createdAt).getTime() -

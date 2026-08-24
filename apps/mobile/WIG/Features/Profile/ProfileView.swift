@@ -2654,8 +2654,15 @@ private struct MyFriendsView: View {
     let onChangePartner: () -> Void
     let onRemovePartner: () -> Void
     let onRemoveFriend: (FriendUserSummary) -> Void
+    @Environment(\.apiClient) private var apiClient
     @State private var selectedSection: FriendsPageSection = .friends
     @State private var pendingFriendRemoval: FriendUserSummary?
+    @State private var blockedUsers: [MobileBlockedUser] = []
+    @State private var hasLoadedBlockedUsers = false
+    @State private var isLoadingBlockedUsers = false
+    @State private var pendingUnblock: MobileBlockedUser?
+    @State private var unblockingUserID: String?
+    @State private var blockedUsersErrorMessage: String?
 
     var body: some View {
         RelationshipListScreen(title: "Friends") {
@@ -2689,8 +2696,15 @@ private struct MyFriendsView: View {
                         onChangePartner: onChangePartner,
                         onRemovePartner: onRemovePartner
                     )
+
+                case .blocked:
+                    blockedUsersContent
                 }
             }
+        }
+        .task(id: selectedSection) {
+            guard selectedSection == .blocked else { return }
+            await loadBlockedUsersIfNeeded()
         }
         .alert(
             "Remove Friend?",
@@ -2718,17 +2732,124 @@ private struct MyFriendsView: View {
                 Text("Remove \(pendingFriendRemoval.name) from your friends?")
             }
         }
+        .alert(item: $pendingUnblock) { user in
+            Alert(
+                title: Text("Unblock \(user.name)?"),
+                message: Text("They’ll be able to find your profile and send you a friend request again. Your previous friendship or partner relationship won’t be restored."),
+                primaryButton: .default(Text("Unblock")) {
+                    unblock(user)
+                },
+                secondaryButton: .cancel()
+            )
+        }
+        .alert(
+            "Couldn’t Update Blocked Users",
+            isPresented: Binding(
+                get: { blockedUsersErrorMessage != nil },
+                set: { isPresented in
+                    if !isPresented {
+                        blockedUsersErrorMessage = nil
+                    }
+                }
+            )
+        ) {
+            Button("OK", role: .cancel) {}
+        } message: {
+            Text(blockedUsersErrorMessage ?? "Please try again.")
+        }
+    }
+
+    @ViewBuilder
+    private var blockedUsersContent: some View {
+        if isLoadingBlockedUsers && !hasLoadedBlockedUsers {
+            ProgressView()
+                .tint(.white)
+                .frame(maxWidth: .infinity)
+                .padding(.vertical, 32)
+        } else if blockedUsers.isEmpty {
+            EmptyRelationshipCard(message: "No blocked users")
+        } else {
+            VStack(spacing: 2) {
+                ForEach(blockedUsers) { user in
+                    HStack(spacing: 8) {
+                        CompactUserListRowView(
+                            imageURL: user.avatarImageURL,
+                            name: user.name,
+                            subtitle: "@\(user.username)",
+                            identityKey: user.id
+                        )
+                        .frame(maxWidth: .infinity, alignment: .leading)
+
+                        Menu {
+                            Button {
+                                pendingUnblock = user
+                            } label: {
+                                Label("Unblock", systemImage: "person.crop.circle.badge.checkmark")
+                                    .foregroundStyle(.white)
+                            }
+                            .tint(.white)
+                        } label: {
+                            Image(systemName: "ellipsis")
+                                .font(.system(size: 18, weight: .bold))
+                                .foregroundStyle(.white.opacity(unblockingUserID == nil ? 0.9 : 0.4))
+                                .frame(width: 32, height: 32)
+                                .contentShape(Circle())
+                        }
+                        .disabled(unblockingUserID != nil)
+                    }
+                }
+            }
+            .frame(maxWidth: .infinity, alignment: .leading)
+        }
+    }
+
+    private func loadBlockedUsersIfNeeded() async {
+        guard !hasLoadedBlockedUsers, !isLoadingBlockedUsers else { return }
+
+        isLoadingBlockedUsers = true
+        defer { isLoadingBlockedUsers = false }
+
+        do {
+            let response = try await apiClient.send(APIClient.mobileBlockedUsers())
+            blockedUsers = response.users
+            hasLoadedBlockedUsers = true
+        } catch {
+            blockedUsersErrorMessage = error.localizedDescription
+        }
+    }
+
+    private func unblock(_ user: MobileBlockedUser) {
+        guard unblockingUserID == nil else { return }
+        unblockingUserID = user.id
+
+        Task {
+            defer { unblockingUserID = nil }
+
+            do {
+                _ = try await apiClient.send(
+                    APIClient.unblockMobileUser(userID: user.id)
+                )
+                blockedUsers.removeAll { $0.id == user.id }
+                ProfileViewModel.invalidateCache()
+                UserProfileViewModel.invalidateAllCaches()
+                NotificationCenter.default.post(name: .appDataDidChange, object: nil)
+            } catch {
+                blockedUsersErrorMessage = error.localizedDescription
+            }
+        }
     }
 }
 
 private enum FriendsPageSection: CaseIterable {
     case friends
     case partner
+    case blocked
 
     var title: String {
         switch self {
         case .friends: "Friends"
         case .partner: "Partner"
+        case .blocked: "Blocked"
         }
     }
 }
@@ -4320,29 +4441,14 @@ private struct MobileSupportReportedEntityPreview: View {
 private struct AdminSettingsView: View {
     @Environment(\.dismiss) private var dismiss
     @State private var presentedPlaceCreationType: PlaceListItem.PlaceType?
-    @State private var isEventCreationSheetPresented = false
-    @State private var isEventSeriesCreationSheetPresented = false
     @State private var isMetroAreaSheetPresented = false
     @State private var isAdminScrapersPresented = false
+    @State private var isSupportRequestsPresented = false
     @State private var headerOpacity: CGFloat = 1
 
     var body: some View {
         ScrollView {
             VStack(spacing: 12) {
-                AdminSettingsActionButton(
-                    title: "Add Event",
-                    systemImage: "calendar.badge.plus"
-                ) {
-                    isEventCreationSheetPresented = true
-                }
-
-                AdminSettingsActionButton(
-                    title: "Add Event Series",
-                    systemImage: "calendar.badge.clock"
-                ) {
-                    isEventSeriesCreationSheetPresented = true
-                }
-
                 AdminSettingsActionButton(
                     title: "Add Venue",
                     systemImage: "building.2"
@@ -4362,6 +4468,13 @@ private struct AdminSettingsView: View {
                     systemImage: "mappin.and.ellipse"
                 ) {
                     isMetroAreaSheetPresented = true
+                }
+
+                AdminSettingsActionButton(
+                    title: "Support Requests",
+                    systemImage: "questionmark.bubble"
+                ) {
+                    isSupportRequestsPresented = true
                 }
 
                 AdminSettingsActionButton(
@@ -4401,15 +4514,8 @@ private struct AdminSettingsView: View {
         .navigationDestination(isPresented: $isAdminScrapersPresented) {
             AdminScrapersView()
         }
-        .sheet(isPresented: $isEventCreationSheetPresented) {
-            MobileEventCreationView()
-                .presentationDetents([.large])
-                .presentationDragIndicator(.visible)
-        }
-        .sheet(isPresented: $isEventSeriesCreationSheetPresented) {
-            MobileEventCreationView(creationKind: .eventSeries)
-                .presentationDetents([.large])
-                .presentationDragIndicator(.visible)
+        .navigationDestination(isPresented: $isSupportRequestsPresented) {
+            AdminSupportRequestsView()
         }
         .sheet(item: $presentedPlaceCreationType) { type in
             MobilePlaceCreationView(type: type)
@@ -4420,6 +4526,324 @@ private struct AdminSettingsView: View {
             MetroAreaCreationView()
                 .presentationDetents([.medium, .large])
                 .presentationDragIndicator(.visible)
+        }
+    }
+}
+
+@MainActor
+private final class AdminSupportRequestsViewModel: ObservableObject {
+    @Published private(set) var tickets: [MobileAdminSupportTicket] = []
+    @Published private(set) var isLoading = false
+    @Published var errorMessage: String?
+
+    func load(using apiClient: APIClient) async {
+        isLoading = true
+        defer { isLoading = false }
+
+        do {
+            tickets = try await apiClient.send(APIClient.mobileAdminSupportTickets()).tickets
+        } catch {
+            errorMessage = error.localizedDescription
+        }
+    }
+
+    func update(
+        _ ticket: MobileAdminSupportTicket,
+        status: MobileSupportTicketStatus,
+        using apiClient: APIClient
+    ) async throws {
+        let response = try await apiClient.send(
+            APIClient.updateMobileAdminSupportTicket(id: ticket.id, status: status)
+        )
+        guard let index = tickets.firstIndex(where: { $0.id == ticket.id }) else { return }
+        tickets[index] = tickets[index].updating(
+            status: response.ticket.status,
+            updatedAt: response.ticket.updatedAt
+        )
+    }
+}
+
+struct AdminSupportRequestsView: View {
+    @Environment(\.dismiss) private var dismiss
+    @Environment(\.apiClient) private var apiClient
+    @StateObject private var viewModel = AdminSupportRequestsViewModel()
+    @State private var selectedStatus: MobileSupportTicketStatus?
+    @State private var headerOpacity: CGFloat = 1
+
+    private var visibleTickets: [MobileAdminSupportTicket] {
+        guard let selectedStatus else { return viewModel.tickets }
+        return viewModel.tickets.filter { $0.status == selectedStatus }
+    }
+
+    var body: some View {
+        ScrollView {
+            LazyVStack(alignment: .leading, spacing: 12) {
+                ScopePillBar {
+                    ScopePill(title: "All", isSelected: selectedStatus == nil) {
+                        selectedStatus = nil
+                    }
+                    ForEach(MobileSupportTicketStatus.allCases) { status in
+                        ScopePill(title: status.title, isSelected: selectedStatus == status) {
+                            selectedStatus = status
+                        }
+                    }
+                }
+                .scrollingPillFade()
+
+                if viewModel.isLoading && viewModel.tickets.isEmpty {
+                    NativeLoadingView(fillsAvailableSpace: false)
+                        .frame(maxWidth: .infinity, minHeight: 160)
+                } else if visibleTickets.isEmpty {
+                    ContentUnavailableView(
+                        "No Support Requests",
+                        systemImage: "questionmark.bubble",
+                        description: Text("Requests matching this filter will appear here.")
+                    )
+                    .frame(maxWidth: .infinity)
+                    .padding(.top, 46)
+                } else {
+                    ForEach(visibleTickets) { ticket in
+                        NavigationLink {
+                            AdminSupportTicketDetailView(ticket: ticket) { status in
+                                try await viewModel.update(ticket, status: status, using: apiClient)
+                            }
+                        } label: {
+                            AdminSupportTicketRow(ticket: ticket)
+                        }
+                        .buttonStyle(.plain)
+                    }
+                }
+            }
+            .padding(.horizontal, 16)
+            .padding(.top, 64)
+            .padding(.bottom, 24)
+        }
+        .refreshable { await viewModel.load(using: apiClient) }
+        .scrollIndicators(.hidden)
+        .modifier(ScrollableHeaderFadeTrackingModifier(opacity: $headerOpacity))
+        .background(ProfileTheme.background.ignoresSafeArea())
+        .background(SwipeBackEnabler())
+        .toolbar(.hidden, for: .navigationBar)
+        .navigationBarBackButtonHidden()
+        .overlay(alignment: .top) {
+            ZStack {
+                Text("Support Requests")
+                    .font(.system(size: 17, weight: .semibold))
+                    .foregroundStyle(.white)
+                    .opacity(headerOpacity)
+
+                HStack {
+                    FloatingGlassIconButton(systemImage: "chevron.left") { dismiss() }
+                    Spacer()
+                }
+            }
+            .padding(.horizontal, 16)
+        }
+        .task { await viewModel.load(using: apiClient) }
+        .alert(
+            "Couldn’t Load Support Requests",
+            isPresented: Binding(
+                get: { viewModel.errorMessage != nil },
+                set: { if !$0 { viewModel.errorMessage = nil } }
+            )
+        ) {
+            Button("OK", role: .cancel) {}
+        } message: {
+            Text(viewModel.errorMessage ?? "Please try again.")
+        }
+    }
+}
+
+private struct AdminSupportTicketRow: View {
+    let ticket: MobileAdminSupportTicket
+
+    var body: some View {
+        HStack(spacing: 12) {
+            UserAvatarView(
+                imageURL: ticket.avatarImageUrl,
+                name: ticket.userName,
+                size: 42,
+                identityKey: ticket.userId
+            )
+
+            VStack(alignment: .leading, spacing: 3) {
+                Text(ticket.subject)
+                    .font(.system(size: 14, weight: .medium))
+                    .foregroundStyle(.white)
+                    .lineLimit(1)
+
+                Text("\(ticket.userName) • \(ticket.type.title) • \(ticket.severity.title)")
+                    .font(.system(size: 10, weight: .medium))
+                    .foregroundStyle(.white.opacity(0.58))
+                    .lineLimit(1)
+            }
+
+            Spacer(minLength: 8)
+
+            Text(ticket.status.title)
+                .font(.system(size: 10, weight: .semibold))
+                .foregroundStyle(ticket.status == .open ? AppTheme.accentBlue : .white.opacity(0.64))
+        }
+        .padding(.vertical, 5)
+        .frame(height: 52)
+        .contentShape(Rectangle())
+    }
+}
+
+private struct AdminSupportTicketDetailView: View {
+    @Environment(\.dismiss) private var dismiss
+    let ticket: MobileAdminSupportTicket
+    let onUpdate: (MobileSupportTicketStatus) async throws -> Void
+    @State private var status: MobileSupportTicketStatus
+    @State private var isSaving = false
+    @State private var errorMessage: String?
+    @State private var headerOpacity: CGFloat = 1
+
+    init(
+        ticket: MobileAdminSupportTicket,
+        onUpdate: @escaping (MobileSupportTicketStatus) async throws -> Void
+    ) {
+        self.ticket = ticket
+        self.onUpdate = onUpdate
+        _status = State(initialValue: ticket.status)
+    }
+
+    var body: some View {
+        ScrollView {
+            VStack(alignment: .leading, spacing: 18) {
+                HStack(spacing: 12) {
+                    UserAvatarView(
+                        imageURL: ticket.avatarImageUrl,
+                        name: ticket.userName,
+                        size: 52,
+                        identityKey: ticket.userId
+                    )
+                    VStack(alignment: .leading, spacing: 3) {
+                        Text(ticket.userName)
+                            .font(.system(size: 16, weight: .semibold))
+                            .foregroundStyle(.white)
+                        Text(ticket.userEmail ?? ticket.username.map { "@\($0)" } ?? ticket.userId)
+                            .font(.system(size: 12, weight: .medium))
+                            .foregroundStyle(.white.opacity(0.52))
+                    }
+                }
+
+                VStack(alignment: .leading, spacing: 12) {
+                    detailLabel("Type", value: ticket.type.title)
+                    detailLabel("Priority", value: ticket.severity.title)
+                    if let entityType = ticket.reportedEntityType,
+                       let entityID = ticket.reportedEntityId {
+                        detailLabel("Reported \(entityType.rawValue.capitalized)", value: entityID)
+                    }
+                    detailLabel("Subject", value: ticket.subject)
+
+                    VStack(alignment: .leading, spacing: 6) {
+                        Text("Details")
+                            .font(.system(size: 12, weight: .semibold))
+                            .foregroundStyle(.white.opacity(0.52))
+                        Text(ticket.message)
+                            .font(.system(size: 15))
+                            .foregroundStyle(.white)
+                            .textSelection(.enabled)
+                    }
+                }
+                .padding(16)
+                .background(ProfileTheme.cardBackground, in: RoundedRectangle(cornerRadius: 20, style: .continuous))
+
+                VStack(alignment: .leading, spacing: 8) {
+                    Text("Status")
+                        .font(.system(size: 12, weight: .semibold))
+                        .foregroundStyle(.white.opacity(0.52))
+
+                    Picker("Status", selection: $status) {
+                        ForEach(MobileSupportTicketStatus.allCases) { option in
+                            Text(option.title).tag(option)
+                        }
+                    }
+                    .pickerStyle(.menu)
+                    .tint(.white)
+                }
+                .padding(16)
+                .frame(maxWidth: .infinity, alignment: .leading)
+                .background(ProfileTheme.cardBackground, in: RoundedRectangle(cornerRadius: 20, style: .continuous))
+
+                Button {
+                    save()
+                } label: {
+                    HStack(spacing: 8) {
+                        if isSaving { ProgressView().tint(.black) }
+                        Text(isSaving ? "Updating…" : "Update Request")
+                            .font(.system(size: 15, weight: .bold))
+                    }
+                    .foregroundStyle(.black)
+                    .frame(maxWidth: .infinity)
+                    .frame(height: 48)
+                    .background(AppTheme.accentBlue, in: RoundedRectangle(cornerRadius: 16, style: .continuous))
+                }
+                .buttonStyle(.plain)
+                .disabled(status == ticket.status || isSaving)
+                .opacity(status == ticket.status || isSaving ? 0.45 : 1)
+            }
+            .padding(.horizontal, 16)
+            .padding(.top, 64)
+            .padding(.bottom, 28)
+        }
+        .scrollIndicators(.hidden)
+        .modifier(ScrollableHeaderFadeTrackingModifier(opacity: $headerOpacity))
+        .background(ProfileTheme.background.ignoresSafeArea())
+        .background(SwipeBackEnabler())
+        .toolbar(.hidden, for: .navigationBar)
+        .navigationBarBackButtonHidden()
+        .overlay(alignment: .top) {
+            ZStack {
+                Text("Support Request")
+                    .font(.system(size: 17, weight: .semibold))
+                    .foregroundStyle(.white)
+                    .opacity(headerOpacity)
+                HStack {
+                    FloatingGlassIconButton(systemImage: "chevron.left") { dismiss() }
+                    Spacer()
+                }
+            }
+            .padding(.horizontal, 16)
+        }
+        .alert(
+            "Couldn’t Update Request",
+            isPresented: Binding(
+                get: { errorMessage != nil },
+                set: { if !$0 { errorMessage = nil } }
+            )
+        ) {
+            Button("OK", role: .cancel) {}
+        } message: {
+            Text(errorMessage ?? "Please try again.")
+        }
+    }
+
+    private func detailLabel(_ label: String, value: String) -> some View {
+        VStack(alignment: .leading, spacing: 4) {
+            Text(label)
+                .font(.system(size: 12, weight: .semibold))
+                .foregroundStyle(.white.opacity(0.52))
+            Text(value)
+                .font(.system(size: 15))
+                .foregroundStyle(.white)
+                .textSelection(.enabled)
+        }
+    }
+
+    private func save() {
+        guard status != ticket.status, !isSaving else { return }
+        isSaving = true
+        Task {
+            do {
+                try await onUpdate(status)
+                isSaving = false
+                dismiss()
+            } catch {
+                isSaving = false
+                errorMessage = error.localizedDescription
+            }
         }
     }
 }
@@ -4440,7 +4864,7 @@ private struct AdminSettingsActionButton: View {
                         .font(.system(size: 17, weight: .semibold))
                         .foregroundStyle(AppTheme.accentBlue)
                 }
-                .frame(width: 44, height: 44)
+                .frame(width: 38, height: 38)
 
                 Text(title)
                     .font(.system(size: 15, weight: .semibold))
@@ -4453,7 +4877,7 @@ private struct AdminSettingsActionButton: View {
                     .foregroundStyle(.white.opacity(0.4))
             }
             .padding(.horizontal, 16)
-            .padding(.vertical, 12)
+            .padding(.vertical, 8)
             .frame(maxWidth: .infinity, alignment: .leading)
             .background(
                 RoundedRectangle(cornerRadius: 18, style: .continuous)
@@ -4471,9 +4895,13 @@ private struct AdminSettingsActionButton: View {
 @MainActor
 private final class AdminScrapersViewModel: ObservableObject {
     @Published private(set) var scraperRows: [MobileAdminScraperRow] = []
+    @Published private(set) var allScraperRows: [MobileAdminScraperRow] = []
     @Published private(set) var isLoadingRows = false
     @Published private(set) var isRunning = false
     @Published private(set) var isImporting = false
+    @Published private(set) var isRunningAllPosh = false
+    @Published private(set) var batchPoshProgress: (current: Int, total: Int)?
+    @Published var batchPoshResultMessage: String?
     @Published private(set) var runResult: MobileAdminScraperRunResponse?
     @Published private(set) var importedCount: Int?
     @Published var errorMessage: String?
@@ -4482,6 +4910,70 @@ private final class AdminScrapersViewModel: ObservableObject {
         runResult = nil
         importedCount = nil
         errorMessage = nil
+    }
+
+    func runAllPosh(using apiClient: APIClient) async {
+        let poshRows = allScraperRows.filter { $0.scraper == .posh }
+        guard !poshRows.isEmpty, !isRunningAllPosh else { return }
+
+        isRunningAllPosh = true
+        batchPoshResultMessage = nil
+        errorMessage = nil
+        var eventsFound = 0
+        var eventsSynced = 0
+        var failures: [String] = []
+
+        for (index, row) in poshRows.enumerated() {
+            batchPoshProgress = (index + 1, poshRows.count)
+
+            do {
+                let result = try await apiClient.send(
+                    APIClient.mobileRunAdminScraper(scraperID: row.id)
+                )
+                eventsFound += result.totalEvents
+
+                let response = try await apiClient.send(
+                    APIClient.mobileImportAdminScraperEvents(
+                        scraperID: row.id,
+                        overrideExisting: true,
+                        events: result.events.map(Self.importPayload)
+                    )
+                )
+                eventsSynced += response.created
+            } catch {
+                failures.append(row.place.name)
+            }
+        }
+
+        batchPoshProgress = nil
+        isRunningAllPosh = false
+
+        let success = "Found \(eventsFound) event\(eventsFound == 1 ? "" : "s") and synced \(eventsSynced)."
+        batchPoshResultMessage = failures.isEmpty
+            ? success
+            : "\(success) Failed: \(failures.joined(separator: ", "))."
+    }
+
+    private static func importPayload(_ event: MobileAdminScrapedEvent) -> MobileAdminScrapedEventImport {
+        MobileAdminScrapedEventImport(
+            title: event.title,
+            description: event.description,
+            coverImageUrl: event.coverImageURL?.absoluteString,
+            eventUrl: event.eventURL?.absoluteString,
+            externalId: event.externalID,
+            source: event.source,
+            startAt: ISO8601DateFormatter.wigFractional.string(from: event.startAt),
+            endAt: event.endAt.map { ISO8601DateFormatter.wigFractional.string(from: $0) },
+            venueName: event.venueName,
+            address: event.address,
+            city: event.city,
+            state: event.state,
+            categories: event.categories,
+            visibility: event.visibility,
+            status: "active",
+            timeZone: nil,
+            venueId: event.venueMatch?.id.uuidString
+        )
     }
 
     func loadRows(search: String, using apiClient: APIClient) async {
@@ -4497,6 +4989,9 @@ private final class AdminScrapersViewModel: ObservableObject {
                 )
             )
             scraperRows = response.scrapers
+            if search.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty {
+                allScraperRows = response.scrapers
+            }
         } catch {
             scraperRows = []
             errorMessage = error.localizedDescription
@@ -4526,27 +5021,7 @@ private final class AdminScrapersViewModel: ObservableObject {
         defer { isImporting = false }
 
         do {
-            let payload = events.map { event in
-                MobileAdminScrapedEventImport(
-                    title: event.title,
-                    description: event.description,
-                    coverImageUrl: event.coverImageURL?.absoluteString,
-                    eventUrl: event.eventURL?.absoluteString,
-                    externalId: event.externalID,
-                    source: event.source,
-                    startAt: ISO8601DateFormatter.wigFractional.string(from: event.startAt),
-                    endAt: event.endAt.map { ISO8601DateFormatter.wigFractional.string(from: $0) },
-                    venueName: event.venueName,
-                    address: event.address,
-                    city: event.city,
-                    state: event.state,
-                    categories: event.categories,
-                    visibility: event.visibility,
-                    status: "active",
-                    timeZone: nil,
-                    venueId: event.venueMatch?.id.uuidString
-                )
-            }
+            let payload = events.map(Self.importPayload)
 
             let response = try await apiClient.send(
                 APIClient.mobileImportAdminScraperEvents(
@@ -4569,21 +5044,18 @@ private struct AdminScrapersView: View {
     @State private var searchText = ""
     @State private var selectedScraperID: UUID?
     @State private var overrideExisting = false
+    @State private var isRunAllPoshConfirmationPresented = false
 
     var body: some View {
         ScrollView {
             VStack(alignment: .leading, spacing: 22) {
-                Text("Scrapers")
-                    .font(.system(size: 20, weight: .bold))
-                    .foregroundStyle(.white)
-                    .padding(.bottom, -10)
-
                 searchBar
-                scraperSelectionSection
 
                 if let selectedRow {
                     selectedScraperCard(selectedRow)
                 }
+
+                scraperSelectionSection
 
                 if let errorMessage = viewModel.errorMessage {
                     errorCard(errorMessage)
@@ -4602,18 +5074,41 @@ private struct AdminScrapersView: View {
         .background(SwipeBackEnabler())
         .toolbar(.hidden, for: .navigationBar)
         .navigationBarBackButtonHidden()
-        .overlay(alignment: .topLeading) {
-            FloatingGlassIconButton(systemImage: "chevron.left") {
-                dismiss()
+        .overlay(alignment: .top) {
+            ZStack {
+                Text("Scrapers")
+                    .font(.system(size: 17, weight: .semibold))
+                    .foregroundStyle(.white)
+
+                HStack {
+                    FloatingGlassIconButton(systemImage: "chevron.left") {
+                        dismiss()
+                    }
+
+                    Spacer()
+
+                    Menu {
+                        Button {
+                            isRunAllPoshConfirmationPresented = true
+                        } label: {
+                            Label("Run all Posh scrapers", systemImage: "play.fill")
+                                .foregroundStyle(.white)
+                        }
+                        .tint(.white)
+                        .disabled(viewModel.isRunningAllPosh || poshScraperCount == 0)
+                    } label: {
+                        Image(systemName: "ellipsis")
+                            .font(.system(size: 18, weight: .bold))
+                            .foregroundStyle(.white)
+                            .frame(width: 46, height: 46)
+                            .contentShape(Circle())
+                            .profileLiquidGlass(in: Circle())
+                    }
+                    .buttonStyle(.plain)
+                    .accessibilityLabel("More scraper options")
+                }
             }
-            .padding(.leading, 16)
-            .padding(.top, 0)
-        }
-        .task {
-            await viewModel.loadRows(search: "", using: apiClient)
-            if selectedScraperID == nil {
-                selectedScraperID = viewModel.scraperRows.first?.id
-            }
+            .padding(.horizontal, 16)
         }
         .task(id: searchText) {
             await viewModel.loadRows(search: searchText, using: apiClient)
@@ -4624,6 +5119,31 @@ private struct AdminScrapersView: View {
                 self.selectedScraperID = viewModel.scraperRows.first?.id
             }
         }
+        .alert("Run All Posh Scrapers?", isPresented: $isRunAllPoshConfirmationPresented) {
+            Button("Cancel", role: .cancel) {}
+            Button("Run All") {
+                Task { await viewModel.runAllPosh(using: apiClient) }
+            }
+        } message: {
+            Text("This will run and sync all \(poshScraperCount) configured Posh scrapers.")
+        }
+        .alert(
+            "Posh Scrapers Complete",
+            isPresented: Binding(
+                get: { viewModel.batchPoshResultMessage != nil },
+                set: { isPresented in
+                    if !isPresented { viewModel.batchPoshResultMessage = nil }
+                }
+            )
+        ) {
+            Button("OK", role: .cancel) {}
+        } message: {
+            Text(viewModel.batchPoshResultMessage ?? "Finished running Posh scrapers.")
+        }
+    }
+
+    private var poshScraperCount: Int {
+        viewModel.allScraperRows.count { $0.scraper == .posh }
     }
 
     private var selectedRow: MobileAdminScraperRow? {
@@ -4668,10 +5188,6 @@ private struct AdminScrapersView: View {
 
     private var scraperSelectionSection: some View {
         VStack(alignment: .leading, spacing: 10) {
-            Text("Select scraper")
-                .font(.system(size: 16, weight: .semibold))
-                .foregroundStyle(.white)
-
             if viewModel.isLoadingRows && viewModel.scraperRows.isEmpty {
                 NativeLoadingView(fillsAvailableSpace: false)
                     .frame(minHeight: 64)
@@ -4686,58 +5202,80 @@ private struct AdminScrapersView: View {
                             .fill(ProfileTheme.cardBackground)
                     )
             } else {
-                VStack(spacing: 10) {
-                    ForEach(viewModel.scraperRows.prefix(12)) { row in
-                        Button {
-                            selectedScraperID = row.id
-                            viewModel.resetSession()
-                        } label: {
-                            HStack(spacing: 12) {
-                                VStack(alignment: .leading, spacing: 4) {
-                                    Text(row.place.name)
-                                        .font(.system(size: 15, weight: .semibold))
-                                        .foregroundStyle(.white)
-                                        .lineLimit(1)
+                VStack(alignment: .leading, spacing: 18) {
+                    ForEach(MobileScraperType.allCases, id: \.self) { type in
+                        let rows = viewModel.scraperRows.filter { $0.scraper == type }
+                        if !rows.isEmpty {
+                            VStack(alignment: .leading, spacing: 2) {
+                                Text(type.title)
+                                    .font(.system(size: 17, weight: .bold))
+                                    .foregroundStyle(.white)
+                                    .padding(.bottom, 4)
 
-                                    Text("\(row.scraper.title) • \(row.searchString)")
-                                        .font(.system(size: 12, weight: .medium))
-                                        .foregroundStyle(.white.opacity(0.54))
-                                        .lineLimit(1)
-                                }
-
-                                Spacer(minLength: 8)
-
-                                if selectedScraperID == row.id {
-                                    Image(systemName: "checkmark.circle.fill")
-                                        .font(.system(size: 18, weight: .semibold))
-                                        .foregroundStyle(AppTheme.accentBlue)
+                                ForEach(rows) { row in
+                                    scraperRow(row)
                                 }
                             }
-                            .padding(14)
-                            .frame(maxWidth: .infinity, alignment: .leading)
-                            .background(
-                                RoundedRectangle(cornerRadius: 18, style: .continuous)
-                                    .fill(ProfileTheme.cardBackground)
-                            )
-                            .overlay(
-                                RoundedRectangle(cornerRadius: 18, style: .continuous)
-                                    .strokeBorder(
-                                        selectedScraperID == row.id
-                                            ? AppTheme.accentBlue.opacity(0.45)
-                                            : .white.opacity(0.08),
-                                        lineWidth: 1
-                                    )
-                            )
                         }
-                        .buttonStyle(.plain)
                     }
                 }
             }
         }
     }
 
+    private func scraperRow(_ row: MobileAdminScraperRow) -> some View {
+        Button {
+            selectedScraperID = row.id
+            viewModel.resetSession()
+        } label: {
+            HStack(spacing: 12) {
+                ZStack {
+                    RoundedRectangle(cornerRadius: 8, style: .continuous)
+                        .fill(.white.opacity(0.08))
+                    Image(systemName: row.place.type == .venue ? "building.2" : "person.2")
+                        .font(.system(size: 15, weight: .semibold))
+                        .foregroundStyle(AppTheme.accentBlue)
+                }
+                .frame(width: 42, height: 42)
+
+                VStack(alignment: .leading, spacing: 3) {
+                    Text(row.place.name)
+                        .font(.system(size: 14, weight: .medium))
+                        .foregroundStyle(.white)
+                        .lineLimit(1)
+
+                    Text("\(row.place.type.displayName) • \(row.searchString)")
+                        .font(.system(size: 10, weight: .medium))
+                        .foregroundStyle(.white.opacity(0.58))
+                        .lineLimit(1)
+                }
+
+                Spacer(minLength: 8)
+
+                if selectedScraperID == row.id {
+                    Image(systemName: "checkmark.circle.fill")
+                        .font(.system(size: 17, weight: .semibold))
+                        .foregroundStyle(AppTheme.accentBlue)
+                }
+            }
+            .padding(.vertical, 5)
+            .frame(height: 52)
+            .contentShape(Rectangle())
+        }
+        .buttonStyle(.plain)
+    }
+
     private func selectedScraperCard(_ row: MobileAdminScraperRow) -> some View {
         VStack(alignment: .leading, spacing: 14) {
+            if let progress = viewModel.batchPoshProgress {
+                HStack(spacing: 8) {
+                    ProgressView().tint(.white)
+                    Text("Running Posh scraper \(progress.current) of \(progress.total)…")
+                        .font(.system(size: 13, weight: .semibold))
+                        .foregroundStyle(.white.opacity(0.72))
+                }
+            }
+
             HStack(spacing: 8) {
                 Text(row.place.name)
                     .font(.system(size: 17, weight: .semibold))
@@ -4779,7 +5317,7 @@ private struct AdminScrapersView: View {
                 )
             }
             .buttonStyle(.plain)
-            .disabled(viewModel.isRunning || viewModel.isImporting)
+            .disabled(viewModel.isRunning || viewModel.isImporting || viewModel.isRunningAllPosh)
         }
         .padding(16)
         .frame(maxWidth: .infinity, alignment: .leading)

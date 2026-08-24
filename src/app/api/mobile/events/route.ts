@@ -324,53 +324,52 @@ export async function GET(request: Request) {
       ).map((follow) => follow.placeId)
     : [];
   const followedPlaceIds = new Set(followedPlaceIdList);
-  const latestFromFollowsCutoff = new Date(
+  const latestFromPlacesCutoff = new Date(
     now.getTime() - 14 * 24 * 60 * 60 * 1000
   );
-  const latestFromFollowsCandidates =
-    followedPlaceIdList.length > 0
-      ? await db.query.events.findMany({
-          where: and(
-            eq(events.visibility, "public"),
-            eq(events.status, "active"),
-            gte(events.startAt, feedStartFloor),
-            or(
-              inArray(events.venueId, followedPlaceIdList),
-              inArray(events.organizerId, followedPlaceIdList)
-            ),
-            or(
-              and(
-                isNull(events.seriesId),
-                or(
-                  gte(events.createdAt, latestFromFollowsCutoff),
-                  gte(events.updatedAt, latestFromFollowsCutoff)
-                )
-              ),
-              and(
-                isNotNull(events.seriesId),
-                gte(events.updatedAt, latestFromFollowsCutoff),
-                gt(events.updatedAt, events.createdAt)
-              )
-            ),
-            visiblePlaceCondition
-          ),
-          orderBy: [desc(events.updatedAt), desc(events.createdAt)],
-          with: {
-            series: true,
-            venue: true,
-            organizer: true,
-            categoryLinks: {
-              with: {
-                category: true,
-              },
-            },
-          },
-        })
-      : [];
+  const latestFromPlacesCandidates = await db.query.events.findMany({
+    where: and(
+      eq(events.visibility, "public"),
+      eq(events.status, "active"),
+      gte(events.startAt, feedStartFloor),
+      or(isNotNull(events.venueId), isNotNull(events.organizerId)),
+      or(
+        and(
+          isNull(events.seriesId),
+          or(
+            gte(events.createdAt, latestFromPlacesCutoff),
+            gte(events.updatedAt, latestFromPlacesCutoff)
+          )
+        ),
+        and(
+          isNotNull(events.seriesId),
+          gte(events.updatedAt, latestFromPlacesCutoff),
+          gt(events.updatedAt, events.createdAt)
+        )
+      ),
+      visiblePlaceCondition
+    ),
+    orderBy: [desc(events.updatedAt), desc(events.createdAt)],
+    with: {
+      series: true,
+      venue: true,
+      organizer: true,
+      categoryLinks: {
+        with: {
+          category: true,
+        },
+      },
+    },
+  });
+  const latestFromFollowsCandidates = latestFromPlacesCandidates.filter(
+    (event) =>
+      (event.venueId ? followedPlaceIds.has(event.venueId) : false) ||
+      (event.organizerId ? followedPlaceIds.has(event.organizerId) : false)
+  );
 
   const allEventList = Array.from(
     new Map(
-      [...eventList, ...latestFromFollowsCandidates].map((event) => [
+      [...eventList, ...latestFromPlacesCandidates].map((event) => [
         event.id,
         event,
       ])
@@ -678,10 +677,16 @@ export async function GET(request: Request) {
     const mapped = payloadByID.get(event.id);
     return mapped ? [mapped] : [];
   });
+  const latestFromPlaces = latestFromPlacesCandidates.flatMap((event) => {
+    const mapped = payloadByID.get(event.id);
+    return mapped ? [mapped] : [];
+  });
 
   return NextResponse.json({
     events: payload,
     latestFromFollows,
+    latestFromPlaces,
+    hasFollowedPlaces: followedPlaceIdList.length > 0,
     availableCities,
     currentUserLocation: currentUserMetroArea,
     feedTimeZone,

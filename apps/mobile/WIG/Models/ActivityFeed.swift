@@ -21,6 +21,8 @@ struct ActivityFeedItem: Decodable, Identifiable, Hashable, Sendable {
     let createdAt: Date
     let updatedAt: Date?
     let event: ActivityEventSummary?
+    let supportTicketID: String?
+    let notificationBody: String?
 
     enum CodingKeys: String, CodingKey {
         case id
@@ -36,6 +38,8 @@ struct ActivityFeedItem: Decodable, Identifiable, Hashable, Sendable {
         case createdAt
         case updatedAt
         case event
+        case supportTicketID = "supportTicketId"
+        case notificationBody
     }
 
     var timestamp: Date {
@@ -51,6 +55,7 @@ enum ActivityType: String, Decodable, Hashable, Sendable {
     case partnerRequestReceived = "partner_request_received"
     case friendRequestAccepted = "friend_request_accepted"
     case partnerRequestAccepted = "partner_request_accepted"
+    case supportTicketCreated = "support_ticket_created"
 
     var isRequest: Bool {
         switch self {
@@ -61,6 +66,8 @@ enum ActivityType: String, Decodable, Hashable, Sendable {
             return true
         case .rsvpGoing, .rsvpInterested, .rsvpNotGoing:
             return false
+        case .supportTicketCreated:
+            return false
         }
     }
 
@@ -68,7 +75,7 @@ enum ActivityType: String, Decodable, Hashable, Sendable {
         switch self {
         case .friendRequestReceived, .partnerRequestReceived:
             return true
-        case .friendRequestAccepted, .partnerRequestAccepted, .rsvpGoing, .rsvpInterested, .rsvpNotGoing:
+        case .friendRequestAccepted, .partnerRequestAccepted, .rsvpGoing, .rsvpInterested, .rsvpNotGoing, .supportTicketCreated:
             return false
         }
     }
@@ -221,6 +228,8 @@ extension ActivityFeedItem {
         createdAt = try container.decode(Date.self, forKey: .createdAt)
         updatedAt = try container.decodeIfPresent(Date.self, forKey: .updatedAt)
         event = try container.decodeIfPresent(ActivityEventSummary.self, forKey: .event)
+        supportTicketID = try container.decodeIfPresent(String.self, forKey: .supportTicketID)
+        notificationBody = try container.decodeIfPresent(String.self, forKey: .notificationBody)
     }
 }
 

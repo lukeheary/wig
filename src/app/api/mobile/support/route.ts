@@ -1,8 +1,14 @@
 import { auth } from "@clerk/nextjs/server";
+import { eq } from "drizzle-orm";
 import { NextResponse } from "next/server";
 import { z } from "zod";
 import { db } from "@/server/db";
-import { supportTicketActivity, supportTickets } from "@/server/db/schema";
+import {
+  notifications,
+  supportTicketActivity,
+  supportTickets,
+  users,
+} from "@/server/db/schema";
 import { ensureDbUser } from "@/server/utils/ensure-db-user";
 
 const submissionSchema = z.object({
@@ -28,6 +34,11 @@ export async function POST(request: Request) {
 
     const body = submissionSchema.parse(await request.json());
     await ensureDbUser(db, userId);
+
+    const admins = await db.query.users.findMany({
+      where: eq(users.role, "admin"),
+      columns: { id: true },
+    });
 
     const ticket = await db.transaction(async (transaction) => {
       const [createdTicket] = await transaction
@@ -59,6 +70,26 @@ export async function POST(request: Request) {
           reportedEntityId: createdTicket.reportedEntityId,
         },
       });
+
+      if (admins.length > 0) {
+        await transaction.insert(notifications).values(
+          admins.map((admin) => ({
+            userId: admin.id,
+            actorUserId: userId,
+            type: "support_ticket_created" as const,
+            entityType: "support_ticket" as const,
+            entityId: createdTicket.id,
+            title: "New support request",
+            body: createdTicket.subject,
+            actionUrl: "/admin/tickets",
+            metadata: {
+              ticketId: createdTicket.id,
+              type: createdTicket.type,
+              severity: createdTicket.severity,
+            },
+          }))
+        );
+      }
 
       return createdTicket;
     });
