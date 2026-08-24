@@ -415,6 +415,26 @@ struct APIClient: Sendable {
         )
     }
 
+    static func mobileBlockedUsers() -> Endpoint<MobileBlockedUsersResponse> {
+        Endpoint(path: "/api/mobile/blocks")
+    }
+
+    static func blockMobileUser(userID: String) -> Endpoint<DeleteSuccessResponse> {
+        Endpoint(
+            path: "/api/mobile/users/\(userID)/block",
+            method: .post,
+            notifiesDataChange: false
+        )
+    }
+
+    static func unblockMobileUser(userID: String) -> Endpoint<DeleteSuccessResponse> {
+        Endpoint(
+            path: "/api/mobile/users/\(userID)/block",
+            method: .delete,
+            notifiesDataChange: false
+        )
+    }
+
     static func sendMobileFriendRequest(friendUserID: String) throws -> Endpoint<MobileFriendRequestResponse> {
         Endpoint(
             path: "/api/mobile/friends/request",
@@ -1403,6 +1423,30 @@ struct MobileFriendRequestResponse: Decodable, Hashable, Sendable {
 
 struct MobileFriendNotificationMuteResponse: Decodable, Hashable, Sendable {
     let notificationsMuted: Bool
+}
+
+struct MobileBlockedUsersResponse: Decodable, Sendable {
+    let users: [MobileBlockedUser]
+}
+
+struct MobileBlockedUser: Decodable, Identifiable, Hashable, Sendable {
+    let id: String
+    let name: String
+    let username: String
+    let avatarImageURL: URL?
+    let city: String?
+    let state: String?
+    let blockedAt: Date
+
+    enum CodingKeys: String, CodingKey {
+        case id
+        case name
+        case username
+        case avatarImageURL = "avatarImageUrl"
+        case city
+        case state
+        case blockedAt
+    }
 }
 
 struct MobileAdminStatusResponse: Decodable, Hashable, Sendable {

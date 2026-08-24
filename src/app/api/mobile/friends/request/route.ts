@@ -7,6 +7,7 @@ import { userFriends, users } from "@/server/db/schema";
 import { createNotification } from "@/server/utils/notifications";
 import { sendPushNotificationToUsers } from "@/server/utils/push-notifications";
 import { recordActivationActionBestEffort } from "@/server/utils/user-activation";
+import { usersAreBlocked } from "@/server/utils/user-blocks";
 
 const requestSchema = z.object({
   friendUserId: z.string().min(1),
@@ -34,6 +35,10 @@ export async function POST(request: Request) {
     });
 
     if (!friendUser) {
+      return NextResponse.json({ error: "User not found" }, { status: 404 });
+    }
+
+    if (await usersAreBlocked(userId, body.friendUserId)) {
       return NextResponse.json({ error: "User not found" }, { status: 404 });
     }
 

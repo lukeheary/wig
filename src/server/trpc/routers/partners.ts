@@ -8,6 +8,7 @@ import {
   deleteNotificationsForEntity,
 } from "@/server/utils/notifications";
 import { sendPushNotificationToUsers } from "@/server/utils/push-notifications";
+import { usersAreBlocked } from "@/server/utils/user-blocks";
 
 export const partnersRouter = router({
   sendPartnerRequest: protectedProcedure
@@ -25,6 +26,13 @@ export const partnersRouter = router({
       });
 
       if (!recipientUser) {
+        throw new TRPCError({
+          code: "NOT_FOUND",
+          message: "User not found",
+        });
+      }
+
+      if (await usersAreBlocked(ctx.auth.userId, input.recipientId)) {
         throw new TRPCError({
           code: "NOT_FOUND",
           message: "User not found",

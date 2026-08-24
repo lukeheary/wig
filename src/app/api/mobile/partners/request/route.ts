@@ -4,10 +4,9 @@ import { NextResponse } from "next/server";
 import { z } from "zod";
 import { db } from "@/server/db";
 import { userFriends, userPartners, users } from "@/server/db/schema";
-import {
-  createNotification,
-} from "@/server/utils/notifications";
+import { createNotification } from "@/server/utils/notifications";
 import { sendPushNotificationToUsers } from "@/server/utils/push-notifications";
+import { usersAreBlocked } from "@/server/utils/user-blocks";
 
 const bodySchema = z.object({
   recipientId: z.string(),
@@ -40,7 +39,10 @@ export async function POST(request: Request) {
 
   const parsed = bodySchema.safeParse(await request.json().catch(() => null));
   if (!parsed.success) {
-    return NextResponse.json({ error: "Invalid partner request payload" }, { status: 400 });
+    return NextResponse.json(
+      { error: "Invalid partner request payload" },
+      { status: 400 }
+    );
   }
 
   const { recipientId } = parsed.data;
@@ -60,11 +62,21 @@ export async function POST(request: Request) {
     return NextResponse.json({ error: "User not found" }, { status: 404 });
   }
 
+  if (await usersAreBlocked(userId, recipientId)) {
+    return NextResponse.json({ error: "User not found" }, { status: 404 });
+  }
+
   const friendship = await db.query.userFriends.findFirst({
     where: and(
       or(
-        and(eq(userFriends.userId, userId), eq(userFriends.friendUserId, recipientId)),
-        and(eq(userFriends.userId, recipientId), eq(userFriends.friendUserId, userId))
+        and(
+          eq(userFriends.userId, userId),
+          eq(userFriends.friendUserId, recipientId)
+        ),
+        and(
+          eq(userFriends.userId, recipientId),
+          eq(userFriends.friendUserId, userId)
+        )
       ),
       eq(userFriends.status, "accepted")
     ),
@@ -88,8 +100,10 @@ export async function POST(request: Request) {
 
   const existingBetweenUsers = existingRelationships.find(
     (relationship) =>
-      (relationship.requesterId === userId && relationship.recipientId === recipientId) ||
-      (relationship.requesterId === recipientId && relationship.recipientId === userId)
+      (relationship.requesterId === userId &&
+        relationship.recipientId === recipientId) ||
+      (relationship.requesterId === recipientId &&
+        relationship.recipientId === userId)
   );
 
   if (existingBetweenUsers) {
@@ -116,7 +130,8 @@ export async function POST(request: Request) {
 
   const recipientHasPartner = existingRelationships.some(
     (relationship) =>
-      relationship.requesterId === recipientId || relationship.recipientId === recipientId
+      relationship.requesterId === recipientId ||
+      relationship.recipientId === recipientId
   );
   if (recipientHasPartner) {
     return NextResponse.json(
@@ -144,7 +159,10 @@ export async function POST(request: Request) {
   });
 
   const senderName =
-    [currentUser?.firstName, currentUser?.lastName].filter(Boolean).join(" ").trim() ||
+    [currentUser?.firstName, currentUser?.lastName]
+      .filter(Boolean)
+      .join(" ")
+      .trim() ||
     currentUser?.username ||
     "Someone";
 

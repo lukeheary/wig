@@ -231,6 +231,8 @@ export const usersRelations = relations(users, ({ many }) => ({
   friendNotificationMutes: many(userFriendsMutedNotifications, {
     relationName: "mutedFriendNotificationsTarget",
   }),
+  blockedUsers: many(userBlocks, { relationName: "blocker" }),
+  blockedByUsers: many(userBlocks, { relationName: "blocked" }),
   surfaceStates: many(userSurfaceState),
   activationTasks: many(userActivationTasks),
   activationTaskActions: many(userActivationTaskActions),
@@ -272,6 +274,42 @@ export const userFriendsMutedNotificationsRelations = relations(
     }),
   })
 );
+
+export const userBlocks = pgTable(
+  "user_blocks",
+  {
+    blockerUserId: text("blocker_user_id")
+      .notNull()
+      .references(() => users.id, { onDelete: "cascade" }),
+    blockedUserId: text("blocked_user_id")
+      .notNull()
+      .references(() => users.id, { onDelete: "cascade" }),
+    createdAt: timestamp("created_at").defaultNow().notNull(),
+  },
+  (table) => ({
+    pk: primaryKey({ columns: [table.blockerUserId, table.blockedUserId] }),
+    blockedUserIdx: index("user_blocks_blocked_user_idx").on(
+      table.blockedUserId
+    ),
+    noSelfBlock: check(
+      "user_blocks_no_self_block_check",
+      sql`${table.blockerUserId} <> ${table.blockedUserId}`
+    ),
+  })
+);
+
+export const userBlocksRelations = relations(userBlocks, ({ one }) => ({
+  blocker: one(users, {
+    fields: [userBlocks.blockerUserId],
+    references: [users.id],
+    relationName: "blocker",
+  }),
+  blocked: one(users, {
+    fields: [userBlocks.blockedUserId],
+    references: [users.id],
+    relationName: "blocked",
+  }),
+}));
 
 export const userPushTokens = pgTable(
   "user_push_tokens",

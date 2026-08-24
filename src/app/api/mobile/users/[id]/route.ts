@@ -22,6 +22,7 @@ import {
   mapEventCategoryData,
   mapPlaceCategoryData,
 } from "@/server/utils/categories";
+import { usersAreBlocked } from "@/server/utils/user-blocks";
 
 const DEFAULT_MOBILE_FEED_TIME_ZONE = "America/New_York";
 const timeZoneFormatterCache = new Map<string, Intl.DateTimeFormat>();
@@ -162,6 +163,16 @@ type RouteContext = {
 
 export async function GET(_request: Request, context: RouteContext) {
   const { id } = await context.params;
+  const { userId: authenticatedViewerId } = await auth();
+
+  if (
+    authenticatedViewerId &&
+    authenticatedViewerId !== id &&
+    (await usersAreBlocked(authenticatedViewerId, id))
+  ) {
+    return NextResponse.json({ error: "User not found" }, { status: 404 });
+  }
+
   const viewerUserId = await currentMobileUserId();
   const now = new Date();
 

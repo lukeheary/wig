@@ -497,7 +497,7 @@ struct EventDetailView: View {
 
             Divider()
 
-            Button(role: .destructive) {
+            Button {
                 if isAuthenticated {
                     reportContext = MobileSupportReportContext(
                         subject: "Report Event",
@@ -510,10 +510,10 @@ struct EventDetailView: View {
                     isAuthSheetPresented = true
                 }
             } label: {
-                Label("Report Event", systemImage: "exclamationmark.bubble")
-                    .foregroundStyle(.red)
+                Label("Report a Concern", systemImage: "exclamationmark.bubble")
+                    .foregroundStyle(.white)
             }
-            .tint(.red)
+            .tint(.white)
         } label: {
             Image(systemName: "ellipsis")
                 .font(.system(size: 18, weight: .bold))
@@ -1998,15 +1998,25 @@ private struct EventRSVPListRouteView: View {
                     showsFriendAction: !route.isCurrentUser
                 )
             }
-            .toolbar {
-                ToolbarItem(placement: .topBarLeading) {
-                    Button(action: onDismiss) {
-                        Image(systemName: "chevron.left")
-                    }
-                }
-            }
         }
         .background(AppTheme.background.ignoresSafeArea())
+        .safeAreaInset(edge: .top, spacing: 0) {
+            if navigationPath.isEmpty {
+                ZStack {
+                    Text("Friends")
+                        .font(.system(size: 17, weight: .semibold))
+                        .foregroundStyle(.white)
+
+                    HStack {
+                        FloatingGlassIconButton(systemImage: "chevron.left", action: onDismiss)
+                        Spacer()
+                    }
+                }
+                .padding(.horizontal, 16)
+                .frame(height: 46)
+                .background(AppTheme.background)
+            }
+        }
         .simultaneousGesture(
             DragGesture(minimumDistance: 12)
             .onEnded { value in
@@ -2088,9 +2098,6 @@ private struct EventRSVPListView: View {
             .padding(.bottom, 6)
         }
         .background(AppTheme.background.ignoresSafeArea())
-        .navigationTitle("Friends")
-        .navigationBarTitleDisplayMode(.inline)
-        .toolbar(.visible, for: .navigationBar)
         .task(id: eventID) {
             guard isPastEvent else { return }
 

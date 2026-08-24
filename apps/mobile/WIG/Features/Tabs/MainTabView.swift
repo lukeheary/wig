@@ -641,7 +641,8 @@ private struct GuestWelcomeView: View {
         ZStack {
             previewWindowBackground
 
-            Color.clear
+            Color.black.opacity(0.001)
+                .ignoresSafeArea()
                 .contentShape(Rectangle())
                 .gesture(
                     DragGesture(minimumDistance: 0)
@@ -659,7 +660,7 @@ private struct GuestWelcomeView: View {
 
                 Spacer()
 
-                Text("See who is going,\ndecide where to go.")
+                Text("Discover events\n& see who is going")
                     .font(.system(size: 36, weight: .heavy))
                     .foregroundStyle(.white)
                     .multilineTextAlignment(.center)

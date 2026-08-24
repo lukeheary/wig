@@ -432,7 +432,7 @@ struct PlaceDetailView: View {
 
                 Divider()
 
-                Button(role: .destructive) {
+                Button {
                     reportContext = MobileSupportReportContext(
                         subject: "Report \(detail.type.displayName)",
                         entityType: .place,
@@ -441,10 +441,10 @@ struct PlaceDetailView: View {
                         imageURL: detail.displayLogoURL
                     )
                 } label: {
-                    Label("Report Profile", systemImage: "exclamationmark.bubble")
-                        .foregroundStyle(.red)
+                Label("Report a Concern", systemImage: "exclamationmark.bubble")
+                        .foregroundStyle(.white)
                 }
-                .tint(.red)
+                .tint(.white)
             }
         } label: {
             placeActionIcon("ellipsis", isAvailable: true)

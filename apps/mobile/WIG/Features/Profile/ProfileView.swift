@@ -44,6 +44,7 @@ struct ProfileView: View {
     @State private var isAdminSettingsPresented = false
     @State private var isEditProfilePresented = false
     @State private var isHelpAndFeedbackPresented = false
+    @State private var isBlockedUsersPresented = false
     @State private var isSignOutConfirmationPresented = false
     @State private var profileShareURL: URL?
     @State private var handledAddPhotoTrigger = 0
@@ -237,6 +238,9 @@ struct ProfileView: View {
                 }
                 .navigationDestination(isPresented: $isHelpAndFeedbackPresented) {
                     MobileHelpAndFeedbackView()
+                }
+                .navigationDestination(isPresented: $isBlockedUsersPresented) {
+                    MobileBlockedUsersView()
                 }
                 .sheet(
                     isPresented: Binding(
@@ -810,6 +814,14 @@ struct ProfileView: View {
             }
             .tint(.white)
 
+            Button {
+                isBlockedUsersPresented = true
+            } label: {
+                Label("Blocked Users", systemImage: "person.crop.circle.badge.xmark")
+                    .foregroundStyle(.white)
+            }
+            .tint(.white)
+
             Button(role: .destructive) {
                 isSignOutConfirmationPresented = true
             } label: {
@@ -840,6 +852,138 @@ struct ProfileView: View {
 
         return error.localizedDescription.trimmingCharacters(in: .whitespacesAndNewlines)
             .localizedCaseInsensitiveCompare("cancelled") == .orderedSame
+    }
+}
+
+private struct MobileBlockedUsersView: View {
+    @Environment(\.apiClient) private var apiClient
+    @Environment(\.dismiss) private var dismiss
+    @State private var users: [MobileBlockedUser] = []
+    @State private var isLoading = true
+    @State private var userBeingUnblocked: MobileBlockedUser?
+    @State private var unblockingUserID: String?
+    @State private var errorMessage: String?
+
+    var body: some View {
+        Group {
+            if isLoading {
+                NativeLoadingView()
+            } else if users.isEmpty {
+                ContentUnavailableView {
+                    Label("No Blocked Users", systemImage: "person.crop.circle.badge.checkmark")
+                } description: {
+                    Text("People you block will appear here.")
+                }
+                .foregroundStyle(.white)
+            } else {
+                ScrollView {
+                    LazyVStack(spacing: 2) {
+                        ForEach(users) { user in
+                            HStack(spacing: 12) {
+                                CompactUserListRowView(
+                                    imageURL: user.avatarImageURL,
+                                    name: user.name,
+                                    subtitle: "@\(user.username)",
+                                    identityKey: user.id
+                                )
+
+                                Button("Unblock") {
+                                    userBeingUnblocked = user
+                                }
+                                .font(.system(size: 14, weight: .semibold))
+                                .foregroundStyle(.white)
+                                .padding(.horizontal, 13)
+                                .frame(height: 36)
+                                .background(Color.white.opacity(0.10), in: Capsule())
+                                .buttonStyle(.plain)
+                                .disabled(unblockingUserID != nil)
+                            }
+                            .padding(.horizontal, 16)
+                            .padding(.vertical, 8)
+                        }
+                    }
+                    .padding(.top, 72)
+                    .padding(.bottom, 24)
+                }
+                .scrollIndicators(.hidden)
+            }
+        }
+        .frame(maxWidth: .infinity, maxHeight: .infinity)
+        .background(ProfileTheme.background.ignoresSafeArea())
+        .background(SwipeBackEnabler())
+        .toolbar(.hidden, for: .navigationBar)
+        .navigationBarBackButtonHidden()
+        .overlay(alignment: .top) {
+            ZStack {
+                Text("Blocked Users")
+                    .font(.system(size: 17, weight: .semibold))
+                    .foregroundStyle(.white)
+
+                HStack {
+                    FloatingGlassIconButton(systemImage: "chevron.left") {
+                        dismiss()
+                    }
+                    Spacer()
+                }
+            }
+            .padding(.horizontal, 16)
+        }
+        .task {
+            await load()
+        }
+        .alert(item: $userBeingUnblocked) { user in
+            Alert(
+                title: Text("Unblock \(user.name)?"),
+                message: Text("Your previous friendship or partner relationship won't be restored."),
+                primaryButton: .default(Text("Unblock")) {
+                    unblock(user)
+                },
+                secondaryButton: .cancel()
+            )
+        }
+        .alert(
+            "Couldn't Update Blocked Users",
+            isPresented: Binding(
+                get: { errorMessage != nil },
+                set: { isPresented in
+                    if !isPresented { errorMessage = nil }
+                }
+            )
+        ) {
+            Button("OK", role: .cancel) {}
+        } message: {
+            Text(errorMessage ?? "Please try again.")
+        }
+    }
+
+    private func load() async {
+        do {
+            let response = try await apiClient.send(APIClient.mobileBlockedUsers())
+            users = response.users
+        } catch {
+            errorMessage = error.localizedDescription
+        }
+        isLoading = false
+    }
+
+    private func unblock(_ user: MobileBlockedUser) {
+        guard unblockingUserID == nil else { return }
+        unblockingUserID = user.id
+
+        Task {
+            do {
+                _ = try await apiClient.send(
+                    APIClient.unblockMobileUser(userID: user.id)
+                )
+                users.removeAll { $0.id == user.id }
+                ProfileViewModel.invalidateCache()
+                UserProfileViewModel.invalidateAllCaches()
+                NotificationCenter.default.post(name: .appDataDidChange, object: nil)
+            } catch {
+                errorMessage = error.localizedDescription
+            }
+            unblockingUserID = nil
+        }
     }
 }
 
@@ -962,6 +1106,7 @@ private struct ProfileShareSheet: UIViewControllerRepresentable {
 private enum UserProfileConfirmation: Identifiable {
     case mute(FriendUserSummary)
     case unfriend(FriendUserSummary)
+    case block(FriendUserSummary)
 
     var id: String {
         switch self {
@@ -969,6 +1114,8 @@ private enum UserProfileConfirmation: Identifiable {
             return "mute-\(profile.id)"
         case .unfriend(let profile):
             return "unfriend-\(profile.id)"
+        case .block(let profile):
+            return "block-\(profile.id)"
         }
     }
 }
@@ -989,6 +1136,8 @@ struct UserProfileView: View {
     @State private var pendingConfirmation: UserProfileConfirmation?
     @State private var profileShareURL: URL?
     @State private var reportContext: MobileSupportReportContext?
+    @State private var isBlockingUser = false
+    @State private var blockErrorMessage: String?
     @State private var headerVisibility = ScrollableHeaderVisibility()
 
     var body: some View {
@@ -1043,7 +1192,29 @@ struct UserProfileView: View {
                         },
                         secondaryButton: .cancel()
                     )
+                case .block(let profile):
+                    Alert(
+                        title: Text("Block \(profile.name)?"),
+                        message: Text("You won't be able to see or interact with each other. Any friendship or partner relationship will be removed. They won't be notified."),
+                        primaryButton: .destructive(Text("Block")) {
+                            block(profile: profile)
+                        },
+                        secondaryButton: .cancel()
+                    )
                 }
+            }
+            .alert(
+                "Couldn't Block User",
+                isPresented: Binding(
+                    get: { blockErrorMessage != nil },
+                    set: { isPresented in
+                        if !isPresented { blockErrorMessage = nil }
+                    }
+                )
+            ) {
+                Button("OK", role: .cancel) {}
+            } message: {
+                Text(blockErrorMessage ?? "Please try again.")
             }
             .sheet(
                 isPresented: Binding(
@@ -1240,6 +1411,8 @@ struct UserProfileView: View {
             Divider()
 
             reportProfileButton(for: profile)
+
+            blockProfileButton(for: profile)
         } label: {
             Image(systemName: "ellipsis")
                 .font(.system(size: 18, weight: .bold))
@@ -1279,6 +1452,8 @@ struct UserProfileView: View {
             Divider()
 
             reportProfileButton(for: profile)
+
+            blockProfileButton(for: profile)
         } label: {
             Image(systemName: "ellipsis")
                 .font(.system(size: 18, weight: .bold))
@@ -1292,7 +1467,7 @@ struct UserProfileView: View {
     }
 
     private func reportProfileButton(for profile: FriendUserSummary) -> some View {
-        Button(role: .destructive) {
+        Button {
             reportContext = MobileSupportReportContext(
                 subject: "Report User",
                 entityType: .user,
@@ -1301,10 +1476,41 @@ struct UserProfileView: View {
                 imageURL: profile.avatarImageURL
             )
         } label: {
-            Label("Report Profile", systemImage: "exclamationmark.bubble")
+                Label("Report a Concern", systemImage: "exclamationmark.bubble")
+                .foregroundStyle(.white)
+        }
+        .tint(.white)
+    }
+
+    private func blockProfileButton(for profile: FriendUserSummary) -> some View {
+        Button(role: .destructive) {
+            pendingConfirmation = .block(profile)
+        } label: {
+            Label("Block User", systemImage: "person.crop.circle.badge.xmark")
                 .foregroundStyle(.red)
         }
         .tint(.red)
+        .disabled(isBlockingUser)
+    }
+
+    private func block(profile: FriendUserSummary) {
+        guard !isBlockingUser else { return }
+        isBlockingUser = true
+
+        Task {
+            do {
+                _ = try await apiClient.send(
+                    APIClient.blockMobileUser(userID: profile.id)
+                )
+                ProfileViewModel.invalidateCache()
+                UserProfileViewModel.invalidateAllCaches()
+                NotificationCenter.default.post(name: .appDataDidChange, object: nil)
+                dismiss()
+            } catch {
+                blockErrorMessage = error.localizedDescription
+                isBlockingUser = false
+            }
+        }
     }
 
     @ViewBuilder
@@ -3815,7 +4021,7 @@ struct MobileHelpAndFeedbackView: View {
     }
 
     init(reportContext: MobileSupportReportContext) {
-        _subject = State(initialValue: String(reportContext.subject.prefix(255)))
+        _subject = State(initialValue: "")
         self.reportContext = reportContext
         reportedEntityType = reportContext.entityType
         reportedEntityID = reportContext.entityID

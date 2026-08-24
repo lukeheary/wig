@@ -128,6 +128,7 @@ struct ActivityView: View {
                     }
             )
             let visibleActivities = Array(activities.prefix(visibleActivityCount))
+            let activitySections = groupedActivities(visibleActivities)
 
             ScrollView {
                 LazyVStack(alignment: .leading, spacing: 14) {
@@ -154,9 +155,10 @@ struct ActivityView: View {
                         .frame(maxWidth: .infinity)
                         .padding(.top, 48)
                     } else {
-                        ForEach(groupedActivities(visibleActivities)) { section in
+                        ForEach(Array(activitySections.enumerated()), id: \.element.id) { index, section in
                             ActivitySectionView(
                                 section: section,
+                                topPadding: index == 0 ? 1 : 5,
                                 onRespondToRequest: { activity, response in
                                     await respondToRequest(activity: activity, response: response)
                                 }
@@ -172,10 +174,11 @@ struct ActivityView: View {
                         }
                     }
                 }
-                // The filter pill is taller than Home's Recent Activity heading.
-                // A 56-point inset keeps the first activity row on the same
-                // vertical baseline when switching between Home and Activity.
-                .padding(.top, 56)
+                // Match the Places page so its scope pills remain on the same
+                // baseline when switching tabs. The first section compensates
+                // for this inset independently to keep its first row aligned
+                // with Home's Recent Activity row.
+                .padding(.top, 60)
                 .padding(.bottom, 18)
             }
             .scrollIndicators(.hidden)
@@ -677,6 +680,7 @@ private struct ActivitySummaryPill: View {
 
 private struct ActivitySectionView: View {
     let section: ActivitySection
+    let topPadding: CGFloat
     let onRespondToRequest: (ActivityFeedItem, ActivityRequestResponse) async -> Void
 
     var body: some View {
@@ -689,7 +693,7 @@ private struct ActivitySectionView: View {
             }
         }
         .padding(.horizontal, 16)
-        .padding(.top, 5)
+        .padding(.top, topPadding)
     }
 }
 

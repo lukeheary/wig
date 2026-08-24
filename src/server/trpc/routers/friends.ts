@@ -9,7 +9,7 @@ import {
   userActivity,
   userPartners,
 } from "../../db/schema";
-import { eq, and, or, ne, sql, inArray, desc } from "drizzle-orm";
+import { eq, and, or, ne, sql, inArray, desc, notInArray } from "drizzle-orm";
 import { TRPCError } from "@trpc/server";
 import {
   createNotification,
@@ -17,6 +17,7 @@ import {
 } from "@/server/utils/notifications";
 import { sendPushNotificationToUsers } from "@/server/utils/push-notifications";
 import { accentInsensitiveLike } from "@/server/db/search";
+import { blockedUserIdsFor, usersAreBlocked } from "@/server/utils/user-blocks";
 
 export const friendsRouter = router({
   searchUsers: protectedProcedure
@@ -35,6 +36,7 @@ export const friendsRouter = router({
           eq(userFriends.friendUserId, ctx.auth.userId)
         ),
       });
+      const blockedUserIds = [...(await blockedUserIdsFor(ctx.auth.userId))];
 
       // Always exclude self, optionally exclude existing friendships
       const excludedUserIds = input.includeAll
@@ -60,6 +62,9 @@ export const friendsRouter = router({
             })
           ),
           eq(users.isOnboarding, false),
+          ...(blockedUserIds.length > 0
+            ? [notInArray(users.id, blockedUserIds)]
+            : []),
           sql`${users.id} NOT IN (${sql.join(
             excludedUserIds.map((id) => sql`${id}`),
             sql`, `
@@ -91,6 +96,13 @@ export const friendsRouter = router({
         throw new TRPCError({
           code: "BAD_REQUEST",
           message: "Cannot send friend request to yourself",
+        });
+      }
+
+      if (await usersAreBlocked(ctx.auth.userId, input.friendUserId)) {
+        throw new TRPCError({
+          code: "NOT_FOUND",
+          message: "User not found",
         });
       }
 

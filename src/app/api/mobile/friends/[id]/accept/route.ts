@@ -8,6 +8,7 @@ import {
   deleteNotificationsForEntity,
 } from "@/server/utils/notifications";
 import { sendPushNotificationToUsers } from "@/server/utils/push-notifications";
+import { usersAreBlocked } from "@/server/utils/user-blocks";
 
 async function currentMobileUserId() {
   const { userId } = await auth();
@@ -69,6 +70,13 @@ export async function POST(_: Request, context: RouteContext) {
     return NextResponse.json(
       { error: "You can only accept requests sent to you" },
       { status: 403 }
+    );
+  }
+
+  if (await usersAreBlocked(userId, friendRequest.userId)) {
+    return NextResponse.json(
+      { error: "Friend request not found" },
+      { status: 404 }
     );
   }
 

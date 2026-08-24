@@ -30,6 +30,7 @@ import { mapEventCategoryData } from "@/server/utils/categories";
 import { goingRsvpCountsForEventIds } from "@/app/api/mobile/event-rsvp-counts";
 import { accentInsensitiveLike } from "@/server/db/search";
 import { createMobileMetroResolver } from "@/app/api/mobile/metro";
+import { blockedUserIdsFor } from "@/server/utils/user-blocks";
 
 function searchQueryVariants(query: string) {
   const trimmed = query.trim();
@@ -83,6 +84,7 @@ export async function GET(request: Request) {
       : 12;
 
     const { userId } = await auth();
+    const blockedUserIds = userId ? [...(await blockedUserIdsFor(userId))] : [];
     const [searchUser, availableMetroAreas, cityCoordinates] =
       await Promise.all([
         userId
@@ -139,6 +141,9 @@ export async function GET(request: Request) {
     const userBaseConditions = [
       eq(users.isOnboarding, false),
       ...(userId ? [ne(users.id, userId)] : []),
+      ...(blockedUserIds.length > 0
+        ? [notInArray(users.id, blockedUserIds)]
+        : []),
     ];
 
     const matchingUsers = query
