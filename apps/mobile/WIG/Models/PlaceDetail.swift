@@ -25,7 +25,8 @@ struct PlaceDetail: Decodable, Identifiable, Hashable, Sendable {
     var isHiddenFromHome = false
     var canManage = false
     let events: [EventFeedItem]
-    let pastEvents: [EventFeedItem]
+    var pastEvents: [EventFeedItem]
+    var pastEventsNextCursor: PlaceEventsCursor? = nil
 
     enum CodingKeys: String, CodingKey {
         case id
@@ -53,6 +54,7 @@ struct PlaceDetail: Decodable, Identifiable, Hashable, Sendable {
         case canManage
         case events
         case pastEvents
+        case pastEventsNextCursor
     }
 
     var locationText: String? {
@@ -174,7 +176,13 @@ extension PlaceDetail {
         canManage = try container.decodeIfPresent(Bool.self, forKey: .canManage) ?? false
         events = try container.decodeIfPresent([EventFeedItem].self, forKey: .events) ?? []
         pastEvents = try container.decodeIfPresent([EventFeedItem].self, forKey: .pastEvents) ?? []
+        pastEventsNextCursor = try container.decodeIfPresent(PlaceEventsCursor.self, forKey: .pastEventsNextCursor)
     }
+}
+
+struct PlaceEventsCursor: Codable, Hashable, Sendable {
+    let startAt: Date
+    let id: UUID
 }
 
 struct VenueHours: Codable, Hashable, Sendable {

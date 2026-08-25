@@ -195,7 +195,7 @@ function mapMobileEvent(
 }
 
 export async function GET(
-  _request: Request,
+  request: Request,
   { params }: { params: Promise<{ slug: string }> }
 ) {
   const { slug } = await params;
@@ -219,6 +219,17 @@ export async function GET(
     place.type === "venue"
       ? eq(events.venueId, place.id)
       : eq(events.organizerId, place.id);
+  const searchParams = new URL(request.url).searchParams;
+  const pastStartAtValue = searchParams.get("pastStartAt");
+  const pastId = searchParams.get("pastId");
+  const pastStartAt = pastStartAtValue ? new Date(pastStartAtValue) : null;
+  const pastCursorCondition =
+    pastStartAt && !Number.isNaN(pastStartAt.getTime()) && pastId
+      ? or(
+          lt(events.startAt, pastStartAt),
+          and(eq(events.startAt, pastStartAt), lt(events.id, pastId))
+        )
+      : undefined;
 
   const upcomingEvents = await db.query.events.findMany({
     where: and(
@@ -244,10 +255,11 @@ export async function GET(
       eventCondition,
       eq(events.visibility, "public"),
       eq(events.status, "active"),
-      lt(events.startAt, now)
+      lt(events.startAt, now),
+      pastCursorCondition
     ),
-    orderBy: [desc(events.startAt)],
-    limit: 24,
+    orderBy: [desc(events.startAt), desc(events.id)],
+    limit: 25,
     with: {
       venue: true,
       organizer: true,
@@ -258,6 +270,9 @@ export async function GET(
       },
     },
   });
+  const hasMorePastEvents = pastEvents.length > 24;
+  const pastEventPage = hasMorePastEvents ? pastEvents.slice(0, 24) : pastEvents;
+  const lastPastEvent = pastEventPage.at(-1);
 
   const mappedPlace = mapPlaceCategoryData(place);
   const { userId: authenticatedUserId } = await auth();
@@ -266,7 +281,7 @@ export async function GET(
     await resolveMobileEventEditPermissions(authenticatedUserId);
   const canManagePlace =
     editPermissions.isAdmin || editPermissions.manageablePlaceIds.has(place.id);
-  const allEvents = [...upcomingEvents, ...pastEvents];
+  const allEvents = [...upcomingEvents, ...pastEventPage];
   const eventIds = allEvents.map((event) => event.id);
   const goingRsvpCounts = await goingRsvpCountsForEventIds(eventIds);
   const socialRsvpsMap = new Map<
@@ -516,7 +531,7 @@ export async function GET(
         goingRsvpCounts.get(event.id) ?? 0
       )
     ),
-    pastEvents: pastEvents.map((event) =>
+    pastEvents: pastEventPage.map((event) =>
       mapMobileEvent(
         event,
         editPermissions,
@@ -526,6 +541,10 @@ export async function GET(
         goingRsvpCounts.get(event.id) ?? 0
       )
     ),
+    pastEventsNextCursor:
+      hasMorePastEvents && lastPastEvent
+        ? { startAt: lastPastEvent.startAt, id: lastPastEvent.id }
+        : null,
   });
 }
 

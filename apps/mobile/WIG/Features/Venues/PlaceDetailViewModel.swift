@@ -12,6 +12,7 @@ final class PlaceDetailViewModel: ObservableObject {
     @Published private(set) var state: State = .idle
     @Published private(set) var isUpdatingFollow = false
     @Published private(set) var isUpdatingHomeVisibility = false
+    @Published private(set) var isLoadingMorePastEvents = false
     @Published private(set) var homeVisibilityErrorMessage: String?
 
     private static var cachedDetails: [String: PlaceDetail] = [:]
@@ -186,5 +187,29 @@ final class PlaceDetailViewModel: ObservableObject {
 
     func clearHomeVisibilityError() {
         homeVisibilityErrorMessage = nil
+    }
+
+    func loadMorePastEvents(slug: String, using apiClient: APIClient) async {
+        guard !isLoadingMorePastEvents,
+              case .loaded(var detail) = state,
+              let cursor = detail.pastEventsNextCursor else {
+            return
+        }
+
+        isLoadingMorePastEvents = true
+        defer { isLoadingMorePastEvents = false }
+
+        do {
+            let page = try await apiClient.send(
+                APIClient.mobilePlaceDetail(slug: slug, pastEventsCursor: cursor)
+            )
+            let existingIDs = Set(detail.pastEvents.map(\.id))
+            detail.pastEvents.append(contentsOf: page.pastEvents.filter { !existingIDs.contains($0.id) })
+            detail.pastEventsNextCursor = page.pastEventsNextCursor
+            Self.seedCache(with: detail)
+            state = .loaded(detail)
+        } catch {
+            // Keep the current page visible; reaching the sentinel again retries.
+        }
     }
 }

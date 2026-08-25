@@ -125,7 +125,7 @@ final class WIGAppDelegate: NSObject, UIApplicationDelegate {
     ) -> Bool {
         AppAnalytics.configure()
         UNUserNotificationCenter.current().delegate = self
-        true
+        return true
     }
 
     func application(

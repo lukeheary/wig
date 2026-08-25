@@ -188,9 +188,24 @@ struct APIClient: Sendable {
         )
     }
 
-    static func mobilePlaceDetail(slug: String) -> Endpoint<PlaceDetail> {
-        Endpoint(
+    static func mobilePlaceDetail(
+        slug: String,
+        pastEventsCursor: PlaceEventsCursor? = nil
+    ) -> Endpoint<PlaceDetail> {
+        var queryItems: [URLQueryItem] = []
+        if let pastEventsCursor {
+            queryItems = [
+                URLQueryItem(
+                    name: "pastStartAt",
+                    value: ISO8601DateFormatter.wigStandard.string(from: pastEventsCursor.startAt)
+                ),
+                URLQueryItem(name: "pastId", value: pastEventsCursor.id.uuidString),
+            ]
+        }
+
+        return Endpoint(
             path: "/api/mobile/places/\(slug)",
+            queryItems: queryItems,
             requiresAuthentication: false,
             includesAuthenticationIfAvailable: true
         )

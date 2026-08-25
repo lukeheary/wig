@@ -88,7 +88,7 @@ enum AppAnalytics {
             to: Calendar.current.startOfDay(for: date)
         ).day ?? 0
 
-        switch days {
+        return switch days {
         case Int.min ... -1: "past"
         case 0: "today"
         case 1: "tomorrow"

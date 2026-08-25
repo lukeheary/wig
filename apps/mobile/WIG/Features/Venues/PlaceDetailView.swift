@@ -634,6 +634,22 @@ struct PlaceDetailView: View {
                     }
                     .padding(.horizontal, -16)
                 }
+
+                if selectedTab == .past, detail.pastEventsNextCursor != nil {
+                    ProgressView()
+                        .tint(.white)
+                        .frame(maxWidth: .infinity)
+                        .padding(.vertical, 12)
+                        .id(detail.pastEventsNextCursor?.id)
+                        .onAppear {
+                            Task {
+                                await viewModel.loadMorePastEvents(
+                                    slug: place.slug,
+                                    using: apiClient
+                                )
+                            }
+                        }
+                }
             }
         }
     }
