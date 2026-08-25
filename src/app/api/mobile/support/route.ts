@@ -83,13 +83,17 @@ export async function POST(request: Request) {
           admins.map((admin) => ({
             userId: admin.id,
             actorUserId: userId,
-            type: "support_ticket_created" as const,
+            // Reuse the support notification enum value that exists in every
+            // deployed database. The metadata distinguishes creation notices
+            // from requester-facing status updates without a schema rollout.
+            type: "support_ticket_status_changed" as const,
             entityType: "support_ticket" as const,
             entityId: ticket.id,
             title: "New support request",
             body: ticket.subject,
             actionUrl: "/admin/tickets",
             metadata: {
+              notificationKind: "support_ticket_created",
               ticketId: ticket.id,
               type: ticket.type,
               severity: ticket.severity,

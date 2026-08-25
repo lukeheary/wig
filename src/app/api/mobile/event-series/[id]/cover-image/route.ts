@@ -10,6 +10,10 @@ import {
   uploadImageFromUrl,
 } from "@/lib/s3";
 import { withStoredImageReplacements } from "@/server/utils/stored-image-lifecycle";
+import {
+  enforceMobileContentCreation,
+  mobileContentModerationErrorResponse,
+} from "@/app/api/mobile/content-moderation";
 
 async function currentMobileUserContext() {
   const { userId } = await auth();
@@ -40,6 +44,7 @@ export async function POST(
     if (!userId) {
       return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
     }
+    await enforceMobileContentCreation(userId, []);
 
     const { id: seriesId } = await params;
     const body = (await request.json()) as { coverImageUrl?: string };
@@ -123,6 +128,8 @@ export async function POST(
 
     return NextResponse.json(updatedSeries);
   } catch (error) {
+    const moderationResponse = mobileContentModerationErrorResponse(error);
+    if (moderationResponse) return moderationResponse;
     console.error("Mobile event series cover image error:", error);
     return NextResponse.json(
       { error: "Failed to update event series cover image" },

@@ -4,6 +4,10 @@ import { NextRequest, NextResponse } from "next/server";
 import { db } from "@/server/db";
 import { events, users } from "@/server/db/schema";
 import { withStoredImageReplacements } from "@/server/utils/stored-image-lifecycle";
+import {
+  enforceMobileContentCreation,
+  mobileContentModerationErrorResponse,
+} from "@/app/api/mobile/content-moderation";
 
 async function currentMobileUserId() {
   const { userId } = await auth();
@@ -33,6 +37,7 @@ export async function POST(
     if (!userId) {
       return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
     }
+    await enforceMobileContentCreation(userId, []);
 
     const { id: eventId } = await params;
     const body = (await request.json()) as {
@@ -105,6 +110,8 @@ export async function POST(
       coverImageUrl: updatedEvent.coverImageUrl,
     });
   } catch (error) {
+    const moderationResponse = mobileContentModerationErrorResponse(error);
+    if (moderationResponse) return moderationResponse;
     console.error("Mobile event cover image error:", error);
     return NextResponse.json(
       { error: "Failed to update event cover image" },

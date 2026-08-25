@@ -4301,6 +4301,12 @@ struct MobileHelpAndFeedbackView: View {
                     Spacer()
 
                     Menu {
+                        Link(destination: URL(string: "https://www.whoisgoing.com/community-guidelines")!) {
+                            Label("Community Guidelines", systemImage: "person.2.badge.gearshape")
+                                .foregroundStyle(.white)
+                        }
+                        .tint(.white)
+
                         Link(destination: URL(string: "https://www.whoisgoing.com/privacy")!) {
                             Label("Privacy Policy", systemImage: "hand.raised")
                                 .foregroundStyle(.white)
@@ -4567,23 +4573,27 @@ struct AdminSupportRequestsView: View {
     @Environment(\.dismiss) private var dismiss
     @Environment(\.apiClient) private var apiClient
     @StateObject private var viewModel = AdminSupportRequestsViewModel()
-    @State private var selectedStatus: MobileSupportTicketStatus?
+    @State private var selectedStatus: MobileSupportTicketStatus = .open
     @State private var headerOpacity: CGFloat = 1
 
     private var visibleTickets: [MobileAdminSupportTicket] {
-        guard let selectedStatus else { return viewModel.tickets }
         return viewModel.tickets.filter { $0.status == selectedStatus }
+    }
+
+    private func ticketCount(for status: MobileSupportTicketStatus) -> Int {
+        viewModel.tickets.lazy.filter { $0.status == status }.count
     }
 
     var body: some View {
         ScrollView {
             LazyVStack(alignment: .leading, spacing: 12) {
                 ScopePillBar {
-                    ScopePill(title: "All", isSelected: selectedStatus == nil) {
-                        selectedStatus = nil
-                    }
-                    ForEach(MobileSupportTicketStatus.allCases) { status in
-                        ScopePill(title: status.title, isSelected: selectedStatus == status) {
+                    ForEach(MobileSupportTicketStatus.adminSelectableCases) { status in
+                        ScopePill(
+                            title: status.title,
+                            count: ticketCount(for: status),
+                            isSelected: selectedStatus == status
+                        ) {
                             selectedStatus = status
                         }
                     }
@@ -4594,13 +4604,11 @@ struct AdminSupportRequestsView: View {
                     NativeLoadingView(fillsAvailableSpace: false)
                         .frame(maxWidth: .infinity, minHeight: 160)
                 } else if visibleTickets.isEmpty {
-                    ContentUnavailableView(
-                        "No Support Requests",
-                        systemImage: "questionmark.bubble",
-                        description: Text("Requests matching this filter will appear here.")
+                    ProfileEmptyEventsPlaceholder(
+                        message: "No \(selectedStatus.title.lowercased()) support requests."
                     )
                     .frame(maxWidth: .infinity)
-                    .padding(.top, 46)
+                    .padding(.top, 24)
                 } else {
                     ForEach(visibleTickets) { ticket in
                         NavigationLink {
@@ -4731,9 +4739,11 @@ private struct AdminSupportTicketDetailView: View {
                 VStack(alignment: .leading, spacing: 12) {
                     detailLabel("Type", value: ticket.type.title)
                     detailLabel("Priority", value: ticket.severity.title)
-                    if let entityType = ticket.reportedEntityType,
-                       let entityID = ticket.reportedEntityId {
-                        detailLabel("Reported \(entityType.rawValue.capitalized)", value: entityID)
+                    if let reportContext = ticket.reportContext {
+                        MobileSupportReportedEntityPreview(context: reportContext)
+                            .padding(.horizontal, -16)
+                    } else if ticket.reportedEntityType != nil {
+                        detailLabel("Reported Entity", value: "This item is no longer available.")
                     }
                     detailLabel("Subject", value: ticket.subject)
 
@@ -4755,13 +4765,29 @@ private struct AdminSupportTicketDetailView: View {
                         .font(.system(size: 12, weight: .semibold))
                         .foregroundStyle(.white.opacity(0.52))
 
-                    Picker("Status", selection: $status) {
-                        ForEach(MobileSupportTicketStatus.allCases) { option in
-                            Text(option.title).tag(option)
+                    Menu {
+                        ForEach(MobileSupportTicketStatus.adminSelectableCases) { option in
+                            Button {
+                                status = option
+                            } label: {
+                                if status == option {
+                                    Label(option.title, systemImage: "checkmark")
+                                } else {
+                                    Text(option.title)
+                                }
+                            }
                         }
+                    } label: {
+                        HStack(spacing: 5) {
+                            Text(status.title)
+                                .font(.system(size: 15))
+                            Image(systemName: "chevron.up.chevron.down")
+                                .font(.system(size: 10, weight: .semibold))
+                        }
+                        .foregroundStyle(.white)
                     }
-                    .pickerStyle(.menu)
-                    .tint(.white)
+                    .buttonStyle(.plain)
+                    .frame(maxWidth: .infinity, alignment: .leading)
                 }
                 .padding(16)
                 .frame(maxWidth: .infinity, alignment: .leading)

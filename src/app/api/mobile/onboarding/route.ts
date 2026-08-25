@@ -5,6 +5,10 @@ import { db } from "@/server/db";
 import { users } from "@/server/db/schema";
 import { isReservedUsername } from "@/lib/reserved-usernames";
 import { isAtLeastMinimumAge, isValidIsoDate } from "@/lib/age-requirement";
+import {
+  enforceMobileContentCreation,
+  mobileContentModerationErrorResponse,
+} from "@/app/api/mobile/content-moderation";
 
 const USERNAME_PATTERN = /^[a-zA-Z0-9_]{3,20}$/;
 function isValidDateOfBirth(value: string): boolean {
@@ -171,6 +175,12 @@ export async function POST(request: NextRequest) {
     const gender = body.gender;
     const dateOfBirth = body.dateOfBirth?.trim() ?? "";
 
+    await enforceMobileContentCreation(userId, [
+      { field: "firstName", value: firstName },
+      { field: "lastName", value: lastName },
+      { field: "username", value: normalizedUsername },
+    ]);
+
     if (
       !firstName ||
       !lastName ||
@@ -319,6 +329,9 @@ export async function POST(request: NextRequest) {
       avatarImageUrl: savedUser.avatarImageUrl,
     });
   } catch (error) {
+    const moderationResponse = mobileContentModerationErrorResponse(error);
+    if (moderationResponse) return moderationResponse;
+
     console.error("Mobile onboarding submit error:", error);
     return NextResponse.json(
       { error: "Failed to complete onboarding" },
@@ -352,6 +365,12 @@ export async function PATCH(request: NextRequest) {
     const state = body.state?.trim().toUpperCase() ?? "";
     const gender = body.gender;
     const dateOfBirth = body.dateOfBirth?.trim() ?? "";
+
+    await enforceMobileContentCreation(userId, [
+      { field: "firstName", value: firstName },
+      { field: "lastName", value: lastName },
+      { field: "username", value: normalizedUsername },
+    ]);
 
     if (
       !firstName ||
@@ -476,6 +495,9 @@ export async function PATCH(request: NextRequest) {
       throw error;
     }
   } catch (error) {
+    const moderationResponse = mobileContentModerationErrorResponse(error);
+    if (moderationResponse) return moderationResponse;
+
     console.error("Mobile profile update error:", error);
     return NextResponse.json(
       { error: "Failed to update profile" },

@@ -1,12 +1,16 @@
 import { auth } from "@clerk/nextjs/server";
 import { and, eq, or } from "drizzle-orm";
 import { NextRequest, NextResponse } from "next/server";
-import { uploadToS3 } from "@/lib/s3";
+import { isUserImageValidationError, uploadToS3 } from "@/lib/s3";
 import { db } from "@/server/db";
 import { userFriends, users } from "@/server/db/schema";
 import { sendBackgroundPushToUsers } from "@/server/utils/push-notifications";
 import { recordActivationActionBestEffort } from "@/server/utils/user-activation";
 import { withStoredImageReplacements } from "@/server/utils/stored-image-lifecycle";
+import {
+  enforceMobileContentCreation,
+  mobileContentModerationErrorResponse,
+} from "@/app/api/mobile/content-moderation";
 
 export async function POST(request: NextRequest) {
   try {
@@ -15,6 +19,7 @@ export async function POST(request: NextRequest) {
     if (!userId) {
       return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
     }
+    await enforceMobileContentCreation(userId, []);
 
     const formData = await request.formData();
     const file = formData.get("file");
@@ -107,6 +112,11 @@ export async function POST(request: NextRequest) {
       avatarImageUrl: updatedUser.avatarImageUrl,
     });
   } catch (error) {
+    const moderationResponse = mobileContentModerationErrorResponse(error);
+    if (moderationResponse) return moderationResponse;
+    if (isUserImageValidationError(error)) {
+      return NextResponse.json({ error: error.message }, { status: 400 });
+    }
     console.error("Mobile profile avatar upload error:", error);
     return NextResponse.json(
       { error: "Failed to update profile image" },

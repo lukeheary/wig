@@ -1,6 +1,11 @@
 import { auth } from "@clerk/nextjs/server";
 import { NextRequest, NextResponse } from "next/server";
-import { uploadToS3 } from "@/lib/s3";
+import { isUserImageValidationError, uploadToS3 } from "@/lib/s3";
+import {
+  ACCOUNT_RESTRICTED_MESSAGE,
+  assertUserCanCreateContent,
+  isAccountRestrictedError,
+} from "@/server/utils/user-moderation";
 
 export async function POST(request: NextRequest) {
   try {
@@ -9,6 +14,7 @@ export async function POST(request: NextRequest) {
     if (!userId) {
       return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
     }
+    await assertUserCanCreateContent(userId);
 
     // Get form data
     const formData = await request.formData();
@@ -46,6 +52,15 @@ export async function POST(request: NextRequest) {
       uploadedBy: userId,
     });
   } catch (error) {
+    if (isAccountRestrictedError(error)) {
+      return NextResponse.json(
+        { error: ACCOUNT_RESTRICTED_MESSAGE },
+        { status: 403 }
+      );
+    }
+    if (isUserImageValidationError(error)) {
+      return NextResponse.json({ error: error.message }, { status: 400 });
+    }
     console.error("Upload error:", error);
     return NextResponse.json(
       { error: "Failed to upload file" },

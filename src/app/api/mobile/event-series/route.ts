@@ -22,6 +22,10 @@ import {
   isPendingStorageUrl,
   uploadImageFromUrl,
 } from "@/lib/s3";
+import {
+  enforceMobileContentCreation,
+  mobileContentModerationErrorResponse,
+} from "@/app/api/mobile/content-moderation";
 
 const mobileCreateEventSeriesSchema = z.object({
   venueId: z.string().uuid().optional(),
@@ -85,6 +89,11 @@ export async function POST(request: Request) {
     }
 
     const body = mobileCreateEventSeriesSchema.parse(await request.json());
+    await enforceMobileContentCreation(userId, [
+      { field: "title", value: body.title },
+      { field: "description", value: body.description },
+    ]);
+
     const startAt = parseDateValue(body.startAt);
     const endAt = parseDateValue(body.endAt);
     const untilDate = parseDateValue(body.recurrence.untilDate);
@@ -256,6 +265,9 @@ export async function POST(request: Request) {
       firstEventId: generated.firstCreatedEventId,
     });
   } catch (error) {
+    const moderationResponse = mobileContentModerationErrorResponse(error);
+    if (moderationResponse) return moderationResponse;
+
     if (error instanceof z.ZodError) {
       return NextResponse.json({ error: "Invalid request" }, { status: 400 });
     }

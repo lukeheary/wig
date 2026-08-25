@@ -1,6 +1,11 @@
 import { z } from "zod";
 import { TRPCError } from "@trpc/server";
-import { router, protectedProcedure, publicProcedure } from "../init";
+import {
+  contentMutationProcedure,
+  router,
+  protectedProcedure,
+  publicProcedure,
+} from "../init";
 import {
   eventRsvps,
   placeMembers,
@@ -16,6 +21,7 @@ import { isReservedUsername } from "@/lib/reserved-usernames";
 import { mapEventCategoryData } from "@/server/utils/categories";
 import { withStoredImageReplacements } from "@/server/utils/stored-image-lifecycle";
 import { isAtLeastMinimumAge } from "@/lib/age-requirement";
+import { assertTRPCTextContentAllowed } from "@/server/utils/content-moderation";
 
 const minimumAgeDateSchema = z
   .string()
@@ -68,7 +74,7 @@ export const userRouter = router({
     return memberships.length > 0;
   }),
 
-  updateUsername: protectedProcedure
+  updateUsername: contentMutationProcedure
     .input(
       z.object({
         username: z
@@ -89,6 +95,10 @@ export const userRouter = router({
     .mutation(async ({ ctx, input }) => {
       const userId = ctx.auth.userId;
       const normalizedUsername = input.username.toLowerCase();
+
+      assertTRPCTextContentAllowed([
+        { field: "username", value: normalizedUsername },
+      ]);
 
       if (isReservedUsername(normalizedUsername)) {
         throw new TRPCError({
@@ -470,7 +480,7 @@ export const userRouter = router({
       return surfaceState;
     }),
 
-  updateProfile: protectedProcedure
+  updateProfile: contentMutationProcedure
     .input(
       z.object({
         username: z
@@ -494,6 +504,11 @@ export const userRouter = router({
     .mutation(async ({ ctx, input }) => {
       const userId = ctx.auth.userId;
       const normalizedUsername = input.username?.toLowerCase().trim();
+      assertTRPCTextContentAllowed([
+        { field: "username", value: normalizedUsername },
+        { field: "firstName", value: input.firstName },
+        { field: "lastName", value: input.lastName },
+      ]);
       const existingProfile = await ctx.db.query.users.findFirst({
         where: eq(users.id, userId),
         columns: { avatarImageUrl: true },

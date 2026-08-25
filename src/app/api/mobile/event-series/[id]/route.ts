@@ -23,6 +23,10 @@ import {
 } from "@/lib/s3";
 import { withStoredImageReplacements } from "@/server/utils/stored-image-lifecycle";
 import { isPublicId, publicOrUuidSchema } from "@/lib/public-id";
+import {
+  enforceMobileContentCreation,
+  mobileContentModerationErrorResponse,
+} from "@/app/api/mobile/content-moderation";
 
 const mobileUpdateEventSeriesSchema = z.object({
   venueId: z.string().uuid().nullable().optional(),
@@ -214,6 +218,11 @@ export async function PATCH(
     }
 
     const body = mobileUpdateEventSeriesSchema.parse(await request.json());
+    await enforceMobileContentCreation(userId, [
+      { field: "title", value: body.title },
+      { field: "description", value: body.description },
+    ]);
+
     const startAt = parseDateValue(body.startAt);
     const endAt = parseDateValue(body.endAt);
     const untilDate = parseDateValue(body.recurrence.untilDate);
@@ -381,6 +390,9 @@ export async function PATCH(
       firstEventId: nextEvent?.id ?? generated.firstCreatedEventId,
     });
   } catch (error) {
+    const moderationResponse = mobileContentModerationErrorResponse(error);
+    if (moderationResponse) return moderationResponse;
+
     if (error instanceof z.ZodError) {
       return NextResponse.json(
         { error: error.issues[0]?.message ?? "Invalid event series payload" },

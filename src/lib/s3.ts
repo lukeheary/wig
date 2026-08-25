@@ -88,6 +88,57 @@ const JPEG_OPTIONS = {
   mozjpeg: true,
 } as const;
 
+const USER_IMAGE_MIME_TYPES = new Set([
+  "image/jpeg",
+  "image/jpg",
+  "image/png",
+  "image/webp",
+]);
+const MAX_USER_IMAGE_DIMENSION = 12_000;
+const MAX_USER_IMAGE_PIXELS = 40_000_000;
+
+export class UserImageValidationError extends Error {
+  constructor(message: string) {
+    super(message);
+    this.name = "UserImageValidationError";
+  }
+}
+
+export function isUserImageValidationError(
+  error: unknown
+): error is UserImageValidationError {
+  return error instanceof UserImageValidationError;
+}
+
+/** Decode user uploads before storage and reject disguised or oversized images. */
+export async function validateUserImageFile(file: File): Promise<void> {
+  if (!USER_IMAGE_MIME_TYPES.has(file.type.toLowerCase())) {
+    throw new UserImageValidationError(
+      "Please upload a JPEG, PNG, or WebP image"
+    );
+  }
+
+  try {
+    const metadata = await sharp(Buffer.from(await file.arrayBuffer()), {
+      limitInputPixels: MAX_USER_IMAGE_PIXELS,
+    }).metadata();
+    if (!metadata.width || !metadata.height)
+      throw new Error("Missing dimensions");
+    if (
+      metadata.width > MAX_USER_IMAGE_DIMENSION ||
+      metadata.height > MAX_USER_IMAGE_DIMENSION ||
+      metadata.width * metadata.height > MAX_USER_IMAGE_PIXELS
+    ) {
+      throw new UserImageValidationError("Image dimensions are too large");
+    }
+  } catch (error) {
+    if (isUserImageValidationError(error)) throw error;
+    throw new UserImageValidationError(
+      "The selected file is not a valid image"
+    );
+  }
+}
+
 function hasJpegExtension(fileName: string | undefined): boolean {
   return /\.jpe?g$/i.test(fileName ?? "");
 }
@@ -273,20 +324,25 @@ export async function uploadToS3(
   folder: string = "uploads",
   fileName?: string
 ): Promise<string> {
-  const filename = generateUniqueFilename(fileName || file.name);
+  await validateUserImageFile(file);
+
+  // User uploads are decoded and re-encoded, stripping metadata and ensuring
+  // that stored bytes match their advertised image format.
+  const usePng = hasPngExtension(fileName || file.name);
+  const filename = generateUniqueFilename(usePng ? "image.png" : "image.jpg");
   const fullPath = getStoragePath(folder);
   const key = `${fullPath}/${filename}`;
 
   const arrayBuffer = await file.arrayBuffer();
   let buffer: Buffer = Buffer.from(arrayBuffer);
-  let contentType = file.type;
+  let contentType: string;
 
-  if (hasJpegExtension(filename)) {
-    buffer = await jpegBuffer(buffer);
-    contentType = "image/jpeg";
-  } else if (hasPngExtension(filename)) {
+  if (usePng) {
     buffer = await pngBuffer(buffer);
     contentType = "image/png";
+  } else {
+    buffer = await jpegBuffer(buffer);
+    contentType = "image/jpeg";
   }
 
   await writeToStorage(key, buffer, contentType);

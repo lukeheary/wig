@@ -140,6 +140,12 @@ export const partnerStatusEnum = pgEnum("partner_status", [
   "accepted",
 ]);
 
+export const userModerationStatusEnum = pgEnum("user_moderation_status", [
+  "active",
+  "suspended",
+  "banned",
+]);
+
 export const supportTicketTypeEnum = pgEnum("support_ticket_type", [
   "help",
   "bug",
@@ -195,6 +201,10 @@ export const users = pgTable(
     gender: genderEnum("gender"),
     dateOfBirth: date("date_of_birth"),
     role: userRoleEnum("role").notNull().default("user"),
+    moderationStatus: userModerationStatusEnum("moderation_status")
+      .notNull()
+      .default("active"),
+    moderationReason: text("moderation_reason"),
     isOnboarding: boolean("is_onboarding").notNull().default(true),
     createdAt: timestamp("created_at").defaultNow().notNull(),
     updatedAt: timestamp("updated_at").defaultNow().notNull(),
@@ -202,6 +212,9 @@ export const users = pgTable(
   (table) => ({
     emailIdx: index("users_email_idx").on(table.email),
     usernameIdx: uniqueIndex("users_username_idx").on(table.username),
+    moderationStatusIdx: index("users_moderation_status_idx").on(
+      table.moderationStatus
+    ),
   })
 );
 

@@ -1,5 +1,10 @@
 import { z } from "zod";
-import { protectedProcedure, publicProcedure, router } from "../init";
+import {
+  contentMutationProcedure,
+  protectedProcedure,
+  publicProcedure,
+  router,
+} from "../init";
 import {
   cities,
   eventRsvps,
@@ -39,6 +44,7 @@ import {
 } from "@/lib/place-identifiers";
 import { accentInsensitiveLike } from "@/server/db/search";
 import { withStoredImageReplacements } from "@/server/utils/stored-image-lifecycle";
+import { assertTRPCTextContentAllowed } from "@/server/utils/content-moderation";
 
 const placeTypeSchema = z.enum(["venue", "organizer"]);
 
@@ -143,7 +149,7 @@ export const placeRouter = router({
       return suggestions;
     }),
 
-  createPlace: protectedProcedure
+  createPlace: contentMutationProcedure
     .input(
       z.object({
         type: placeTypeSchema,
@@ -167,6 +173,11 @@ export const placeRouter = router({
       })
     )
     .mutation(async ({ ctx, input }) => {
+      assertTRPCTextContentAllowed([
+        { field: "name", value: input.name },
+        { field: "description", value: input.description },
+      ]);
+
       // Generate initial slug
       let slug = input.name.toLowerCase().replace(/[^a-z0-9]+/g, "");
 
@@ -810,7 +821,7 @@ export const placeRouter = router({
       }));
     }),
 
-  updatePlace: protectedProcedure
+  updatePlace: contentMutationProcedure
     .input(
       z.object({
         placeId: z.string().uuid(),
@@ -844,6 +855,11 @@ export const placeRouter = router({
       })
     )
     .mutation(async ({ ctx, input }) => {
+      assertTRPCTextContentAllowed([
+        { field: "name", value: input.name },
+        { field: "description", value: input.description },
+      ]);
+
       // Check if user is admin or place member
       const user = await ctx.db.query.users.findFirst({
         where: eq(users.id, ctx.auth.userId),

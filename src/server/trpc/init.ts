@@ -4,6 +4,11 @@ import superjson from "superjson";
 import { db } from "../db";
 import { users, placeMembers } from "../db/schema";
 import { eq, and } from "drizzle-orm";
+import {
+  ACCOUNT_RESTRICTED_MESSAGE,
+  assertUserCanCreateContent,
+  isAccountRestrictedError,
+} from "@/server/utils/user-moderation";
 
 const t = initTRPC.context<Context>().create({
   transformer: superjson,
@@ -28,6 +33,24 @@ export const protectedProcedure = t.procedure.use(({ ctx, next }) => {
   });
 });
 
+// Use for mutations that publish or edit user-generated content. Reads,
+// support requests, account deletion, and appeals intentionally remain usable.
+export const contentMutationProcedure = protectedProcedure.use(
+  async ({ ctx, next }) => {
+    try {
+      await assertUserCanCreateContent(ctx.auth.userId);
+    } catch (error) {
+      if (!isAccountRestrictedError(error)) throw error;
+      throw new TRPCError({
+        code: "FORBIDDEN",
+        message: ACCOUNT_RESTRICTED_MESSAGE,
+      });
+    }
+
+    return next({ ctx });
+  }
+);
+
 // Admin procedure - requires authentication and admin role
 export const adminProcedure = protectedProcedure.use(async ({ ctx, next }) => {
   const user = await db.query.users.findFirst({
@@ -37,7 +60,7 @@ export const adminProcedure = protectedProcedure.use(async ({ ctx, next }) => {
   if (!user || user.role !== "admin") {
     throw new TRPCError({
       code: "FORBIDDEN",
-      message: "Admin access required"
+      message: "Admin access required",
     });
   }
 

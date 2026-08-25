@@ -4,6 +4,10 @@ import { NextResponse } from "next/server";
 import { resolveMobileEventEditPermissions } from "@/app/api/mobile/event-edit-permissions";
 import { db } from "@/server/db";
 import { places, users } from "@/server/db/schema";
+import {
+  enforceMobileContentCreation,
+  mobileContentModerationErrorResponse,
+} from "@/app/api/mobile/content-moderation";
 
 async function currentMobileUserContext() {
   const { userId } = await auth();
@@ -27,6 +31,7 @@ export async function POST(
     if (!userId) {
       return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
     }
+    await enforceMobileContentCreation(userId, []);
 
     const { slug } = await params;
     const body = (await request.json()) as { logoImageUrl?: string };
@@ -50,7 +55,10 @@ export async function POST(
 
     if (!isPreview) {
       const permissions = await resolveMobileEventEditPermissions(userId);
-      if (!permissions.isAdmin && !permissions.manageablePlaceIds.has(place.id)) {
+      if (
+        !permissions.isAdmin &&
+        !permissions.manageablePlaceIds.has(place.id)
+      ) {
         return NextResponse.json({ error: "Forbidden" }, { status: 403 });
       }
     }
@@ -62,6 +70,8 @@ export async function POST(
 
     return NextResponse.json({ id: place.id, logoImageUrl });
   } catch (error) {
+    const moderationResponse = mobileContentModerationErrorResponse(error);
+    if (moderationResponse) return moderationResponse;
     console.error("Mobile place logo image error:", error);
     return NextResponse.json(
       { error: "Failed to update place logo image" },

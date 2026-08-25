@@ -70,6 +70,12 @@ export default async function LandingPage() {
                   >
                     Privacy Policy
                   </Link>
+                  <Link
+                    href="/community-guidelines"
+                    className="inline-block text-sm text-muted-foreground underline-offset-4 transition-colors hover:text-foreground hover:underline"
+                  >
+                    Community Guidelines
+                  </Link>
                 </div>
 
                 <div className="flex w-full flex-row gap-3 md:ml-auto md:w-auto md:flex-none">

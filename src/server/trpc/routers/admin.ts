@@ -43,6 +43,7 @@ const supportTicketStatusSchema = z.enum([
   "planned",
   "resolved",
 ]);
+const userModerationStatusSchema = z.enum(["active", "suspended", "banned"]);
 const categoryKeySchema = z
   .string()
   .min(1)
@@ -224,7 +225,7 @@ export const adminRouter = router({
         );
       }
 
-      return ctx.db
+      const tickets = await ctx.db
         .select({
           id: supportTickets.id,
           userId: supportTickets.userId,
@@ -247,6 +248,32 @@ export const adminRouter = router({
         .innerJoin(users, eq(supportTickets.userId, users.id))
         .where(conditions.length > 0 ? and(...conditions) : undefined)
         .orderBy(desc(supportTickets.createdAt));
+
+      const reportedUserIds = tickets.flatMap((ticket) =>
+        ticket.reportedEntityType === "user" && ticket.reportedEntityId
+          ? [ticket.reportedEntityId]
+          : []
+      );
+      const reportedUsers = reportedUserIds.length
+        ? await ctx.db
+            .select({
+              id: users.id,
+              moderationStatus: users.moderationStatus,
+            })
+            .from(users)
+            .where(inArray(users.id, reportedUserIds))
+        : [];
+      const reportedUserStatus = new Map(
+        reportedUsers.map((user) => [user.id, user.moderationStatus])
+      );
+
+      return tickets.map((ticket) => ({
+        ...ticket,
+        reportedUserModerationStatus:
+          ticket.reportedEntityType === "user" && ticket.reportedEntityId
+            ? (reportedUserStatus.get(ticket.reportedEntityId) ?? null)
+            : null,
+      }));
     }),
 
   updateSupportTicketStatus: adminProcedure
@@ -323,6 +350,61 @@ export const adminRouter = router({
       });
 
       return updatedTicket;
+    }),
+
+  updateReportedUserModerationStatus: adminProcedure
+    .input(
+      z.object({
+        ticketId: z.string().uuid(),
+        moderationStatus: userModerationStatusSchema,
+      })
+    )
+    .mutation(async ({ ctx, input }) => {
+      const ticket = await ctx.db.query.supportTickets.findFirst({
+        where: eq(supportTickets.id, input.ticketId),
+        columns: {
+          id: true,
+          subject: true,
+          reportedEntityType: true,
+          reportedEntityId: true,
+        },
+      });
+
+      if (
+        !ticket ||
+        ticket.reportedEntityType !== "user" ||
+        !ticket.reportedEntityId
+      ) {
+        throw new TRPCError({
+          code: "BAD_REQUEST",
+          message: "This ticket does not report a user",
+        });
+      }
+
+      const [updatedUser] = await ctx.db
+        .update(users)
+        .set({
+          moderationStatus: input.moderationStatus,
+          moderationReason:
+            input.moderationStatus === "active"
+              ? null
+              : `Support ticket ${ticket.id}: ${ticket.subject}`,
+          updatedAt: new Date(),
+        })
+        .where(eq(users.id, ticket.reportedEntityId))
+        .returning({
+          id: users.id,
+          moderationStatus: users.moderationStatus,
+        });
+
+      if (!updatedUser) {
+        throw new TRPCError({
+          code: "NOT_FOUND",
+          message: "Reported user not found",
+        });
+      }
+
+      return updatedUser;
     }),
 
   // ============================================================================

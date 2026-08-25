@@ -33,6 +33,10 @@ import {
   setPlaceCategoryKeys,
 } from "@/server/utils/categories";
 import {
+  enforceMobileContentCreation,
+  mobileContentModerationErrorResponse,
+} from "@/app/api/mobile/content-moderation";
+import {
   canEditMobileEvent,
   resolveMobileEventEditPermissions,
   type MobileEventEditPermissions,
@@ -56,7 +60,11 @@ const mobileUpdatePlaceSchema = z
       .regex(PLACE_SLUG_REGEX, PLACE_SLUG_ERROR),
     type: z.enum(["venue", "organizer"]),
     name: z.string().trim().min(1).max(255),
-    aliases: z.array(z.string().trim().min(1).max(255)).max(25).optional().default([]),
+    aliases: z
+      .array(z.string().trim().min(1).max(255))
+      .max(25)
+      .optional()
+      .default([]),
     description: z.string().trim().nullable().optional(),
     logoImageUrl: z.string().url().nullable().optional(),
     keepExistingLogo: z.boolean().optional().default(true),
@@ -548,6 +556,11 @@ export async function PATCH(
     }
 
     const body = mobileUpdatePlaceSchema.parse(await request.json());
+    await enforceMobileContentCreation(userId, [
+      { field: "name", value: body.name },
+      { field: "description", value: body.description },
+    ]);
+
     if (body.slug !== place.slug) {
       const placeWithSlug = await db.query.places.findFirst({
         where: and(eq(places.slug, body.slug), ne(places.id, place.id)),
@@ -607,6 +620,9 @@ export async function PATCH(
 
     return NextResponse.json({ id: place.id, slug: body.slug });
   } catch (error) {
+    const moderationResponse = mobileContentModerationErrorResponse(error);
+    if (moderationResponse) return moderationResponse;
+
     if (error instanceof z.ZodError) {
       return NextResponse.json(
         { error: error.issues[0]?.message || "Invalid request" },

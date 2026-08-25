@@ -217,7 +217,16 @@ export async function GET(request: Request) {
     ? await db.query.notifications.findMany({
         where: and(
           eq(notifications.userId, userId),
-          eq(notifications.type, "support_ticket_created")
+          eq(notifications.entityType, "support_ticket"),
+          or(
+            // Cast to text so older databases can evaluate this branch even
+            // when their enum does not contain support_ticket_created.
+            sql`${notifications.type}::text = 'support_ticket_created'`,
+            and(
+              eq(notifications.type, "support_ticket_status_changed"),
+              sql`${notifications.metadata} ->> 'notificationKind' = 'support_ticket_created'`
+            )
+          )
         ),
         orderBy: [desc(notifications.createdAt)],
         limit: 50,

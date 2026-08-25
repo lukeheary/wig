@@ -26,6 +26,10 @@ import { logEventActivity } from "@/server/utils/event-activity-logger";
 import { EVENT_STATUS_VALUES, type EventStatus } from "@/lib/event-status";
 import { isPublicId, publicOrUuidSchema } from "@/lib/public-id";
 import { withStoredImageReplacements } from "@/server/utils/stored-image-lifecycle";
+import {
+  enforceMobileContentCreation,
+  mobileContentModerationErrorResponse,
+} from "@/app/api/mobile/content-moderation";
 
 const mobileUpdateEventSchema = z.object({
   venueId: z.string().uuid().optional().nullable(),
@@ -375,6 +379,11 @@ export async function PATCH(
     const cleanedAddress = body.address?.trim() || null;
     const cleanedCity = body.city.trim();
     const cleanedState = body.state.trim().toUpperCase();
+    await enforceMobileContentCreation(userId, [
+      { field: "title", value: cleanedTitle },
+      { field: "description", value: cleanedDescription },
+    ]);
+
     const resolvedTimeZone =
       body.timeZone?.trim() || eventTimeZone(undefined, cleanedState) || null;
 
@@ -525,6 +534,9 @@ export async function PATCH(
       isCreatedByCurrentUser: isCreator,
     });
   } catch (error) {
+    const moderationResponse = mobileContentModerationErrorResponse(error);
+    if (moderationResponse) return moderationResponse;
+
     if (error instanceof z.ZodError) {
       return NextResponse.json(
         { error: error.issues[0]?.message ?? "Invalid event payload" },

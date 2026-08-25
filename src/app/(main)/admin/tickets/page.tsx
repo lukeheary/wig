@@ -63,6 +63,13 @@ const severityVariants = {
 } as const;
 
 type TicketStatus = Exclude<(typeof statusOptions)[number]["value"], "all">;
+type UserModerationStatus = "active" | "suspended" | "banned";
+
+const userModerationStatusLabels: Record<UserModerationStatus, string> = {
+  active: "Active",
+  suspended: "Suspended",
+  banned: "Banned",
+};
 
 export default function AdminTicketsPage() {
   const { toast } = useToast();
@@ -93,6 +100,21 @@ export default function AdminTicketsPage() {
       });
     },
   });
+
+  const updateReportedUserStatus =
+    trpc.admin.updateReportedUserModerationStatus.useMutation({
+      onSuccess: async () => {
+        await utils.admin.listSupportTickets.invalidate();
+        toast({ title: "User moderation status updated" });
+      },
+      onError: (error) => {
+        toast({
+          title: "Could not update user",
+          description: error.message,
+          variant: "destructive",
+        });
+      },
+    });
 
   return (
     <div className="space-y-4">
@@ -155,7 +177,7 @@ export default function AdminTicketsPage() {
                   className="rounded-xl border border-border/70 bg-muted/10 px-4 py-3 transition-colors hover:bg-muted/20"
                 >
                   <div className="flex flex-col gap-3 xl:flex-row xl:items-center xl:gap-4">
-                    <div className="min-w-0 flex flex-1 items-start gap-3">
+                    <div className="flex min-w-0 flex-1 items-start gap-3">
                       <UserAvatar
                         src={ticket.avatarImageUrl}
                         name={displayName}
@@ -185,7 +207,10 @@ export default function AdminTicketsPage() {
                             {ticket.subject}
                           </h2>
                           <div className="hidden items-center gap-2 sm:flex">
-                            <Badge variant="outline" className="h-6 font-medium">
+                            <Badge
+                              variant="outline"
+                              className="h-6 font-medium"
+                            >
                               {typeLabels[ticket.type]}
                             </Badge>
                             <Badge
@@ -200,6 +225,40 @@ export default function AdminTicketsPage() {
                         <p className="line-clamp-2 text-sm text-muted-foreground">
                           {ticket.message}
                         </p>
+
+                        {ticket.reportedEntityType === "user" &&
+                        ticket.reportedEntityId &&
+                        ticket.reportedUserModerationStatus ? (
+                          <div className="flex max-w-[220px] items-center gap-2 pt-1">
+                            <span className="shrink-0 text-xs font-medium text-muted-foreground">
+                              Reported user:
+                            </span>
+                            <Select
+                              value={ticket.reportedUserModerationStatus}
+                              onValueChange={(value) =>
+                                updateReportedUserStatus.mutate({
+                                  ticketId: ticket.id,
+                                  moderationStatus:
+                                    value as UserModerationStatus,
+                                })
+                              }
+                              disabled={updateReportedUserStatus.isPending}
+                            >
+                              <SelectTrigger className="h-8 rounded-lg bg-background/70 text-xs">
+                                <SelectValue />
+                              </SelectTrigger>
+                              <SelectContent>
+                                {Object.entries(userModerationStatusLabels).map(
+                                  ([value, label]) => (
+                                    <SelectItem key={value} value={value}>
+                                      {label}
+                                    </SelectItem>
+                                  )
+                                )}
+                              </SelectContent>
+                            </Select>
+                          </div>
+                        ) : null}
                       </div>
                     </div>
 

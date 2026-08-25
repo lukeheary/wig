@@ -25,6 +25,10 @@ import {
   INSTAGRAM_HANDLE_ERROR,
   INSTAGRAM_HANDLE_REGEX,
 } from "@/lib/place-identifiers";
+import {
+  enforceMobileContentCreation,
+  mobileContentModerationErrorResponse,
+} from "@/app/api/mobile/content-moderation";
 
 async function currentMobileUserContext() {
   const { userId } = await auth();
@@ -51,7 +55,11 @@ const mobileCreatePlaceSchema = z
   .object({
     type: z.enum(["venue", "organizer"]),
     name: z.string().trim().min(1).max(255),
-    aliases: z.array(z.string().trim().min(1).max(255)).max(25).optional().default([]),
+    aliases: z
+      .array(z.string().trim().min(1).max(255))
+      .max(25)
+      .optional()
+      .default([]),
     description: z.string().trim().optional(),
     logoImageUrl: z.string().url().optional(),
     address: z.string().trim().optional(),
@@ -204,8 +212,9 @@ export async function GET(request: Request) {
               placeId: true,
             },
           })
-          .then((memberships) =>
-            new Set(memberships.map((membership) => membership.placeId))
+          .then(
+            (memberships) =>
+              new Set(memberships.map((membership) => membership.placeId))
           ),
       ])
     : [new Set<string>(), new Set<string>()];
@@ -349,6 +358,11 @@ export async function POST(request: Request) {
     const cleanedWebsite = body.website?.trim() || null;
     const cleanedInstagram = body.instagram?.trim() || null;
 
+    await enforceMobileContentCreation(userId, [
+      { field: "name", value: cleanedName },
+      { field: "description", value: cleanedDescription },
+    ]);
+
     let slug = cleanedInstagram
       ? cleanedInstagram.toLowerCase()
       : cleanedName.toLowerCase().replace(/[^a-z0-9]+/g, "");
@@ -407,6 +421,9 @@ export async function POST(request: Request) {
 
     return NextResponse.json({ id: place.id, slug: place.slug });
   } catch (error) {
+    const moderationResponse = mobileContentModerationErrorResponse(error);
+    if (moderationResponse) return moderationResponse;
+
     if (error instanceof z.ZodError) {
       const message = error.issues[0]?.message || "Invalid request";
       return NextResponse.json({ error: message }, { status: 400 });

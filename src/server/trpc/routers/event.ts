@@ -1,10 +1,12 @@
 import { z } from "zod";
 import {
   adminProcedure,
+  contentMutationProcedure,
   protectedProcedure,
   publicProcedure,
   router,
 } from "../init";
+import { assertTRPCTextContentAllowed } from "@/server/utils/content-moderation";
 import {
   categories,
   eventRsvps,
@@ -251,7 +253,7 @@ async function assertCanManageSeries(
 }
 
 export const eventRouter = router({
-  createEvent: protectedProcedure
+  createEvent: contentMutationProcedure
     .input(
       z.object({
         venueId: z.string().uuid().optional(),
@@ -274,6 +276,11 @@ export const eventRouter = router({
       })
     )
     .mutation(async ({ ctx, input }) => {
+      assertTRPCTextContentAllowed([
+        { field: "title", value: input.title },
+        { field: "description", value: input.description },
+      ]);
+
       // Check if user is admin
       const user = await ctx.db.query.users.findFirst({
         where: eq(users.id, ctx.auth.userId),
@@ -421,7 +428,7 @@ export const eventRouter = router({
       return created ? mapEventCategoryData(created) : event;
     }),
 
-  createRecurringEvent: protectedProcedure
+  createRecurringEvent: contentMutationProcedure
     .input(
       z.object({
         venueId: z.string().uuid().optional(),
@@ -450,6 +457,11 @@ export const eventRouter = router({
       })
     )
     .mutation(async ({ ctx, input }) => {
+      assertTRPCTextContentAllowed([
+        { field: "title", value: input.title },
+        { field: "description", value: input.description },
+      ]);
+
       const user = await ctx.db.query.users.findFirst({
         where: eq(users.id, ctx.auth.userId),
       });
@@ -628,7 +640,7 @@ export const eventRouter = router({
       };
     }),
 
-  setEventCoverImage: protectedProcedure
+  setEventCoverImage: contentMutationProcedure
     .input(
       z.object({
         eventId: z.string().uuid(),
@@ -717,7 +729,7 @@ export const eventRouter = router({
       return mapEventSeriesCategoryData(series);
     }),
 
-  updateEventSeries: protectedProcedure
+  updateEventSeries: contentMutationProcedure
     .input(
       z.object({
         seriesId: z.string().uuid(),
@@ -745,6 +757,11 @@ export const eventRouter = router({
       })
     )
     .mutation(async ({ ctx, input }) => {
+      assertTRPCTextContentAllowed([
+        { field: "title", value: input.title },
+        { field: "description", value: input.description },
+      ]);
+
       const existingSeries = await ctx.db.query.eventSeries.findFirst({
         where: eq(eventSeries.id, input.seriesId),
       });
@@ -986,7 +1003,7 @@ export const eventRouter = router({
       };
     }),
 
-  setEventSeriesCoverImage: protectedProcedure
+  setEventSeriesCoverImage: contentMutationProcedure
     .input(
       z.object({
         seriesId: z.string().uuid(),
@@ -2244,7 +2261,7 @@ export const eventRouter = router({
       return rsvp;
     }),
 
-  updateEvent: protectedProcedure
+  updateEvent: contentMutationProcedure
     .input(
       z.object({
         eventId: z.string().uuid(),
@@ -2268,6 +2285,11 @@ export const eventRouter = router({
       })
     )
     .mutation(async ({ ctx, input }) => {
+      assertTRPCTextContentAllowed([
+        { field: "title", value: input.title },
+        { field: "description", value: input.description },
+      ]);
+
       const { eventId, ...updates } = input;
 
       // Fetch the event to check permissions

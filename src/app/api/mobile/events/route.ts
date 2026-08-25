@@ -19,6 +19,10 @@ import { z } from "zod";
 import { db } from "@/server/db";
 import { generateNanoId } from "@/lib/nano-id";
 import {
+  enforceMobileContentCreation,
+  mobileContentModerationErrorResponse,
+} from "@/app/api/mobile/content-moderation";
+import {
   cities,
   eventReviews,
   eventRsvps,
@@ -726,6 +730,11 @@ export async function POST(request: Request) {
     const cleanedCoverImageUrl = body.coverImageUrl?.trim() || null;
     const cleanedAddress = body.address?.trim() || null;
     const cleanedEventUrl = body.eventUrl?.trim() || null;
+    await enforceMobileContentCreation(userId, [
+      { field: "title", value: cleanedTitle },
+      { field: "description", value: cleanedDescription },
+    ]);
+
     const resolvedTimeZone =
       body.timeZone?.trim() || eventTimeZone(undefined, cleanedState) || null;
 
@@ -810,6 +819,9 @@ export async function POST(request: Request) {
 
     return NextResponse.json({ id: event.id, publicId: event.publicId });
   } catch (error) {
+    const moderationResponse = mobileContentModerationErrorResponse(error);
+    if (moderationResponse) return moderationResponse;
+
     if (error instanceof z.ZodError) {
       return NextResponse.json({ error: "Invalid request" }, { status: 400 });
     }

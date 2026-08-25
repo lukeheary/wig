@@ -1,11 +1,13 @@
 import { auth } from "@clerk/nextjs/server";
-import { desc, eq } from "drizzle-orm";
+import { desc, eq, inArray } from "drizzle-orm";
 import { NextResponse } from "next/server";
 import { z } from "zod";
 
 import { db } from "@/server/db";
 import {
+  events,
   notifications,
+  places,
   supportTicketActivity,
   supportTickets,
   users,
@@ -68,7 +70,109 @@ export async function GET() {
     .innerJoin(users, eq(supportTickets.userId, users.id))
     .orderBy(desc(supportTickets.createdAt));
 
-  return NextResponse.json({ tickets });
+  const reportedUserIds = tickets.flatMap((ticket) =>
+    ticket.reportedEntityType === "user" && ticket.reportedEntityId
+      ? [ticket.reportedEntityId]
+      : []
+  );
+  const reportedPlaceIds = tickets.flatMap((ticket) =>
+    ticket.reportedEntityType === "place" && ticket.reportedEntityId
+      ? [ticket.reportedEntityId]
+      : []
+  );
+  const reportedEventIds = tickets.flatMap((ticket) =>
+    ticket.reportedEntityType === "event" && ticket.reportedEntityId
+      ? [ticket.reportedEntityId]
+      : []
+  );
+
+  const [reportedUsers, reportedPlaces, reportedEvents] = await Promise.all([
+    reportedUserIds.length > 0
+      ? db
+          .select({
+            id: users.id,
+            username: users.username,
+            firstName: users.firstName,
+            lastName: users.lastName,
+            imageUrl: users.avatarImageUrl,
+          })
+          .from(users)
+          .where(inArray(users.id, reportedUserIds))
+      : [],
+    reportedPlaceIds.length > 0
+      ? db
+          .select({
+            id: places.id,
+            name: places.name,
+            type: places.type,
+            imageUrl: places.logoImageUrl,
+          })
+          .from(places)
+          .where(inArray(places.id, reportedPlaceIds))
+      : [],
+    reportedEventIds.length > 0
+      ? db
+          .select({
+            id: events.id,
+            name: events.title,
+            imageUrl: events.coverImageUrl,
+          })
+          .from(events)
+          .where(inArray(events.id, reportedEventIds))
+      : [],
+  ]);
+
+  const userPreviews = new Map(
+    reportedUsers.map((user) => {
+      const fullName = [user.firstName, user.lastName].filter(Boolean).join(" ").trim();
+      return [
+        user.id,
+        {
+          name: fullName || user.username,
+          imageUrl: user.imageUrl,
+          displayType: "User",
+        },
+      ] as const;
+    })
+  );
+  const placePreviews = new Map(
+    reportedPlaces.map((place) => [
+      place.id,
+      {
+        name: place.name,
+        imageUrl: place.imageUrl,
+        displayType: place.type === "venue" ? "Venue" : "Organizer",
+      },
+    ] as const)
+  );
+  const eventPreviews = new Map(
+    reportedEvents.map((event) => [
+      event.id,
+      { name: event.name, imageUrl: event.imageUrl, displayType: "Event" },
+    ] as const)
+  );
+
+  const ticketsWithPreviews = tickets.map((ticket) => {
+    const entityId = ticket.reportedEntityId;
+    const preview = entityId
+      ? ticket.reportedEntityType === "user"
+        ? userPreviews.get(entityId)
+        : ticket.reportedEntityType === "place"
+          ? placePreviews.get(entityId)
+          : ticket.reportedEntityType === "event"
+            ? eventPreviews.get(entityId)
+            : undefined
+      : undefined;
+
+    return {
+      ...ticket,
+      reportedEntityName: preview?.name ?? null,
+      reportedEntityImageUrl: preview?.imageUrl ?? null,
+      reportedEntityDisplayType: preview?.displayType ?? null,
+    };
+  });
+
+  return NextResponse.json({ tickets: ticketsWithPreviews });
 }
 
 export async function PATCH(request: Request) {

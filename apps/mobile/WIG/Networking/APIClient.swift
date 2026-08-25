@@ -1321,6 +1321,13 @@ enum MobileSupportTicketStatus: String, Codable, CaseIterable, Identifiable, Sen
 
     var id: String { rawValue }
 
+    static let adminSelectableCases: [MobileSupportTicketStatus] = [
+        .open,
+        .inReview,
+        .resolved,
+        .closed,
+    ]
+
     var title: String {
         switch self {
         case .open: "Open"
@@ -1400,6 +1407,9 @@ struct MobileAdminSupportTicket: Decodable, Identifiable, Hashable, Sendable {
     let message: String
     let reportedEntityType: MobileSupportReportedEntityType?
     let reportedEntityId: String?
+    let reportedEntityName: String?
+    let reportedEntityImageUrl: URL?
+    let reportedEntityDisplayType: String?
     let createdAt: Date
     let updatedAt: Date
     let userEmail: String?
@@ -1416,6 +1426,22 @@ struct MobileAdminSupportTicket: Decodable, Identifiable, Hashable, Sendable {
         return fullName.isEmpty ? (username ?? userEmail ?? "Unknown user") : fullName
     }
 
+    var reportContext: MobileSupportReportContext? {
+        guard let entityType = reportedEntityType,
+              let entityID = reportedEntityId,
+              let entityName = reportedEntityName else {
+            return nil
+        }
+
+        return MobileSupportReportContext(
+            subject: reportedEntityDisplayType ?? entityType.rawValue.capitalized,
+            entityType: entityType,
+            entityID: entityID,
+            entityName: entityName,
+            imageURL: reportedEntityImageUrl
+        )
+    }
+
     func updating(status: MobileSupportTicketStatus, updatedAt: Date = .now) -> Self {
         Self(
             id: id,
@@ -1427,6 +1453,9 @@ struct MobileAdminSupportTicket: Decodable, Identifiable, Hashable, Sendable {
             message: message,
             reportedEntityType: reportedEntityType,
             reportedEntityId: reportedEntityId,
+            reportedEntityName: reportedEntityName,
+            reportedEntityImageUrl: reportedEntityImageUrl,
+            reportedEntityDisplayType: reportedEntityDisplayType,
             createdAt: createdAt,
             updatedAt: updatedAt,
             userEmail: userEmail,

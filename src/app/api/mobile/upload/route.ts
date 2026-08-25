@@ -2,8 +2,12 @@ import { auth } from "@clerk/nextjs/server";
 import { asc, eq } from "drizzle-orm";
 import { NextRequest, NextResponse } from "next/server";
 import { db } from "@/server/db";
-import { uploadToS3 } from "@/lib/s3";
+import { isUserImageValidationError, uploadToS3 } from "@/lib/s3";
 import { users } from "@/server/db/schema";
+import {
+  enforceMobileContentCreation,
+  mobileContentModerationErrorResponse,
+} from "@/app/api/mobile/content-moderation";
 
 async function currentMobileUserId() {
   const { userId } = await auth();
@@ -30,6 +34,7 @@ export async function POST(request: NextRequest) {
     if (!userId) {
       return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
     }
+    await enforceMobileContentCreation(userId, []);
 
     const formData = await request.formData();
     const file = formData.get("file");
@@ -53,12 +58,18 @@ export async function POST(request: NextRequest) {
       );
     }
 
-    const folder = String(formData.get("folder") ?? "uploads").trim() || "uploads";
+    const folder =
+      String(formData.get("folder") ?? "uploads").trim() || "uploads";
     const filename = String(formData.get("filename") ?? "").trim() || undefined;
     const url = await uploadToS3(file, folder, filename);
 
     return NextResponse.json({ url });
   } catch (error) {
+    const moderationResponse = mobileContentModerationErrorResponse(error);
+    if (moderationResponse) return moderationResponse;
+    if (isUserImageValidationError(error)) {
+      return NextResponse.json({ error: error.message }, { status: 400 });
+    }
     console.error("Mobile upload error:", error);
     return NextResponse.json(
       { error: "Failed to upload image" },
