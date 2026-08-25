@@ -366,6 +366,14 @@ async function runScraper(
               activeOnly: true,
             });
           }
+          if (claimedId && value.coverImageUrl) {
+            await rehostScrapedEventImage(
+              claimedId,
+              value.coverImageUrl,
+              value.coverImageUrl,
+              value.coverImageUrl
+            );
+          }
         }
         return value;
       }

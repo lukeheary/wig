@@ -659,6 +659,14 @@ export async function PATCH(request: Request) {
                 activeOnly: true,
               });
             }
+            if (claimedId && event.coverImageUrl) {
+              await rehostScrapedEventImage(
+                claimedId,
+                event.coverImageUrl,
+                event.coverImageUrl,
+                event.coverImageUrl
+              );
+            }
           }
           return event;
         }

@@ -1228,6 +1228,14 @@ export const eventRouter = router({
                   activeOnly: true,
                 });
               }
+              if (claimedId && event.coverImageUrl) {
+                await rehostScrapedEventImage(
+                  claimedId,
+                  event.coverImageUrl,
+                  event.coverImageUrl,
+                  event.coverImageUrl
+                );
+              }
             }
             return event;
           }
