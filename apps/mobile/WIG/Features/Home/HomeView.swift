@@ -1131,7 +1131,7 @@ struct HomeView: View {
                 }
             }
 
-            if !isSearchPresented {
+            if !isSearchPresented && appSession.isAdmin {
                 Menu {
                     ForEach(availableLocationFilters) { location in
                         Button {
@@ -1163,6 +1163,24 @@ struct HomeView: View {
                     .homeLiquidGlass(in: Capsule())
                 }
                 .buttonStyle(.plain)
+                .frame(maxWidth: .infinity)
+            }
+
+            if !isSearchPresented && !appSession.isAdmin {
+                VStack(spacing: 1) {
+                    Text(visibleWeekRelativeTitle)
+                        .font(.system(size: 11, weight: .semibold))
+                        .foregroundStyle(.white.opacity(0.56))
+                    Text(visibleWeekRangeTitle)
+                        .font(.system(size: 13, weight: .semibold))
+                        .foregroundStyle(.white.opacity(0.92))
+                        .minimumScaleFactor(0.8)
+                }
+                .lineLimit(1)
+                .padding(.horizontal, 20)
+                .frame(width: 156, height: 46)
+                .contentShape(Capsule())
+                .homeLiquidGlass(in: Capsule())
                 .frame(maxWidth: .infinity)
             }
         }

@@ -8,7 +8,10 @@ const supportTicketTypeSchema = z.enum([
   "help",
   "bug",
   "feedback",
+  "incorrect-data",
   "feature-request",
+  "event-request",
+  "place-request",
 ]);
 
 const supportTicketStatusSchema = z.enum([

@@ -1,5 +1,5 @@
 import { auth } from "@clerk/nextjs/server";
-import { eq } from "drizzle-orm";
+import { desc, eq } from "drizzle-orm";
 import { NextResponse } from "next/server";
 import { z } from "zod";
 import { db } from "@/server/db";
@@ -12,7 +12,7 @@ import {
 import { ensureDbUser } from "@/server/utils/ensure-db-user";
 
 const submissionSchema = z.object({
-  type: z.enum(["help", "bug", "feedback", "feature-request"]),
+  type: z.enum(["help", "bug", "feedback", "incorrect-data", "feature-request", "event-request", "place-request"]),
   severity: z.enum(["low", "medium", "high"]),
   subject: z.string().trim().min(3).max(255),
   message: z.string().trim().min(10).max(5_000),
@@ -24,6 +24,39 @@ const submissionSchema = z.object({
     Boolean(submission.reportedEntityId),
   { message: "Reported entity type and ID must be provided together." }
 );
+
+export async function GET() {
+  try {
+    const { userId } = await auth();
+    if (!userId) {
+      return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
+    }
+
+    await ensureDbUser(db, userId);
+    const tickets = await db.query.supportTickets.findMany({
+      where: eq(supportTickets.userId, userId),
+      orderBy: [desc(supportTickets.createdAt)],
+      columns: {
+        id: true,
+        type: true,
+        severity: true,
+        status: true,
+        subject: true,
+        message: true,
+        createdAt: true,
+        updatedAt: true,
+      },
+    });
+
+    return NextResponse.json({ tickets });
+  } catch (error) {
+    console.error("Mobile support ticket list error:", error);
+    return NextResponse.json(
+      { error: "We couldn't load your support requests." },
+      { status: 500 }
+    );
+  }
+}
 
 export async function POST(request: Request) {
   try {

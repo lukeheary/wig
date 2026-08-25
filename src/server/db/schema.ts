@@ -150,7 +150,10 @@ export const supportTicketTypeEnum = pgEnum("support_ticket_type", [
   "help",
   "bug",
   "feedback",
+  "incorrect-data",
   "feature-request",
+  "event-request",
+  "place-request",
 ]);
 
 export const supportTicketStatusEnum = pgEnum("support_ticket_status", [

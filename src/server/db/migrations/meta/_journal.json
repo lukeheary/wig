@@ -413,6 +413,13 @@
       "when": 1787673600000,
       "tag": "0067_add_user_moderation_status",
       "breakpoints": true
+    },
+    {
+      "idx": 68,
+      "version": "7",
+      "when": 1787760000000,
+      "tag": "0068_add_support_request_types",
+      "breakpoints": true
     }
   ]
 }

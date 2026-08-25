@@ -187,8 +187,10 @@ struct PlaceDetailView: View {
                 )
             }
         }
-        .navigationDestination(item: $reportContext) { context in
-            MobileHelpAndFeedbackView(reportContext: context)
+        .sheet(item: $reportContext) { context in
+            NavigationStack {
+                MobileNewSupportRequestView(reportContext: context)
+            }
         }
         .sheet(item: $presentedWebsite) { destination in
             PlaceWebsiteBrowser(url: destination.url)

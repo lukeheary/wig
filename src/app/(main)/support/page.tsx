@@ -28,8 +28,11 @@ import { Textarea } from "@/components/ui/textarea";
 const ticketTypes = [
   { value: "help", label: "Get Help" },
   { value: "bug", label: "Report a Bug" },
-  { value: "feature-request", label: "Request a Feature" },
   { value: "feedback", label: "Share Feedback" },
+  { value: "incorrect-data", label: "Incorrect Data" },
+  { value: "feature-request", label: "Request a Feature" },
+  { value: "event-request", label: "Request Event" },
+  { value: "place-request", label: "Request Place" },
 ] as const;
 
 const statusOptions = [

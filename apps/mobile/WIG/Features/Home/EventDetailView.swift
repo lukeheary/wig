@@ -278,8 +278,10 @@ struct EventDetailView: View {
                 }
             )
         }
-        .navigationDestination(item: $reportContext) { context in
-            MobileHelpAndFeedbackView(reportContext: context)
+        .sheet(item: $reportContext) { context in
+            NavigationStack {
+                MobileNewSupportRequestView(reportContext: context)
+            }
         }
         .fullScreenCover(isPresented: $isImageViewerPresented) {
             if let posterImageURL = currentEvent.posterImageURL {
@@ -469,7 +471,21 @@ struct EventDetailView: View {
     }
 
     private var topTrailingControls: some View {
-        Menu {
+        HStack(spacing: 10) {
+            Button {
+                isShareSheetPresented = true
+            } label: {
+                Image(systemName: "square.and.arrow.up")
+                    .font(.system(size: 17, weight: .bold))
+                    .foregroundStyle(.white)
+                    .frame(width: heroControlButtonSize, height: heroControlButtonSize)
+                    .contentShape(Circle())
+                    .eventDetailLiquidGlass(in: Circle())
+            }
+            .buttonStyle(.plain)
+            .accessibilityLabel("Share event")
+
+            Menu {
             if let sourceName = currentEvent.externalSourceName,
                currentEvent.eventURL != nil
             {
@@ -478,12 +494,6 @@ struct EventDetailView: View {
                 } label: {
                     Label("View on \(sourceName)", systemImage: "arrow.up.right")
                 }
-            }
-
-            Button {
-                isShareSheetPresented = true
-            } label: {
-                Label("Share Event", systemImage: "square.and.arrow.up")
             }
 
             if currentEvent.canEdit || appSession.isAdmin {
@@ -514,7 +524,7 @@ struct EventDetailView: View {
                     .foregroundStyle(.white)
             }
             .tint(.white)
-        } label: {
+            } label: {
             Image(systemName: "ellipsis")
                 .font(.system(size: 18, weight: .bold))
                 .foregroundStyle(.white)
@@ -522,8 +532,9 @@ struct EventDetailView: View {
                 .contentShape(Circle())
                 .eventDetailLiquidGlass(in: Circle())
         }
-        .buttonStyle(.plain)
-        .accessibilityLabel("More event actions")
+            .buttonStyle(.plain)
+            .accessibilityLabel("More event actions")
+        }
     }
 
     private var guestRSVPButton: some View {
@@ -711,13 +722,10 @@ struct EventDetailView: View {
             return "\(prefix) at \(compactTimeString(for: currentEvent.startAt, includeMeridiem: true))"
         }
 
-        let startMeridiem = meridiemString(for: currentEvent.startAt)
-        let endMeridiem = meridiemString(for: endAt)
-        let includeStartMeridiem = startMeridiem != endMeridiem
-        let startText = compactTimeString(for: currentEvent.startAt, includeMeridiem: includeStartMeridiem)
+        let startText = compactTimeString(for: currentEvent.startAt, includeMeridiem: true)
         let endText = compactTimeString(for: endAt, includeMeridiem: true)
 
-        return "\(prefix) from \(startText) to \(endText)"
+        return "\(prefix) at \(startText) – \(endText)"
     }
 
     private func compactTimeString(for date: Date, includeMeridiem: Bool) -> String {
@@ -738,13 +746,6 @@ struct EventDetailView: View {
 
         let formatter = DateFormatter()
         formatter.dateFormat = format
-        formatter.timeZone = currentEvent.displayTimeZone
-        return formatter.string(from: date)
-    }
-
-    private func meridiemString(for date: Date) -> String {
-        let formatter = DateFormatter()
-        formatter.dateFormat = "a"
         formatter.timeZone = currentEvent.displayTimeZone
         return formatter.string(from: date)
     }

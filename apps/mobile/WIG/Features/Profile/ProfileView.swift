@@ -44,7 +44,6 @@ struct ProfileView: View {
     @State private var isAdminSettingsPresented = false
     @State private var isEditProfilePresented = false
     @State private var isHelpAndFeedbackPresented = false
-    @State private var isBlockedUsersPresented = false
     @State private var isSignOutConfirmationPresented = false
     @State private var profileShareURL: URL?
     @State private var handledAddPhotoTrigger = 0
@@ -238,9 +237,6 @@ struct ProfileView: View {
                 }
                 .navigationDestination(isPresented: $isHelpAndFeedbackPresented) {
                     MobileHelpAndFeedbackView()
-                }
-                .navigationDestination(isPresented: $isBlockedUsersPresented) {
-                    MobileBlockedUsersView()
                 }
                 .sheet(
                     isPresented: Binding(
@@ -814,14 +810,6 @@ struct ProfileView: View {
             }
             .tint(.white)
 
-            Button {
-                isBlockedUsersPresented = true
-            } label: {
-                Label("Blocked Users", systemImage: "person.crop.circle.badge.xmark")
-                    .foregroundStyle(.white)
-            }
-            .tint(.white)
-
             Button(role: .destructive) {
                 isSignOutConfirmationPresented = true
             } label: {
@@ -1149,8 +1137,10 @@ struct UserProfileView: View {
             .overlay(alignment: .top) {
                 topControls
             }
-            .navigationDestination(item: $reportContext) { context in
-                MobileHelpAndFeedbackView(reportContext: context)
+            .sheet(item: $reportContext) { context in
+                NavigationStack {
+                    MobileNewSupportRequestView(reportContext: context)
+                }
             }
             .task(id: userID) {
                 if case .loaded(let response) = viewModel.state,
@@ -4113,7 +4103,125 @@ private extension String {
     }
 }
 
+private final class MobileSupportRequestsViewModel: ObservableObject {
+    @Published private(set) var tickets: [MobileSupportTicket] = []
+    @Published private(set) var isLoading = false
+    @Published var errorMessage: String?
+
+    func load(using apiClient: APIClient) async {
+        isLoading = true
+        defer { isLoading = false }
+        do {
+            tickets = try await apiClient.send(APIClient.mobileSupportTickets()).tickets
+        } catch {
+            errorMessage = error.localizedDescription
+        }
+    }
+}
+
 struct MobileHelpAndFeedbackView: View {
+    @Environment(\.apiClient) private var apiClient
+    @Environment(\.dismiss) private var dismiss
+    @StateObject private var viewModel = MobileSupportRequestsViewModel()
+    @State private var selectedStatus: MobileSupportTicketStatus = .open
+    @State private var isNewRequestPresented = false
+    @State private var headerOpacity: CGFloat = 1
+
+    private var visibleTickets: [MobileSupportTicket] {
+        viewModel.tickets.filter { $0.status == selectedStatus }
+    }
+
+    private func ticketCount(for status: MobileSupportTicketStatus) -> Int {
+        viewModel.tickets.lazy.filter { $0.status == status }.count
+    }
+
+    var body: some View {
+        ScrollView {
+            LazyVStack(alignment: .leading, spacing: 12) {
+                ScopePillBar {
+                    ForEach(MobileSupportTicketStatus.adminSelectableCases) { status in
+                        ScopePill(
+                            title: status.title,
+                            count: ticketCount(for: status),
+                            isSelected: selectedStatus == status
+                        ) { selectedStatus = status }
+                    }
+                }
+                .scrollingPillFade()
+
+                if viewModel.isLoading && viewModel.tickets.isEmpty {
+                    NativeLoadingView(fillsAvailableSpace: false)
+                        .frame(maxWidth: .infinity, minHeight: 160)
+                } else if visibleTickets.isEmpty {
+                    ProfileEmptyEventsPlaceholder(
+                        message: "No \(selectedStatus.title.lowercased()) support requests."
+                    )
+                    .frame(maxWidth: .infinity)
+                    .padding(.top, 24)
+                } else {
+                    ForEach(visibleTickets) { ticket in
+                        VStack(alignment: .leading, spacing: 7) {
+                            Text(ticket.subject)
+                                .font(.system(size: 15, weight: .semibold))
+                                .foregroundStyle(.white)
+                            Text("\(ticket.type.title) • \(ticket.severity.title)")
+                                .font(.system(size: 11, weight: .medium))
+                                .foregroundStyle(.white.opacity(0.58))
+                            Text(ticket.message)
+                                .font(.system(size: 13))
+                                .foregroundStyle(.white.opacity(0.72))
+                                .lineLimit(3)
+                        }
+                        .frame(maxWidth: .infinity, alignment: .leading)
+                        .padding(16)
+                        .background(ProfileTheme.cardBackground, in: RoundedRectangle(cornerRadius: 18, style: .continuous))
+                    }
+                }
+            }
+            .padding(.horizontal, 16)
+            .padding(.top, 64)
+            .padding(.bottom, 24)
+        }
+        .refreshable { await viewModel.load(using: apiClient) }
+        .scrollIndicators(.hidden)
+        .modifier(ScrollableHeaderFadeTrackingModifier(opacity: $headerOpacity))
+        .background(ProfileTheme.background.ignoresSafeArea())
+        .background(SwipeBackEnabler())
+        .toolbar(.hidden, for: .navigationBar)
+        .navigationBarBackButtonHidden()
+        .overlay(alignment: .top) {
+            ZStack {
+                Text("Help & Feedback")
+                    .font(.system(size: 17, weight: .semibold))
+                    .foregroundStyle(.white)
+                    .opacity(headerOpacity)
+                HStack {
+                    FloatingGlassIconButton(systemImage: "chevron.left") { dismiss() }
+                    Spacer()
+                    FloatingGlassIconButton(systemImage: "plus") { isNewRequestPresented = true }
+                }
+            }
+            .padding(.horizontal, 16)
+        }
+        .sheet(isPresented: $isNewRequestPresented, onDismiss: {
+            Task { await viewModel.load(using: apiClient) }
+        }) {
+            NavigationStack { MobileNewSupportRequestView() }
+        }
+        .task { await viewModel.load(using: apiClient) }
+        .alert(
+            "Couldn’t Load Support Requests",
+            isPresented: Binding(
+                get: { viewModel.errorMessage != nil },
+                set: { if !$0 { viewModel.errorMessage = nil } }
+            )
+        ) { Button("OK", role: .cancel) {} } message: {
+            Text(viewModel.errorMessage ?? "Please try again.")
+        }
+    }
+}
+
+struct MobileNewSupportRequestView: View {
     @Environment(\.apiClient) private var apiClient
     @Environment(\.dismiss) private var dismiss
     @FocusState private var focusedField: Field?
@@ -4142,7 +4250,7 @@ struct MobileHelpAndFeedbackView: View {
     }
 
     init(reportContext: MobileSupportReportContext) {
-        _subject = State(initialValue: "")
+        _subject = State(initialValue: String(reportContext.subject.prefix(255)))
         self.reportContext = reportContext
         reportedEntityType = reportContext.entityType
         reportedEntityID = reportContext.entityID
@@ -4277,7 +4385,7 @@ struct MobileHelpAndFeedbackView: View {
                 .opacity(canSubmit && !isSubmitting ? 1 : 0.45)
             }
             .padding(.horizontal, 16)
-            .padding(.top, 70)
+            .padding(.top, 88)
             .padding(.bottom, 32)
         }
         .scrollDismissesKeyboard(.interactively)
@@ -4289,42 +4397,20 @@ struct MobileHelpAndFeedbackView: View {
         .navigationBarBackButtonHidden()
         .overlay(alignment: .top) {
             ZStack {
-                Text("Help & Feedback")
+                Text("New Support Request")
                     .font(.system(size: 17, weight: .semibold))
                     .foregroundStyle(.white)
                     .opacity(headerOpacity)
 
                 HStack {
-                    FloatingGlassIconButton(systemImage: "chevron.left") {
+                    FloatingGlassIconButton(systemImage: "xmark") {
                         dismiss()
                     }
                     Spacer()
-
-                    Menu {
-                        Link(destination: URL(string: "https://www.whoisgoing.com/community-guidelines")!) {
-                            Label("Community Guidelines", systemImage: "person.2.badge.gearshape")
-                                .foregroundStyle(.white)
-                        }
-                        .tint(.white)
-
-                        Link(destination: URL(string: "https://www.whoisgoing.com/privacy")!) {
-                            Label("Privacy Policy", systemImage: "hand.raised")
-                                .foregroundStyle(.white)
-                        }
-                        .tint(.white)
-                    } label: {
-                        Image(systemName: "ellipsis")
-                            .font(.system(size: 18, weight: .bold))
-                            .foregroundStyle(.white)
-                            .frame(width: 46, height: 46)
-                            .contentShape(Circle())
-                            .profileLiquidGlass(in: Circle())
-                    }
-                    .buttonStyle(.plain)
-                    .accessibilityLabel("More help options")
                 }
             }
             .padding(.horizontal, 16)
+            .padding(.top, 16)
         }
         .alert("Message Sent", isPresented: $isSuccessPresented) {
             Button("Done") { dismiss() }

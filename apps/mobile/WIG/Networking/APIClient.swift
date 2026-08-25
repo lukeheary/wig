@@ -159,6 +159,10 @@ struct APIClient: Sendable {
         )
     }
 
+    static func mobileSupportTickets() -> Endpoint<MobileSupportTicketsResponse> {
+        Endpoint(path: "/api/mobile/support")
+    }
+
     static func mobileCategories() -> Endpoint<MobileCategoriesResponse> {
         Endpoint(
             path: "/api/mobile/categories",
@@ -1288,8 +1292,11 @@ struct EmptyResponse: Decodable, Sendable {}
 enum MobileSupportTicketType: String, Codable, CaseIterable, Identifiable, Sendable {
     case help
     case bug
-    case featureRequest = "feature-request"
     case feedback
+    case incorrectData = "incorrect-data"
+    case featureRequest = "feature-request"
+    case eventRequest = "event-request"
+    case placeRequest = "place-request"
 
     var id: String { rawValue }
 
@@ -1297,8 +1304,11 @@ enum MobileSupportTicketType: String, Codable, CaseIterable, Identifiable, Senda
         switch self {
         case .help: "Get Help"
         case .bug: "Report a Bug"
-        case .featureRequest: "Request a Feature"
         case .feedback: "Share Feedback"
+        case .incorrectData: "Incorrect Data"
+        case .featureRequest: "Request a Feature"
+        case .eventRequest: "Request Event"
+        case .placeRequest: "Request Place"
         }
     }
 }
@@ -1381,6 +1391,21 @@ private struct MobileAdminSupportTicketUpdateRequest: Encodable, Sendable {
 struct MobileSupportTicketSubmissionResponse: Decodable, Sendable {
     let success: Bool
     let ticketId: UUID
+}
+
+struct MobileSupportTicketsResponse: Decodable, Sendable {
+    let tickets: [MobileSupportTicket]
+}
+
+struct MobileSupportTicket: Decodable, Identifiable, Hashable, Sendable {
+    let id: UUID
+    let type: MobileSupportTicketType
+    let severity: MobileSupportTicketSeverity
+    let status: MobileSupportTicketStatus
+    let subject: String
+    let message: String
+    let createdAt: Date
+    let updatedAt: Date
 }
 
 struct MobileAdminSupportTicketsResponse: Decodable, Sendable {

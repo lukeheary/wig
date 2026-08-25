@@ -46,7 +46,10 @@ const statusVariants = {
 const typeLabels = {
   help: "Get Help",
   bug: "Report a Bug",
+  "incorrect-data": "Incorrect Data",
   "feature-request": "Request a Feature",
+  "event-request": "Request Event",
+  "place-request": "Request Place",
   feedback: "Share Feedback",
 } as const;
 
