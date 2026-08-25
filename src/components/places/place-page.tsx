@@ -1,7 +1,7 @@
 "use client";
 
 import Link from "next/link";
-import { useState } from "react";
+import { useCallback, useMemo, useState } from "react";
 import Image from "next/image";
 import { useParams } from "next/navigation";
 import { trpc } from "@/lib/trpc";
@@ -46,6 +46,24 @@ export function PlacePage({ actionMenuType }: PlacePageProps) {
     slug,
     type: actionMenuType,
   });
+  const pastEventsQuery = trpc.place.getPastEvents.useInfiniteQuery(
+    { slug, type: actionMenuType, limit: 24 },
+    {
+      enabled: eventsTab === "past" && Boolean(place),
+      getNextPageParam: (lastPage) => lastPage.nextCursor ?? undefined,
+    }
+  );
+  const pastEvents = useMemo(() => {
+    const pagedEvents = pastEventsQuery.data?.pages.flatMap(
+      (page) => page.events
+    );
+    return pagedEvents ?? place?.pastEvents ?? [];
+  }, [pastEventsQuery.data, place?.pastEvents]);
+  const loadMorePastEvents = useCallback(() => {
+    if (pastEventsQuery.hasNextPage && !pastEventsQuery.isFetchingNextPage) {
+      void pastEventsQuery.fetchNextPage();
+    }
+  }, [pastEventsQuery]);
 
   const { data: isFollowing } = trpc.place.isFollowingPlace.useQuery(
     { placeId: place?.id || "" },
@@ -125,9 +143,7 @@ export function PlacePage({ actionMenuType }: PlacePageProps) {
       (member: { userId: string }) => member.userId === currentUser.id
     );
   const canEdit = isAdmin || Boolean(isMember);
-  const hasPastEvents = (place.pastEvents as any[] | undefined)?.length
-    ? (place.pastEvents as any[]).length > 0
-    : false;
+  const hasPastEvents = pastEvents.length > 0;
   const followButtonClassName = cn(
     "font-space-grotesk rounded-xl py-6 text-base font-medium lg:text-lg",
     isFollowing &&
@@ -351,7 +367,13 @@ export function PlacePage({ actionMenuType }: PlacePageProps) {
       </div>
 
       {eventsTab === "past" && hasPastEvents ? (
-        <PlaceUpcomingEvents events={place.pastEvents as any} mode="past" />
+        <PlaceUpcomingEvents
+          events={pastEvents as any}
+          mode="past"
+          hasMore={pastEventsQuery.hasNextPage ?? false}
+          isLoadingMore={pastEventsQuery.isFetchingNextPage}
+          onLoadMore={loadMorePastEvents}
+        />
       ) : (
         <PlaceUpcomingEvents events={place.events} />
       )}

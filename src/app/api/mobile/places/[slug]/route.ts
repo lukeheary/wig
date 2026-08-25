@@ -247,7 +247,7 @@ export async function GET(
       lt(events.startAt, now)
     ),
     orderBy: [desc(events.startAt)],
-    limit: 12,
+    limit: 24,
     with: {
       venue: true,
       organizer: true,

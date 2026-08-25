@@ -463,7 +463,7 @@ export const placeRouter = router({
       const pastEvents = await ctx.db.query.events.findMany({
         where: and(eventCondition, lt(events.startAt, now)),
         orderBy: [desc(events.startAt)],
-        limit: 12,
+        limit: 24,
         with: {
           series: true,
           venue: true,
@@ -588,6 +588,74 @@ export const placeRouter = router({
           friendsGoing: attendeesMap.get(e.id) || [],
           friendsInterested: [] as never[],
         })),
+      };
+    }),
+
+  getPastEvents: publicProcedure
+    .input(
+      z.object({
+        slug: z.string(),
+        type: placeTypeSchema,
+        limit: z.number().int().min(1).max(50).default(24),
+        cursor: z
+          .object({
+            startAt: z.date(),
+            id: z.string().uuid(),
+          })
+          .optional(),
+      })
+    )
+    .query(async ({ ctx, input }) => {
+      const place = await ctx.db.query.places.findFirst({
+        where: and(eq(places.slug, input.slug), eq(places.type, input.type)),
+        columns: { id: true, type: true },
+      });
+      if (!place) {
+        throw new TRPCError({ code: "NOT_FOUND", message: "Place not found" });
+      }
+
+      const eventCondition =
+        place.type === "venue"
+          ? eq(events.venueId, place.id)
+          : eq(events.organizerId, place.id);
+      const cursorCondition = input.cursor
+        ? or(
+            lt(events.startAt, input.cursor.startAt),
+            and(
+              eq(events.startAt, input.cursor.startAt),
+              lt(events.id, input.cursor.id)
+            )
+          )
+        : undefined;
+      const rows = await ctx.db.query.events.findMany({
+        where: and(
+          eventCondition,
+          lt(events.startAt, new Date()),
+          cursorCondition
+        ),
+        orderBy: [desc(events.startAt), desc(events.id)],
+        limit: input.limit + 1,
+        with: {
+          series: true,
+          venue: true,
+          organizer: true,
+          createdBy: true,
+          categoryLinks: { with: { category: true } },
+        },
+      });
+      const hasMore = rows.length > input.limit;
+      const pageRows = hasMore ? rows.slice(0, input.limit) : rows;
+      const last = pageRows.at(-1);
+
+      return {
+        events: pageRows.map((event) => ({
+          ...mapEventCategoryData(event),
+          userRsvp: null,
+          friendsGoing: [] as never[],
+          friendsInterested: [] as never[],
+        })),
+        nextCursor:
+          hasMore && last ? { startAt: last.startAt, id: last.id } : null,
       };
     }),
 

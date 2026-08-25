@@ -9,6 +9,8 @@ import {
   compareDesc,
   parseISO,
 } from "date-fns";
+import { useEffect, useRef } from "react";
+import { Loader2 } from "lucide-react";
 import { type EventCardItem } from "@/components/events/event-card-helpers";
 import { HomeMobileEventRail } from "@/components/events/home-mobile-event-rail";
 import { EventsPlaceholder } from "@/components/shared/events-placeholder";
@@ -18,6 +20,9 @@ import { formatEventDateKey } from "@/lib/utils";
 interface PlaceUpcomingEventsProps {
   events: EventCardItem[] | null | undefined;
   mode?: "upcoming" | "past";
+  hasMore?: boolean;
+  isLoadingMore?: boolean;
+  onLoadMore?: () => void;
 }
 
 function getWeekLabel(weeksAway: number) {
@@ -44,7 +49,26 @@ function getPastMonthLabel(monthsAgo: number) {
 export function PlaceUpcomingEvents({
   events,
   mode = "upcoming",
+  hasMore = false,
+  isLoadingMore = false,
+  onLoadMore,
 }: PlaceUpcomingEventsProps) {
+  const loadMoreRef = useRef<HTMLDivElement>(null);
+
+  useEffect(() => {
+    if (mode !== "past" || !hasMore || !onLoadMore) return;
+    const sentinel = loadMoreRef.current;
+    if (!sentinel) return;
+    const observer = new IntersectionObserver(
+      ([entry]) => {
+        if (entry.isIntersecting && !isLoadingMore) onLoadMore();
+      },
+      { rootMargin: "400px 0px" }
+    );
+    observer.observe(sentinel);
+    return () => observer.disconnect();
+  }, [hasMore, isLoadingMore, mode, onLoadMore]);
+
   if (!events || events.length === 0) {
     return (
       <div className="container mx-auto pt-4">
@@ -113,6 +137,13 @@ export function PlaceUpcomingEvents({
           </div>
         </div>
       ))}
+      {mode === "past" && (hasMore || isLoadingMore) ? (
+        <div ref={loadMoreRef} className="flex justify-center py-8">
+          {isLoadingMore ? (
+            <Loader2 className="h-6 w-6 animate-spin text-muted-foreground" />
+          ) : null}
+        </div>
+      ) : null}
     </>
   );
 }
