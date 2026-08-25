@@ -1655,6 +1655,7 @@ struct UserProfileView: View {
                 let response = try await apiClient.send(
                     APIClient.sendMobileFriendRequest(friendUserID: userID)
                 )
+                AppAnalytics.log(.friendRequestSent, ["source": "user_profile"])
                 viewModel.updateLoadedResponse { current in
                     UserProfileResponse(
                         profile: current.profile.map {
@@ -4139,7 +4140,7 @@ struct MobileHelpAndFeedbackView: View {
         ScrollView {
             LazyVStack(alignment: .leading, spacing: 12) {
                 ScopePillBar {
-                    ForEach(MobileSupportTicketStatus.adminSelectableCases) { status in
+                    ForEach(MobileSupportTicketStatus.userSelectableCases) { status in
                         ScopePill(
                             title: status.title,
                             count: ticketCount(for: status),
@@ -4250,7 +4251,7 @@ struct MobileNewSupportRequestView: View {
     }
 
     init(reportContext: MobileSupportReportContext) {
-        _subject = State(initialValue: String(reportContext.subject.prefix(255)))
+        _subject = State(initialValue: "")
         self.reportContext = reportContext
         reportedEntityType = reportContext.entityType
         reportedEntityID = reportContext.entityID

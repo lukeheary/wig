@@ -3,7 +3,12 @@ import { isStorageUrl, uploadImageFromUrl } from "@/lib/s3";
 import { db } from "@/server/db";
 import { events } from "@/server/db/schema";
 
-export const SCRAPER_SOURCES = ["dice", "posh", "ticketmaster"] as const;
+export const SCRAPER_SOURCES = [
+  "dice",
+  "posh",
+  "ticketmaster",
+  "eventbrite",
+] as const;
 export type ScraperSource = (typeof SCRAPER_SOURCES)[number];
 
 const REHOST_CONCURRENCY = 4;
@@ -68,7 +73,10 @@ export async function rehostScrapedEventImage(
       .where(eq(events.id, eventId));
     return "updated";
   } catch (error) {
-    console.error(`Failed to re-host scraped image for event ${eventId}`, error);
+    console.error(
+      `Failed to re-host scraped image for event ${eventId}`,
+      error
+    );
     return "failed";
   }
 }
@@ -116,9 +124,8 @@ export async function rehostExistingScrapedEventImages(
   }
 
   await Promise.all(
-    Array.from(
-      { length: Math.min(REHOST_CONCURRENCY, rows.length) },
-      () => worker()
+    Array.from({ length: Math.min(REHOST_CONCURRENCY, rows.length) }, () =>
+      worker()
     )
   );
 

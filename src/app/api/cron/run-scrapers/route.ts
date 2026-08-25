@@ -16,10 +16,12 @@ import {
 import { scrapeDice } from "@/app/api/scrape-dice/route";
 import { scrapePosh } from "@/app/api/scrape-posh/route";
 import { scrapeTicketmaster } from "@/app/api/scrape-ticketmaster/route";
+import { scrapeEventbrite } from "@/app/api/scrape-eventbrite/route";
 import {
   rehostExistingScrapedEventImages,
   rehostScrapedEventImage,
 } from "@/server/utils/scraped-event-images";
+import { claimManualSeriesOccurrence } from "@/server/utils/scraper-event-reconciliation";
 
 export const dynamic = "force-dynamic";
 export const maxDuration = 300; // 5 minutes
@@ -42,6 +44,7 @@ interface ScrapedEvent {
   externalId: string | null;
   startAt: string;
   endAt: string | null;
+  timeZone?: string | null;
   venueName?: string;
   address?: string | null;
   city: string;
@@ -55,7 +58,7 @@ async function runScraper(
   scraperRow: {
     id: string;
     placeId: string;
-    scraper: "dice" | "posh" | "ticketmaster";
+    scraper: "dice" | "posh" | "ticketmaster" | "eventbrite";
     searchString: string;
     classificationName: string | null;
     place: {
@@ -115,6 +118,8 @@ async function runScraper(
         stateCode: scraperRow.place.state,
         classificationName: scraperRow.classificationName ?? undefined,
       });
+    } else if (scraperRow.scraper === "eventbrite") {
+      scrapeResult = await scrapeEventbrite(scraperRow.searchString);
     } else {
       return {
         status: "error",
@@ -275,7 +280,10 @@ async function runScraper(
       source: e.source ?? null,
       externalId: e.externalId ?? null,
       startAt: new Date(e.startAt),
+      timeZone: e.timeZone ?? null,
       endAt: e.endAt ? new Date(e.endAt) : null,
+      address: e.address ?? null,
+      categories: e.categories ?? [],
       city: e.city || scraperRow.place.city || "",
       state: e.state || scraperRow.place.state || "",
       venueId: venueId ?? resolveOrganizerVenueId(e),
@@ -329,7 +337,39 @@ async function runScraper(
         columns: { id: true, source: true, externalId: true },
         orderBy: (event, { asc }) => [asc(event.createdAt)],
       });
-      if (!sameSlot?.externalId || sameSlot.externalId === value.externalId) {
+      if (!sameSlot?.externalId) {
+        if (organizerId) {
+          const claimedId = await claimManualSeriesOccurrence({
+            db,
+            venueId: value.venueId,
+            source: value.source,
+            externalId: value.externalId,
+            startAt: value.startAt,
+            title: value.title,
+            description: value.description,
+            coverImageUrl: value.coverImageUrl,
+            eventUrl: value.eventUrl,
+            timeZone: value.timeZone,
+            endAt: value.endAt,
+            address: value.address,
+            city: value.city,
+            state: value.state,
+            organizerId,
+          });
+          if (claimedId && value.categories.length > 0) {
+            const categoryKeys = await filterExistingCategoryKeys(
+              db,
+              value.categories,
+              { activeOnly: true }
+            );
+            await setEventCategoryKeys(db, claimedId, categoryKeys, {
+              activeOnly: true,
+            });
+          }
+        }
+        return value;
+      }
+      if (sameSlot.externalId === value.externalId) {
         return value;
       }
 
@@ -391,10 +431,12 @@ async function runScraper(
           state: string;
           venueId: string | null;
           updatedAt: Date;
+          timeZone: string | null;
         }> = {
           city: value.city,
           state: value.state,
           updatedAt: new Date(),
+          timeZone: value.timeZone,
         };
         const locationMismatchConditions = [
           ne(events.city, value.city),
@@ -438,6 +480,7 @@ async function runScraper(
           description: string | null;
           eventUrl: string | null;
           endAt: Date | null;
+          timeZone: string | null;
         }> = {};
         const missingLinkConditions = [];
 
@@ -456,6 +499,7 @@ async function runScraper(
           updates.description = value.description;
           updates.eventUrl = value.eventUrl;
           updates.endAt = value.endAt;
+          updates.timeZone = value.timeZone;
           missingLinkConditions.push(eq(events.source, value.source));
         }
 

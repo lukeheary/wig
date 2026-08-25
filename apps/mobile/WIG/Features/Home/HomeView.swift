@@ -680,6 +680,7 @@ struct HomeView: View {
                     if index == 0, shouldShowLatestFromFollows {
                         WhatsNewSection(
                             updates: visibleWhatsNewUpdates,
+                            followsPlaces: hasFollowedPlaces,
                             selection: Binding(
                                 get: { effectiveWhatsNewFilter },
                                 set: { selectedWhatsNewFilter = $0 }
@@ -2253,6 +2254,7 @@ private enum HomeWhatsNewFilter: String, CaseIterable, Identifiable {
 
 private struct WhatsNewSection: View {
     let updates: [FollowedEventUpdate]
+    let followsPlaces: Bool
     @Binding var selection: HomeWhatsNewFilter
 
     @ViewBuilder
@@ -2275,6 +2277,9 @@ private struct WhatsNewSection: View {
                     .buttonStyle(.plain)
                 }
             }
+            // Each filter represents a distinct feed. Recreate the carousel when
+            // it changes so its scroll position begins with that feed's first card.
+            .id(selection)
             .accessibilityElement(children: .contain)
             .accessibilityLabel("What’s New")
         } else {
@@ -2286,7 +2291,7 @@ private struct WhatsNewSection: View {
                 }
                 .padding(.horizontal, 16)
 
-                Text("No recent updates from places you follow.")
+                Text(emptyStateMessage)
                     .font(.system(size: 14, weight: .medium))
                     .foregroundStyle(.white.opacity(0.52))
                     .padding(.horizontal, 16)
@@ -2299,6 +2304,12 @@ private struct WhatsNewSection: View {
         Text("What’s New")
             .font(AppTheme.contentHeaderFont)
             .foregroundStyle(.white)
+    }
+
+    private var emptyStateMessage: String {
+        followsPlaces
+            ? "No recent updates from places you follow."
+            : "Follow places to see their latest updates here."
     }
 
     private var filterMenu: some View {
@@ -3608,6 +3619,20 @@ final class HomeSearchDirectoryViewModel: ObservableObject {
             }
 
             apply(resolvedResponse)
+            if !normalizedQuery.isEmpty {
+                let resultCount = resolvedResponse.events.count
+                    + resolvedResponse.users.count
+                    + resolvedResponse.places.count
+                AppAnalytics.log(.search, [
+                    "search_type": "all",
+                    "query_length": normalizedQuery.count,
+                    "source_screen": "search",
+                ])
+                AppAnalytics.log(.viewSearchResults, [
+                    "search_type": "all",
+                    "result_count_bucket": AppAnalytics.resultCountBucket(resultCount),
+                ])
+            }
         } catch {
             guard activeQuery == normalizedQuery else {
                 return

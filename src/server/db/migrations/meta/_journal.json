@@ -420,6 +420,13 @@
       "when": 1787760000000,
       "tag": "0068_add_support_request_types",
       "breakpoints": true
+    },
+    {
+      "idx": 69,
+      "version": "7",
+      "when": 1787846400000,
+      "tag": "0069_add_eventbrite_scraper",
+      "breakpoints": true
     }
   ]
 }

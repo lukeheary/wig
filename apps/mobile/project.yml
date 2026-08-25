@@ -14,6 +14,9 @@ packages:
   Clerk:
     url: https://github.com/clerk/clerk-ios
     from: 1.0.0
+  Firebase:
+    url: https://github.com/firebase/firebase-ios-sdk
+    from: 12.17.0
 schemes:
   WIG:
     build:
@@ -107,3 +110,5 @@ targets:
         product: ClerkKit
       - package: Clerk
         product: ClerkKitUI
+      - package: Firebase
+        product: FirebaseAnalytics

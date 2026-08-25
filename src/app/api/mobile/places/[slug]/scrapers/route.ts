@@ -6,7 +6,12 @@ import { resolveMobileEventEditPermissions } from "@/app/api/mobile/event-edit-p
 import { db } from "@/server/db";
 import { places, scrapers, users } from "@/server/db/schema";
 
-const scraperTypeSchema = z.enum(["dice", "posh", "ticketmaster"]);
+const scraperTypeSchema = z.enum([
+  "dice",
+  "posh",
+  "ticketmaster",
+  "eventbrite",
+]);
 
 const replaceScrapersSchema = z.object({
   scrapers: z.array(
@@ -92,14 +97,16 @@ export async function PUT(
     const body = replaceScrapersSchema.parse(await request.json());
     const normalizedScrapers = body.scrapers.map((scraper) => {
       const trimmedSearchString = scraper.searchString.trim();
-      const trimmedClassificationName = scraper.classificationName?.trim() ?? "";
+      const trimmedClassificationName =
+        scraper.classificationName?.trim() ?? "";
 
       return {
         id: scraper.id ?? null,
         scraper: scraper.scraper,
         searchString: trimmedSearchString,
         classificationName:
-          scraper.scraper === "ticketmaster" && trimmedClassificationName.length > 0
+          scraper.scraper === "ticketmaster" &&
+          trimmedClassificationName.length > 0
             ? trimmedClassificationName
             : null,
       };
@@ -121,10 +128,14 @@ export async function PUT(
         where: eq(scrapers.placeId, place.id),
       });
 
-      const existingIDs = new Set(existingScrapers.map((scraper) => scraper.id));
+      const existingIDs = new Set(
+        existingScrapers.map((scraper) => scraper.id)
+      );
       for (const scraper of normalizedScrapers) {
         if (scraper.id && !existingIDs.has(scraper.id)) {
-          throw new Error("One or more scraper rows do not belong to this place");
+          throw new Error(
+            "One or more scraper rows do not belong to this place"
+          );
         }
       }
 
@@ -137,7 +148,9 @@ export async function PUT(
         .filter((id) => !incomingIDs.includes(id));
 
       if (scraperIDsToDelete.length > 0) {
-        await tx.delete(scrapers).where(inArray(scrapers.id, scraperIDsToDelete));
+        await tx
+          .delete(scrapers)
+          .where(inArray(scrapers.id, scraperIDsToDelete));
       }
 
       const nextScrapers = [];
@@ -189,7 +202,10 @@ export async function PUT(
     }
 
     return NextResponse.json(
-      { error: error instanceof Error ? error.message : "Failed to save scrapers" },
+      {
+        error:
+          error instanceof Error ? error.message : "Failed to save scrapers",
+      },
       { status: 500 }
     );
   }

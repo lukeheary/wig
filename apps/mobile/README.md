@@ -49,3 +49,13 @@ xcodegen generate
 ```
 
 If you prefer, you can also create an Xcode project manually and add `ClerkKit` and `ClerkKitUI` from `https://github.com/clerk/clerk-ios`.
+
+### Google Analytics setup
+
+1. Register the iOS bundle ID in Firebase and enable Google Analytics.
+2. Download `GoogleService-Info.plist` and place it at `WIG/Support/GoogleService-Info.plist`.
+3. Regenerate the project with `xcodegen generate`.
+
+Analytics safely remains disabled in local builds where the plist is absent. Do
+not add user-entered text, email addresses, names, birthdays, raw search terms,
+or unique content identifiers as event parameters.

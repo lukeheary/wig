@@ -25,7 +25,7 @@ import {
 } from "@/components/venue-hours-editor";
 
 export type PlaceType = "venue" | "organizer";
-export type ScraperType = "dice" | "posh" | "ticketmaster";
+export type ScraperType = "dice" | "posh" | "ticketmaster" | "eventbrite";
 
 export interface PlaceScraperFormData {
   id?: string;
@@ -667,6 +667,7 @@ export function PlaceEditForm({
                       <SelectItem value="dice">Dice.fm</SelectItem>
                       <SelectItem value="posh">Posh</SelectItem>
                       <SelectItem value="ticketmaster">Ticketmaster</SelectItem>
+                      <SelectItem value="eventbrite">Eventbrite</SelectItem>
                     </SelectContent>
                   </Select>
                 </div>
@@ -689,7 +690,9 @@ export function PlaceEditForm({
                         ? "Venue/organizer name (e.g. Big Night Live)"
                         : scraperRow.scraper === "posh"
                           ? "Posh event or group URL(s)"
-                          : "Scraper URL"
+                          : scraperRow.scraper === "eventbrite"
+                            ? "Eventbrite organizer URL"
+                            : "Scraper URL"
                     }
                   />
                   <p className="mt-1 text-xs text-muted-foreground">

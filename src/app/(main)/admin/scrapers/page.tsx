@@ -40,7 +40,7 @@ import {
   PopoverTrigger,
 } from "@/components/ui/popover";
 
-type ScraperType = "dice" | "posh" | "ticketmaster";
+type ScraperType = "dice" | "posh" | "ticketmaster" | "eventbrite";
 
 interface ScraperRow {
   id: string;
@@ -68,6 +68,7 @@ interface ScrapedEvent {
   externalId: string | null;
   startAt: string;
   endAt: string | null;
+  timeZone?: string | null;
   venueName: string;
   address: string;
   city: string;
@@ -139,12 +140,14 @@ const SCRAPER_LABELS: Record<ScraperType, string> = {
   dice: "Dice.fm",
   posh: "Posh",
   ticketmaster: "Ticketmaster",
+  eventbrite: "Eventbrite",
 };
 
 const SCRAPER_WEBSITES: Record<ScraperType, string> = {
   dice: "https://dice.fm",
   posh: "https://posh.vip",
   ticketmaster: "https://www.ticketmaster.com",
+  eventbrite: "https://www.eventbrite.com",
 };
 
 function normalizeHttpUrl(value: string | null | undefined): string | null {
@@ -627,17 +630,22 @@ export default function AdminScrapersPage() {
       .filter((event) => event.venueName.trim().length > 0);
   }, [editableEvents, isOrganizerImport]);
 
-  const { data: venueMatches = [] } = trpc.admin.matchVenuesForScrapedEvents.useQuery(
-    {
-      events: scrapedVenueInputs,
-    },
-    {
-      enabled: isOrganizerImport && scrapedVenueInputs.length > 0,
-    }
-  );
+  const { data: venueMatches = [] } =
+    trpc.admin.matchVenuesForScrapedEvents.useQuery(
+      {
+        events: scrapedVenueInputs,
+      },
+      {
+        enabled: isOrganizerImport && scrapedVenueInputs.length > 0,
+      }
+    );
 
   useEffect(() => {
-    if (!isOrganizerImport || venueMatches.length === 0 || scrapeSessionId === 0) {
+    if (
+      !isOrganizerImport ||
+      venueMatches.length === 0 ||
+      scrapeSessionId === 0
+    ) {
       return;
     }
 
@@ -707,6 +715,9 @@ export default function AdminScrapersPage() {
           stateCode: selectedRow.place.state,
           classificationName: selectedRow.classificationName ?? undefined,
         };
+      } else if (selectedRow.scraper === "eventbrite") {
+        endpoint = "/api/scrape-eventbrite";
+        payload = { url: selectedRow.searchString };
       }
 
       const response = await fetch(endpoint, {
@@ -880,8 +891,8 @@ export default function AdminScrapersPage() {
       SCRAPER_WEBSITES[selectedRow.scraper];
     const organizerWebsiteUrl =
       selectedRow.place.type === "organizer"
-        ? normalizeHttpUrl(selectedRow.place.website) ??
-          normalizeHttpUrl(result.organizer?.url)
+        ? (normalizeHttpUrl(selectedRow.place.website) ??
+          normalizeHttpUrl(result.organizer?.url))
         : null;
 
     const events = editableEvents.map((event) => {
@@ -906,8 +917,8 @@ export default function AdminScrapersPage() {
       const venueWebsiteUrl =
         selectedRow.place.type === "venue"
           ? normalizeHttpUrl(selectedRow.place.website)
-          : normalizeHttpUrl(event.linkedVenue?.website) ??
-            normalizeHttpUrl(defaultVenue?.website);
+          : (normalizeHttpUrl(event.linkedVenue?.website) ??
+            normalizeHttpUrl(defaultVenue?.website));
       const resolvedEventUrl =
         normalizeHttpUrl(event.eventUrl) ??
         normalizeHttpUrl(scraperWebsiteUrl) ??
@@ -923,6 +934,7 @@ export default function AdminScrapersPage() {
         source: event.source ?? undefined,
         externalId: event.externalId ?? undefined,
         startAt,
+        timeZone: event.timeZone ?? undefined,
         endAt,
         address: event.address,
         city: event.city,

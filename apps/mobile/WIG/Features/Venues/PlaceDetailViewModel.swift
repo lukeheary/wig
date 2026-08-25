@@ -102,6 +102,12 @@ final class PlaceDetailViewModel: ObservableObject {
             if isFollowed {
                 NotificationCenter.default.post(name: .activationDidChange, object: nil)
             }
+            if followState.isFollowed == isFollowed {
+                AppAnalytics.log(.placeFollowed, [
+                    "followed": isFollowed,
+                    "place_type": detail.type.rawValue,
+                ])
+            }
             isUpdatingFollow = false
             return followState.isFollowed == isFollowed
         } catch {

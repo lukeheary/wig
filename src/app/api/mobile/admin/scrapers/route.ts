@@ -6,6 +6,7 @@ import { resolveMobileEventEditPermissions } from "@/app/api/mobile/event-edit-p
 import { scrapeDice } from "@/app/api/scrape-dice/route";
 import { scrapePosh } from "@/app/api/scrape-posh/route";
 import { scrapeTicketmaster } from "@/app/api/scrape-ticketmaster/route";
+import { scrapeEventbrite } from "@/app/api/scrape-eventbrite/route";
 import { db } from "@/server/db";
 import { generateNanoId } from "@/lib/nano-id";
 import { events, places, scrapers, users } from "@/server/db/schema";
@@ -20,10 +21,16 @@ import {
   rehostExistingScrapedEventImages,
   rehostScrapedEventImage,
 } from "@/server/utils/scraped-event-images";
+import { claimManualSeriesOccurrence } from "@/server/utils/scraper-event-reconciliation";
 
 export const maxDuration = 300;
 
-const scraperTypeSchema = z.enum(["dice", "posh", "ticketmaster"]);
+const scraperTypeSchema = z.enum([
+  "dice",
+  "posh",
+  "ticketmaster",
+  "eventbrite",
+]);
 
 const runScraperSchema = z.object({
   scraperId: z.string().uuid(),
@@ -289,7 +296,7 @@ async function runSelectedScraper(
     }
 
     result = await scrapePosh(urls, prefetchedGroups);
-  } else {
+  } else if (row.scraper === "ticketmaster") {
     if (!row.place.state) {
       throw new Error(
         "Ticketmaster scrapers require the linked venue to have a 2-letter state code."
@@ -301,6 +308,8 @@ async function runSelectedScraper(
       stateCode: row.place.state,
       classificationName: row.classificationName ?? undefined,
     });
+  } else {
+    result = await scrapeEventbrite(row.searchString);
   }
 
   let venueMatches: Array<any> = [];
@@ -621,7 +630,38 @@ export async function PATCH(request: Request) {
           columns: { id: true, source: true, externalId: true },
           orderBy: (storedEvent, { asc }) => [asc(storedEvent.createdAt)],
         });
-        if (!sameSlot?.externalId) return event;
+        if (!sameSlot?.externalId) {
+          if (row.place.type === "organizer") {
+            const claimedId = await claimManualSeriesOccurrence({
+              db,
+              venueId: event.venueId,
+              source: event.source,
+              externalId: event.externalId,
+              startAt: event.startAtDate,
+              title: event.title,
+              description: event.description,
+              coverImageUrl: event.coverImageUrl,
+              eventUrl: event.eventUrl,
+              timeZone: event.timeZone,
+              endAt: event.endAtDate,
+              address: event.address,
+              city: event.city,
+              state: event.normalizedState,
+              organizerId: row.placeId,
+            });
+            if (claimedId && event.categories.length > 0) {
+              const categoryKeys = await filterExistingCategoryKeys(
+                db,
+                event.categories,
+                { activeOnly: true }
+              );
+              await setEventCategoryKeys(db, claimedId, categoryKeys, {
+                activeOnly: true,
+              });
+            }
+          }
+          return event;
+        }
 
         if (row.place.type === "organizer") {
           await db

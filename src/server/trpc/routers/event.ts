@@ -75,6 +75,7 @@ import {
   SCRAPER_SOURCES,
   type ScraperSource,
 } from "@/server/utils/scraped-event-images";
+import { claimManualSeriesOccurrence } from "@/server/utils/scraper-event-reconciliation";
 import { withStoredImageReplacements } from "@/server/utils/stored-image-lifecycle";
 
 function resolveEventUpdateActivityType(
@@ -921,7 +922,11 @@ export const eventRouter = router({
       await ctx.db
         .delete(events)
         .where(
-          and(eq(events.seriesId, input.seriesId), gte(events.startAt, now))
+          and(
+            eq(events.seriesId, input.seriesId),
+            gte(events.startAt, now),
+            isNull(events.externalId)
+          )
         );
 
       const generated = await materializeEventSeries(ctx.db, {
@@ -1194,7 +1199,38 @@ export const eventRouter = router({
             columns: { id: true, source: true, externalId: true },
             orderBy: [asc(events.createdAt)],
           });
-          if (!sameSlot?.externalId) return event;
+          if (!sameSlot?.externalId) {
+            if (organizerId) {
+              const claimedId = await claimManualSeriesOccurrence({
+                db: ctx.db,
+                venueId,
+                source: event.source,
+                externalId: event.externalId,
+                startAt: event.startAt,
+                title: event.title,
+                description: event.description,
+                coverImageUrl: event.coverImageUrl,
+                eventUrl: event.eventUrl,
+                timeZone: event.timeZone,
+                endAt: event.endAt,
+                address: event.address,
+                city: event.city,
+                state: event.state,
+                organizerId,
+              });
+              if (claimedId && event.categories.length > 0) {
+                const categoryKeys = await filterExistingCategoryKeys(
+                  ctx.db,
+                  event.categories,
+                  { activeOnly: true }
+                );
+                await setEventCategoryKeys(ctx.db, claimedId, categoryKeys, {
+                  activeOnly: true,
+                });
+              }
+            }
+            return event;
+          }
 
           if (organizerId) {
             await ctx.db

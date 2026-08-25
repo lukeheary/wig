@@ -95,16 +95,8 @@ struct EventDetailView: View {
                         header: {
                             VStack(alignment: .leading, spacing: 0) {
                                 details
-
-                                if isAuthenticated {
-                                    if !shouldHideCompletedRSVP {
-                                        inlineRSVPSection
-                                            .padding(.top, 20)
-                                    }
-                                } else {
-                                    guestRSVPButton
-                                        .padding(.top, 20)
-                                }
+                                eventActionButtons
+                                    .padding(.top, 20)
                             }
                         },
                         topLeadingControls: {
@@ -202,6 +194,11 @@ struct EventDetailView: View {
             }
         }
         .task(id: "\(currentEvent.id.uuidString)-\(isAuthenticated)") {
+            AppAnalytics.log(.viewItem, [
+                "content_type": "event",
+                "days_until_event": AppAnalytics.daysUntilBucket(currentEvent.startAt),
+                "city": currentEvent.city,
+            ])
             guard isAuthenticated else {
                 return
             }
@@ -433,6 +430,10 @@ struct EventDetailView: View {
                 comment: comment
             )
             let review = try await apiClient.send(endpoint)
+            AppAnalytics.log(.eventReviewSubmitted, [
+                "rating_bucket": rating.rawValue,
+                "had_comment": !(comment?.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty ?? true),
+            ])
             EventReviewCache.store(review)
             currentUserReview = review
             await loadAttendeeReviewRatings(using: apiClient)
@@ -473,6 +474,7 @@ struct EventDetailView: View {
     private var topTrailingControls: some View {
         HStack(spacing: 10) {
             Button {
+                AppAnalytics.log(.share, ["content_type": "event", "method": "system_share_sheet"])
                 isShareSheetPresented = true
             } label: {
                 Image(systemName: "square.and.arrow.up")
@@ -486,16 +488,6 @@ struct EventDetailView: View {
             .accessibilityLabel("Share event")
 
             Menu {
-            if let sourceName = currentEvent.externalSourceName,
-               currentEvent.eventURL != nil
-            {
-                Button {
-                    openExternalEvent()
-                } label: {
-                    Label("View on \(sourceName)", systemImage: "arrow.up.right")
-                }
-            }
-
             if currentEvent.canEdit || appSession.isAdmin {
                 Button {
                     closeRSVPMenu()
@@ -566,6 +558,63 @@ struct EventDetailView: View {
         .buttonStyle(.plain)
         .disabled(currentEvent.hasEnded)
         .opacity(currentEvent.hasEnded ? 0.62 : 1)
+    }
+
+    @ViewBuilder
+    private var eventActionButtons: some View {
+        if currentEvent.eventURL != nil,
+           currentEvent.externalSourceName != nil
+        {
+            VStack(spacing: 12) {
+                if isAuthenticated, !shouldHideCompletedRSVP {
+                    rsvpErrorMessage
+                }
+
+                if isAuthenticated {
+                    if !shouldHideCompletedRSVP {
+                        rsvpTriggerButton
+                    }
+                } else {
+                    guestRSVPButton
+                }
+
+                externalEventButton
+            }
+        } else if isAuthenticated {
+            if !shouldHideCompletedRSVP {
+                inlineRSVPSection
+            }
+        } else {
+            guestRSVPButton
+        }
+    }
+
+    @ViewBuilder
+    private var externalEventButton: some View {
+        if let sourceName = currentEvent.externalSourceName {
+            Button {
+                openExternalEvent()
+            } label: {
+                HStack(spacing: 8) {
+                    Text("View on \(sourceName)")
+                        .font(.system(size: 14, weight: .medium))
+
+                    Image(systemName: "arrow.up.right")
+                        .font(.system(size: 12, weight: .semibold))
+                }
+                .foregroundStyle(.white.opacity(0.78))
+                .padding(.horizontal, 22)
+                .frame(maxWidth: .infinity)
+                .frame(height: 44)
+                .contentShape(Capsule())
+                .overlay {
+                    Capsule()
+                        .strokeBorder(Color.white.opacity(0.18), lineWidth: 1)
+                }
+            }
+            .buttonStyle(.plain)
+            .accessibilityHint("Opens the event on \(sourceName)")
+        }
     }
 
     private var details: some View {
@@ -1336,6 +1385,11 @@ struct EventDetailView: View {
         showConfirmation: Bool = false,
         allowsUndo: Bool = false
     ) {
+        AppAnalytics.log(.rsvpUpdated, [
+            "new_status": rsvpViewModel.status?.rawValue ?? "none",
+            "include_partner": rsvpViewModel.includePartner,
+            "notify_friends": rsvpViewModel.notifyFriends,
+        ])
         ProfileViewModel.invalidateCache()
         UserProfileViewModel.invalidateAllCaches()
         if let userID = clerk.user?.id {
@@ -2529,7 +2583,7 @@ private struct RSVPDeclineReasonMenuButton: View {
             }
             .foregroundStyle(isSelected ? EventRSVPStatus.notGoing.rsvpTintColor : .white)
             .padding(.horizontal, 14)
-            .frame(height: 48)
+            .frame(height: 52)
             .background(isSelected ? Color.white.opacity(0.10) : Color.clear, in: Capsule())
             .contentShape(Capsule())
         }

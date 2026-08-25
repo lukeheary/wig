@@ -29,7 +29,7 @@ interface ScraperLog {
   scraperId: string | null;
   placeId: string | null;
   placeName: string;
-  scraper: "dice" | "posh" | "ticketmaster";
+  scraper: "dice" | "posh" | "ticketmaster" | "eventbrite";
   status: ScraperLogStatus;
   eventsFound: number;
   eventsAdded: number;
@@ -41,13 +41,18 @@ interface ScraperLog {
 
 const scraperLabels: Record<string, string> = {
   dice: "Dice.fm",
+  eventbrite: "Eventbrite",
   posh: "Posh",
   ticketmaster: "Ticketmaster",
 };
 
 const statusConfig: Record<
   ScraperLogStatus,
-  { label: string; variant: "default" | "secondary" | "destructive" | "outline"; icon: React.ElementType }
+  {
+    label: string;
+    variant: "default" | "secondary" | "destructive" | "outline";
+    icon: React.ElementType;
+  }
 > = {
   success: { label: "Success", variant: "default", icon: CheckCircle2 },
   partial: { label: "Partial", variant: "outline", icon: AlertTriangle },
@@ -70,7 +75,7 @@ function LogRow({ log }: { log: ScraperLog }) {
     <div className="border-b last:border-b-0">
       <button
         onClick={() => setExpanded((v) => !v)}
-        className="flex w-full items-center gap-3 p-3 text-left hover:bg-accent/50 transition-colors"
+        className="flex w-full items-center gap-3 p-3 text-left transition-colors hover:bg-accent/50"
       >
         <div className="shrink-0">
           {expanded ? (
@@ -79,41 +84,47 @@ function LogRow({ log }: { log: ScraperLog }) {
             <ChevronRight className="h-4 w-4 text-muted-foreground" />
           )}
         </div>
-        <div className="flex-1 min-w-0">
+        <div className="min-w-0 flex-1">
           <div className="flex flex-wrap items-center gap-2">
-            <span className="font-medium text-sm truncate">{log.placeName}</span>
-            <Badge variant="outline" className="text-xs shrink-0">
+            <span className="truncate text-sm font-medium">
+              {log.placeName}
+            </span>
+            <Badge variant="outline" className="shrink-0 text-xs">
               {scraperLabels[log.scraper] ?? log.scraper}
             </Badge>
-            <Badge variant={config.variant} className="text-xs shrink-0 gap-1">
+            <Badge variant={config.variant} className="shrink-0 gap-1 text-xs">
               <StatusIcon className="h-3 w-3" />
               {config.label}
             </Badge>
           </div>
-          <div className="flex flex-wrap gap-3 mt-1 text-xs text-muted-foreground">
-            <span>{formatDistanceToNow(new Date(log.ranAt), { addSuffix: true })}</span>
+          <div className="mt-1 flex flex-wrap gap-3 text-xs text-muted-foreground">
+            <span>
+              {formatDistanceToNow(new Date(log.ranAt), { addSuffix: true })}
+            </span>
             <span>{log.eventsFound} found</span>
-            <span className="font-medium text-foreground">{log.eventsAdded} added</span>
+            <span className="font-medium text-foreground">
+              {log.eventsAdded} added
+            </span>
             <span>{formatDuration(log.durationMs)}</span>
           </div>
         </div>
       </button>
 
       {expanded && (
-        <div className="px-10 pb-3 space-y-2 text-sm">
+        <div className="space-y-2 px-10 pb-3 text-sm">
           <div className="text-xs text-muted-foreground">
             {format(new Date(log.ranAt), "PPpp")}
           </div>
 
           {log.error && (
-            <div className="rounded bg-destructive/10 text-destructive px-3 py-2 text-xs">
+            <div className="rounded bg-destructive/10 px-3 py-2 text-xs text-destructive">
               {log.error}
             </div>
           )}
 
           {data && data.eventsAdded.length > 0 && (
             <div>
-              <p className="text-xs font-medium mb-1 text-muted-foreground">
+              <p className="mb-1 text-xs font-medium text-muted-foreground">
                 Events added ({data.eventsAdded.length})
               </p>
               <ul className="space-y-0.5">
@@ -131,15 +142,21 @@ function LogRow({ log }: { log: ScraperLog }) {
             </div>
           )}
 
-          {data && data.eventsFound.length > 0 && data.eventsAdded.length === 0 && (
-            <p className="text-xs text-muted-foreground">
-              {data.eventsFound.length} event{data.eventsFound.length !== 1 ? "s" : ""} found, all already in database.
-            </p>
-          )}
+          {data &&
+            data.eventsFound.length > 0 &&
+            data.eventsAdded.length === 0 && (
+              <p className="text-xs text-muted-foreground">
+                {data.eventsFound.length} event
+                {data.eventsFound.length !== 1 ? "s" : ""} found, all already in
+                database.
+              </p>
+            )}
 
-          {(!data || (data.eventsFound.length === 0 && data.eventsAdded.length === 0)) && !log.error && (
-            <p className="text-xs text-muted-foreground">No events found.</p>
-          )}
+          {(!data ||
+            (data.eventsFound.length === 0 && data.eventsAdded.length === 0)) &&
+            !log.error && (
+              <p className="text-xs text-muted-foreground">No events found.</p>
+            )}
         </div>
       )}
     </div>
@@ -147,8 +164,12 @@ function LogRow({ log }: { log: ScraperLog }) {
 }
 
 export default function ScraperLogsPage() {
-  const { data: logs, isLoading, refetch, isFetching } =
-    trpc.admin.listScraperLogs.useQuery({ limit: 200 });
+  const {
+    data: logs,
+    isLoading,
+    refetch,
+    isFetching,
+  } = trpc.admin.listScraperLogs.useQuery({ limit: 200 });
 
   return (
     <div className="space-y-6">
@@ -178,7 +199,8 @@ export default function ScraperLogsPage() {
             </div>
           ) : !logs || logs.length === 0 ? (
             <p className="p-4 text-sm text-muted-foreground">
-              No scraper runs yet. Logs will appear here after the cron job runs.
+              No scraper runs yet. Logs will appear here after the cron job
+              runs.
             </p>
           ) : (
             <div>

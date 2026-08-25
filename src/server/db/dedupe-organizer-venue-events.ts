@@ -56,7 +56,12 @@ async function main() {
   try {
     const rows = (await db.query.events.findMany({
       where: and(
-        inArray(schema.events.source, ["dice", "posh", "ticketmaster"]),
+        inArray(schema.events.source, [
+          "dice",
+          "posh",
+          "ticketmaster",
+          "eventbrite",
+        ]),
         isNotNull(schema.events.venueId)
       ),
       columns: {

@@ -73,6 +73,10 @@ struct EventDetailNavigationLink<Label: View>: View {
     }
 
     private func openEvent() {
+        AppAnalytics.log(.selectContent, [
+            "content_type": "event",
+            "source": "event_card",
+        ])
         onOpen(event)
         let sourceID = transitionNamespace == nil ? nil : transitionSourceID
 

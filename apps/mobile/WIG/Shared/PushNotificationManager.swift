@@ -60,6 +60,10 @@ final class PushNotificationManager: NSObject, ObservableObject {
 
     private func requestAuthorization() {
         UNUserNotificationCenter.current().requestAuthorization(options: [.alert, .badge, .sound]) { granted, error in
+            AppAnalytics.log(.pushPermissionResult, [
+                "status": error == nil ? (granted ? "authorized" : "denied") : "error",
+                "prompt_context": "after_first_login",
+            ])
             if let error {
                 print("Push authorization error:", error.localizedDescription)
             }
@@ -119,6 +123,8 @@ final class WIGAppDelegate: NSObject, UIApplicationDelegate {
         _ application: UIApplication,
         didFinishLaunchingWithOptions launchOptions: [UIApplication.LaunchOptionsKey: Any]? = nil
     ) -> Bool {
+        AppAnalytics.configure()
+        UNUserNotificationCenter.current().delegate = self
         true
     }
 
@@ -158,5 +164,21 @@ final class WIGAppDelegate: NSObject, UIApplicationDelegate {
             )
             completionHandler(.newData)
         }
+    }
+}
+
+extension WIGAppDelegate: UNUserNotificationCenterDelegate {
+    func userNotificationCenter(
+        _ center: UNUserNotificationCenter,
+        didReceive response: UNNotificationResponse
+    ) async {
+        let userInfo = response.notification.request.content.userInfo
+        let notificationType = (userInfo["data"] as? [String: Any])?["type"] as? String
+            ?? userInfo["type"] as? String
+            ?? "unknown"
+        AppAnalytics.log(.notificationOpened, [
+            "notification_type": notificationType,
+            "action": response.actionIdentifier,
+        ])
     }
 }

@@ -335,8 +335,10 @@ struct ActivityView: View {
             switch (activity.type, response) {
             case (.friendRequestReceived, .accept):
                 try await apiClient.send(APIClient.acceptMobileFriendRequest(friendRequestID: activity.id.uuidString))
+                AppAnalytics.log(.friendRequestResponded, ["response": "accepted", "source": "activity"])
             case (.friendRequestReceived, .decline):
                 try await apiClient.send(APIClient.declineMobileFriendRequest(friendRequestID: activity.id.uuidString))
+                AppAnalytics.log(.friendRequestResponded, ["response": "declined", "source": "activity"])
             case (.partnerRequestReceived, .accept):
                 try await apiClient.send(APIClient.acceptMobilePartnerRequest(partnerID: activity.id.uuidString))
             case (.partnerRequestReceived, .decline):

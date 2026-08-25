@@ -1338,6 +1338,12 @@ enum MobileSupportTicketStatus: String, Codable, CaseIterable, Identifiable, Sen
         .closed,
     ]
 
+    static let userSelectableCases: [MobileSupportTicketStatus] = [
+        .open,
+        .inReview,
+        .resolved,
+    ]
+
     var title: String {
         switch self {
         case .open: "Open"

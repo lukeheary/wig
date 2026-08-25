@@ -184,6 +184,7 @@ export const scraperTypeEnum = pgEnum("scraper_type", [
   "dice",
   "posh",
   "ticketmaster",
+  "eventbrite",
 ]);
 
 // ============================================================================

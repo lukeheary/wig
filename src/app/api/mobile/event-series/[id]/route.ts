@@ -1,5 +1,5 @@
 import { auth } from "@clerk/nextjs/server";
-import { asc, and, eq, gte } from "drizzle-orm";
+import { asc, and, eq, gte, isNull } from "drizzle-orm";
 import { NextResponse } from "next/server";
 import { z } from "zod";
 import { EVENT_STATUS_VALUES } from "@/lib/event-status";
@@ -355,7 +355,13 @@ export async function PATCH(
     const now = new Date();
     await db
       .delete(events)
-      .where(and(eq(events.seriesId, id), gte(events.startAt, now)));
+      .where(
+        and(
+          eq(events.seriesId, id),
+          gte(events.startAt, now),
+          isNull(events.externalId)
+        )
+      );
 
     const generated = await materializeEventSeries(db, {
       seriesIds: [id],

@@ -358,6 +358,7 @@ struct MobileOnboardingView: View {
     @State private var isDeleteAccountWarningPresented = false
     @State private var isDeleteAccountVerificationPresented = false
     @State private var headerOpacity: CGFloat = 1
+    @State private var analyticsStartDate: Date?
     @FocusState private var focusedInput: OnboardingInputField?
 
     private var normalizedUsername: String {
@@ -436,6 +437,12 @@ struct MobileOnboardingView: View {
         .modifier(ScrollableHeaderFadeTrackingModifier(opacity: $headerOpacity))
         .background(onboardingBackground)
         .toolbar(.hidden, for: .navigationBar)
+        .onAppear {
+            guard mode == .onboarding, analyticsStartDate == nil else { return }
+            analyticsStartDate = .now
+            logSignUpIfNeeded()
+            AppAnalytics.log(.onboardingStart)
+        }
         .overlay(alignment: .top) {
             if mode == .editing {
                 editNavigationBar
@@ -964,6 +971,13 @@ struct MobileOnboardingView: View {
                     dateOfBirth: formattedDateOfBirth,
                     using: apiClient
                 )
+                if mode == .onboarding {
+                    let duration = Date.now.timeIntervalSince(analyticsStartDate ?? .now)
+                    AppAnalytics.log(.onboardingComplete, [
+                        "duration_bucket": Self.durationBucket(duration),
+                        "avatar_added": initialState.avatarImageURL != nil,
+                    ])
+                }
                 onComplete()
             } catch {
                 errorMessage = error.localizedDescription
@@ -973,6 +987,24 @@ struct MobileOnboardingView: View {
 
     private static func isValidUsername(_ value: String) -> Bool {
         value.range(of: #"^[a-zA-Z0-9_]{3,20}$"#, options: .regularExpression) != nil
+    }
+
+    private static func durationBucket(_ seconds: TimeInterval) -> String {
+        switch seconds {
+        case ..<60: "under_1_min"
+        case ..<180: "1_3_min"
+        case ..<600: "3_10_min"
+        default: "10_plus_min"
+        }
+    }
+
+    private func logSignUpIfNeeded() {
+        guard AppAnalytics.isConfigured, let userID = clerk.user?.id else { return }
+        let key = "wig.analytics.signup-logged-user-ids"
+        var loggedUserIDs = Set(UserDefaults.standard.stringArray(forKey: key) ?? [])
+        guard loggedUserIDs.insert(userID).inserted else { return }
+        UserDefaults.standard.set(Array(loggedUserIDs), forKey: key)
+        AppAnalytics.log(.signUp, ["method": "clerk"])
     }
 
     private static func date(from value: String?) -> Date? {

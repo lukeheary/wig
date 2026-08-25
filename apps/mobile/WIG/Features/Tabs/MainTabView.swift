@@ -58,7 +58,14 @@ struct MainTabView: View {
         .onChange(of: isAuthenticated) { _, isAuthenticated in
             guard isAuthenticated, let pendingSignInMethod else { return }
             lastSignInMethod = pendingSignInMethod.rawValue
+            AppAnalytics.log(.login, ["method": pendingSignInMethod.rawValue])
             self.pendingSignInMethod = nil
+        }
+        .onChange(of: selectedTab, initial: true) { _, tab in
+            AppAnalytics.log(.screenView, [
+                "screen_name": tab.analyticsName,
+                "screen_class": "MainTabView",
+            ])
         }
         .fullScreenCover(item: $appSession.presentedEventDetail) { presentation in
             eventDetailOverlay(for: presentation)
@@ -478,11 +485,13 @@ struct MainTabView: View {
 
     private func presentAuthenticationFromGuestWelcome() {
         guard !isAuthenticated else { return }
+        AppAnalytics.log(.authStarted, ["method": SignInMethod.email.rawValue, "source": "welcome_overlay"])
         pendingSignInMethod = .email
         isAuthPagePresented = true
     }
 
     private func continueWithGoogle() {
+        AppAnalytics.log(.authStarted, ["method": SignInMethod.google.rawValue, "source": "welcome_overlay"])
         pendingSignInMethod = .google
         Task {
             let outcome = await guestGoogleAuthController.signIn(using: clerk)
@@ -495,6 +504,7 @@ struct MainTabView: View {
     }
 
     private func continueWithApple() {
+        AppAnalytics.log(.authStarted, ["method": SignInMethod.apple.rawValue, "source": "welcome_overlay"])
         pendingSignInMethod = .apple
         Task {
             let outcome = await guestGoogleAuthController.signInWithApple(using: clerk)
@@ -858,6 +868,16 @@ private enum AppTab: Hashable {
             return true
         case .home, .venues, .search:
             return false
+        }
+    }
+
+    var analyticsName: String {
+        switch self {
+        case .home: "home"
+        case .venues: "places"
+        case .activity: "activity"
+        case .profile: "profile"
+        case .search: "search"
         }
     }
 }

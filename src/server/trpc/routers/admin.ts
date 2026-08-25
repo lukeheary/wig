@@ -29,7 +29,12 @@ import {
 
 const placeTypeSchema = z.enum(["venue", "organizer"]);
 const placeMemberRoleSchema = z.enum(["owner", "manager", "promoter", "staff"]);
-const scraperTypeSchema = z.enum(["dice", "posh", "ticketmaster"]);
+const scraperTypeSchema = z.enum([
+  "dice",
+  "posh",
+  "ticketmaster",
+  "eventbrite",
+]);
 const placeScraperInputSchema = z.object({
   id: z.string().uuid().optional(),
   scraper: scraperTypeSchema,

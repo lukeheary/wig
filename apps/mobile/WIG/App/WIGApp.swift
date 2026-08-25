@@ -77,6 +77,10 @@ private struct ConfiguredAppRootView: View {
                     .background(AppTheme.background.ignoresSafeArea())
             }
         }
+            .onChange(of: clerk.user?.id, initial: true) { _, userID in
+                AppAnalytics.setUserID(userID)
+                AppAnalytics.setUserProperty(userID == nil ? "guest" : "authenticated", name: "auth_state")
+            }
             .task(id: configuredPublishableKey) {
                 isReady = false
 
