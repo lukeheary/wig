@@ -172,7 +172,7 @@ function MobileEventBrowserControls({
   if (isSearchView) {
     return (
       <>
-        <div className="fixed inset-x-3 top-3 z-50 md:hidden">
+        <div className="fixed inset-x-3 top-[calc(env(safe-area-inset-top)+0.75rem)] z-50 md:hidden">
           <Suspense fallback={null}>
             <SearchInput
               ref={searchInputRef}
@@ -184,7 +184,10 @@ function MobileEventBrowserControls({
             />
           </Suspense>
         </div>
-        <div className="h-[3.75rem] md:hidden" aria-hidden="true" />
+        <div
+          className="h-[calc(3.75rem+env(safe-area-inset-top))] md:hidden"
+          aria-hidden="true"
+        />
       </>
     );
   }
@@ -212,7 +215,7 @@ function MobileEventBrowserControls({
 
   return (
     <>
-      <div className="fixed inset-x-3 top-3 z-50 grid h-12 grid-cols-[5.75rem_minmax(0,1fr)_5.75rem] items-stretch gap-2 md:hidden">
+      <div className="fixed inset-x-3 top-[calc(env(safe-area-inset-top)+0.75rem)] z-50 grid h-12 grid-cols-[5.75rem_minmax(0,1fr)_5.75rem] items-stretch gap-2 md:hidden">
         <div className="flex h-12 overflow-hidden rounded-3xl border border-white/15 bg-[#242426]/85 shadow-[0_18px_50px_rgba(0,0,0,0.55)] backdrop-blur-2xl">
           <DropdownMenu>
             <DropdownMenuTrigger asChild>
@@ -304,7 +307,10 @@ function MobileEventBrowserControls({
           </button>
         </div>
       </div>
-      <div className="h-[3.75rem] md:hidden" aria-hidden="true" />
+      <div
+        className="h-[calc(3.75rem+env(safe-area-inset-top))] md:hidden"
+        aria-hidden="true"
+      />
     </>
   );
 }

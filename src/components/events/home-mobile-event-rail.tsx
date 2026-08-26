@@ -335,7 +335,7 @@ function HomeMiniEventCard({ event }: { event: EventCardItem }) {
               src={eventImageUrl}
               alt={event.title}
               fill
-              sizes="212px"
+              sizes="224px"
               className={cn(
                 "object-cover transition-transform duration-500 group-hover:scale-[1.03]",
                 hasInactiveStatus && "opacity-50 blur-[2px]"
@@ -348,9 +348,9 @@ function HomeMiniEventCard({ event }: { event: EventCardItem }) {
           )}
 
           <div
-            className="absolute inset-x-0 bottom-0 h-[58%]"
+            className="absolute inset-x-0 bottom-0 h-[55%]"
             style={{
-              background: `linear-gradient(to bottom, transparent 0%, ${shelfColor} 42%, ${shelfColor} 100%)`,
+              background: `linear-gradient(to bottom, transparent 0%, color-mix(in srgb, ${shelfColor} 28%, transparent) 34%, color-mix(in srgb, ${shelfColor} 72%, transparent) 68%, ${shelfColor} 100%)`,
             }}
           />
           <div className="absolute inset-0 bg-[linear-gradient(to_bottom,transparent_0%,transparent_40%,rgba(0,0,0,0.08)_54%,rgba(0,0,0,0.16)_100%)]" />
@@ -370,7 +370,7 @@ function HomeMiniEventCard({ event }: { event: EventCardItem }) {
             </div>
           )}
 
-          <div className="font-space-grotesk relative z-10 mt-auto space-y-1 px-4 pb-4 pt-24 text-white">
+          <div className="font-space-grotesk relative z-10 mt-auto space-y-0.5 px-4 pb-4 pt-24 text-white">
             <h3 className="line-clamp-2 text-sm/5 font-semibold tracking-tight transition-colors group-hover:text-white">
               {titleMain}
               {trailingParenthetical ? (
