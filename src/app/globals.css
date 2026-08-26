@@ -57,31 +57,6 @@
     background-color: #000;
   }
 
-  /*
-   * Mobile Safari renders its floating URL bar over the page and samples the
-   * content beneath it. Keep that browser-chrome region black so imagery and
-   * cards do not show through the translucent toolbar. The large/dynamic
-   * viewport difference shrinks as Safari collapses its controls.
-   */
-  @supports (-webkit-touch-callout: none) {
-    @media (max-width: 767px) {
-      body::after {
-        position: fixed;
-        z-index: 49;
-        right: 0;
-        bottom: 0;
-        left: 0;
-        height: max(
-          env(safe-area-inset-bottom),
-          calc(100lvh - 100dvh + env(safe-area-inset-bottom))
-        );
-        background: #000;
-        content: "";
-        pointer-events: none;
-      }
-    }
-  }
-
   * {
     @apply border-border;
   }
@@ -164,6 +139,32 @@
 
   .mobile-bottom-nav-safe-space {
     padding-bottom: calc(5rem + max(0.75rem, env(safe-area-inset-bottom)));
+  }
+
+  /*
+   * Safari 26 ignores theme-color and pseudo-elements when deriving its
+   * Liquid Glass toolbar backdrop. It samples a real fixed element near the
+   * viewport edge instead, then extends that solid color behind its chrome.
+   */
+  .safari-bottom-chrome-color {
+    display: none;
+  }
+
+  @supports (-webkit-touch-callout: none) {
+    @media (max-width: 767px) {
+      .safari-bottom-chrome-color {
+        position: fixed;
+        z-index: 2147483647;
+        right: 0;
+        bottom: -3px;
+        left: 0;
+        display: block;
+        width: 100%;
+        height: 6px;
+        background-color: #000;
+        pointer-events: none;
+      }
+    }
   }
 }
 
