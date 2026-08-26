@@ -32,7 +32,7 @@ import {
   splitTrailingParenthetical,
 } from "@/lib/utils";
 
-export const HOME_MOBILE_EVENT_CARD_WIDTH = 212;
+export const HOME_MOBILE_EVENT_CARD_WIDTH = 224;
 const DESKTOP_RAIL_SIDE_INSET = "max(2rem, calc((100vw - 1200px) / 2 + 2rem))";
 const DESKTOP_SCROLL_STEP = 320;
 

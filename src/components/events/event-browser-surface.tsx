@@ -904,7 +904,7 @@ export function EventBrowserSurface({
 
       {!showSkeletons && !isSearchView && !flatListTitle
         ? (defaultContent ?? (
-            <div className="space-y-4">
+            <div className="space-y-5 md:space-y-4">
               {daysToDisplay.map((date) => {
                 const dateKey = format(date, "yyyy-MM-dd");
                 const dayEvents = eventsByDay[dateKey] || [];

@@ -52,19 +52,26 @@
 }
 
 @layer base {
+  html,
+  body {
+    background-color: #000;
+  }
+
   * {
     @apply border-border;
   }
   body {
-    @apply bg-background text-foreground;
+    @apply text-foreground;
     font-family:
-      -apple-system,
-      BlinkMacSystemFont,
-      "SF Pro Display",
-      "SF Pro Text",
-      "Helvetica Neue",
-      Arial,
-      sans-serif;
+      -apple-system, BlinkMacSystemFont, "SF Pro Display", "SF Pro Text",
+      "Helvetica Neue", Arial, sans-serif;
+  }
+
+  @media (min-width: 768px) {
+    html,
+    body {
+      background-color: hsl(var(--background));
+    }
   }
   /* Remove all focus rings globally */
   *:focus,
@@ -119,13 +126,8 @@
 @layer utilities {
   .font-space-grotesk {
     font-family:
-      -apple-system,
-      BlinkMacSystemFont,
-      "SF Pro Display",
-      "SF Pro Text",
-      "Helvetica Neue",
-      Arial,
-      sans-serif;
+      -apple-system, BlinkMacSystemFont, "SF Pro Display", "SF Pro Text",
+      "Helvetica Neue", Arial, sans-serif;
   }
 }
 

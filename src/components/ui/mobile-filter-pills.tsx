@@ -37,7 +37,7 @@ export function MobileFilterPills<T extends string>({
             aria-pressed={selected}
             onClick={() => onValueChange(option.value)}
             className={cn(
-              "shrink-0 rounded-full px-4 py-2 text-[13px] font-semibold transition-colors",
+              "shrink-0 rounded-full px-4 py-2 text-xs font-semibold transition-colors",
               selected ? "bg-sky-300 text-black" : "bg-white/[0.07] text-white"
             )}
           >

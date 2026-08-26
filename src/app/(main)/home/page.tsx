@@ -715,7 +715,7 @@ function HomePageContent() {
                   href="/activity"
                   className="flex items-center gap-1 transition-colors hover:text-primary"
                 >
-                  <h1 className="text-xl font-bold tracking-tight">
+                  <h1 className="text-lg font-bold tracking-tight">
                     Recent Activity
                   </h1>
                   <ChevronRight className="h-4 w-4" />

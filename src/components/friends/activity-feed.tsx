@@ -506,7 +506,7 @@ export function ActivityItem({ activity }: ActivityItemProps) {
         </div>
       </div>
       <div className="flex-1">
-        <p className="text-base text-muted-foreground">
+        <p className="text-[15px] leading-[1.45] text-muted-foreground md:text-base">
           {content}
           {!isEventStatusUpdate &&
             !shouldInlineEventDate &&

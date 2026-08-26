@@ -55,13 +55,13 @@ function MobilePlaceLogo({ item }: { item: any }) {
   const [failed, setFailed] = useState(false);
 
   return (
-    <div className="relative h-[3.25rem] w-[3.25rem] shrink-0 overflow-hidden rounded-[14px] border border-white/10 bg-[#111113]">
+    <div className="relative h-11 w-11 shrink-0 overflow-hidden rounded-xl border border-white/10 bg-[#111113]">
       {item.logoImageUrl && !failed ? (
         <Image
           src={item.logoImageUrl}
           alt=""
           fill
-          sizes="52px"
+          sizes="44px"
           className="object-cover"
           onError={() => setFailed(true)}
         />
@@ -116,14 +116,14 @@ function MobilePlacesList({ items }: { items: any[] }) {
               }
               key={`${item.type}-${item.id}`}
               href={`/${item.type === "venue" ? "venue" : "organizer"}/${item.slug}`}
-              className="flex min-h-[4.25rem] scroll-mt-40 items-center gap-3 rounded-xl px-2 py-2 transition-colors active:bg-white/[0.06]"
+              className="flex min-h-[3.75rem] scroll-mt-40 items-center gap-2.5 rounded-xl px-2 py-2 transition-colors active:bg-white/[0.06]"
             >
               <MobilePlaceLogo item={item} />
               <div className="min-w-0 flex-1">
-                <h2 className="truncate text-[15px] font-semibold leading-tight text-white">
+                <h2 className="truncate text-[13px] font-semibold leading-tight text-white">
                   {item.name}
                 </h2>
-                <p className="mt-0.5 truncate text-xs font-medium text-white/50">
+                <p className="mt-0.5 truncate text-[10px] font-medium leading-tight text-white/50">
                   <span className="capitalize">{item.type}</span>
                   {item.eventCount > 0
                     ? ` · ${item.eventCount} upcoming ${item.eventCount === 1 ? "event" : "events"}`
