@@ -491,6 +491,7 @@ export function NotificationsBell() {
                         <UserAvatar
                           src={request.user.avatarImageUrl}
                           name={request.user.firstName}
+                          identityKey={request.user.id}
                           className="h-7 w-7"
                         />
                         <p className="text-sm leading-snug text-muted-foreground">
@@ -573,6 +574,7 @@ export function NotificationsBell() {
                         <UserAvatar
                           src={request.partner?.avatarImageUrl}
                           name={request.partner?.firstName}
+                          identityKey={request.partner?.id}
                           className="h-7 w-7"
                         />
                         <p className="text-sm leading-snug text-muted-foreground">
@@ -644,6 +646,7 @@ export function NotificationsBell() {
                       <UserAvatar
                         src={notification.actor.avatarImageUrl}
                         name={notification.actor.firstName}
+                        identityKey={notification.actor.id}
                         className="h-7 w-7"
                       />
                       {renderNotificationBody(notification, {
@@ -691,6 +694,7 @@ export function NotificationsBell() {
                       <UserAvatar
                         src={notification.actor.avatarImageUrl}
                         name={notification.actor.firstName}
+                        identityKey={notification.actor.id}
                         className="h-7 w-7"
                       />
                       {renderNotificationBody(notification, {

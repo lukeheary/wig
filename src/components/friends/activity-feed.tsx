@@ -478,6 +478,9 @@ export function ActivityItem({ activity }: ActivityItemProps) {
                 ? activity.event?.venue?.name || activity.event?.title
                 : actor.firstName
             }
+            identityKey={
+              isEventStatusUpdate ? activity.event?.venue?.id : actor.id
+            }
             className={
               isEventStatusUpdate
                 ? "h-11 w-11 rounded-md border-2 border-background ring-2 ring-muted/20"

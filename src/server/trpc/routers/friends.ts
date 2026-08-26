@@ -7,6 +7,7 @@ import {
   userFriends,
   userFriendsMutedNotifications,
   userActivity,
+  userBlocks,
   userPartners,
 } from "../../db/schema";
 import { eq, and, or, ne, sql, inArray, desc, notInArray } from "drizzle-orm";
@@ -20,6 +21,62 @@ import { accentInsensitiveLike } from "@/server/db/search";
 import { blockedUserIdsFor, usersAreBlocked } from "@/server/utils/user-blocks";
 
 export const friendsRouter = router({
+  listBlockedUsers: protectedProcedure.query(async ({ ctx }) => {
+    const blocks = await ctx.db.query.userBlocks.findMany({
+      where: eq(userBlocks.blockerUserId, ctx.auth.userId),
+      with: { blocked: true },
+      orderBy: [desc(userBlocks.createdAt)],
+    });
+
+    return blocks.map((block) => block.blocked);
+  }),
+
+  removeFriend: protectedProcedure
+    .input(z.object({ friendUserId: z.string().uuid() }))
+    .mutation(async ({ ctx, input }) => {
+      const friendship = await ctx.db.query.userFriends.findFirst({
+        where: and(
+          eq(userFriends.status, "accepted"),
+          or(
+            and(
+              eq(userFriends.userId, ctx.auth.userId),
+              eq(userFriends.friendUserId, input.friendUserId)
+            ),
+            and(
+              eq(userFriends.userId, input.friendUserId),
+              eq(userFriends.friendUserId, ctx.auth.userId)
+            )
+          )
+        ),
+      });
+
+      if (!friendship) {
+        throw new TRPCError({
+          code: "NOT_FOUND",
+          message: "Friendship not found",
+        });
+      }
+
+      await ctx.db.delete(userFriends).where(eq(userFriends.id, friendship.id));
+
+      await ctx.db
+        .delete(userFriendsMutedNotifications)
+        .where(
+          or(
+            and(
+              eq(userFriendsMutedNotifications.userId, ctx.auth.userId),
+              eq(userFriendsMutedNotifications.friendUserId, input.friendUserId)
+            ),
+            and(
+              eq(userFriendsMutedNotifications.userId, input.friendUserId),
+              eq(userFriendsMutedNotifications.friendUserId, ctx.auth.userId)
+            )
+          )
+        );
+
+      return { success: true };
+    }),
+
   searchUsers: protectedProcedure
     .input(
       z.object({

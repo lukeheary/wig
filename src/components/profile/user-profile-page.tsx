@@ -212,6 +212,7 @@ export function UserProfilePage({
               <UserAvatar
                 src={profile.avatarImageUrl}
                 name={name}
+                identityKey={profile.id}
                 className="h-28 w-28 text-3xl md:h-36 md:w-36"
               />
               {showSettings ? (
@@ -251,14 +252,22 @@ export function UserProfilePage({
                     Friends
                   </span>
                 </Link>
-                <div className="flex flex-col">
+                <Link
+                  href={profile.isCurrentUser ? "/profile/following" : "#"}
+                  aria-disabled={!profile.isCurrentUser}
+                  className={`flex flex-col ${
+                    profile.isCurrentUser
+                      ? "transition-opacity hover:opacity-80"
+                      : "pointer-events-none"
+                  }`}
+                >
                   <span className="text-lg font-semibold text-white md:text-2xl">
                     {data.followingCount}
                   </span>
                   <span className="text-xs text-muted-foreground md:text-sm">
                     Following
                   </span>
-                </div>
+                </Link>
                 {profile.isCurrentUser ? (
                   <Link
                     href="/profile/requests"

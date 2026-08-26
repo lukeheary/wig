@@ -115,6 +115,7 @@ export function PlaceMembersManager({
                   `${member.user.firstName || ""} ${member.user.lastName || ""}`.trim() ||
                   member.user.username
                 }
+                identityKey={member.user.id}
                 className="h-10 w-10"
               />
               <div className="min-w-0">
@@ -185,6 +186,7 @@ export function PlaceMembersManager({
                         `${user.firstName || ""} ${user.lastName || ""}`.trim() ||
                         user.username
                       }
+                      identityKey={user.id}
                       className="h-8 w-8"
                     />
                     <div className="min-w-0">

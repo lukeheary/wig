@@ -242,6 +242,7 @@ function MainLayoutContent({ children }: { children: React.ReactNode }) {
                       <UserAvatar
                         src={user?.avatarImageUrl}
                         name={user?.firstName}
+                        identityKey={user?.id}
                         className="h-8 w-8"
                       />
                     </Button>
@@ -445,6 +446,7 @@ function MainLayoutContent({ children }: { children: React.ReactNode }) {
                             <UserAvatar
                               src={user?.avatarImageUrl}
                               name={user?.firstName}
+                              identityKey={user?.id}
                               className="h-full w-full"
                             />
                           </div>

@@ -82,6 +82,7 @@ export function AvatarStack({
               <UserAvatar
                 src={user.avatarImageUrl}
                 name={user.firstName}
+                identityKey={user.id}
                 size={avatarSize}
                 className="h-full w-full border-0 bg-transparent"
               />

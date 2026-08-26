@@ -555,6 +555,7 @@ export default function ProfilePage() {
             <UserAvatar
               src={avatarImageUrl || user.avatarImageUrl}
               name={firstName || user.firstName}
+              identityKey={user.id}
               className="h-24 w-24"
             />
             <div className="space-y-2">
@@ -805,6 +806,7 @@ export default function ProfilePage() {
                 <UserAvatar
                   src={acceptedRelationship.partner.avatarImageUrl}
                   name={acceptedRelationship.partner.firstName}
+                  identityKey={acceptedRelationship.partner.id}
                   className="h-12 w-12"
                 />
                 <div>
@@ -926,9 +928,10 @@ export default function ProfilePage() {
                       className="flex items-center justify-between rounded-lg border p-3"
                     >
                       <div className="flex items-center gap-3">
-                        <UserAvatar
-                          src={friend.avatarImageUrl}
-                          name={friend.firstName}
+                      <UserAvatar
+                        src={friend.avatarImageUrl}
+                        name={friend.firstName}
+                        identityKey={friend.id}
                           className="h-10 w-10"
                         />
                         <div>

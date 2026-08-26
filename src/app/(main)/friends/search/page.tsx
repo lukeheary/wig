@@ -48,10 +48,10 @@ function SearchResultImage({
 }) {
   return (
     <div
-      className={`relative h-[3.25rem] w-[3.25rem] shrink-0 overflow-hidden border border-white/10 bg-[#111113] ${round ? "rounded-full" : "rounded-[14px]"}`}
+      className={`relative h-11 w-11 shrink-0 overflow-hidden border border-white/10 bg-[#111113] ${round ? "rounded-full" : "rounded-xl"}`}
     >
       {src ? (
-        <Image src={src} alt={alt} fill sizes="52px" className="object-cover" />
+        <Image src={src} alt={alt} fill sizes="44px" className="object-cover" />
       ) : (
         <div className="flex h-full w-full items-center justify-center">
           {fallback}
@@ -75,14 +75,14 @@ function MobileResultRow({
   return (
     <Link
       href={href}
-      className="flex min-h-[4.25rem] items-center gap-3 rounded-xl px-2 py-2 transition-colors active:bg-white/[0.06]"
+      className="flex min-h-[3.75rem] items-center gap-2.5 rounded-xl px-2 py-2 transition-colors active:bg-white/[0.06]"
     >
       {image}
       <div className="min-w-0 flex-1">
-        <p className="truncate text-[15px] font-semibold leading-tight text-white">
+        <p className="truncate text-[13px] font-semibold leading-tight text-white">
           {title}
         </p>
-        <p className="mt-0.5 truncate text-xs font-medium text-white/50">
+        <p className="mt-0.5 truncate text-[10px] font-medium leading-tight text-white/50">
           {subtitle}
         </p>
       </div>
@@ -228,8 +228,9 @@ function SearchPageContent() {
                         <UserAvatar
                           src={user.avatarImageUrl}
                           name={displayName}
-                          className="h-[3.25rem] w-[3.25rem] rounded-full"
-                          size={52}
+                          identityKey={user.id}
+                          className="h-11 w-11 rounded-full"
+                          size={44}
                         />
                       }
                       title={displayName}
@@ -348,6 +349,7 @@ function SearchPageContent() {
                       <UserAvatar
                         src={user.avatarImageUrl}
                         name={user.firstName}
+                        identityKey={user.id}
                       />
                       <div>
                         <p className="font-medium">
@@ -413,6 +415,7 @@ function SearchPageContent() {
                           <UserAvatar
                             src={user.avatarImageUrl}
                             name={user.firstName}
+                            identityKey={user.id}
                           />
                           <div>
                             <p className="font-medium">

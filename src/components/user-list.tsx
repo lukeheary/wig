@@ -1,4 +1,3 @@
-
 import { UserAvatar } from "@/components/ui/user-avatar";
 import { cn } from "@/lib/utils";
 import { ReactNode } from "react";
@@ -51,6 +50,7 @@ export function UserList<T>({
               <UserAvatar
                 src={user.avatarImageUrl}
                 name={user.firstName}
+                identityKey={user.id}
               />
               <div>
                 <div className="flex items-center gap-2">
@@ -59,7 +59,9 @@ export function UserList<T>({
                   </p>
                   {renderBadges && renderBadges(item)}
                 </div>
-                <p className="text-sm text-muted-foreground">@{user.username}</p>
+                <p className="text-sm text-muted-foreground">
+                  @{user.username}
+                </p>
               </div>
             </div>
             {renderAction && <div>{renderAction(item)}</div>}

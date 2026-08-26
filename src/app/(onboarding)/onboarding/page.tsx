@@ -230,6 +230,7 @@ export default function OnboardingPage() {
               <UserAvatar
                 src={formData.avatarImageUrl}
                 name={clerkUser?.firstName || formData.username}
+                identityKey={clerkUser?.id || avatarUploadUserId}
                 className="h-24 w-24 border-2 border-primary/10"
               />
             </div>

@@ -348,9 +348,9 @@ function HomeMiniEventCard({ event }: { event: EventCardItem }) {
           )}
 
           <div
-            className="absolute inset-x-0 bottom-0 h-[55%]"
+            className="absolute inset-x-0 bottom-0 h-[57%]"
             style={{
-              background: `linear-gradient(to bottom, transparent 0%, color-mix(in srgb, ${shelfColor} 28%, transparent) 34%, color-mix(in srgb, ${shelfColor} 72%, transparent) 68%, ${shelfColor} 100%)`,
+              background: `linear-gradient(to bottom, transparent 0%, color-mix(in srgb, ${shelfColor} 25%, transparent) 14%, color-mix(in srgb, ${shelfColor} 65%, transparent) 28%, ${shelfColor} 42%, ${shelfColor} 100%)`,
             }}
           />
           <div className="absolute inset-0 bg-[linear-gradient(to_bottom,transparent_0%,transparent_40%,rgba(0,0,0,0.08)_54%,rgba(0,0,0,0.16)_100%)]" />

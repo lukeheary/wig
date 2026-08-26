@@ -99,6 +99,7 @@ export default function EventFriendsPage() {
                 <UserAvatar
                   src={attendee.user.avatarImageUrl}
                   name={displayName}
+                  identityKey={attendee.user.id}
                   className="h-[3.25rem] w-[3.25rem] rounded-full"
                   size={52}
                 />

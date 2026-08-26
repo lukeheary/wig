@@ -561,6 +561,7 @@ export default function EventPage() {
           <UserAvatar
             src={attendee.user.avatarImageUrl}
             name={attendee.user.firstName}
+            identityKey={attendee.user.id}
             className="h-10 w-10"
           />
         </div>
@@ -1103,6 +1104,7 @@ export default function EventPage() {
                         <UserAvatar
                           src={attendee.user.avatarImageUrl}
                           name={firstName}
+                          identityKey={attendee.user.id}
                           className="h-14 w-14 rounded-full"
                           size={56}
                         />
