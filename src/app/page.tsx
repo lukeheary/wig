@@ -7,7 +7,8 @@ import { LandingEventsPreview } from "@/components/landing/landing-events-previe
 
 export const viewport: Viewport = {
   colorScheme: "dark",
-  themeColor: "#1B1B1D",
+  themeColor: "#000000",
+  viewportFit: "cover",
 };
 
 export default async function LandingPage() {
