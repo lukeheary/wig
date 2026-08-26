@@ -1,6 +1,7 @@
 "use client";
 
 import { useState, useEffect, useCallback } from "react";
+import { useRouter } from "next/navigation";
 import { trpc } from "@/lib/trpc";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -9,7 +10,14 @@ import { Card, CardContent } from "@/components/ui/card";
 import { UserAvatar } from "@/components/ui/user-avatar";
 import { Separator } from "@/components/ui/separator";
 import { useUser, useReverification } from "@clerk/nextjs";
-import { Loader2, Upload, X } from "lucide-react";
+import {
+  CalendarDays,
+  ChevronLeft,
+  ChevronRight,
+  Loader2,
+  Mail,
+  MapPin,
+} from "lucide-react";
 import { useToast } from "@/hooks/use-toast";
 import { GooglePlacesAutocomplete } from "@/components/google-places-autocomplete";
 import { S3Uploader } from "@/components/ui/s3-uploader";
@@ -20,6 +28,7 @@ import { isReservedUsername } from "@/lib/reserved-usernames";
 import { isAtLeastMinimumAge } from "@/lib/age-requirement";
 
 export default function ProfilePage() {
+  const router = useRouter();
   const { toast } = useToast();
   const utils = trpc.useUtils();
   const { user: clerkUser, isLoaded: isClerkLoaded } = useUser();
@@ -42,6 +51,7 @@ export default function ProfilePage() {
   const [avatarImageUrl, setImageUrl] = useState("");
   const [city, setCity] = useState("");
   const [state, setState] = useState("");
+  const [gender, setGender] = useState<"male" | "female" | "other" | "">("");
   const [searchCity, setSearchCity] = useState("");
   const [dobDay, setDobDay] = useState("");
   const [dobMonth, setDobMonth] = useState("");
@@ -52,6 +62,7 @@ export default function ProfilePage() {
   const [emailStep, setEmailStep] = useState<"idle" | "code">("idle");
   const [pendingEmail, setPendingEmail] = useState<any>(null);
   const [isEmailLoading, setIsEmailLoading] = useState(false);
+  const [isDeletingAccount, setIsDeletingAccount] = useState(false);
   const [partnerSearch, setPartnerSearch] = useState("");
 
   const createEmailAddress = useReverification((email: string) =>
@@ -147,6 +158,7 @@ export default function ProfilePage() {
       setImageUrl(user.avatarImageUrl || "");
       setCity(user.city || "");
       setState(user.state || "");
+      setGender(user.gender || "");
       setSearchCity(user.city || "");
 
       const dob = normalizeDob(user.dateOfBirth);
@@ -346,6 +358,7 @@ export default function ProfilePage() {
       avatarImageUrl: avatarImageUrl || undefined,
       city: city || undefined,
       state: state || undefined,
+      gender: gender || undefined,
       dateOfBirth,
     });
   };
@@ -461,6 +474,7 @@ export default function ProfilePage() {
       setImageUrl(user.avatarImageUrl || "");
       setCity(user.city || "");
       setState(user.state || "");
+      setGender(user.gender || "");
       setSearchCity(user.city || "");
 
       const dob = normalizeDob(user.dateOfBirth);
@@ -477,6 +491,32 @@ export default function ProfilePage() {
       setInitialDob(dob);
     }
     // setIsEditing(false);
+  };
+
+  const handleDeleteAccount = async () => {
+    const confirmation = window.prompt(
+      "This permanently deletes your profile and all associated data. Type DELETE to confirm."
+    );
+    if (confirmation !== "DELETE" || !clerkUser) return;
+
+    setIsDeletingAccount(true);
+    try {
+      const response = await fetch("/api/mobile/account", { method: "DELETE" });
+      if (!response.ok) {
+        const result = await response.json().catch(() => null);
+        throw new Error(result?.error || "We couldn't delete your account.");
+      }
+      await clerkUser.delete();
+      window.location.assign("/");
+    } catch (error) {
+      toast({
+        title: "Account deletion failed",
+        description:
+          error instanceof Error ? error.message : "Please try again.",
+        variant: "destructive",
+      });
+      setIsDeletingAccount(false);
+    }
   };
 
   if (isLoading) {
@@ -538,358 +578,549 @@ export default function ProfilePage() {
     }
   );
 
+  const dateOfBirthValue =
+    dobYear && dobMonth && dobDay
+      ? `${dobYear.padStart(4, "0")}-${dobMonth.padStart(2, "0")}-${dobDay.padStart(2, "0")}`
+      : "";
+  const latestAllowedBirthday = new Date(
+    new Date().setFullYear(new Date().getFullYear() - 13)
+  )
+    .toISOString()
+    .slice(0, 10);
+  const profileIsUnchanged =
+    username === (user.username || "") &&
+    firstName === (user.firstName || "") &&
+    lastName === (user.lastName || "") &&
+    city === (user.city || "") &&
+    state === (user.state || "") &&
+    gender === (user.gender || "") &&
+    dateOfBirthValue === initialDob;
+  const mobileFieldClass =
+    "h-12 rounded-[14px] border-white/[0.09] bg-white/[0.065] px-4 text-[15px] font-medium text-white placeholder:text-white/45 focus:border-white/20";
+  const mobileLabelClass = "text-[14px] font-semibold text-white/80";
+
   return (
-    <PageContainer className="max-w-2xl pt-0">
-      {/*<div className="flex items-center justify-between">*/}
-      {/*  <h1 className="text-3xl font-bold">Profile</h1>*/}
-      {/*  /!*<UserButton afterSignOutUrl="/sign-in" />*!/*/}
-      {/*</div>*/}
+    <>
+      <main className="min-h-screen bg-gradient-to-b from-black to-[#0e0e11] pb-8 md:hidden">
+        <header className="sticky top-0 z-30 grid h-[70px] grid-cols-[1fr_auto_1fr] items-center bg-black/90 px-4 backdrop-blur-xl">
+          <Button
+            type="button"
+            variant="ghost"
+            size="icon"
+            onClick={() => router.back()}
+            aria-label="Back"
+            className="h-[46px] w-[46px] rounded-full border border-white/15 bg-[#242426]/85 text-white backdrop-blur-2xl"
+          >
+            <ChevronLeft className="h-[17px] w-[17px] stroke-[3]" />
+          </Button>
+          <h1 className="text-[17px] font-semibold text-white">Edit Profile</h1>
+          <Button
+            type="button"
+            onClick={handleSave}
+            disabled={updateProfileMutation.isPending || profileIsUnchanged}
+            className="ml-auto h-[46px] rounded-full bg-white px-[18px] text-[15px] font-bold text-black hover:bg-white disabled:opacity-35"
+          >
+            {updateProfileMutation.isPending && (
+              <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+            )}
+            Save
+          </Button>
+        </header>
 
-      <StickySectionHeader className="-mx-4">
-        <h2 className="tracking-tight">Profile Settings</h2>
-      </StickySectionHeader>
-      <Card>
-        <CardContent className="space-y-6 pt-4">
-          {/* Profile Image */}
-          <div className="flex items-center gap-6">
-            <UserAvatar
-              src={avatarImageUrl || user.avatarImageUrl}
-              name={firstName || user.firstName}
-              identityKey={user.id}
-              className="h-24 w-24"
-            />
-            <div className="space-y-2">
-              <S3Uploader
-                folder={`users/${user.id}/avatars`}
-                fileName="avatar-image.jpg"
-                onUploadComplete={handleImageUpload}
-                variant="button"
-                buttonText="Upload Profile Image"
-                maxSizeMB={4}
+        <div className="space-y-6 px-4 pt-4">
+          <section className="space-y-2">
+            <Label className={mobileLabelClass}>Name</Label>
+            <div className="grid grid-cols-2 gap-2">
+              <Input
+                aria-label="First name"
+                value={firstName}
+                onChange={(event) => setFirstName(event.target.value)}
+                placeholder="First name"
+                className={mobileFieldClass}
               />
-              <p className="text-xs text-muted-foreground">Max 4MB.</p>
+              <Input
+                aria-label="Last name"
+                value={lastName}
+                onChange={(event) => setLastName(event.target.value)}
+                placeholder="Last name"
+                className={mobileFieldClass}
+              />
             </div>
-          </div>
+          </section>
 
-          <Separator />
-
-          {/* Form Fields */}
-          <div className="space-y-4">
-            <div className={"flex flex-col gap-2 md:flex-row"}>
-              <div className="w-full space-y-2">
-                <Label htmlFor="firstName">First Name</Label>
+          <section className="space-y-2">
+            <Label className={mobileLabelClass}>Email</Label>
+            {emailStep === "idle" && !newEmail ? (
+              <button
+                type="button"
+                onClick={() => setNewEmail(user.email)}
+                className="flex h-12 w-full items-center gap-3 rounded-[14px] border border-white/[0.09] bg-white/[0.065] px-4 text-left"
+              >
+                <Mail className="h-[17px] w-[17px] text-white/60" />
+                <span className="min-w-0 flex-1 truncate text-[15px] font-medium text-white">
+                  {user.email}
+                </span>
+                <ChevronRight className="h-4 w-4 text-white/35" />
+              </button>
+            ) : emailStep === "idle" ? (
+              <div className="space-y-2">
                 <Input
-                  id="firstName"
-                  value={firstName}
-                  onChange={(e) => setFirstName(e.target.value)}
-                  // disabled={!isEditing}
-                  placeholder="Enter your first name"
+                  type="email"
+                  value={newEmail}
+                  onChange={(event) => setNewEmail(event.target.value)}
+                  className={mobileFieldClass}
+                  placeholder="New email address"
                 />
+                <div className="flex gap-2">
+                  <Button
+                    type="button"
+                    size="sm"
+                    onClick={handleStartEmailUpdate}
+                    disabled={isEmailLoading || newEmail === user.email}
+                  >
+                    Send verification code
+                  </Button>
+                  <Button
+                    type="button"
+                    variant="ghost"
+                    size="sm"
+                    onClick={() => setNewEmail("")}
+                  >
+                    Cancel
+                  </Button>
+                </div>
               </div>
-
-              <div className="w-full space-y-2">
-                <Label htmlFor="lastName">Last Name</Label>
+            ) : (
+              <div className="space-y-2">
                 <Input
-                  id="lastName"
-                  value={lastName}
-                  onChange={(e) => setLastName(e.target.value)}
-                  // disabled={!isEditing}
-                  placeholder="Enter your last name"
+                  inputMode="numeric"
+                  value={emailCode}
+                  onChange={(event) => setEmailCode(event.target.value)}
+                  className={mobileFieldClass}
+                  placeholder="Verification code"
                 />
+                <Button
+                  type="button"
+                  size="sm"
+                  onClick={handleVerifyEmail}
+                  disabled={isEmailLoading || !emailCode}
+                >
+                  Verify and update
+                </Button>
               </div>
-            </div>
+            )}
+            <p className="text-[12px] font-medium text-white/40">
+              Used to sign in and receive account emails
+            </p>
+          </section>
 
-            <div className="space-y-2">
-              <Label htmlFor="city">City</Label>
+          <section className="space-y-2">
+            <Label htmlFor="mobile-username" className={mobileLabelClass}>
+              Username
+            </Label>
+            <Input
+              id="mobile-username"
+              value={username}
+              onChange={(event) =>
+                setUsername(event.target.value.toLowerCase())
+              }
+              className={mobileFieldClass}
+            />
+            <p className="text-[12px] font-medium text-white/40">
+              3-20 characters · letters, numbers, and underscores
+            </p>
+          </section>
+
+          <section className="space-y-2">
+            <Label className={mobileLabelClass}>City</Label>
+            <div className="relative">
+              <MapPin className="pointer-events-none absolute left-4 top-1/2 z-10 h-[17px] w-[17px] -translate-y-1/2 text-white/60" />
               <GooglePlacesAutocomplete
                 value={searchCity}
                 onChange={setSearchCity}
                 onPlaceSelect={handleCitySelect}
-                placeholder="Search for your city..."
+                placeholder="Search for your city"
                 searchType="cities"
+                className={`${mobileFieldClass} pl-11 pr-10`}
               />
-              {city && state && (
-                <p className="text-xs text-muted-foreground">
-                  Selected: {city}, {state}
-                </p>
-              )}
+              <ChevronRight className="pointer-events-none absolute right-4 top-1/2 h-4 w-4 -translate-y-1/2 text-white/35" />
             </div>
+          </section>
 
-            <div className="space-y-2">
-              <Label htmlFor="email">Email</Label>
-              {emailStep === "idle" && !newEmail && (
-                <>
-                  <div className="flex items-center gap-2">
-                    <Input
-                      id="email"
-                      value={user.email}
-                      disabled
-                      className="bg-muted"
-                    />
-                    <Button
-                      type="button"
-                      variant="outline"
-                      size="sm"
-                      className="shrink-0"
-                      onClick={() => setNewEmail(user.email)}
-                    >
-                      Change
-                    </Button>
-                  </div>
-                </>
-              )}
-              {emailStep === "idle" && newEmail && (
-                <div className="space-y-3 rounded-lg border p-4">
-                  <div className="space-y-2">
-                    <Label
-                      htmlFor="new-email"
-                      className="text-sm text-muted-foreground"
-                    >
-                      New email address
-                    </Label>
-                    <Input
-                      id="new-email"
-                      type="email"
-                      value={newEmail}
-                      onChange={(e) => setNewEmail(e.target.value)}
-                      placeholder="you@example.com"
-                    />
-                  </div>
-                  <div className="flex gap-2">
-                    <Button
-                      type="button"
-                      size="sm"
-                      onClick={handleStartEmailUpdate}
-                      disabled={
-                        isEmailLoading || !newEmail || newEmail === user.email
-                      }
-                    >
-                      {isEmailLoading && (
-                        <Loader2 className="mr-2 h-4 w-4 animate-spin" />
-                      )}
-                      Send Verification Code
-                    </Button>
-                    <Button
-                      type="button"
-                      variant="ghost"
-                      size="sm"
-                      onClick={() => setNewEmail("")}
-                    >
-                      Cancel
-                    </Button>
-                  </div>
-                </div>
-              )}
-              {emailStep === "code" && (
-                <div className="space-y-3 rounded-lg border p-4">
-                  <p className="text-sm text-muted-foreground">
-                    A verification code was sent to{" "}
-                    <span className="font-medium text-foreground">
-                      {newEmail}
-                    </span>
-                  </p>
-                  <div className="space-y-2">
-                    <Label
-                      htmlFor="email-code"
-                      className="text-sm text-muted-foreground"
-                    >
-                      Verification code
-                    </Label>
-                    <Input
-                      id="email-code"
-                      value={emailCode}
-                      onChange={(e) => setEmailCode(e.target.value)}
-                      placeholder="Enter code"
-                    />
-                  </div>
-                  <div className="flex gap-2">
-                    <Button
-                      type="button"
-                      size="sm"
-                      onClick={handleVerifyEmail}
-                      disabled={isEmailLoading || !emailCode}
-                    >
-                      {isEmailLoading && (
-                        <Loader2 className="mr-2 h-4 w-4 animate-spin" />
-                      )}
-                      Verify & Update
-                    </Button>
-                    <Button
-                      type="button"
-                      variant="ghost"
-                      size="sm"
-                      onClick={() => {
-                        setEmailStep("idle");
-                        setEmailCode("");
-                        setPendingEmail(null);
-                        setNewEmail("");
-                      }}
-                    >
-                      Cancel
-                    </Button>
-                  </div>
-                </div>
-              )}
+          <section className="space-y-2">
+            <Label className={mobileLabelClass}>Gender</Label>
+            <div className="grid h-12 grid-cols-3 gap-1 rounded-2xl border border-white/[0.07] bg-white/[0.08] p-1">
+              {(["male", "female", "other"] as const).map((option) => (
+                <button
+                  type="button"
+                  key={option}
+                  onClick={() => setGender(option)}
+                  className={`rounded-[13px] text-[15px] capitalize text-white/70 transition-colors ${gender === option ? "bg-white/20 font-semibold text-white" : "font-medium"}`}
+                >
+                  {option}
+                </button>
+              ))}
             </div>
+          </section>
 
-            <div className="space-y-2">
-              <Label htmlFor="username">Username</Label>
+          <section className="space-y-2">
+            <Label htmlFor="mobile-birthday" className={mobileLabelClass}>
+              Birthday
+            </Label>
+            <p className="text-[11px] font-medium text-white/40">
+              You must be at least 13 years old to use WIG.
+            </p>
+            <div className="relative">
+              <CalendarDays className="pointer-events-none absolute left-4 top-1/2 z-10 h-[17px] w-[17px] -translate-y-1/2 text-white/60" />
               <Input
-                id="username"
-                value={username}
-                onChange={(e) => setUsername(e.target.value.toLowerCase())}
+                id="mobile-birthday"
+                type="date"
+                min="1900-01-01"
+                max={latestAllowedBirthday}
+                value={dateOfBirthValue}
+                onChange={(event) => {
+                  const [year, month, day] = event.target.value.split("-");
+                  setDobYear(year || "");
+                  setDobMonth(month || "");
+                  setDobDay(day || "");
+                }}
+                className={`${mobileFieldClass} pl-11 [color-scheme:dark]`}
               />
-              <p className="text-xs text-muted-foreground">
-                3-20 characters, letters, numbers, and underscores only
-              </p>
+            </div>
+          </section>
+
+          <section className="space-y-1 pt-3">
+            <h2 className={mobileLabelClass}>Delete Account</h2>
+            <p className="text-[11px] font-medium leading-relaxed text-white/35">
+              Permanently removes your account and all associated data. This
+              action cannot be reversed.
+            </p>
+            <button
+              type="button"
+              onClick={() => void handleDeleteAccount()}
+              disabled={isDeletingAccount}
+              className="h-[34px] text-[13px] font-semibold text-red-500/75 disabled:opacity-40"
+            >
+              {isDeletingAccount ? "Deleting Account…" : "Delete Account"}
+            </button>
+          </section>
+        </div>
+      </main>
+
+      <PageContainer className="hidden max-w-2xl pt-0 md:block">
+        {/*<div className="flex items-center justify-between">*/}
+        {/*  <h1 className="text-3xl font-bold">Profile</h1>*/}
+        {/*  /!*<UserButton afterSignOutUrl="/sign-in" />*!/*/}
+        {/*</div>*/}
+
+        <StickySectionHeader className="-mx-4">
+          <h2 className="tracking-tight">Profile Settings</h2>
+        </StickySectionHeader>
+        <Card>
+          <CardContent className="space-y-6 pt-4">
+            {/* Profile Image */}
+            <div className="flex items-center gap-6">
+              <UserAvatar
+                src={avatarImageUrl || user.avatarImageUrl}
+                name={firstName || user.firstName}
+                identityKey={user.id}
+                className="h-24 w-24"
+              />
+              <div className="space-y-2">
+                <S3Uploader
+                  folder={`users/${user.id}/avatars`}
+                  fileName="avatar-image.jpg"
+                  onUploadComplete={handleImageUpload}
+                  variant="button"
+                  buttonText="Upload Profile Image"
+                  maxSizeMB={4}
+                />
+                <p className="text-xs text-muted-foreground">Max 4MB.</p>
+              </div>
             </div>
 
-            <DateOfBirthInput
-              day={dobDay}
-              month={dobMonth}
-              year={dobYear}
-              onDayChange={setDobDay}
-              onMonthChange={setDobMonth}
-              onYearChange={setDobYear}
-              disabled
-            />
-          </div>
+            <Separator />
 
-          <Separator />
+            {/* Form Fields */}
+            <div className="space-y-4">
+              <div className={"flex flex-col gap-2 md:flex-row"}>
+                <div className="w-full space-y-2">
+                  <Label htmlFor="firstName">First Name</Label>
+                  <Input
+                    id="firstName"
+                    value={firstName}
+                    onChange={(e) => setFirstName(e.target.value)}
+                    // disabled={!isEditing}
+                    placeholder="Enter your first name"
+                  />
+                </div>
 
-          {/* Action Buttons */}
-          <div className="flex w-full justify-between gap-2">
-            {/*{!isEditing ? (*/}
-            {/*  <Button onClick={() => setIsEditing(true)}>Edit Profile</Button>*/}
-            {/*) : (*/}
-            <>
-              <Button
-                variant="outline"
-                onClick={handleCancel}
-                disabled={updateProfileMutation.isPending}
-              >
-                Cancel
-              </Button>
-              <Button
-                onClick={handleSave}
-                disabled={
-                  updateProfileMutation.isPending ||
-                  (username === (user.username || "") &&
-                    firstName === (user.firstName || "") &&
-                    lastName === (user.lastName || "") &&
-                    city === (user.city || "") &&
-                    state === (user.state || "") &&
-                    (dobDay && dobMonth && dobYear
-                      ? `${dobYear.padStart(4, "0")}-${dobMonth.padStart(2, "0")}-${dobDay.padStart(2, "0")}`
-                      : "") === initialDob)
-                }
-              >
-                {updateProfileMutation.isPending && (
-                  <Loader2 className="mr-2 h-4 w-4 animate-spin" />
-                )}
-                Save Changes
-              </Button>
-            </>
-            {/*)}*/}
-          </div>
-        </CardContent>
-      </Card>
-
-      <StickySectionHeader className="-mx-4 pt-6">
-        <h2 className="tracking-tight">My Partner</h2>
-      </StickySectionHeader>
-      <Card>
-        <CardContent className="space-y-4 pt-4">
-          {acceptedRelationship ? (
-            <>
-              <div className="flex items-center gap-3 rounded-lg border p-3">
-                <UserAvatar
-                  src={acceptedRelationship.partner.avatarImageUrl}
-                  name={acceptedRelationship.partner.firstName}
-                  identityKey={acceptedRelationship.partner.id}
-                  className="h-12 w-12"
-                />
-                <div>
-                  <p className="font-medium">
-                    {acceptedRelationship.partner.firstName}{" "}
-                    {acceptedRelationship.partner.lastName}
-                  </p>
-                  <p className="text-sm text-muted-foreground">
-                    @{acceptedRelationship.partner.username}
-                  </p>
+                <div className="w-full space-y-2">
+                  <Label htmlFor="lastName">Last Name</Label>
+                  <Input
+                    id="lastName"
+                    value={lastName}
+                    onChange={(e) => setLastName(e.target.value)}
+                    // disabled={!isEditing}
+                    placeholder="Enter your last name"
+                  />
                 </div>
               </div>
-              <Button
-                variant="outline"
-                onClick={() => {
-                  if (
-                    !window.confirm(
-                      `Remove ${acceptedRelationship.partner.firstName} as your partner?`
-                    )
-                  ) {
-                    return;
-                  }
-                  removePartnerMutation.mutate();
-                }}
-                disabled={partnerMutationsBusy}
-              >
-                {removePartnerMutation.isPending && (
-                  <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+
+              <div className="space-y-2">
+                <Label htmlFor="city">City</Label>
+                <GooglePlacesAutocomplete
+                  value={searchCity}
+                  onChange={setSearchCity}
+                  onPlaceSelect={handleCitySelect}
+                  placeholder="Search for your city..."
+                  searchType="cities"
+                />
+                {city && state && (
+                  <p className="text-xs text-muted-foreground">
+                    Selected: {city}, {state}
+                  </p>
                 )}
-                Remove Partner
-              </Button>
-            </>
-          ) : pendingSentRelationship ? (
-            <>
-              <p className="text-sm text-muted-foreground">
-                Partner request pending, waiting for{" "}
-                <span className="font-medium text-foreground">
-                  {pendingSentRelationship.partner.firstName}
-                </span>{" "}
-                to accept.
-              </p>
-              <Button
-                variant="outline"
-                onClick={() =>
-                  declinePartnerRequestMutation.mutate({
-                    partnerId: pendingSentRelationship.id,
-                  })
-                }
-                disabled={partnerMutationsBusy}
-              >
-                {declinePartnerRequestMutation.isPending && (
-                  <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+              </div>
+
+              <div className="space-y-2">
+                <Label htmlFor="email">Email</Label>
+                {emailStep === "idle" && !newEmail && (
+                  <>
+                    <div className="flex items-center gap-2">
+                      <Input
+                        id="email"
+                        value={user.email}
+                        disabled
+                        className="bg-muted"
+                      />
+                      <Button
+                        type="button"
+                        variant="outline"
+                        size="sm"
+                        className="shrink-0"
+                        onClick={() => setNewEmail(user.email)}
+                      >
+                        Change
+                      </Button>
+                    </div>
+                  </>
                 )}
-                Cancel Request
-              </Button>
-            </>
-          ) : pendingReceivedRelationship ? (
-            <>
-              <p className="text-sm text-muted-foreground">
-                <span className="font-medium text-foreground">
-                  {pendingReceivedRelationship.partner.firstName}
-                </span>{" "}
-                sent you a partner request.
-              </p>
-              <div className="flex gap-2">
+                {emailStep === "idle" && newEmail && (
+                  <div className="space-y-3 rounded-lg border p-4">
+                    <div className="space-y-2">
+                      <Label
+                        htmlFor="new-email"
+                        className="text-sm text-muted-foreground"
+                      >
+                        New email address
+                      </Label>
+                      <Input
+                        id="new-email"
+                        type="email"
+                        value={newEmail}
+                        onChange={(e) => setNewEmail(e.target.value)}
+                        placeholder="you@example.com"
+                      />
+                    </div>
+                    <div className="flex gap-2">
+                      <Button
+                        type="button"
+                        size="sm"
+                        onClick={handleStartEmailUpdate}
+                        disabled={
+                          isEmailLoading || !newEmail || newEmail === user.email
+                        }
+                      >
+                        {isEmailLoading && (
+                          <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+                        )}
+                        Send Verification Code
+                      </Button>
+                      <Button
+                        type="button"
+                        variant="ghost"
+                        size="sm"
+                        onClick={() => setNewEmail("")}
+                      >
+                        Cancel
+                      </Button>
+                    </div>
+                  </div>
+                )}
+                {emailStep === "code" && (
+                  <div className="space-y-3 rounded-lg border p-4">
+                    <p className="text-sm text-muted-foreground">
+                      A verification code was sent to{" "}
+                      <span className="font-medium text-foreground">
+                        {newEmail}
+                      </span>
+                    </p>
+                    <div className="space-y-2">
+                      <Label
+                        htmlFor="email-code"
+                        className="text-sm text-muted-foreground"
+                      >
+                        Verification code
+                      </Label>
+                      <Input
+                        id="email-code"
+                        value={emailCode}
+                        onChange={(e) => setEmailCode(e.target.value)}
+                        placeholder="Enter code"
+                      />
+                    </div>
+                    <div className="flex gap-2">
+                      <Button
+                        type="button"
+                        size="sm"
+                        onClick={handleVerifyEmail}
+                        disabled={isEmailLoading || !emailCode}
+                      >
+                        {isEmailLoading && (
+                          <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+                        )}
+                        Verify & Update
+                      </Button>
+                      <Button
+                        type="button"
+                        variant="ghost"
+                        size="sm"
+                        onClick={() => {
+                          setEmailStep("idle");
+                          setEmailCode("");
+                          setPendingEmail(null);
+                          setNewEmail("");
+                        }}
+                      >
+                        Cancel
+                      </Button>
+                    </div>
+                  </div>
+                )}
+              </div>
+
+              <div className="space-y-2">
+                <Label htmlFor="username">Username</Label>
+                <Input
+                  id="username"
+                  value={username}
+                  onChange={(e) => setUsername(e.target.value.toLowerCase())}
+                />
+                <p className="text-xs text-muted-foreground">
+                  3-20 characters, letters, numbers, and underscores only
+                </p>
+              </div>
+
+              <DateOfBirthInput
+                day={dobDay}
+                month={dobMonth}
+                year={dobYear}
+                onDayChange={setDobDay}
+                onMonthChange={setDobMonth}
+                onYearChange={setDobYear}
+                disabled
+              />
+            </div>
+
+            <Separator />
+
+            {/* Action Buttons */}
+            <div className="flex w-full justify-between gap-2">
+              {/*{!isEditing ? (*/}
+              {/*  <Button onClick={() => setIsEditing(true)}>Edit Profile</Button>*/}
+              {/*) : (*/}
+              <>
                 <Button
-                  onClick={() =>
-                    acceptPartnerRequestMutation.mutate({
-                      partnerId: pendingReceivedRelationship.id,
-                    })
-                  }
-                  disabled={partnerMutationsBusy}
+                  variant="outline"
+                  onClick={handleCancel}
+                  disabled={updateProfileMutation.isPending}
                 >
-                  {acceptPartnerRequestMutation.isPending && (
+                  Cancel
+                </Button>
+                <Button
+                  onClick={handleSave}
+                  disabled={
+                    updateProfileMutation.isPending ||
+                    (username === (user.username || "") &&
+                      firstName === (user.firstName || "") &&
+                      lastName === (user.lastName || "") &&
+                      city === (user.city || "") &&
+                      state === (user.state || "") &&
+                      (dobDay && dobMonth && dobYear
+                        ? `${dobYear.padStart(4, "0")}-${dobMonth.padStart(2, "0")}-${dobDay.padStart(2, "0")}`
+                        : "") === initialDob)
+                  }
+                >
+                  {updateProfileMutation.isPending && (
                     <Loader2 className="mr-2 h-4 w-4 animate-spin" />
                   )}
-                  Accept
+                  Save Changes
                 </Button>
+              </>
+              {/*)}*/}
+            </div>
+          </CardContent>
+        </Card>
+
+        <StickySectionHeader className="-mx-4 pt-6">
+          <h2 className="tracking-tight">My Partner</h2>
+        </StickySectionHeader>
+        <Card>
+          <CardContent className="space-y-4 pt-4">
+            {acceptedRelationship ? (
+              <>
+                <div className="flex items-center gap-3 rounded-lg border p-3">
+                  <UserAvatar
+                    src={acceptedRelationship.partner.avatarImageUrl}
+                    name={acceptedRelationship.partner.firstName}
+                    identityKey={acceptedRelationship.partner.id}
+                    className="h-12 w-12"
+                  />
+                  <div>
+                    <p className="font-medium">
+                      {acceptedRelationship.partner.firstName}{" "}
+                      {acceptedRelationship.partner.lastName}
+                    </p>
+                    <p className="text-sm text-muted-foreground">
+                      @{acceptedRelationship.partner.username}
+                    </p>
+                  </div>
+                </div>
+                <Button
+                  variant="outline"
+                  onClick={() => {
+                    if (
+                      !window.confirm(
+                        `Remove ${acceptedRelationship.partner.firstName} as your partner?`
+                      )
+                    ) {
+                      return;
+                    }
+                    removePartnerMutation.mutate();
+                  }}
+                  disabled={partnerMutationsBusy}
+                >
+                  {removePartnerMutation.isPending && (
+                    <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+                  )}
+                  Remove Partner
+                </Button>
+              </>
+            ) : pendingSentRelationship ? (
+              <>
+                <p className="text-sm text-muted-foreground">
+                  Partner request pending, waiting for{" "}
+                  <span className="font-medium text-foreground">
+                    {pendingSentRelationship.partner.firstName}
+                  </span>{" "}
+                  to accept.
+                </p>
                 <Button
                   variant="outline"
                   onClick={() =>
                     declinePartnerRequestMutation.mutate({
-                      partnerId: pendingReceivedRelationship.id,
+                      partnerId: pendingSentRelationship.id,
                     })
                   }
                   disabled={partnerMutationsBusy}
@@ -897,98 +1128,138 @@ export default function ProfilePage() {
                   {declinePartnerRequestMutation.isPending && (
                     <Loader2 className="mr-2 h-4 w-4 animate-spin" />
                   )}
-                  Decline
+                  Cancel Request
                 </Button>
-              </div>
-            </>
-          ) : (
-            <>
-              <div className="space-y-2">
-                <Label htmlFor="partner-search">Choose from your friends</Label>
-                <Input
-                  id="partner-search"
-                  value={partnerSearch}
-                  onChange={(event) => setPartnerSearch(event.target.value)}
-                  placeholder="Search accepted friends..."
-                />
-              </div>
-              {acceptedFriendCandidates.length === 0 ? (
+              </>
+            ) : pendingReceivedRelationship ? (
+              <>
                 <p className="text-sm text-muted-foreground">
-                  You need an accepted friend before you can choose a partner.
+                  <span className="font-medium text-foreground">
+                    {pendingReceivedRelationship.partner.firstName}
+                  </span>{" "}
+                  sent you a partner request.
                 </p>
-              ) : filteredPartnerCandidates.length === 0 ? (
-                <p className="text-sm text-muted-foreground">
-                  No friends found.
-                </p>
-              ) : (
-                <div className="space-y-2">
-                  {filteredPartnerCandidates.slice(0, 6).map((friend) => (
-                    <div
-                      key={friend.id}
-                      className="flex items-center justify-between rounded-lg border p-3"
-                    >
-                      <div className="flex items-center gap-3">
-                      <UserAvatar
-                        src={friend.avatarImageUrl}
-                        name={friend.firstName}
-                        identityKey={friend.id}
-                          className="h-10 w-10"
-                        />
-                        <div>
-                          <p className="font-medium">
-                            {friend.firstName} {friend.lastName}
-                          </p>
-                          <p className="text-sm text-muted-foreground">
-                            @{friend.username}
-                          </p>
-                        </div>
-                      </div>
-                      <Button
-                        size="sm"
-                        onClick={() =>
-                          sendPartnerRequestMutation.mutate({
-                            recipientId: friend.id,
-                          })
-                        }
-                        disabled={partnerMutationsBusy}
-                      >
-                        {sendPartnerRequestMutation.isPending && (
-                          <Loader2 className="mr-2 h-4 w-4 animate-spin" />
-                        )}
-                        Send Request
-                      </Button>
-                    </div>
-                  ))}
+                <div className="flex gap-2">
+                  <Button
+                    onClick={() =>
+                      acceptPartnerRequestMutation.mutate({
+                        partnerId: pendingReceivedRelationship.id,
+                      })
+                    }
+                    disabled={partnerMutationsBusy}
+                  >
+                    {acceptPartnerRequestMutation.isPending && (
+                      <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+                    )}
+                    Accept
+                  </Button>
+                  <Button
+                    variant="outline"
+                    onClick={() =>
+                      declinePartnerRequestMutation.mutate({
+                        partnerId: pendingReceivedRelationship.id,
+                      })
+                    }
+                    disabled={partnerMutationsBusy}
+                  >
+                    {declinePartnerRequestMutation.isPending && (
+                      <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+                    )}
+                    Decline
+                  </Button>
                 </div>
-              )}
-            </>
-          )}
-        </CardContent>
-      </Card>
+              </>
+            ) : (
+              <>
+                <div className="space-y-2">
+                  <Label htmlFor="partner-search">
+                    Choose from your friends
+                  </Label>
+                  <Input
+                    id="partner-search"
+                    value={partnerSearch}
+                    onChange={(event) => setPartnerSearch(event.target.value)}
+                    placeholder="Search accepted friends..."
+                  />
+                </div>
+                {acceptedFriendCandidates.length === 0 ? (
+                  <p className="text-sm text-muted-foreground">
+                    You need an accepted friend before you can choose a partner.
+                  </p>
+                ) : filteredPartnerCandidates.length === 0 ? (
+                  <p className="text-sm text-muted-foreground">
+                    No friends found.
+                  </p>
+                ) : (
+                  <div className="space-y-2">
+                    {filteredPartnerCandidates.slice(0, 6).map((friend) => (
+                      <div
+                        key={friend.id}
+                        className="flex items-center justify-between rounded-lg border p-3"
+                      >
+                        <div className="flex items-center gap-3">
+                          <UserAvatar
+                            src={friend.avatarImageUrl}
+                            name={friend.firstName}
+                            identityKey={friend.id}
+                            className="h-10 w-10"
+                          />
+                          <div>
+                            <p className="font-medium">
+                              {friend.firstName} {friend.lastName}
+                            </p>
+                            <p className="text-sm text-muted-foreground">
+                              @{friend.username}
+                            </p>
+                          </div>
+                        </div>
+                        <Button
+                          size="sm"
+                          onClick={() =>
+                            sendPartnerRequestMutation.mutate({
+                              recipientId: friend.id,
+                            })
+                          }
+                          disabled={partnerMutationsBusy}
+                        >
+                          {sendPartnerRequestMutation.isPending && (
+                            <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+                          )}
+                          Send Request
+                        </Button>
+                      </div>
+                    ))}
+                  </div>
+                )}
+              </>
+            )}
+          </CardContent>
+        </Card>
 
-      {/* Account Settings Card */}
-      {/*<Card>*/}
-      {/*  <CardHeader>*/}
-      {/*    <CardTitle>Account Settings</CardTitle>*/}
-      {/*  </CardHeader>*/}
-      {/*  <CardContent>*/}
-      {/*    <p className="text-sm text-muted-foreground mb-4">*/}
-      {/*      Manage your account security, email preferences, and authentication settings.*/}
-      {/*    </p>*/}
-      {/*    <div className="flex items-center gap-2">*/}
-      {/*      <UserButton afterSignOutUrl="/sign-in" appearance={{*/}
-      {/*        elements: {*/}
-      {/*          rootBox: "inline-flex",*/}
-      {/*          userButtonAvatarBox: "w-10 h-10"*/}
-      {/*        }*/}
-      {/*      }} />*/}
-      {/*      <div className="text-sm">*/}
-      {/*        <p className="font-medium">Account Management</p>*/}
-      {/*        <p className="text-muted-foreground">Click to manage your account settings</p>*/}
-      {/*      </div>*/}
-      {/*    </div>*/}
-      {/*  </CardContent>*/}
-      {/*</Card>*/}
-    </PageContainer>
+        {/* Account Settings Card */}
+        {/*<Card>*/}
+        {/*  <CardHeader>*/}
+        {/*    <CardTitle>Account Settings</CardTitle>*/}
+        {/*  </CardHeader>*/}
+        {/*  <CardContent>*/}
+        {/*    <p className="text-sm text-muted-foreground mb-4">*/}
+        {/*      Manage your account security, email preferences, and authentication settings.*/}
+        {/*    </p>*/}
+        {/*    <div className="flex items-center gap-2">*/}
+        {/*      <UserButton afterSignOutUrl="/sign-in" appearance={{*/}
+        {/*        elements: {*/}
+        {/*          rootBox: "inline-flex",*/}
+        {/*          userButtonAvatarBox: "w-10 h-10"*/}
+        {/*        }*/}
+        {/*      }} />*/}
+        {/*      <div className="text-sm">*/}
+        {/*        <p className="font-medium">Account Management</p>*/}
+        {/*        <p className="text-muted-foreground">Click to manage your account settings</p>*/}
+        {/*      </div>*/}
+        {/*    </div>*/}
+        {/*  </CardContent>*/}
+        {/*</Card>*/}
+      </PageContainer>
+    </>
   );
 }

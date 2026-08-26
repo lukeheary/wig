@@ -23,7 +23,7 @@ export function SharedBackButton({
   returnTo,
   backLabel = "Back",
   className,
-  iconClassName = "h-5 w-5",
+  iconClassName = "h-[18px] w-[18px]",
   variant = "ghost",
   size = "icon",
   onClick,

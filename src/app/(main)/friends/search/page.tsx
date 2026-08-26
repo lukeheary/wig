@@ -98,7 +98,17 @@ function SearchPageContent() {
     defaultValue: "",
   });
   const [cursor, setCursor] = useState(0);
-  const [mobileFilter, setMobileFilter] = useState<SearchFilter>("all");
+  const [mobileFilter, setMobileFilter] = useQueryState<SearchFilter>(
+    "filter",
+    {
+      defaultValue: "all",
+      parse: (value) =>
+        ["all", "people", "places", "events"].includes(value ?? "")
+          ? (value as SearchFilter)
+          : "all",
+      serialize: (value) => value,
+    }
+  );
   const pageSize = 20;
 
   const eventRange = useMemo(() => {
@@ -185,7 +195,7 @@ function SearchPageContent() {
 
   return (
     <PageContainer className="min-h-screen bg-black !px-2 !pt-0 md:bg-background md:!px-4 md:!pt-4">
-      <div className="md:hidden">
+      <div>
         <div className="sticky top-0 z-40 bg-black px-1 pb-3 pt-3">
           <SearchInput
             placeholder="Search..."
@@ -303,7 +313,7 @@ function SearchPageContent() {
         )}
       </div>
 
-      <div className="hidden md:block">
+      <div className="hidden">
         <BackButtonHeader
           backHref="/activity"
           title="Find Friends"

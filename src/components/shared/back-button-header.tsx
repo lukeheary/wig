@@ -41,11 +41,12 @@ export function BackButtonHeader({
           <Button
             variant="ghost"
             size="icon"
+            className="h-10 w-10 rounded-full"
             aria-label={backLabel}
             onClick={onBack}
             type="button"
           >
-            <ArrowLeft className="h-5 w-5" />
+            <ArrowLeft className="h-[18px] w-[18px]" />
           </Button>
         ) : (
           <SharedBackButton

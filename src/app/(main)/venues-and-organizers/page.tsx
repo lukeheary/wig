@@ -2,16 +2,9 @@
 
 import Image from "next/image";
 import Link from "next/link";
-import {
-  Suspense,
-  useMemo,
-  useEffect,
-  useRef,
-  useState,
-  useCallback,
-} from "react";
+import { useRouter } from "next/navigation";
+import { Suspense, useMemo, useEffect, useState, useCallback } from "react";
 import { trpc } from "@/lib/trpc";
-import { SearchInput } from "@/components/ui/search-input";
 import { useNavbarSearch } from "@/contexts/nav-search-context";
 import { Card, CardContent } from "@/components/ui/card";
 import {
@@ -177,18 +170,15 @@ function PlaceSkeletonGrid({ count = 9 }: { count?: number }) {
 }
 
 function PlacesPageContent() {
+  const router = useRouter();
   const { setShowNavbarSearch, registerScrollToSearch } = useNavbarSearch();
   const { triggerHaptic } = useHaptics();
-  const searchInputRef = useRef<HTMLInputElement>(null);
   const [isSticky, setIsSticky] = useState(false);
-  const [isSearchMode, setIsSearchMode] = useState(false);
   const [selectedCategories, setSelectedCategories] = useState<string[]>([]);
 
-  // Scroll to top and focus search input when navbar search button is clicked
   const scrollToSearchAndFocus = useCallback(() => {
-    window.scrollTo({ top: 0, left: 0, behavior: "auto" });
-    searchInputRef.current?.focus();
-  }, []);
+    router.push("/activity/search?filter=places");
+  }, [router]);
 
   // Register the scroll callback with the navbar context
   useEffect(() => {
@@ -211,9 +201,6 @@ function PlacesPageContent() {
     };
   }, []);
 
-  const [searchQuery, setSearchQuery] = useQueryState("search", {
-    defaultValue: "",
-  });
   const [selectedCity, setSelectedCity] = useQueryState<string | null>("city", {
     defaultValue: null,
     parse: (value) => value || null,
@@ -249,7 +236,6 @@ function PlacesPageContent() {
   const isReady = !isLoadingUser;
 
   // Determine place type filter
-  const isFilteredPlacesView = filterType !== "all";
   const placeType =
     filterType === "venues"
       ? "venue"
@@ -262,7 +248,6 @@ function PlacesPageContent() {
     trpc.place.listPlaces.useQuery(
       {
         type: placeType,
-        search: searchQuery || undefined,
         city:
           effectiveCity && effectiveCity !== "all" ? effectiveCity : undefined,
         followedOnly: filterType === "following",
@@ -338,127 +323,86 @@ function PlacesPageContent() {
     );
   }, []);
 
-  const handleBackFromSearchOrFilter = useCallback(() => {
-    setIsSearchMode(false);
-    searchInputRef.current?.blur();
-
-    if (isFilteredPlacesView) {
-      setFilterType("all");
-    }
-  }, [isFilteredPlacesView, setFilterType]);
-
   const isLoading = isLoadingPlaces;
 
   return (
     <PageContainer className="min-h-screen bg-black !px-2 !pt-0 md:bg-background md:!px-4 md:!pt-4">
       {/* Search and Filters */}
       <div className="fixed inset-x-0 top-0 z-40 px-3 pb-3 pt-3 md:hidden">
-        {isSearchMode ? (
-          <Suspense fallback={null}>
-            <SearchInput
-              ref={searchInputRef}
-              placeholder="Search places..."
-              value={searchQuery}
-              onChange={setSearchQuery}
-              showBack
-              onBack={handleBackFromSearchOrFilter}
-              className="h-12"
-            />
-          </Suspense>
-        ) : (
-          <div className="grid h-12 grid-cols-[5.75rem_1fr_5.75rem] items-center">
-            <div className="flex h-12 overflow-hidden rounded-3xl border border-white/15 bg-[#242426]/85 shadow-lg backdrop-blur-2xl">
-              <DropdownMenu>
-                <DropdownMenuTrigger asChild>
-                  <button
-                    type="button"
-                    className="flex flex-1 items-center justify-center"
-                    aria-label="Filter places"
-                  >
-                    <ListFilter className="h-4 w-4" />
-                  </button>
-                </DropdownMenuTrigger>
-                <DropdownMenuContent align="start" className="w-64">
-                  <DropdownMenuLabel>Categories</DropdownMenuLabel>
-                  {visibleCategories.length > 0 ? (
-                    visibleCategories.map((category) => (
-                      <DropdownMenuCheckboxItem
-                        key={category.id}
-                        checked={selectedCategories.includes(category.key)}
-                        onSelect={(event) => event.preventDefault()}
-                        onCheckedChange={() => toggleCategory(category.key)}
-                      >
-                        {category.label}
-                      </DropdownMenuCheckboxItem>
-                    ))
-                  ) : (
-                    <div className="px-2 py-2 text-sm text-muted-foreground">
-                      No categories available
-                    </div>
-                  )}
-                </DropdownMenuContent>
-              </DropdownMenu>
-              <button
-                type="button"
-                onClick={() => {
-                  setIsSearchMode(true);
-                  window.requestAnimationFrame(() =>
-                    searchInputRef.current?.focus()
-                  );
-                }}
-                className="flex flex-1 items-center justify-center"
-                aria-label="Search places"
-              >
-                <Search className="h-[1.125rem] w-[1.125rem]" />
-              </button>
-            </div>
-            <h1
-              className={cn(
-                "text-center text-[17px] font-bold transition-opacity duration-300 ease-in-out",
-                isSticky && "opacity-0"
-              )}
+        <div className="grid h-12 grid-cols-[5.75rem_1fr_5.75rem] items-center">
+          <div className="flex h-12 overflow-hidden rounded-3xl border border-white/15 bg-[#242426]/85 shadow-lg backdrop-blur-2xl">
+            <DropdownMenu>
+              <DropdownMenuTrigger asChild>
+                <button
+                  type="button"
+                  className="flex flex-1 items-center justify-center"
+                  aria-label="Filter places"
+                >
+                  <ListFilter className="h-4 w-4" />
+                </button>
+              </DropdownMenuTrigger>
+              <DropdownMenuContent align="start" className="w-64">
+                <DropdownMenuLabel>Categories</DropdownMenuLabel>
+                {visibleCategories.length > 0 ? (
+                  visibleCategories.map((category) => (
+                    <DropdownMenuCheckboxItem
+                      key={category.id}
+                      checked={selectedCategories.includes(category.key)}
+                      onSelect={(event) => event.preventDefault()}
+                      onCheckedChange={() => toggleCategory(category.key)}
+                    >
+                      {category.label}
+                    </DropdownMenuCheckboxItem>
+                  ))
+                ) : (
+                  <div className="px-2 py-2 text-sm text-muted-foreground">
+                    No categories available
+                  </div>
+                )}
+              </DropdownMenuContent>
+            </DropdownMenu>
+            <Link
+              href="/activity/search?filter=places"
+              className="flex flex-1 items-center justify-center"
+              aria-label="Search places"
             >
-              Places
-            </h1>
+              <Search className="h-[1.125rem] w-[1.125rem]" />
+            </Link>
           </div>
-        )}
-
-        {!isSearchMode ? (
-          <MobileFilterPills
-            options={MOBILE_PLACE_FILTERS}
-            value={filterType}
-            onValueChange={setFilterType}
+          <h1
             className={cn(
-              "-mx-3 mt-4 pl-3 transition-opacity duration-300 ease-in-out",
-              isSticky && "pointer-events-none opacity-0"
+              "text-center text-[17px] font-bold transition-opacity duration-300 ease-in-out",
+              isSticky && "opacity-0"
             )}
-          />
-        ) : null}
+          >
+            Places
+          </h1>
+        </div>
+
+        <MobileFilterPills
+          options={MOBILE_PLACE_FILTERS}
+          value={filterType}
+          onValueChange={setFilterType}
+          className={cn(
+            "-mx-3 mt-4 pl-3 transition-opacity duration-300 ease-in-out",
+            isSticky && "pointer-events-none opacity-0"
+          )}
+        />
       </div>
-      <div
-        className={cn("md:hidden", isSearchMode ? "h-[4.5rem]" : "h-[7.5rem]")}
-        aria-hidden="true"
-      />
+      <div className="h-[7.5rem] md:hidden" aria-hidden="true" />
 
       <StickySearchBar
         className="hidden md:block"
         innerClassName="w-full flex-col items-stretch sm:flex-col sm:items-stretch"
       >
         <div className="flex w-full flex-col gap-2 sm:flex-row sm:items-center">
-          <div className="flex w-full flex-row">
-            <Suspense fallback={null}>
-              <SearchInput
-                ref={searchInputRef}
-                placeholder="Search venues & organizers..."
-                value={searchQuery}
-                onChange={setSearchQuery}
-                onFocus={() => setIsSearchMode(true)}
-                showBack={isSearchMode || isFilteredPlacesView}
-                onBack={handleBackFromSearchOrFilter}
-                className="w-full"
-              />
-            </Suspense>
-          </div>
+          <Link
+            href="/activity/search?filter=places"
+            className="flex h-10 w-full items-center gap-2 rounded-md border border-input bg-background px-3 text-sm text-muted-foreground shadow-sm"
+          >
+            <Search className="h-4 w-4" />
+            Search venues &amp; organizers...
+          </Link>
 
           {/* Filters */}
           <div className="flex w-full gap-2 sm:w-fit">
@@ -648,9 +592,7 @@ function PlacesPageContent() {
                 ? "Try removing a category filter or adjusting your search"
                 : filterType === "following"
                   ? "You aren't following any venues or organizers yet"
-                  : searchQuery
-                    ? "Try adjusting your search or filters"
-                    : "No venues or organizers available yet"}
+                  : "No venues or organizers available yet"}
             </p>
           </CardContent>
         </Card>

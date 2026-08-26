@@ -1,17 +1,12 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import Link from "next/link";
 import {
   Camera,
   ChevronDown,
-  Headset,
   Loader2,
-  LogOut,
   MoreHorizontal,
-  Pencil,
-  Settings,
-  Share2,
   ChevronLeft,
 } from "lucide-react";
 import { useClerk } from "@clerk/nextjs";
@@ -26,13 +21,6 @@ import { trpc } from "@/lib/trpc";
 import { HomeMobileEventRail } from "@/components/events/home-mobile-event-rail";
 import { Button } from "@/components/ui/button";
 import { UserAvatar } from "@/components/ui/user-avatar";
-import {
-  DropdownMenu,
-  DropdownMenuContent,
-  DropdownMenuItem,
-  DropdownMenuSeparator,
-  DropdownMenuTrigger,
-} from "@/components/ui/dropdown-menu";
 
 type UserProfilePageProps = {
   username: string;
@@ -57,6 +45,7 @@ export function UserProfilePage({
   const { signOut } = useClerk();
   const router = useRouter();
   const utils = trpc.useUtils();
+  const profileMenuRef = useRef<HTMLSelectElement>(null);
   const [eventMode, setEventMode] = useState<"upcoming" | "past">("upcoming");
   const { data, isLoading, isError } = trpc.user.getProfileByUsername.useQuery({
     username,
@@ -114,6 +103,30 @@ export function UserProfilePage({
     window.location.assign("/");
   };
 
+  const handleProfileMenuAction = async (action: string) => {
+    if (profileMenuRef.current) {
+      profileMenuRef.current.selectedIndex = -1;
+    }
+
+    switch (action) {
+      case "edit":
+        router.push("/profile/settings");
+        break;
+      case "share":
+        await shareProfile();
+        break;
+      case "admin":
+        router.push("/admin");
+        break;
+      case "support":
+        router.push("/support");
+        break;
+      case "sign-out":
+        await handleSignOut();
+        break;
+    }
+  };
+
   return (
     <main className="min-h-screen bg-black">
       <div className="mx-auto w-full pb-12">
@@ -122,7 +135,7 @@ export function UserProfilePage({
             className={
               showSettings
                 ? "h-7"
-                : "flex h-12 items-center gap-3 pr-14 md:pr-16"
+                : "flex h-7 items-center justify-center px-14 md:px-16"
             }
           >
             {!showSettings ? (
@@ -131,81 +144,51 @@ export function UserProfilePage({
                 variant="ghost"
                 size="icon"
                 onClick={() => router.back()}
-                className="h-12 w-12 shrink-0 rounded-3xl border border-white/15 bg-[#242426]/85 text-white shadow-[0_18px_50px_rgba(0,0,0,0.55)] backdrop-blur-2xl hover:bg-[#242426]/85"
+                className="absolute left-3 top-3 h-[46px] w-[46px] shrink-0 rounded-full border border-white/15 bg-[#242426]/85 text-white shadow-[0_18px_50px_rgba(0,0,0,0.55)] backdrop-blur-2xl hover:bg-[#242426]/85 md:left-8 md:top-6 md:h-12 md:w-12"
                 aria-label="Go back"
               >
-                <ChevronLeft className="h-5 w-5" />
+                <ChevronLeft className="h-[18px] w-[18px]" />
               </Button>
             ) : null}
             <p
               className={
                 showSettings
                   ? "text-center text-[17px] font-bold text-white md:text-xl"
-                  : "truncate text-[17px] font-bold text-white md:text-xl"
+                  : "truncate text-center text-[17px] font-bold text-white md:text-xl"
               }
             >
               {profile.username}
             </p>
           </div>
-          <DropdownMenu>
-            <DropdownMenuTrigger asChild>
-              <Button
-                variant="ghost"
-                size="icon"
-                className="absolute right-3 top-3 h-[46px] w-[46px] rounded-full border border-white/15 bg-[#242426]/85 text-white shadow-[0_18px_50px_rgba(0,0,0,0.55)] backdrop-blur-2xl hover:bg-[#242426]/85 md:right-8 md:top-6 md:h-12 md:w-12"
-                aria-label="Profile options"
-              >
-                <MoreHorizontal className="h-5 w-5" />
-              </Button>
-            </DropdownMenuTrigger>
-            <DropdownMenuContent
-              align="end"
-              sideOffset={8}
-              className="w-64 border-white/15 bg-[#242426]/95 p-2 shadow-2xl backdrop-blur-2xl"
+          <label className="absolute right-3 top-3 flex h-[46px] w-[46px] cursor-pointer items-center justify-center rounded-full border border-white/15 bg-[#242426]/85 text-white shadow-[0_18px_50px_rgba(0,0,0,0.55)] backdrop-blur-2xl md:right-8 md:top-6 md:h-12 md:w-12">
+            <MoreHorizontal className="h-5 w-5" aria-hidden="true" />
+            <select
+              ref={(select) => {
+                profileMenuRef.current = select;
+                if (select) select.selectedIndex = -1;
+              }}
+              aria-label="Profile options"
+              onPointerDown={(event) => {
+                event.currentTarget.selectedIndex = -1;
+              }}
+              onChange={(event) => {
+                const action = event.target.value;
+                event.currentTarget.selectedIndex = -1;
+                void handleProfileMenuAction(action);
+              }}
+              className="absolute inset-0 h-full w-full cursor-pointer opacity-0"
             >
-              {showSettings ? (
-                <DropdownMenuItem asChild className="gap-4 py-3 text-base">
-                  <Link href="/profile/settings">
-                    <Pencil />
-                    Edit Profile
-                  </Link>
-                </DropdownMenuItem>
-              ) : null}
-              <DropdownMenuItem
-                onSelect={() => void shareProfile()}
-                className="cursor-pointer gap-4 py-3 text-base"
-              >
-                <Share2 />
-                Share Profile
-              </DropdownMenuItem>
+              {showSettings ? <option value="edit">Edit Profile</option> : null}
+              <option value="share">Share Profile</option>
               {showSettings && adminStatus?.isAdmin ? (
-                <DropdownMenuItem asChild className="gap-4 py-3 text-base">
-                  <Link href="/admin">
-                    <Settings />
-                    Admin Settings
-                  </Link>
-                </DropdownMenuItem>
+                <option value="admin">Admin Settings</option>
               ) : null}
               {showSettings ? (
-                <>
-                  <DropdownMenuItem asChild className="gap-4 py-3 text-base">
-                    <Link href="/support">
-                      <Headset />
-                      Help &amp; Feedback
-                    </Link>
-                  </DropdownMenuItem>
-                  <DropdownMenuSeparator className="bg-white/10" />
-                  <DropdownMenuItem
-                    onSelect={() => void handleSignOut()}
-                    className="cursor-pointer gap-4 py-3 text-base text-red-400 focus:text-red-400"
-                  >
-                    <LogOut />
-                    Sign Out
-                  </DropdownMenuItem>
-                </>
+                <option value="support">Help &amp; Feedback</option>
               ) : null}
-            </DropdownMenuContent>
-          </DropdownMenu>
+              {showSettings ? <option value="sign-out">Sign Out</option> : null}
+            </select>
+          </label>
 
           <div className="mt-12 flex items-end gap-5 md:mt-14 md:gap-8">
             <div className="relative shrink-0">

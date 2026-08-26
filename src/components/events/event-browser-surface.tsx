@@ -7,6 +7,7 @@ import {
   useEffect,
   useState,
 } from "react";
+import Link from "next/link";
 import {
   differenceInCalendarWeeks,
   format,
@@ -34,16 +35,6 @@ import { SearchInput } from "@/components/ui/search-input";
 import { ResponsiveSelect } from "@/components/ui/responsive-select";
 import { StickySearchBar } from "@/components/ui/sticky-search-bar";
 import { StickySectionHeader } from "@/components/ui/sticky-section-header";
-import {
-  DropdownMenu,
-  DropdownMenuCheckboxItem,
-  DropdownMenuContent,
-  DropdownMenuLabel,
-  DropdownMenuRadioGroup,
-  DropdownMenuRadioItem,
-  DropdownMenuSeparator,
-  DropdownMenuTrigger,
-} from "@/components/ui/dropdown-menu";
 import { cn } from "@/lib/utils";
 import { type EventFilterTab } from "@/types/events";
 import { type EventListItem } from "@/types/trpc";
@@ -82,6 +73,7 @@ interface EventBrowserSurfaceProps {
   searchQuery: string;
   onSearchQueryChange: (value: string) => void | Promise<unknown>;
   onSearchFocus?: () => void;
+  searchHref?: string;
   showSearchBack?: boolean;
   onSearchBack: () => void;
   shouldShowReturnToCurrentWeekButton: boolean;
@@ -113,6 +105,7 @@ interface EventBrowserSurfaceProps {
   showWeekSkeletons?: boolean;
   skeletonDateHeader?: string | null;
   defaultContent?: ReactNode;
+  afterFirstEventDay?: ReactNode;
 }
 
 const MOBILE_EVENT_FILTERS: Array<{ value: EventFilterTab; label: string }> = [
@@ -127,6 +120,7 @@ function MobileEventBrowserControls({
   searchQuery,
   onSearchQueryChange,
   onSearchFocus,
+  searchHref,
   isSearchView,
   onSearchBack,
   filterValue,
@@ -146,6 +140,7 @@ function MobileEventBrowserControls({
   | "searchQuery"
   | "onSearchQueryChange"
   | "onSearchFocus"
+  | "searchHref"
   | "isSearchView"
   | "onSearchBack"
   | "filterValue"
@@ -216,59 +211,66 @@ function MobileEventBrowserControls({
     <>
       <div className="fixed inset-x-3 top-[calc(env(safe-area-inset-top)+0.75rem)] z-50 grid h-12 grid-cols-[5.75rem_minmax(0,1fr)_5.75rem] items-stretch gap-2 md:hidden">
         <div className="flex h-12 overflow-hidden rounded-3xl border border-white/15 bg-[#242426]/50 shadow-[0_18px_50px_rgba(0,0,0,0.55)] backdrop-blur-[24px]">
-          <DropdownMenu>
-            <DropdownMenuTrigger asChild>
-              <button
-                type="button"
-                className="flex flex-1 items-center justify-center"
-                aria-label="Filter events"
-              >
-                <SlidersHorizontal className="h-[1.125rem] w-[1.125rem]" />
-              </button>
-            </DropdownMenuTrigger>
-            <DropdownMenuContent align="start" className="w-72">
-              <DropdownMenuLabel>Events</DropdownMenuLabel>
-              <DropdownMenuRadioGroup
-                value={filterValue}
-                onValueChange={(value) =>
-                  onFilterChange(value as EventFilterTab)
+          <label className="relative flex flex-1 cursor-pointer items-center justify-center">
+            <SlidersHorizontal
+              className="h-[1.125rem] w-[1.125rem]"
+              aria-hidden="true"
+            />
+            <select
+              aria-label="Filter events"
+              value={`filter:${filterValue}`}
+              onChange={(event) => {
+                const selection = event.target.value;
+                if (selection.startsWith("filter:")) {
+                  onFilterChange(
+                    selection.slice("filter:".length) as EventFilterTab
+                  );
+                } else if (selection.startsWith("category:")) {
+                  onToggleCategory(selection.slice("category:".length));
                 }
-              >
+              }}
+              className="absolute inset-0 h-full w-full cursor-pointer opacity-0"
+            >
+              <optgroup label="Events">
                 {filterOptions.map((option) => (
-                  <DropdownMenuRadioItem
-                    key={option.value}
-                    value={option.value}
-                  >
+                  <option key={option.value} value={`filter:${option.value}`}>
                     {option.label}
-                  </DropdownMenuRadioItem>
+                  </option>
                 ))}
-              </DropdownMenuRadioGroup>
+              </optgroup>
               {visibleCategories.length > 0 ? (
-                <>
-                  <DropdownMenuSeparator />
-                  <DropdownMenuLabel>Categories</DropdownMenuLabel>
+                <optgroup label="Categories">
                   {visibleCategories.map((category) => (
-                    <DropdownMenuCheckboxItem
+                    <option
                       key={category.id}
-                      checked={selectedCategories.includes(category.key)}
-                      onSelect={(event) => event.preventDefault()}
-                      onCheckedChange={() => onToggleCategory(category.key)}
+                      value={`category:${category.key}`}
                     >
+                      {selectedCategories.includes(category.key) ? "✓ " : ""}
                       {category.label}
-                    </DropdownMenuCheckboxItem>
+                    </option>
                   ))}
-                </>
+                </optgroup>
               ) : null}
-            </DropdownMenuContent>
-          </DropdownMenu>
-          <button
-            type="button"
-            onClick={onSearchFocus}
-            className="flex flex-1 items-center justify-center"
-            aria-label="Search events"
-          >
-            <MagnifyingGlass className="h-[1.125rem] w-[1.125rem]" />
-          </button>
+            </select>
+          </label>
+          {searchHref ? (
+            <Link
+              href={searchHref}
+              className="flex flex-1 items-center justify-center"
+              aria-label="Search events"
+            >
+              <MagnifyingGlass className="h-[1.125rem] w-[1.125rem]" />
+            </Link>
+          ) : (
+            <button
+              type="button"
+              onClick={onSearchFocus}
+              className="flex flex-1 items-center justify-center"
+              aria-label="Search events"
+            >
+              <MagnifyingGlass className="h-[1.125rem] w-[1.125rem]" />
+            </button>
+          )}
         </div>
 
         <button
@@ -537,6 +539,7 @@ export function EventBrowserSurface({
   searchQuery,
   onSearchQueryChange,
   onSearchFocus,
+  searchHref,
   isSearchView,
   showSearchBack = isSearchView,
   onSearchBack,
@@ -568,9 +571,13 @@ export function EventBrowserSurface({
   showWeekSkeletons = true,
   skeletonDateHeader,
   defaultContent,
+  afterFirstEventDay,
 }: EventBrowserSurfaceProps) {
   const isSearching = Boolean(searchQuery.trim());
   const [hasScrolled, setHasScrolled] = useState(!hideUntilScroll);
+  const firstEventDayKey = daysToDisplay
+    .map((date) => format(date, "yyyy-MM-dd"))
+    .find((dateKey) => (eventsByDay[dateKey] || []).length > 0);
 
   useEffect(() => {
     if (!hideUntilScroll) {
@@ -612,6 +619,7 @@ export function EventBrowserSurface({
               searchQuery={searchQuery}
               onSearchQueryChange={onSearchQueryChange}
               onSearchFocus={onSearchFocus}
+              searchHref={searchHref}
               isSearchView={isSearchView}
               onSearchBack={onSearchBack}
               filterValue={filterValue}
@@ -654,18 +662,28 @@ export function EventBrowserSurface({
                   </button>
                 </div>
 
-                <Suspense fallback={null}>
-                  <SearchInput
-                    ref={searchInputRef}
-                    placeholder="Search events..."
-                    value={searchQuery}
-                    onChange={onSearchQueryChange}
-                    onFocus={onSearchFocus}
-                    showBack={showSearchBack}
-                    onBack={onSearchBack}
-                    className="min-w-0 flex-1"
-                  />
-                </Suspense>
+                {searchHref ? (
+                  <Link
+                    href={searchHref}
+                    className="flex h-10 min-w-0 flex-1 items-center gap-2 rounded-md border border-input bg-background px-3 text-sm text-muted-foreground shadow-sm"
+                  >
+                    <MagnifyingGlass className="h-4 w-4" />
+                    Search events...
+                  </Link>
+                ) : (
+                  <Suspense fallback={null}>
+                    <SearchInput
+                      ref={searchInputRef}
+                      placeholder="Search events..."
+                      value={searchQuery}
+                      onChange={onSearchQueryChange}
+                      onFocus={onSearchFocus}
+                      showBack={showSearchBack}
+                      onBack={onSearchBack}
+                      className="min-w-0 flex-1"
+                    />
+                  </Suspense>
+                )}
 
                 <div
                   className={cn(
@@ -930,6 +948,9 @@ export function EventBrowserSurface({
                       dayEvents={dayEvents}
                       emptyDayState={emptyStates?.day}
                     />
+                    {afterFirstEventDay && dateKey === firstEventDayKey
+                      ? afterFirstEventDay
+                      : null}
                   </div>
                 );
               })}

@@ -10,18 +10,19 @@ import {
 } from "react";
 import Image from "next/image";
 import Link from "next/link";
-import {
-  format,
-  addDays,
-  startOfDay,
-  isSameMonth,
-  isSameDay,
-} from "date-fns";
+import { useRouter } from "next/navigation";
+import { format, addDays, startOfDay, isSameMonth, isSameDay } from "date-fns";
 import { useAuth } from "@clerk/nextjs";
 import { useQueryState } from "nuqs";
 import { CalendarIcon, Clock, ChevronRight, MapPin } from "lucide-react";
 import { trpc } from "@/lib/trpc";
 import { EventBrowserSurface } from "@/components/events/event-browser-surface";
+import {
+  WhatsNewSection,
+  type WhatsNewEvent,
+  type WhatsNewFilter,
+  type WhatsNewUpdate,
+} from "@/components/events/whats-new-section";
 import { useEventBrowserState } from "@/components/events/use-event-browser-state";
 import { Card, CardContent } from "@/components/ui/card";
 import {
@@ -50,6 +51,24 @@ const HOME_ADD_FRIENDS_BANNER_KEY_PREFIX =
   "wig:home:add-friends-banner-dismissed";
 const HOME_ACTIVITY_WINDOW_DAYS = 1;
 const HOME_EVENTS_QUERY_LIMIT = 500;
+
+type MobileWhatsNewEvent = WhatsNewEvent & {
+  venueId: string | null;
+  organizerId: string | null;
+  seriesId: string | null;
+  createdAt: string | null;
+  updatedAt: string | null;
+  metroAreaCity: string | null;
+  isFollowed: boolean;
+  venueIsFollowed: boolean;
+  organizerIsFollowed: boolean;
+};
+
+type MobileEventsWhatsNewResponse = {
+  latestFromPlaces?: MobileWhatsNewEvent[];
+  latestFromFollows?: MobileWhatsNewEvent[];
+  hasFollowedPlaces?: boolean;
+};
 
 function getFriendActivityCount(event: {
   friendsGoing?: ArrayLike<unknown> | null;
@@ -107,6 +126,7 @@ function sortEventsLikeNativeHome<
 }
 
 function HomePageContent() {
+  const router = useRouter();
   const { toast } = useToast();
   const { triggerHaptic } = useHaptics();
   const { userId } = useAuth();
@@ -118,6 +138,10 @@ function HomePageContent() {
     useState(false);
   const [isSticky, setIsSticky] = useState(false);
   const [isDateNavigating, setIsDateNavigating] = useState(false);
+  const [whatsNewResponse, setWhatsNewResponse] =
+    useState<MobileEventsWhatsNewResponse | null>(null);
+  const [selectedWhatsNewFilter, setSelectedWhatsNewFilter] =
+    useState<WhatsNewFilter | null>(null);
   const stickySentinelRef = useRef<HTMLDivElement>(null);
   const hasMarkedHomeActivitySeenRef = useRef(false);
 
@@ -297,6 +321,118 @@ function HomePageContent() {
     [buildEventsByDay, filteredEvents]
   );
 
+  useEffect(() => {
+    if (!userId || !isCurrentWeek) {
+      setWhatsNewResponse(null);
+      return;
+    }
+
+    const controller = new AbortController();
+
+    void fetch("/api/mobile/events?limit=500", {
+      credentials: "same-origin",
+      signal: controller.signal,
+    })
+      .then((response) => {
+        if (!response.ok) throw new Error("Unable to load What’s New");
+        return response.json() as Promise<MobileEventsWhatsNewResponse>;
+      })
+      .then((response) => setWhatsNewResponse(response))
+      .catch((fetchError: unknown) => {
+        if (
+          fetchError instanceof DOMException &&
+          fetchError.name === "AbortError"
+        ) {
+          return;
+        }
+        setWhatsNewResponse(null);
+      });
+
+    return () => controller.abort();
+  }, [isCurrentWeek, userId]);
+
+  const hasFollowedPlaces = whatsNewResponse?.hasFollowedPlaces ?? false;
+  const effectiveWhatsNewFilter =
+    selectedWhatsNewFilter ?? (hasFollowedPlaces ? "following" : "allPlaces");
+  const allWhatsNewUpdates = useMemo<WhatsNewUpdate[]>(() => {
+    const cutoff = Date.now() - 14 * 24 * 60 * 60 * 1000;
+    const seenIds = new Set<string>();
+    const source =
+      whatsNewResponse?.latestFromPlaces ??
+      whatsNewResponse?.latestFromFollows ??
+      [];
+
+    return source
+      .filter((event) => {
+        if (seenIds.has(event.id)) return false;
+        seenIds.add(event.id);
+        if (!event.venueId && !event.organizerId) return false;
+        if (!effectiveCity || effectiveCity === "all") return true;
+        return (
+          event.metroAreaCity === effectiveCity || event.city === effectiveCity
+        );
+      })
+      .flatMap((event): WhatsNewUpdate[] => {
+        const createdAt = event.createdAt
+          ? new Date(event.createdAt).getTime()
+          : Number.NEGATIVE_INFINITY;
+        const updatedAt = event.updatedAt
+          ? new Date(event.updatedAt).getTime()
+          : Number.NEGATIVE_INFINITY;
+        const wasRecentlyCreated = createdAt >= cutoff;
+        const wasRecentlyUpdated = updatedAt >= cutoff && updatedAt > createdAt;
+        const isSeriesOccurrence = Boolean(event.seriesId);
+        const qualifies = isSeriesOccurrence
+          ? wasRecentlyUpdated
+          : wasRecentlyCreated || wasRecentlyUpdated;
+
+        if (!qualifies) return [];
+
+        const kind =
+          isSeriesOccurrence || (wasRecentlyUpdated && !wasRecentlyCreated)
+            ? "seriesUpdated"
+            : "newEvent";
+
+        return [
+          {
+            event,
+            kind,
+            activityDate: kind === "seriesUpdated" ? updatedAt : createdAt,
+          },
+        ];
+      })
+      .sort((a, b) => {
+        if (a.activityDate !== b.activityDate) {
+          return b.activityDate - a.activityDate;
+        }
+        return (
+          new Date(a.event.startAt).getTime() -
+          new Date(b.event.startAt).getTime()
+        );
+      });
+  }, [effectiveCity, whatsNewResponse]);
+  const visibleWhatsNewUpdates = useMemo(
+    () =>
+      allWhatsNewUpdates.filter((update) => {
+        if (effectiveWhatsNewFilter === "allPlaces") return true;
+        return (
+          (update.event as MobileWhatsNewEvent).isFollowed ||
+          (update.event as MobileWhatsNewEvent).venueIsFollowed ||
+          (update.event as MobileWhatsNewEvent).organizerIsFollowed
+        );
+      }),
+    [allWhatsNewUpdates, effectiveWhatsNewFilter]
+  );
+  const shouldShowWhatsNew =
+    Boolean(userId) &&
+    isCurrentWeek &&
+    isDefaultCalendarView &&
+    browser.selectedCategories.length === 0 &&
+    !isSearchView &&
+    !isSearching &&
+    !showSkeletons &&
+    allWhatsNewUpdates.length > 0;
+
   const isHomeActivityStateReady = !isHomeActivityStateLoading;
   const shouldShowRecentActivity =
     !isSearchView &&
@@ -341,9 +477,8 @@ function HomePageContent() {
   }, [browser, isFilteredFeedView, triggerHaptic]);
 
   const scrollToSearchAndFocus = useCallback(() => {
-    window.scrollTo({ top: 0, left: 0, behavior: "auto" });
-    browser.searchInputRef.current?.focus();
-  }, [browser.searchInputRef]);
+    router.push("/activity/search?filter=events");
+  }, [router]);
 
   useEffect(() => {
     registerScrollToSearch(scrollToSearchAndFocus);
@@ -621,6 +756,7 @@ function HomePageContent() {
       searchQuery={browser.searchQuery}
       onSearchQueryChange={browser.setSearchQuery}
       onSearchFocus={() => browser.setIsSearchMode(true)}
+      searchHref="/activity/search?filter=events"
       showSearchBack={isSearchView || isFilteredFeedView}
       onSearchBack={handleBackFromSearchOrFilter}
       shouldShowReturnToCurrentWeekButton={
@@ -721,6 +857,16 @@ function HomePageContent() {
       showWeekSkeletons={shouldShowWeekSectionSkeletons}
       skeletonDateHeader={skeletonDateHeader}
       defaultContent={monthContent}
+      afterFirstEventDay={
+        shouldShowWhatsNew ? (
+          <WhatsNewSection
+            updates={visibleWhatsNewUpdates}
+            hasFollowedPlaces={hasFollowedPlaces}
+            selection={effectiveWhatsNewFilter}
+            onSelectionChange={setSelectedWhatsNewFilter}
+          />
+        ) : undefined
+      }
     />
   );
 }

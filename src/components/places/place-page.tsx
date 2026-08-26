@@ -227,10 +227,10 @@ export function PlacePage({ actionMenuType }: PlacePageProps) {
             variant="ghost"
             size="icon"
             onClick={() => router.back()}
-            className="h-12 w-12 shrink-0 rounded-3xl border border-white/15 bg-[#242426]/85 text-white shadow-[0_18px_50px_rgba(0,0,0,0.55)] backdrop-blur-2xl hover:bg-[#242426]/85"
+            className="h-12 w-12 shrink-0 rounded-full border border-white/15 bg-[#242426]/85 text-white shadow-[0_18px_50px_rgba(0,0,0,0.55)] backdrop-blur-2xl hover:bg-[#242426]/85"
             aria-label="Go back"
           >
-            <ChevronLeft className="h-5 w-5" />
+            <ChevronLeft className="h-[18px] w-[18px]" />
           </Button>
           <h1 className="min-w-0 flex-1 truncate text-[17px] font-bold text-white">
             {place.slug}

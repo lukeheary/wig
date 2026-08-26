@@ -11,9 +11,9 @@ export function MobileProfileListHeader({ title }: { title: string }) {
       <Link
         href="/profile"
         aria-label="Back to profile"
-        className="absolute left-0 top-3 flex h-12 w-12 items-center justify-center rounded-3xl border border-white/15 bg-[#242426]/85 text-white shadow-[0_18px_50px_rgba(0,0,0,0.55)] backdrop-blur-2xl"
+        className="absolute left-0 top-3 flex h-[46px] w-[46px] items-center justify-center rounded-full border border-white/15 bg-[#242426]/85 text-white shadow-[0_18px_50px_rgba(0,0,0,0.55)] backdrop-blur-2xl"
       >
-        <ChevronLeft className="h-6 w-6" />
+        <ChevronLeft className="h-[18px] w-[18px]" />
       </Link>
       <h1 className="text-[17px] font-bold text-white">{title}</h1>
     </div>
