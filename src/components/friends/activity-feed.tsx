@@ -20,7 +20,6 @@ import {
 } from "lucide-react";
 import {
   differenceInCalendarDays,
-  format,
   formatDistanceToNow,
   isToday,
   isTomorrow,
@@ -29,7 +28,7 @@ import {
 } from "date-fns";
 import { usePathname, useSearchParams } from "next/navigation";
 import Link from "next/link";
-import { formatEventDate, formatRelativeEventDate } from "@/lib/utils";
+import { formatEventDate } from "@/lib/utils";
 import { StickySectionHeader } from "@/components/ui/sticky-section-header";
 import { buildReturnTo, withReturnTo } from "@/lib/navigation";
 import { EmptyStateCard } from "@/components/shared/empty-state-card";
@@ -48,31 +47,16 @@ function formatInlineEventDate(
   eventDate: Date,
   event?: { timeZone?: string | null; state?: string | null } | null
 ) {
-  const now = startOfDay(new Date());
-  const normalizedEventDate = startOfDay(eventDate);
-  const diff = differenceInCalendarDays(normalizedEventDate, now);
+  return `on ${formatEventDate(eventDate, event?.timeZone, event?.state, {
+    month: "short",
+    day: "numeric",
+  })}`;
+}
 
-  if (diff === 0) return "tonight";
-  if (diff === 1) return "tomorrow";
-  if (diff > 1 && diff < 7) {
-    return `on ${formatEventDate(eventDate, event?.timeZone, event?.state, {
-      weekday: "long",
-    })}`;
-  }
-  if (diff >= 7 && diff < 14) {
-    return `next ${formatEventDate(eventDate, event?.timeZone, event?.state, {
-      weekday: "long",
-    })}`;
-  }
-
-  return `on ${formatEventDate(
-    eventDate,
-    event?.timeZone,
-    event?.state,
-    eventDate.getFullYear() === new Date().getFullYear()
-      ? { month: "long", day: "numeric" }
-      : { month: "long", day: "numeric", year: "numeric" }
-  )}`;
+function formatActivityAge(activity: any) {
+  return formatDistanceToNow(getActivityTimestamp(activity), {
+    addSuffix: true,
+  }).replace(/^about /i, "");
 }
 
 const EVENT_UPDATE_TYPES = new Set([
@@ -108,7 +92,7 @@ export function ActivityItem({ activity }: ActivityItemProps) {
     : false;
 
   const eventRelativeDate = eventDate
-    ? formatRelativeEventDate(eventDate)
+    ? formatInlineEventDate(eventDate, event)
     : null;
   const cancelledEventDatePhrase = eventDate
     ? isToday(eventDate)
@@ -506,7 +490,7 @@ export function ActivityItem({ activity }: ActivityItemProps) {
         </div>
       </div>
       <div className="flex-1">
-        <p className="text-[15px] leading-[1.45] text-muted-foreground md:text-base">
+        <p className="text-sm leading-[1.45] text-muted-foreground md:text-base">
           {content}
           {!isEventStatusUpdate &&
             !shouldInlineEventDate &&
@@ -516,10 +500,8 @@ export function ActivityItem({ activity }: ActivityItemProps) {
               </span>
             )}
         </p>
-        <p className="text-xs text-muted-foreground/60 md:text-sm">
-          {formatDistanceToNow(getActivityTimestamp(activity), {
-            addSuffix: true,
-          })}
+        <p className="text-[11px] font-medium text-muted-foreground/60 md:text-sm">
+          {formatActivityAge(activity)}
         </p>
       </div>
     </div>

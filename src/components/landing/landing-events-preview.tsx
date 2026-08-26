@@ -8,10 +8,12 @@ import { useSignIn } from "@clerk/nextjs";
 import { isClerkAPIResponseError } from "@clerk/nextjs/errors";
 import { trpc } from "@/lib/trpc";
 import { cn, formatEventDate, formatEventTime } from "@/lib/utils";
-import { getEventImageUrl } from "@/components/events/event-card-helpers";
-import { type EventListItem } from "@/types/trpc";
+import {
+  getEventImageUrl,
+  type EventCardItem,
+} from "@/components/events/event-card-helpers";
 
-function PreviewCard({ event }: { event: EventListItem }) {
+function PreviewCard({ event }: { event: EventCardItem }) {
   const imageUrl = getEventImageUrl(event);
   const date = formatEventDate(event.startAt, event.timeZone, event.state, {
     weekday: "short",

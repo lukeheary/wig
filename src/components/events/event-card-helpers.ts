@@ -1,7 +1,11 @@
 import { type EventListItem } from "@/types/trpc";
 
-export type EventCardItem = Omit<EventListItem, "friendsInterested"> & {
+export type EventCardItem = Omit<
+  EventListItem,
+  "friendsInterested" | "isFollowed"
+> & {
   friendsInterested?: EventListItem["friendsInterested"];
+  isFollowed?: EventListItem["isFollowed"];
 };
 
 export type SocialUser = {

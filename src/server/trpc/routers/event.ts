@@ -1545,6 +1545,13 @@ export const eventRouter = router({
       const currentUser = await ctx.db.query.users.findFirst({
         where: eq(users.id, ctx.auth.userId),
       });
+      const userPlaceFollows = await ctx.db.query.placeFollows.findMany({
+        where: eq(placeFollows.userId, ctx.auth.userId),
+        columns: { placeId: true },
+      });
+      const followedPlaceIdSet = new Set(
+        userPlaceFollows.map((follow) => follow.placeId)
+      );
 
       // Build where conditions
       const conditions = [
@@ -1687,10 +1694,6 @@ export const eventRouter = router({
 
       // Filter by followed places (venues and organizers)
       if (input.followedOnly) {
-        const userPlaceFollows = await ctx.db.query.placeFollows.findMany({
-          where: eq(placeFollows.userId, ctx.auth.userId),
-        });
-
         // Get followed places and separate by type
         const followedPlaceIds = userPlaceFollows.map((f) => f.placeId);
 
@@ -1934,6 +1937,11 @@ export const eventRouter = router({
 
       return eventList.map((event) => ({
         ...mapEventCategoryData(event),
+        isFollowed:
+          (event.venueId ? followedPlaceIdSet.has(event.venueId) : false) ||
+          (event.organizerId
+            ? followedPlaceIdSet.has(event.organizerId)
+            : false),
         userRsvp: rsvpMap.get(event.id) || null,
         friendsGoing:
           (socialRsvpsMap.get(event.id) || []).filter(

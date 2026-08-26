@@ -36,7 +36,6 @@ import {
 import { EmptyStateCard } from "@/components/shared/empty-state-card";
 import { EventsPlaceholder } from "@/components/shared/events-placeholder";
 import { useNavbarSearch } from "@/contexts/nav-search-context";
-import { getDistanceMiles, type Coordinates } from "@/lib/geo";
 import { sendGoogleAnalyticsEvent } from "@/lib/google-analytics";
 import { HapticPreset, useHaptics } from "@/hooks/use-haptics";
 import { resolveMetroArea } from "@/lib/metro-areas";
@@ -59,6 +58,52 @@ function getFriendActivityCount(event: {
   return (
     (event.friendsGoing?.length ?? 0) + (event.friendsInterested?.length ?? 0)
   );
+}
+
+function getNativeDayRowPriority(event: {
+  coverImageUrl?: string | null;
+  venue?: { logoImageUrl?: string | null } | null;
+  organizer?: { logoImageUrl?: string | null } | null;
+  isFollowed?: boolean;
+  userRsvp?: { status?: string | null } | null;
+  friendsGoing?: ArrayLike<unknown> | null;
+  friendsInterested?: ArrayLike<unknown> | null;
+}) {
+  const hasSocialRsvp =
+    event.userRsvp?.status === "going" ||
+    event.userRsvp?.status === "interested" ||
+    getFriendActivityCount(event) > 0;
+
+  if (hasSocialRsvp) return 0;
+  if (event.isFollowed && event.coverImageUrl) return 1;
+  if (event.isFollowed) return 2;
+  if (
+    event.coverImageUrl ||
+    event.venue?.logoImageUrl ||
+    event.organizer?.logoImageUrl
+  ) {
+    return 3;
+  }
+  return 4;
+}
+
+function sortEventsLikeNativeHome<
+  T extends Parameters<typeof getNativeDayRowPriority>[0] & {
+    startAt: Date | string;
+    title: string;
+  },
+>(events: readonly T[]) {
+  return [...events].sort((a, b) => {
+    const priorityDifference =
+      getNativeDayRowPriority(a) - getNativeDayRowPriority(b);
+    if (priorityDifference !== 0) return priorityDifference;
+
+    const timeDifference =
+      new Date(a.startAt).getTime() - new Date(b.startAt).getTime();
+    if (timeDifference !== 0) return timeDifference;
+
+    return a.title.localeCompare(b.title, undefined, { sensitivity: "base" });
+  });
 }
 
 function HomePageContent() {
@@ -87,8 +132,6 @@ function HomePageContent() {
   const isDefaultCalendarView = activeFilter === "all";
   const isFollowingFeed = activeFilter === "following";
   const usesDaySectionLayout = isDefaultCalendarView || isFollowingFeed;
-  const shouldPrioritizeFriendActivity =
-    activeFilter === "all" || isFollowingFeed;
 
   const browser = useEventBrowserState({
     viewMode,
@@ -183,53 +226,6 @@ function HomePageContent() {
     return metro?.city ?? currentUser.city;
   }, [selectedCity, currentUser?.city, currentUser?.state, cities]);
 
-  const referenceCity =
-    selectedCity && selectedCity !== "all"
-      ? selectedCity
-      : (effectiveCity ?? null);
-
-  const referenceCityRecord = useMemo(() => {
-    if (!referenceCity || !cities) return null;
-    const matches = cities.filter((city) => city.city === referenceCity);
-    if (matches.length === 0) return null;
-    if (currentUser?.state) {
-      const preferred = matches.find(
-        (city) => city.state === currentUser.state
-      );
-      if (preferred) return preferred;
-    }
-    return matches[0];
-  }, [referenceCity, cities, currentUser?.state]);
-
-  const referenceCoords = useMemo<Coordinates | null>(() => {
-    if (
-      referenceCityRecord?.latitude == null ||
-      referenceCityRecord?.longitude == null
-    ) {
-      return null;
-    }
-    return {
-      latitude: referenceCityRecord.latitude,
-      longitude: referenceCityRecord.longitude,
-    };
-  }, [referenceCityRecord]);
-
-  const cityDistanceMap = useMemo(() => {
-    if (!cities || !referenceCoords) return new Map<string, number>();
-    const map = new Map<string, number>();
-    cities.forEach((city) => {
-      if (city.latitude == null || city.longitude == null) return;
-      const distance = getDistanceMiles(referenceCoords, {
-        latitude: city.latitude,
-        longitude: city.longitude,
-      });
-      if (distance != null) {
-        map.set(`${city.city}|${city.state}`, distance);
-      }
-    });
-    return map;
-  }, [cities, referenceCoords]);
-
   const isReady = !isLoadingUser;
 
   const {
@@ -276,53 +272,13 @@ function HomePageContent() {
 
   const sortedEvents = useMemo(() => {
     if (!events) return [];
-    if (!referenceCoords && !shouldPrioritizeFriendActivity) return events;
-    const nextEvents = [...events];
-    nextEvents.sort((a, b) => {
-      if (shouldPrioritizeFriendActivity) {
-        const diff = getFriendActivityCount(b) - getFriendActivityCount(a);
-        if (diff !== 0) return diff;
-      }
-      if (!referenceCoords) {
-        return new Date(a.startAt).getTime() - new Date(b.startAt).getTime();
-      }
-      const aDistance =
-        cityDistanceMap.get(`${a.city}|${a.state}`) ?? Number.POSITIVE_INFINITY;
-      const bDistance =
-        cityDistanceMap.get(`${b.city}|${b.state}`) ?? Number.POSITIVE_INFINITY;
-      if (aDistance !== bDistance) return aDistance - bDistance;
-      return new Date(a.startAt).getTime() - new Date(b.startAt).getTime();
-    });
-    return nextEvents;
-  }, [cityDistanceMap, events, referenceCoords, shouldPrioritizeFriendActivity]);
+    return sortEventsLikeNativeHome(events);
+  }, [events]);
 
   const sortedUpcomingSearchEvents = useMemo(() => {
     if (!upcomingSearchEvents) return [];
-    if (!referenceCoords && !shouldPrioritizeFriendActivity)
-      return upcomingSearchEvents;
-    const nextEvents = [...upcomingSearchEvents];
-    nextEvents.sort((a, b) => {
-      if (shouldPrioritizeFriendActivity) {
-        const diff = getFriendActivityCount(b) - getFriendActivityCount(a);
-        if (diff !== 0) return diff;
-      }
-      if (!referenceCoords) {
-        return new Date(a.startAt).getTime() - new Date(b.startAt).getTime();
-      }
-      const aDistance =
-        cityDistanceMap.get(`${a.city}|${a.state}`) ?? Number.POSITIVE_INFINITY;
-      const bDistance =
-        cityDistanceMap.get(`${b.city}|${b.state}`) ?? Number.POSITIVE_INFINITY;
-      if (aDistance !== bDistance) return aDistance - bDistance;
-      return new Date(a.startAt).getTime() - new Date(b.startAt).getTime();
-    });
-    return nextEvents;
-  }, [
-    cityDistanceMap,
-    referenceCoords,
-    shouldPrioritizeFriendActivity,
-    upcomingSearchEvents,
-  ]);
+    return sortEventsLikeNativeHome(upcomingSearchEvents);
+  }, [upcomingSearchEvents]);
 
   const visibleCategories = useMemo(
     () => getVisibleCategories(sortedEvents),
