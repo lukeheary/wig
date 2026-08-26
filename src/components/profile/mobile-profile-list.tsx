@@ -7,11 +7,11 @@ import { UserAvatar } from "@/components/ui/user-avatar";
 
 export function MobileProfileListHeader({ title }: { title: string }) {
   return (
-    <div className="relative flex h-16 items-center justify-center">
+    <div className="relative flex h-[3.75rem] items-center justify-center pt-3">
       <Link
         href="/profile"
         aria-label="Back to profile"
-        className="absolute left-0 flex h-12 w-12 items-center justify-center rounded-3xl border border-white/15 bg-[#242426]/85 text-white shadow-[0_18px_50px_rgba(0,0,0,0.55)] backdrop-blur-2xl"
+        className="absolute left-0 top-3 flex h-12 w-12 items-center justify-center rounded-3xl border border-white/15 bg-[#242426]/85 text-white shadow-[0_18px_50px_rgba(0,0,0,0.55)] backdrop-blur-2xl"
       >
         <ChevronLeft className="h-6 w-6" />
       </Link>

@@ -554,7 +554,7 @@ function MainLayoutContent({ children }: { children: React.ReactNode }) {
             isSignedIn &&
             (isEventDetail
               ? "bg-black md:bg-background"
-              : "bg-black pb-[calc(6.25rem+env(safe-area-inset-bottom))] md:bg-background md:pb-0")
+              : "mobile-bottom-nav-safe-space bg-black md:bg-background md:pb-0")
         )}
       >
         {children}
@@ -563,7 +563,7 @@ function MainLayoutContent({ children }: { children: React.ReactNode }) {
       {hasMounted && isSignedIn && !isEventDetail ? (
         <nav
           aria-label="Primary navigation"
-          className="fixed inset-x-3 bottom-[calc(0.75rem+env(safe-area-inset-bottom))] z-50 mx-auto flex h-16 max-w-md items-stretch rounded-[2rem] border border-white/15 bg-[#242426]/85 p-1.5 shadow-[0_18px_50px_rgba(0,0,0,0.55)] backdrop-blur-2xl md:hidden"
+          className="mobile-bottom-nav fixed inset-x-3 z-50 mx-auto flex h-16 max-w-md items-stretch rounded-[2rem] border border-white/15 bg-[#242426]/85 p-1.5 shadow-[0_18px_50px_rgba(0,0,0,0.55)] backdrop-blur-2xl md:hidden"
         >
           <MobileTabLink href="/home" label="Home" active={isHome}>
             <Home />

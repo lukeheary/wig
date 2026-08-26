@@ -801,7 +801,9 @@ export function EventBrowserSurface({
 
       {recentActivity?.content ? (
         <div className="mb-4">
-          <StickySectionHeader>{recentActivity.title}</StickySectionHeader>
+          <StickySectionHeader stickyOnMobile={false}>
+            {recentActivity.title}
+          </StickySectionHeader>
           <div className="container mx-auto px-4">{recentActivity.content}</div>
         </div>
       ) : null}

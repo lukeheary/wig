@@ -75,7 +75,7 @@ export function ProfileRequestsPage() {
   const hasAnyRequests = receivedRequests.length > 0 || sentRequests.length > 0;
 
   return (
-    <PageContainer className="min-h-screen bg-black !px-2 !pt-3 md:bg-background md:!px-4 md:!pt-4">
+    <PageContainer className="min-h-screen bg-black !px-2 !pt-0 md:bg-background md:!px-4 md:!pt-4">
       <div className="md:hidden">
         <MobileProfileListHeader title="Requests" />
         <MobileFilterPills
