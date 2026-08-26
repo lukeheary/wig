@@ -561,34 +561,37 @@ function MainLayoutContent({ children }: { children: React.ReactNode }) {
       </main>
 
       {hasMounted && isSignedIn && !isEventDetail ? (
-        <nav
-          aria-label="Primary navigation"
-          className="mobile-bottom-nav fixed inset-x-3 z-50 mx-auto flex h-16 max-w-md items-stretch rounded-[2rem] border border-white/15 bg-[#242426]/85 p-1.5 shadow-[0_18px_50px_rgba(0,0,0,0.55)] backdrop-blur-2xl md:hidden"
-        >
-          <MobileTabLink href="/home" label="Home" active={isHome}>
-            <Home />
-          </MobileTabLink>
-          <MobileTabLink href="/places" label="Places" active={isPlaces}>
-            <Building />
-          </MobileTabLink>
-          <MobileTabLink
-            href="/activity"
-            label="Activity"
-            active={isFriends && !isSearchPage}
+        <>
+          <div aria-hidden="true" className="mobile-bottom-nav-backdrop" />
+          <nav
+            aria-label="Primary navigation"
+            className="mobile-bottom-nav fixed inset-x-3 z-50 mx-auto flex h-16 max-w-md items-stretch rounded-[2rem] border border-white/15 bg-[#242426]/85 p-1.5 shadow-[0_18px_50px_rgba(0,0,0,0.55)] backdrop-blur-2xl md:hidden"
           >
-            <Zap />
-          </MobileTabLink>
-          <MobileTabLink
-            href="/activity/search"
-            label="Search"
-            active={isSearchPage}
-          >
-            <Search />
-          </MobileTabLink>
-          <MobileTabLink href="/profile" label="Profile" active={isProfile}>
-            <CircleUserRound />
-          </MobileTabLink>
-        </nav>
+            <MobileTabLink href="/home" label="Home" active={isHome}>
+              <Home />
+            </MobileTabLink>
+            <MobileTabLink href="/places" label="Places" active={isPlaces}>
+              <Building />
+            </MobileTabLink>
+            <MobileTabLink
+              href="/activity"
+              label="Activity"
+              active={isFriends && !isSearchPage}
+            >
+              <Zap />
+            </MobileTabLink>
+            <MobileTabLink
+              href="/activity/search"
+              label="Search"
+              active={isSearchPage}
+            >
+              <Search />
+            </MobileTabLink>
+            <MobileTabLink href="/profile" label="Profile" active={isProfile}>
+              <CircleUserRound />
+            </MobileTabLink>
+          </nav>
+        </>
       ) : null}
     </div>
   );

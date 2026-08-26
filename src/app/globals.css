@@ -137,6 +137,24 @@
     -webkit-backdrop-filter: blur(24px);
   }
 
+  .mobile-bottom-nav-backdrop {
+    position: fixed;
+    z-index: 45;
+    right: 0;
+    bottom: 0;
+    left: 0;
+    display: block;
+    height: calc(5rem + env(safe-area-inset-bottom));
+    background-color: #000;
+    pointer-events: none;
+  }
+
+  @media (min-width: 768px) {
+    .mobile-bottom-nav-backdrop {
+      display: none;
+    }
+  }
+
   .mobile-bottom-nav-safe-space {
     padding-bottom: calc(5rem + max(0.75rem, env(safe-area-inset-bottom)));
   }
