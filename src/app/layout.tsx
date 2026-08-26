@@ -28,7 +28,6 @@ export const metadata: Metadata = {
 export const viewport: Viewport = {
   colorScheme: "dark",
   themeColor: "#000000",
-  viewportFit: "cover",
 };
 
 export default function RootLayout({
@@ -65,7 +64,6 @@ export default function RootLayout({
               <ScrollRestoration />
               {children}
               <Toaster />
-              <div aria-hidden="true" className="safari-bottom-chrome-color" />
             </Providers>
           </TRPCProvider>
         </body>

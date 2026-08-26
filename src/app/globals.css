@@ -140,32 +140,6 @@
   .mobile-bottom-nav-safe-space {
     padding-bottom: calc(5rem + max(0.75rem, env(safe-area-inset-bottom)));
   }
-
-  /*
-   * Safari 26 ignores theme-color and pseudo-elements when deriving its
-   * Liquid Glass toolbar backdrop. It samples a real fixed element near the
-   * viewport edge instead, then extends that solid color behind its chrome.
-   */
-  .safari-bottom-chrome-color {
-    display: none;
-  }
-
-  @supports (-webkit-touch-callout: none) {
-    @media (max-width: 767px) {
-      .safari-bottom-chrome-color {
-        position: fixed;
-        z-index: 2147483647;
-        right: 0;
-        bottom: -24rem;
-        left: 0;
-        display: block;
-        width: 100%;
-        height: calc(24rem + 2px);
-        background-color: #000;
-        pointer-events: none;
-      }
-    }
-  }
 }
 
 @keyframes hero-event-marquee {
