@@ -67,7 +67,7 @@ export default function EventFriendsPage() {
         >
           <ChevronLeft className="h-5 w-5" />
         </Button>
-        <h1 className="text-center text-xl font-bold">Friends</h1>
+        <h1 className="text-center text-[17px] font-bold">Friends</h1>
       </div>
 
       <MobileFilterPills

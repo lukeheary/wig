@@ -65,7 +65,7 @@ export function BackButtonHeader({
             {title ? (
               <h1
                 className={cn(
-                  "text-2xl font-bold tracking-tight md:text-3xl",
+                  "text-[17px] font-bold tracking-tight md:text-3xl",
                   titleClassName
                 )}
               >

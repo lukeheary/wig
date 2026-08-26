@@ -17,6 +17,13 @@ import {
   Zap,
   CircleUserRound,
 } from "lucide-react";
+import {
+  Building as PhosphorBuilding,
+  House as PhosphorHouse,
+  Lightning as PhosphorLightning,
+  MagnifyingGlass as PhosphorMagnifyingGlass,
+  UserCircle as PhosphorUserCircle,
+} from "@phosphor-icons/react";
 import { Button } from "@/components/ui/button";
 import { trpc } from "@/lib/trpc";
 import { UserAvatar } from "@/components/ui/user-avatar";
@@ -565,30 +572,34 @@ function MainLayoutContent({ children }: { children: React.ReactNode }) {
           <div aria-hidden="true" className="mobile-bottom-nav-backdrop" />
           <nav
             aria-label="Primary navigation"
-            className="mobile-bottom-nav fixed inset-x-3 z-50 mx-auto flex h-16 max-w-md items-stretch rounded-[2rem] border border-white/15 bg-[#242426]/85 p-1.5 shadow-[0_18px_50px_rgba(0,0,0,0.55)] backdrop-blur-2xl md:hidden"
+            className="mobile-bottom-nav fixed inset-x-3 z-50 mx-auto flex h-16 max-w-md items-stretch rounded-[2rem] border border-white/15 bg-[#242426]/50 p-1.5 shadow-[0_18px_50px_rgba(0,0,0,0.55)] backdrop-blur-[4px] md:hidden"
           >
             <MobileTabLink href="/home" label="Home" active={isHome}>
-              <Home />
+              <PhosphorHouse weight={isHome ? "fill" : "regular"} />
             </MobileTabLink>
             <MobileTabLink href="/places" label="Places" active={isPlaces}>
-              <Building />
+              <PhosphorBuilding weight={isPlaces ? "fill" : "regular"} />
             </MobileTabLink>
             <MobileTabLink
               href="/activity"
               label="Activity"
               active={isFriends && !isSearchPage}
             >
-              <Zap />
+              <PhosphorLightning
+                weight={isFriends && !isSearchPage ? "fill" : "regular"}
+              />
             </MobileTabLink>
             <MobileTabLink
               href="/activity/search"
               label="Search"
               active={isSearchPage}
             >
-              <Search />
+              <PhosphorMagnifyingGlass
+                weight={isSearchPage ? "bold" : "regular"}
+              />
             </MobileTabLink>
             <MobileTabLink href="/profile" label="Profile" active={isProfile}>
-              <CircleUserRound />
+              <PhosphorUserCircle weight={isProfile ? "fill" : "regular"} />
             </MobileTabLink>
           </nav>
         </>
@@ -614,7 +625,7 @@ function MobileTabLink({
       aria-label={label}
       aria-current={active ? "page" : undefined}
       className={cn(
-        "flex min-w-0 flex-1 items-center justify-center rounded-full text-white/90 transition-colors active:bg-black/50 [&>svg]:h-7 [&>svg]:w-7 [&>svg]:stroke-[2.35]",
+        "flex min-w-0 flex-1 items-center justify-center rounded-full text-white/90 transition-colors active:bg-black/50 [&>svg]:h-7 [&>svg]:w-7",
         active && "bg-black/75 text-sky-300"
       )}
     >

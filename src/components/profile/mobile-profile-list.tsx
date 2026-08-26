@@ -15,7 +15,7 @@ export function MobileProfileListHeader({ title }: { title: string }) {
       >
         <ChevronLeft className="h-6 w-6" />
       </Link>
-      <h1 className="text-xl font-semibold text-white">{title}</h1>
+      <h1 className="text-[17px] font-bold text-white">{title}</h1>
     </div>
   );
 }

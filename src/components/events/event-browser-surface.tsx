@@ -19,11 +19,10 @@ import {
   CalendarIcon,
   ChevronLeft,
   ChevronRight,
-  ListFilter,
   Loader2,
-  Search,
   X,
 } from "lucide-react";
+import { MagnifyingGlass, SlidersHorizontal } from "@phosphor-icons/react";
 import {
   HOME_MOBILE_EVENT_CARD_WIDTH,
   HomeMobileEventRail,
@@ -216,7 +215,7 @@ function MobileEventBrowserControls({
   return (
     <>
       <div className="fixed inset-x-3 top-[calc(env(safe-area-inset-top)+0.75rem)] z-50 grid h-12 grid-cols-[5.75rem_minmax(0,1fr)_5.75rem] items-stretch gap-2 md:hidden">
-        <div className="flex h-12 overflow-hidden rounded-3xl border border-white/15 bg-[#242426]/85 shadow-[0_18px_50px_rgba(0,0,0,0.55)] backdrop-blur-2xl">
+        <div className="flex h-12 overflow-hidden rounded-3xl border border-white/15 bg-[#242426]/50 shadow-[0_18px_50px_rgba(0,0,0,0.55)] backdrop-blur-[24px]">
           <DropdownMenu>
             <DropdownMenuTrigger asChild>
               <button
@@ -224,7 +223,7 @@ function MobileEventBrowserControls({
                 className="flex flex-1 items-center justify-center"
                 aria-label="Filter events"
               >
-                <ListFilter className="h-4 w-4" />
+                <SlidersHorizontal className="h-[1.125rem] w-[1.125rem]" />
               </button>
             </DropdownMenuTrigger>
             <DropdownMenuContent align="start" className="w-72">
@@ -268,14 +267,14 @@ function MobileEventBrowserControls({
             className="flex flex-1 items-center justify-center"
             aria-label="Search events"
           >
-            <Search className="h-[1.125rem] w-[1.125rem]" />
+            <MagnifyingGlass className="h-[1.125rem] w-[1.125rem]" />
           </button>
         </div>
 
         <button
           type="button"
           onClick={() => !isCurrentWeek && void onToday()}
-          className="flex h-12 min-w-0 flex-col items-center justify-center rounded-3xl border border-white/15 bg-[#242426]/85 px-2 shadow-[0_18px_50px_rgba(0,0,0,0.55)] backdrop-blur-2xl"
+          className="flex h-12 min-w-0 flex-col items-center justify-center rounded-3xl border border-white/15 bg-[#242426]/50 px-2 shadow-[0_18px_50px_rgba(0,0,0,0.55)] backdrop-blur-[24px]"
         >
           <span className="text-[11px] font-semibold leading-none text-muted-foreground">
             {weekLabel}
@@ -287,7 +286,7 @@ function MobileEventBrowserControls({
           </span>
         </button>
 
-        <div className="flex h-12 overflow-hidden rounded-3xl border border-white/15 bg-[#242426]/85 shadow-[0_18px_50px_rgba(0,0,0,0.55)] backdrop-blur-2xl">
+        <div className="flex h-12 overflow-hidden rounded-3xl border border-white/15 bg-[#242426]/50 shadow-[0_18px_50px_rgba(0,0,0,0.55)] backdrop-blur-[24px]">
           <button
             type="button"
             onClick={() => void onPrevious()}

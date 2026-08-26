@@ -353,7 +353,7 @@ function FriendsPageContent() {
       {!isSubView && !isSearchMode && (
         <div className="mb-5 md:hidden">
           <div className="flex h-12 items-center justify-center">
-            <h1 className="text-center text-xl font-bold">Activity</h1>
+            <h1 className="text-center text-[17px] font-bold">Activity</h1>
           </div>
           <MobileFilterPills
             options={ACTIVITY_FILTERS}

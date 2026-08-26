@@ -117,7 +117,7 @@ export function UserProfilePage({
   return (
     <main className="min-h-screen bg-black">
       <div className="mx-auto w-full pb-12">
-        <section className="relative mx-auto max-w-3xl px-5 pb-8 pt-5 md:px-8 md:pb-10 md:pt-8">
+        <section className="relative mx-auto max-w-3xl px-4 pb-8 pt-5 md:px-8 md:pb-10 md:pt-8">
           <div
             className={
               showSettings
@@ -140,8 +140,8 @@ export function UserProfilePage({
             <p
               className={
                 showSettings
-                  ? "text-center text-xl font-bold text-white"
-                  : "truncate text-xl font-bold text-white"
+                  ? "text-center text-[17px] font-bold text-white md:text-xl"
+                  : "truncate text-[17px] font-bold text-white md:text-xl"
               }
             >
               {profile.username}
@@ -152,7 +152,7 @@ export function UserProfilePage({
               <Button
                 variant="ghost"
                 size="icon"
-                className="absolute right-3 top-3 h-12 w-12 rounded-3xl border border-white/15 bg-[#242426]/85 text-white shadow-[0_18px_50px_rgba(0,0,0,0.55)] backdrop-blur-2xl hover:bg-[#242426]/85 md:right-8 md:top-6"
+                className="absolute right-3 top-3 h-[46px] w-[46px] rounded-full border border-white/15 bg-[#242426]/85 text-white shadow-[0_18px_50px_rgba(0,0,0,0.55)] backdrop-blur-2xl hover:bg-[#242426]/85 md:right-8 md:top-6 md:h-12 md:w-12"
                 aria-label="Profile options"
               >
                 <MoreHorizontal className="h-5 w-5" />
@@ -213,22 +213,22 @@ export function UserProfilePage({
                 src={profile.avatarImageUrl}
                 name={name}
                 identityKey={profile.id}
-                className="h-28 w-28 text-3xl md:h-36 md:w-36"
+                className="h-[104px] w-[104px] text-3xl md:h-36 md:w-36"
               />
               {showSettings ? (
                 <Link
                   href="/profile/settings"
                   aria-label="Edit profile picture"
-                  className="absolute -bottom-1 -right-1 flex h-10 w-10 items-center justify-center rounded-full border-[3px] border-black bg-[#242428] text-white shadow-lg md:h-11 md:w-11"
+                  className="absolute -bottom-0.5 -right-0.5 flex h-[34px] w-[34px] items-center justify-center rounded-full border-[3px] border-black bg-[#242428] text-white shadow-lg md:h-11 md:w-11"
                 >
-                  <Camera className="h-5 w-5" />
+                  <Camera className="h-4 w-4 md:h-5 md:w-5" />
                 </Link>
               ) : null}
             </div>
 
             <div className="min-w-0 flex-1 pb-1">
               <div className="translate-y-1.5 md:translate-y-0">
-                <h1 className="truncate text-xl font-bold tracking-tight md:text-3xl">
+                <h1 className="truncate text-[17px] font-bold tracking-tight md:text-3xl">
                   {name}
                 </h1>
                 {profile.city && profile.state ? (
@@ -239,16 +239,16 @@ export function UserProfilePage({
               </div>
 
               <div
-                className={`mt-5 grid ${profile.isCurrentUser ? "grid-cols-3" : "grid-cols-2"}`}
+                className={`mt-3.5 grid ${profile.isCurrentUser ? "grid-cols-3" : "grid-cols-2"}`}
               >
                 <Link
                   href={friendsHref}
                   className="flex flex-col transition-opacity hover:opacity-80"
                 >
-                  <span className="text-lg font-semibold text-white md:text-2xl">
+                  <span className="text-base font-semibold text-white md:text-2xl">
                     {data.friendCount}
                   </span>
-                  <span className="text-xs text-muted-foreground md:text-sm">
+                  <span className="text-[11px] font-medium text-muted-foreground md:text-sm">
                     Friends
                   </span>
                 </Link>
@@ -261,10 +261,10 @@ export function UserProfilePage({
                       : "pointer-events-none"
                   }`}
                 >
-                  <span className="text-lg font-semibold text-white md:text-2xl">
+                  <span className="text-base font-semibold text-white md:text-2xl">
                     {data.followingCount}
                   </span>
-                  <span className="text-xs text-muted-foreground md:text-sm">
+                  <span className="text-[11px] font-medium text-muted-foreground md:text-sm">
                     Following
                   </span>
                 </Link>
@@ -273,10 +273,10 @@ export function UserProfilePage({
                     href="/profile/requests"
                     className="flex flex-col transition-opacity hover:opacity-80"
                   >
-                    <span className="text-lg font-semibold text-white md:text-2xl">
+                    <span className="text-base font-semibold text-white md:text-2xl">
                       {data.requestCount}
                     </span>
-                    <span className="text-xs text-muted-foreground md:text-sm">
+                    <span className="text-[11px] font-medium text-muted-foreground md:text-sm">
                       Requests
                     </span>
                   </Link>
@@ -368,13 +368,13 @@ function ProfileSectionHeading({
   return (
     <div className="flex items-center justify-between">
       {title ? (
-        <h2 className="text-xl font-semibold tracking-tight md:text-2xl md:font-bold">
+        <h2 className="text-[19px] font-bold tracking-tight md:text-2xl">
           {title}
         </h2>
       ) : (
         <span />
       )}
-      <label className="relative flex items-center text-sm font-medium text-muted-foreground md:text-lg">
+      <label className="relative flex items-center text-[13px] font-medium text-muted-foreground md:text-lg">
         <select
           aria-label="Profile events"
           value={mode}
@@ -412,7 +412,7 @@ function ProfileMonthHeader({
               ? `${title}: scroll events back to the beginning`
               : undefined
           }
-          className={`text-left text-xl font-semibold tracking-tight md:text-2xl md:font-bold ${showBackToStart ? "cursor-pointer" : "cursor-default"}`}
+          className={`text-left text-[19px] font-bold tracking-tight md:text-2xl ${showBackToStart ? "cursor-pointer" : "cursor-default"}`}
         >
           {title}
         </button>

@@ -232,7 +232,7 @@ export function PlacePage({ actionMenuType }: PlacePageProps) {
           >
             <ChevronLeft className="h-5 w-5" />
           </Button>
-          <h1 className="min-w-0 flex-1 truncate text-xl font-bold text-white">
+          <h1 className="min-w-0 flex-1 truncate text-[17px] font-bold text-white">
             {place.slug}
           </h1>
           {canEdit ? (

@@ -414,7 +414,7 @@ function PlacesPageContent() {
             </div>
             <h1
               className={cn(
-                "text-center text-xl font-bold transition-opacity duration-300 ease-in-out",
+                "text-center text-[17px] font-bold transition-opacity duration-300 ease-in-out",
                 isSticky && "opacity-0"
               )}
             >

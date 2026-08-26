@@ -32,7 +32,7 @@ import {
   splitTrailingParenthetical,
 } from "@/lib/utils";
 
-export const HOME_MOBILE_EVENT_CARD_WIDTH = 224;
+export const HOME_MOBILE_EVENT_CARD_WIDTH = 220;
 const DESKTOP_RAIL_SIDE_INSET = "max(2rem, calc((100vw - 1200px) / 2 + 2rem))";
 const DESKTOP_SCROLL_STEP = 320;
 
@@ -329,7 +329,7 @@ function HomeMiniEventCard({ event }: { event: EventCardItem }) {
   return (
     <Link href={eventHref} className="group block h-full" onClick={handleClick}>
       <Card className="relative h-full cursor-pointer overflow-hidden rounded-[18px] !border-none bg-[#111116] p-0 shadow-[0_10px_30px_rgba(0,0,0,0.28)] ring-1 ring-white/[0.08] transition-all duration-300">
-        <div className="relative flex h-full min-h-[304px] flex-col overflow-hidden">
+        <div className="relative flex h-full min-h-[284px] flex-col overflow-hidden">
           {eventImageUrl ? (
             <Image
               src={eventImageUrl}
