@@ -565,7 +565,7 @@ struct EventDetailView: View {
         if currentEvent.eventURL != nil,
            currentEvent.externalSourceName != nil
         {
-            VStack(spacing: 12) {
+            VStack(spacing: 8) {
                 if isAuthenticated, !shouldHideCompletedRSVP {
                     rsvpErrorMessage
                 }
@@ -596,7 +596,7 @@ struct EventDetailView: View {
                 openExternalEvent()
             } label: {
                 HStack(spacing: 8) {
-                    Text("View on \(sourceName)")
+                    Text("View tickets on \(sourceName)")
                         .font(.system(size: 14, weight: .medium))
 
                     Image(systemName: "arrow.up.right")

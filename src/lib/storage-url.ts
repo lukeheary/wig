@@ -106,6 +106,9 @@ export function resolveStoredImageValue(value: string): string {
     process.env.R2_ENDPOINT;
 
   if (!publicBaseUrl) return trimmed;
-  const key = knownStorageKey || trimmed;
+  // Database values may still contain an environment-qualified legacy key or
+  // full R2 URL. Always remove that qualifier before applying the environment
+  // of the currently running app so local development never reads production.
+  const key = stripEnvironmentPrefix(knownStorageKey || trimmed);
   return `${trimTrailingSlashes(publicBaseUrl)}/${addCurrentEnvironmentPrefix(key)}`;
 }

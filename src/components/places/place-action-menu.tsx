@@ -27,12 +27,14 @@ import {
 } from "@/components/ui/sheet";
 import { useMediaQuery } from "@/hooks/use-media-query";
 import { buildReturnTo, withReturnTo } from "@/lib/navigation";
+import { cn } from "@/lib/utils";
 
 type PlaceActionMenuProps = {
   placeId: string;
   slug: string;
   type: "venue" | "organizer";
   isAdmin?: boolean;
+  triggerClassName?: string;
 };
 
 export function PlaceActionMenu({
@@ -40,6 +42,7 @@ export function PlaceActionMenu({
   slug,
   type,
   isAdmin = false,
+  triggerClassName,
 }: PlaceActionMenuProps) {
   const [open, setOpen] = useState(false);
   const isDesktop = useMediaQuery("(min-width: 768px)");
@@ -64,7 +67,11 @@ export function PlaceActionMenu({
   const adminHref = `/admin/${type}/${placeId}`;
 
   const trigger = (
-    <Button size="icon" variant="secondary" className="h-10 w-10">
+    <Button
+      size="icon"
+      variant="secondary"
+      className={cn("h-10 w-10", triggerClassName)}
+    >
       <MoreHorizontal className="h-4 w-4" />
       <span className="sr-only">{typeLabel} actions</span>
     </Button>

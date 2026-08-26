@@ -8,6 +8,7 @@ interface StickySectionHeaderProps {
   className?: string;
   leadingSlot?: React.ReactNode;
   leadingSlotVisible?: boolean;
+  stickyOnMobile?: boolean;
 }
 
 export function StickySectionHeader({
@@ -15,6 +16,7 @@ export function StickySectionHeader({
   className,
   leadingSlot,
   leadingSlotVisible = false,
+  stickyOnMobile = true,
 }: StickySectionHeaderProps) {
   const sentinelRef = useRef<HTMLDivElement>(null);
   const [, setIsSticky] = useState(false);
@@ -43,9 +45,15 @@ export function StickySectionHeader({
   return (
     <>
       <div ref={sentinelRef} className="h-0 w-full" />
-      <div className={cn("sticky top-14 z-30 w-full md:top-16", className)}>
+      <div
+        className={cn(
+          "z-30 w-full md:sticky md:top-16",
+          stickyOnMobile && "sticky top-0",
+          className
+        )}
+      >
         <div className="container mx-auto flex flex-row px-4">
-          <div className="-ml-4 flex w-fit items-center gap-2 bg-background pl-4 pr-1 md:ml-0 md:pl-0">
+          <div className="-ml-4 flex w-fit items-center gap-2 bg-black pl-4 pr-1 md:ml-0 md:bg-background md:pl-0">
             <div className="pb-2">
               <div className="relative flex items-center">
                 {leadingSlot ? (
@@ -68,14 +76,6 @@ export function StickySectionHeader({
               </div>
             </div>
           </div>
-          <img
-            src="/svg/header-corner.svg"
-            alt=""
-            aria-hidden
-            width={36}
-            height={36}
-            className="block h-9 w-9 shrink-0"
-          />
         </div>
       </div>
     </>

@@ -8,6 +8,7 @@ import {
 } from "../init";
 import {
   eventRsvps,
+  placeFollows,
   placeMembers,
   userFriends,
   users,
@@ -265,6 +266,7 @@ export const userRouter = router({
         pendingRequests,
         viewerTargetFriendship,
         profileRsvps,
+        followedPlaces,
       ] = await Promise.all([
         ctx.db.query.userFriends.findMany({
           where: and(
@@ -318,6 +320,10 @@ export const userRouter = router({
             },
           },
           orderBy: [asc(eventRsvps.updatedAt)],
+        }),
+        ctx.db.query.placeFollows.findMany({
+          where: eq(placeFollows.userId, targetUser.id),
+          columns: { id: true },
         }),
       ]);
 
@@ -398,6 +404,7 @@ export const userRouter = router({
             : "none",
         },
         friendCount: friendSummaries.length,
+        followingCount: followedPlaces.length,
         requestCount:
           viewerUserId === targetUser.id ? pendingRequests.length : 0,
         friends: friendSummaries,

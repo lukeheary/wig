@@ -27,8 +27,15 @@ import { EmptyStateCard } from "@/components/shared/empty-state-card";
 import { PageContainer } from "@/components/shared/page-container";
 import { cn } from "@/lib/utils";
 import { Card, CardContent } from "@/components/ui/card";
+import { MobileFilterPills } from "@/components/ui/mobile-filter-pills";
 
 type FriendsView = "discover" | "list" | "requests";
+type ActivityTiming = "upcoming" | "past";
+
+const ACTIVITY_FILTERS = [
+  { value: "upcoming", label: "Upcoming" },
+  { value: "past", label: "Past" },
+] as const;
 
 function FriendsPageContent() {
   const { toast } = useToast();
@@ -50,6 +57,8 @@ function FriendsPageContent() {
   });
   const [friendsListSearchQuery, setFriendsListSearchQuery] = useState("");
   const [requestsSearchQuery, setRequestsSearchQuery] = useState("");
+  const [activityTiming, setActivityTiming] =
+    useState<ActivityTiming>("upcoming");
 
   // Scroll to top and focus search input when navbar search button is clicked
   const scrollToSearchAndFocus = useCallback(() => {
@@ -337,11 +346,28 @@ function FriendsPageContent() {
   );
 
   return (
-    <PageContainer>
+    <PageContainer className="min-h-screen bg-black !pt-3 md:bg-background md:!pt-4">
       {/* Sticky sentinel for intersection observer */}
       <div ref={stickySentinelRef} className="h-px w-full" />
 
-      <StickySearchBar innerClassName="w-full flex-col items-stretch sm:flex-col sm:items-stretch">
+      {!isSubView && !isSearchMode && (
+        <div className="mb-5 md:hidden">
+          <div className="flex h-12 items-center justify-center">
+            <h1 className="text-center text-xl font-bold">Activity</h1>
+          </div>
+          <MobileFilterPills
+            options={ACTIVITY_FILTERS}
+            value={activityTiming}
+            onValueChange={setActivityTiming}
+            className="mt-4"
+          />
+        </div>
+      )}
+
+      <StickySearchBar
+        className="hidden md:block"
+        innerClassName="w-full flex-col items-stretch sm:flex-col sm:items-stretch"
+      >
         <div className="flex w-full flex-col gap-2 sm:flex-row sm:items-center">
           <div className="flex w-full flex-row">
             <Suspense fallback={null}>
@@ -749,7 +775,12 @@ function FriendsPageContent() {
             renderRecentlyJoined()
           ) : (
             <div>
-              <ActivityFeed groupByRecency groupHeaderClassName="-mx-4" />
+              <div className="md:hidden">
+                <ActivityFeed eventTiming={activityTiming} />
+              </div>
+              <div className="hidden md:block">
+                <ActivityFeed groupByRecency groupHeaderClassName="-mx-4" />
+              </div>
             </div>
           )}
         </>

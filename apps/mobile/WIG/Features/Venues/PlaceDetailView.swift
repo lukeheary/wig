@@ -614,7 +614,7 @@ struct PlaceDetailView: View {
                 )
             }
         } else {
-            VStack(alignment: .leading, spacing: 18) {
+            LazyVStack(alignment: .leading, spacing: 18) {
                 ForEach(groups) { group in
                     EventCardCarousel(
                         events: group.events,
@@ -636,11 +636,17 @@ struct PlaceDetailView: View {
                 }
 
                 if selectedTab == .past, detail.pastEventsNextCursor != nil {
-                    ProgressView()
-                        .tint(.white)
+                    Group {
+                        if viewModel.isLoadingMorePastEvents {
+                            ProgressView()
+                                .tint(.white)
+                        } else {
+                            Color.clear
+                                .frame(height: 1)
+                        }
+                    }
                         .frame(maxWidth: .infinity)
                         .padding(.vertical, 12)
-                        .id(detail.pastEventsNextCursor?.id)
                         .onAppear {
                             Task {
                                 await viewModel.loadMorePastEvents(

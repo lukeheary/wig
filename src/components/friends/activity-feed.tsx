@@ -34,10 +34,7 @@ import { StickySectionHeader } from "@/components/ui/sticky-section-header";
 import { buildReturnTo, withReturnTo } from "@/lib/navigation";
 import { EmptyStateCard } from "@/components/shared/empty-state-card";
 import { getGenderGrammar } from "@/lib/gender-grammar";
-import {
-  getRsvpDeclineReasonPhrase,
-  type RsvpDeclineReason,
-} from "@/lib/rsvp";
+import { getRsvpDeclineReasonPhrase, type RsvpDeclineReason } from "@/lib/rsvp";
 
 interface ActivityItemProps {
   activity: any;
@@ -216,9 +213,9 @@ export function ActivityItem({ activity }: ActivityItemProps) {
     ) : (
       <span className="font-medium text-foreground">{entityName}</span>
     );
-    const notGoingReason =
-      ((metadata as { reason?: RsvpDeclineReason | null } | null)?.reason ??
-        null) as RsvpDeclineReason | null;
+    const notGoingReason = ((
+      metadata as { reason?: RsvpDeclineReason | null } | null
+    )?.reason ?? null) as RsvpDeclineReason | null;
     const notGoingReasonText = (() => {
       if (!notGoingReason) return null;
       const reasonPhrase = getRsvpDeclineReasonPhrase(notGoingReason);
@@ -511,11 +508,13 @@ export function ActivityItem({ activity }: ActivityItemProps) {
       <div className="flex-1">
         <p className="text-base text-muted-foreground">
           {content}
-          {!isEventStatusUpdate && !shouldInlineEventDate && eventRelativeDate && (
-            <span className="ml-1.5 font-medium text-muted-foreground">
-              {eventRelativeDate}
-            </span>
-          )}
+          {!isEventStatusUpdate &&
+            !shouldInlineEventDate &&
+            eventRelativeDate && (
+              <span className="ml-1.5 font-medium text-muted-foreground">
+                {eventRelativeDate}
+              </span>
+            )}
         </p>
         <p className="text-xs text-muted-foreground/60 md:text-sm">
           {formatDistanceToNow(getActivityTimestamp(activity), {
@@ -534,6 +533,7 @@ interface ActivityFeedProps {
   groupByRecency?: boolean;
   groupHeaderClassName?: string;
   includeEventUpdates?: boolean;
+  eventTiming?: "all" | "upcoming" | "past";
 }
 
 interface ActivityFeedListProps {
@@ -561,8 +561,10 @@ function filterActivities(
   rawActivities: any[] | undefined,
   {
     hidePastEvents = false,
+    eventTiming = "all",
   }: {
     hidePastEvents?: boolean;
+    eventTiming?: "all" | "upcoming" | "past";
   } = {}
 ) {
   const visibleActivities = rawActivities?.filter(
@@ -571,7 +573,16 @@ function filterActivities(
       !HIDDEN_ACTIVITY_TYPES.has(activity.type)
   );
 
-  return hidePastEvents
+  if (eventTiming === "past") {
+    return visibleActivities?.filter((activity: any) => {
+      if (!activity.event?.startAt) return false;
+      return (
+        startOfDay(new Date(activity.event.startAt)) < startOfDay(new Date())
+      );
+    });
+  }
+
+  return hidePastEvents || eventTiming === "upcoming"
     ? visibleActivities?.filter((activity: any) => {
         if (!activity.event?.startAt) return true;
         const eventDate = startOfDay(new Date(activity.event.startAt));
@@ -595,12 +606,17 @@ function selectHomePreviewActivities(
   > &
     Pick<
       HomeActivityPreviewOptions,
-      "limit" | "lastVisitedAt" | "missedWindowStartAt" | "missedWindowExpiresAt"
+      | "limit"
+      | "lastVisitedAt"
+      | "missedWindowStartAt"
+      | "missedWindowExpiresAt"
     >
 ): HomeActivityPreviewResult {
   const now = new Date();
   const recentCutoff = subDays(now, staleAfterDays).getTime();
-  const activities = [...(filterActivities(rawActivities, { hidePastEvents }) ?? [])].sort(
+  const activities = [
+    ...(filterActivities(rawActivities, { hidePastEvents }) ?? []),
+  ].sort(
     (a: any, b: any) =>
       getActivityTimestamp(b).getTime() - getActivityTimestamp(a).getTime()
   );
@@ -619,7 +635,7 @@ function selectHomePreviewActivities(
     : null;
 
   const missedActivities = hasActiveMissedWindow
-      ? activities.filter((activity) => {
+    ? activities.filter((activity) => {
         const createdAt = getActivityTimestamp(activity).getTime();
         return (
           activeMissedWindowStartAt != null &&
@@ -627,16 +643,19 @@ function selectHomePreviewActivities(
           createdAt < recentCutoff
         );
       })
-      : lastVisitedAt == null
+    : lastVisitedAt == null
       ? []
       : activities.filter((activity) => {
           const createdAt = getActivityTimestamp(activity).getTime();
-          return createdAt > lastVisitedAt.getTime() && createdAt < recentCutoff;
+          return (
+            createdAt > lastVisitedAt.getTime() && createdAt < recentCutoff
+          );
         });
 
   const previewActivities = [...recentActivities, ...missedActivities].filter(
     (activity, index, collection) =>
-      collection.findIndex((candidate) => candidate.id === activity.id) === index
+      collection.findIndex((candidate) => candidate.id === activity.id) ===
+      index
   );
 
   const limitedActivities =
@@ -646,7 +665,8 @@ function selectHomePreviewActivities(
 
   return {
     activities: limitedActivities,
-    shouldStartMissedWindow: !hasActiveMissedWindow && missedActivities.length > 0,
+    shouldStartMissedWindow:
+      !hasActiveMissedWindow && missedActivities.length > 0,
   };
 }
 
@@ -730,6 +750,7 @@ export function ActivityFeed({
   groupByRecency = false,
   groupHeaderClassName,
   includeEventUpdates = true,
+  eventTiming = "all",
 }: ActivityFeedProps) {
   const { data: rawActivities, isLoading } =
     trpc.friends.getFriendFeed.useQuery({
@@ -737,7 +758,10 @@ export function ActivityFeed({
       includeEventUpdates,
     });
 
-  const activities = filterActivities(rawActivities, { hidePastEvents });
+  const activities = filterActivities(rawActivities, {
+    hidePastEvents,
+    eventTiming,
+  });
 
   if (isLoading) {
     return (

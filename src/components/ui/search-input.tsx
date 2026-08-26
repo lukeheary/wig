@@ -57,14 +57,14 @@ export const SearchInput = forwardRef<HTMLInputElement, SearchInputProps>(
               e.stopPropagation();
               onBack?.();
             }}
-            className="flex h-10 w-10 shrink-0 items-center justify-center rounded-full text-muted-foreground hover:bg-muted hover:text-foreground transition-colors outline-none focus:outline-none focus-visible:outline-none"
+            className="flex h-10 w-10 shrink-0 items-center justify-center rounded-full text-muted-foreground outline-none transition-colors hover:bg-muted hover:text-foreground focus:outline-none focus-visible:outline-none"
             tabIndex={showBack ? 0 : -1}
           >
             <ArrowLeft className="h-5 w-5" />
           </button>
         </div>
         <div className="relative flex-1 transition-all duration-200">
-          <Search className="absolute left-4 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground" />
+          <Search className="pointer-events-none absolute left-4 top-1/2 z-10 h-4 w-4 -translate-y-1/2 text-muted-foreground" />
           <Input
             ref={ref}
             placeholder={placeholder}
@@ -73,7 +73,7 @@ export const SearchInput = forwardRef<HTMLInputElement, SearchInputProps>(
             onFocus={onFocus}
             onBlur={onBlur}
             className={cn(
-              "appearance-none pl-10 shadow-none transition-all duration-200 [box-shadow:none] [-webkit-appearance:none] [-webkit-tap-highlight-color:transparent] focus:shadow-none focus-visible:shadow-none",
+              "appearance-none pl-10 shadow-none transition-all duration-200 [-webkit-appearance:none] [-webkit-tap-highlight-color:transparent] [box-shadow:none] focus:shadow-none focus-visible:shadow-none",
               showClear && value && "pr-10"
             )}
           />
@@ -81,7 +81,9 @@ export const SearchInput = forwardRef<HTMLInputElement, SearchInputProps>(
           <div
             className={cn(
               "absolute right-3 top-1/2 -translate-y-1/2 transition-opacity duration-150",
-              showClear && value ? "opacity-100" : "opacity-0 pointer-events-none"
+              showClear && value
+                ? "opacity-100"
+                : "pointer-events-none opacity-0"
             )}
           >
             <button
@@ -93,7 +95,7 @@ export const SearchInput = forwardRef<HTMLInputElement, SearchInputProps>(
                 e.preventDefault();
               }}
               onClick={() => onChange("")}
-              className="rounded-full p-1 text-muted-foreground hover:bg-muted hover:text-foreground transition-colors"
+              className="rounded-full p-1 text-muted-foreground transition-colors hover:bg-muted hover:text-foreground"
               tabIndex={showClear && value ? 0 : -1}
             >
               <X className="h-4 w-4" />

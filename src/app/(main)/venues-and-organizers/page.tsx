@@ -18,8 +18,10 @@ import {
   Building,
   Building2,
   CalendarDays,
+  ListFilter,
   MapPin,
   Loader2,
+  Search,
   X,
 } from "lucide-react";
 import { useQueryState } from "nuqs";
@@ -29,8 +31,128 @@ import { cn } from "@/lib/utils";
 import { StickySearchBar } from "@/components/ui/sticky-search-bar";
 import { HapticPreset, useHaptics } from "@/hooks/use-haptics";
 import { PageContainer } from "@/components/shared/page-container";
+import { MobileFilterPills } from "@/components/ui/mobile-filter-pills";
+import {
+  DropdownMenu,
+  DropdownMenuCheckboxItem,
+  DropdownMenuContent,
+  DropdownMenuLabel,
+  DropdownMenuTrigger,
+} from "@/components/ui/dropdown-menu";
 
 type FilterType = "all" | "venues" | "organizers" | "following";
+
+const MOBILE_PLACE_FILTERS: Array<{ value: FilterType; label: string }> = [
+  { value: "all", label: "All" },
+  { value: "following", label: "Following" },
+  { value: "venues", label: "Venues" },
+  { value: "organizers", label: "Organizers" },
+];
+
+const PLACE_INDEX = [..."ABCDEFGHIJKLMNOPQRSTUVWXYZ", "#"];
+
+function MobilePlaceLogo({ item }: { item: any }) {
+  const [failed, setFailed] = useState(false);
+
+  return (
+    <div className="relative h-[3.25rem] w-[3.25rem] shrink-0 overflow-hidden rounded-[14px] border border-white/10 bg-[#111113]">
+      {item.logoImageUrl && !failed ? (
+        <Image
+          src={item.logoImageUrl}
+          alt=""
+          fill
+          sizes="52px"
+          className="object-cover"
+          onError={() => setFailed(true)}
+        />
+      ) : (
+        <div className="flex h-full w-full items-center justify-center">
+          {item.type === "venue" ? (
+            <Building className="h-5 w-5 text-white/25" />
+          ) : (
+            <Building2 className="h-5 w-5 text-white/25" />
+          )}
+        </div>
+      )}
+    </div>
+  );
+}
+
+function MobilePlacesList({ items }: { items: any[] }) {
+  const availableLetters = useMemo(
+    () =>
+      new Set(
+        items.map((item) =>
+          /^[A-Z]/i.test(item.name) ? item.name[0].toUpperCase() : "#"
+        )
+      ),
+    [items]
+  );
+
+  const scrollToLetter = (letter: string) => {
+    document
+      .getElementById(`place-letter-${letter}`)
+      ?.scrollIntoView({ behavior: "smooth", block: "start" });
+  };
+
+  return (
+    <div className="relative md:hidden">
+      <div className="pr-6">
+        {items.map((item, index) => {
+          const letter = /^[A-Z]/i.test(item.name)
+            ? item.name[0].toUpperCase()
+            : "#";
+          const previous = items[index - 1];
+          const previousLetter = previous
+            ? /^[A-Z]/i.test(previous.name)
+              ? previous.name[0].toUpperCase()
+              : "#"
+            : null;
+
+          return (
+            <Link
+              id={
+                letter !== previousLetter ? `place-letter-${letter}` : undefined
+              }
+              key={`${item.type}-${item.id}`}
+              href={`/${item.type === "venue" ? "venue" : "organizer"}/${item.slug}`}
+              className="flex min-h-[4.25rem] scroll-mt-40 items-center gap-3 rounded-xl px-2 py-2 transition-colors active:bg-white/[0.06]"
+            >
+              <MobilePlaceLogo item={item} />
+              <div className="min-w-0 flex-1">
+                <h2 className="truncate text-[15px] font-semibold leading-tight text-white">
+                  {item.name}
+                </h2>
+                <p className="mt-0.5 truncate text-xs font-medium text-white/50">
+                  <span className="capitalize">{item.type}</span>
+                  {item.eventCount > 0
+                    ? ` · ${item.eventCount} upcoming ${item.eventCount === 1 ? "event" : "events"}`
+                    : ""}
+                  {item.isFollowing ? " · Following" : ""}
+                </p>
+              </div>
+            </Link>
+          );
+        })}
+      </div>
+
+      <div className="fixed right-1 top-1/2 z-20 flex -translate-y-1/2 flex-col items-center text-[10px] font-semibold leading-[13px] md:hidden">
+        {PLACE_INDEX.map((letter) => (
+          <button
+            key={letter}
+            type="button"
+            disabled={!availableLetters.has(letter)}
+            onClick={() => scrollToLetter(letter)}
+            className="w-5 text-center text-white/55 disabled:text-white/15"
+            aria-label={`Jump to places beginning with ${letter}`}
+          >
+            {letter}
+          </button>
+        ))}
+      </div>
+    </div>
+  );
+}
 
 function PlaceSkeletonGrid({ count = 9 }: { count?: number }) {
   return (
@@ -58,7 +180,6 @@ function PlacesPageContent() {
   const { setShowNavbarSearch, registerScrollToSearch } = useNavbarSearch();
   const { triggerHaptic } = useHaptics();
   const searchInputRef = useRef<HTMLInputElement>(null);
-  const stickySentinelRef = useRef<HTMLDivElement>(null);
   const [isSticky, setIsSticky] = useState(false);
   const [isSearchMode, setIsSearchMode] = useState(false);
   const [selectedCategories, setSelectedCategories] = useState<string[]>([]);
@@ -79,24 +200,14 @@ function PlacesPageContent() {
     setShowNavbarSearch(isSticky);
   }, [isSticky, setShowNavbarSearch]);
 
-  // Observe when the search section scrolls out of view
+  // Fade the secondary mobile header controls once the page starts scrolling.
   useEffect(() => {
-    const observer = new IntersectionObserver(
-      ([entry]) => {
-        setIsSticky(!entry.isIntersecting);
-      },
-      { threshold: [1], rootMargin: "-1px 0px 0px 0px" }
-    );
-
-    const sentinel = stickySentinelRef.current;
-    if (sentinel) {
-      observer.observe(sentinel);
-    }
+    const handleScroll = () => setIsSticky(window.scrollY > 0);
+    handleScroll();
+    window.addEventListener("scroll", handleScroll, { passive: true });
 
     return () => {
-      if (sentinel) {
-        observer.unobserve(sentinel);
-      }
+      window.removeEventListener("scroll", handleScroll);
     };
   }, []);
 
@@ -179,6 +290,7 @@ function PlacesPageContent() {
         latitude: place.latitude,
         longitude: place.longitude,
         eventCount: place.eventCount,
+        isFollowing: place.isFollowing,
         categories: place.categories ?? [],
       }))
       .sort((a, b) =>
@@ -238,12 +350,100 @@ function PlacesPageContent() {
   const isLoading = isLoadingPlaces;
 
   return (
-    <PageContainer>
-      {/* Sticky sentinel for intersection observer */}
-      <div ref={stickySentinelRef} className="h-px w-full" />
-
+    <PageContainer className="min-h-screen bg-black !px-2 !pt-0 md:bg-background md:!px-4 md:!pt-4">
       {/* Search and Filters */}
-      <StickySearchBar innerClassName="w-full flex-col items-stretch sm:flex-col sm:items-stretch">
+      <div className="fixed inset-x-0 top-0 z-40 px-3 pb-3 pt-3 md:hidden">
+        {isSearchMode ? (
+          <Suspense fallback={null}>
+            <SearchInput
+              ref={searchInputRef}
+              placeholder="Search places..."
+              value={searchQuery}
+              onChange={setSearchQuery}
+              showBack
+              onBack={handleBackFromSearchOrFilter}
+              className="h-12"
+            />
+          </Suspense>
+        ) : (
+          <div className="grid h-12 grid-cols-[5.75rem_1fr_5.75rem] items-center">
+            <div className="flex h-12 overflow-hidden rounded-3xl border border-white/15 bg-[#242426]/85 shadow-lg backdrop-blur-2xl">
+              <DropdownMenu>
+                <DropdownMenuTrigger asChild>
+                  <button
+                    type="button"
+                    className="flex flex-1 items-center justify-center"
+                    aria-label="Filter places"
+                  >
+                    <ListFilter className="h-4 w-4" />
+                  </button>
+                </DropdownMenuTrigger>
+                <DropdownMenuContent align="start" className="w-64">
+                  <DropdownMenuLabel>Categories</DropdownMenuLabel>
+                  {visibleCategories.length > 0 ? (
+                    visibleCategories.map((category) => (
+                      <DropdownMenuCheckboxItem
+                        key={category.id}
+                        checked={selectedCategories.includes(category.key)}
+                        onSelect={(event) => event.preventDefault()}
+                        onCheckedChange={() => toggleCategory(category.key)}
+                      >
+                        {category.label}
+                      </DropdownMenuCheckboxItem>
+                    ))
+                  ) : (
+                    <div className="px-2 py-2 text-sm text-muted-foreground">
+                      No categories available
+                    </div>
+                  )}
+                </DropdownMenuContent>
+              </DropdownMenu>
+              <button
+                type="button"
+                onClick={() => {
+                  setIsSearchMode(true);
+                  window.requestAnimationFrame(() =>
+                    searchInputRef.current?.focus()
+                  );
+                }}
+                className="flex flex-1 items-center justify-center"
+                aria-label="Search places"
+              >
+                <Search className="h-[1.125rem] w-[1.125rem]" />
+              </button>
+            </div>
+            <h1
+              className={cn(
+                "text-center text-xl font-bold transition-opacity duration-300 ease-in-out",
+                isSticky && "opacity-0"
+              )}
+            >
+              Places
+            </h1>
+          </div>
+        )}
+
+        {!isSearchMode ? (
+          <MobileFilterPills
+            options={MOBILE_PLACE_FILTERS}
+            value={filterType}
+            onValueChange={setFilterType}
+            className={cn(
+              "-mx-3 mt-4 pl-3 transition-opacity duration-300 ease-in-out",
+              isSticky && "pointer-events-none opacity-0"
+            )}
+          />
+        ) : null}
+      </div>
+      <div
+        className={cn("md:hidden", isSearchMode ? "h-[4.5rem]" : "h-[7.5rem]")}
+        aria-hidden="true"
+      />
+
+      <StickySearchBar
+        className="hidden md:block"
+        innerClassName="w-full flex-col items-stretch sm:flex-col sm:items-stretch"
+      >
         <div className="flex w-full flex-col gap-2 sm:flex-row sm:items-center">
           <div className="flex w-full flex-row">
             <Suspense fallback={null}>
@@ -338,77 +538,100 @@ function PlacesPageContent() {
       </StickySearchBar>
 
       {/* Loading State */}
-      {(isLoading || !isReady) && <PlaceSkeletonGrid />}
+      {(isLoading || !isReady) && (
+        <div className="hidden md:block">
+          <PlaceSkeletonGrid />
+        </div>
+      )}
+      {(isLoading || !isReady) && (
+        <div className="space-y-3 pr-6 md:hidden">
+          {Array.from({ length: 8 }).map((_, index) => (
+            <div
+              key={index}
+              className="flex animate-pulse items-center gap-4 px-2 py-2"
+            >
+              <div className="h-[3.25rem] w-[3.25rem] rounded-[14px] bg-white/10" />
+              <div className="flex-1 space-y-2">
+                <div className="h-4 w-2/3 rounded bg-white/10" />
+                <div className="h-3 w-4/5 rounded bg-white/10" />
+              </div>
+            </div>
+          ))}
+        </div>
+      )}
 
       {/* Combined Grid */}
       {!isLoading && isReady && filteredItems.length > 0 && (
-        <div className="grid gap-2 md:grid-cols-2 lg:grid-cols-3">
-          {filteredItems.map((item) => (
-            <Link
-              key={`${item.type}-${item.id}`}
-              href={`/${item.type === "venue" ? "venue" : "organizer"}/${item.slug}`}
-            >
-              <Card className="relative h-28 cursor-pointer overflow-hidden !border-none bg-card p-2 transition-all duration-300 hover:bg-accent/50">
-                <div className="flex h-full">
-                  <div className="relative h-24 w-24 flex-shrink-0 overflow-hidden rounded-2xl bg-muted">
-                    {item.logoImageUrl ? (
-                      <Image
-                        src={item.logoImageUrl}
-                        alt={item.name}
-                        fill
-                        className="object-cover"
-                        sizes="96px"
-                      />
-                    ) : (
-                      <div className="flex h-full w-full items-center justify-center">
-                        {item.type === "venue" ? (
-                          <Building className="h-8 w-8 text-muted-foreground/40" />
-                        ) : (
-                          <Building2 className="h-8 w-8 text-muted-foreground/40" />
-                        )}
-                      </div>
-                    )}
-                  </div>
-
-                  <div className="font-space-grotesk flex flex-1 flex-col justify-between py-1 pl-3 pr-1">
-                    <div className="space-y-1.5">
-                      <h3 className="line-clamp-2 text-base font-medium leading-tight">
-                        {item.name}
-                      </h3>
-                      {item.city && item.state && (
-                        <div className="flex items-center gap-1.5 text-sm font-medium text-neon-teal">
-                          {/*<MapPin className="h-3.5 w-3.5" />*/}
-                          <span>
-                            {item.city}, {item.state}
-                          </span>
+        <>
+          <MobilePlacesList items={filteredItems} />
+          <div className="hidden gap-2 md:grid md:grid-cols-2 lg:grid-cols-3">
+            {filteredItems.map((item) => (
+              <Link
+                key={`${item.type}-${item.id}`}
+                href={`/${item.type === "venue" ? "venue" : "organizer"}/${item.slug}`}
+              >
+                <Card className="relative h-28 cursor-pointer overflow-hidden !border-none bg-card p-2 transition-all duration-300 hover:bg-accent/50">
+                  <div className="flex h-full">
+                    <div className="relative h-24 w-24 flex-shrink-0 overflow-hidden rounded-2xl bg-muted">
+                      {item.logoImageUrl ? (
+                        <Image
+                          src={item.logoImageUrl}
+                          alt={item.name}
+                          fill
+                          className="object-cover"
+                          sizes="96px"
+                        />
+                      ) : (
+                        <div className="flex h-full w-full items-center justify-center">
+                          {item.type === "venue" ? (
+                            <Building className="h-8 w-8 text-muted-foreground/40" />
+                          ) : (
+                            <Building2 className="h-8 w-8 text-muted-foreground/40" />
+                          )}
                         </div>
                       )}
-                      <div
-                        className={cn(
-                          "flex items-center gap-1.5 text-sm",
-                          item.eventCount === 0
-                            ? "hidden"
-                            : "text-muted-foreground"
+                    </div>
+
+                    <div className="font-space-grotesk flex flex-1 flex-col justify-between py-1 pl-3 pr-1">
+                      <div className="space-y-1.5">
+                        <h3 className="line-clamp-2 text-base font-medium leading-tight">
+                          {item.name}
+                        </h3>
+                        {item.city && item.state && (
+                          <div className="flex items-center gap-1.5 text-sm font-medium text-neon-teal">
+                            {/*<MapPin className="h-3.5 w-3.5" />*/}
+                            <span>
+                              {item.city}, {item.state}
+                            </span>
+                          </div>
                         )}
-                      >
-                        {/*<CalendarDays className="h-3.5 w-3.5" />*/}
-                        <span>
-                          {item.eventCount} upcoming{" "}
-                          {item.eventCount === 1 ? "event" : "events"}
+                        <div
+                          className={cn(
+                            "flex items-center gap-1.5 text-sm",
+                            item.eventCount === 0
+                              ? "hidden"
+                              : "text-muted-foreground"
+                          )}
+                        >
+                          {/*<CalendarDays className="h-3.5 w-3.5" />*/}
+                          <span>
+                            {item.eventCount} upcoming{" "}
+                            {item.eventCount === 1 ? "event" : "events"}
+                          </span>
+                        </div>
+                      </div>
+                      <div className="flex justify-end">
+                        <span className="text-xs text-muted-foreground/50">
+                          {item.type === "venue" ? "Venue" : "Organizer"}
                         </span>
                       </div>
                     </div>
-                    <div className="flex justify-end">
-                      <span className="text-xs text-muted-foreground/50">
-                        {item.type === "venue" ? "Venue" : "Organizer"}
-                      </span>
-                    </div>
                   </div>
-                </div>
-              </Card>
-            </Link>
-          ))}
-        </div>
+                </Card>
+              </Link>
+            ))}
+          </div>
+        </>
       )}
 
       {/* Empty State */}

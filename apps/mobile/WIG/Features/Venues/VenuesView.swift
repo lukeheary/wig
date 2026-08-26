@@ -123,47 +123,65 @@ struct VenuesView: View {
             } else {
                 let places = filteredPlaces(in: response)
 
-                ScrollView {
-                    LazyVStack(alignment: .leading, spacing: 14) {
-                        placeFilterBar
-                            .scrollingPillFade()
-                            .background {
-                                placesHeaderScrollMarker
-                            }
+                ScrollViewReader { scrollProxy in
+                    ScrollView {
+                        LazyVStack(alignment: .leading, spacing: 14) {
+                            placeFilterBar
+                                .scrollingPillFade()
+                                .background {
+                                    placesHeaderScrollMarker
+                                }
 
-                        if places.isEmpty {
-                            ContentUnavailableView {
-                                Label("No Places Found", systemImage: "building.2")
-                            } description: {
-                                Text("Try adjusting your city or place filter.")
+                            if places.isEmpty {
+                                ContentUnavailableView {
+                                    Label("No Places Found", systemImage: "building.2")
+                                } description: {
+                                    Text("Try adjusting your city or place filter.")
+                                }
+                                .foregroundStyle(.white)
+                                .frame(maxWidth: .infinity)
+                                .padding(.top, 40)
+                            } else {
+                                CompactPlaceListView(
+                                    places: places,
+                                    logoCornerRadius: 8,
+                                    rowSpacing: 6
+                                )
+                                .padding(.trailing, 14)
                             }
-                            .foregroundStyle(.white)
-                            .frame(maxWidth: .infinity)
-                            .padding(.top, 40)
-                        } else {
-                            CompactPlaceListView(
-                                places: places,
-                                logoCornerRadius: 8,
-                                rowSpacing: 6
-                            )
+                        }
+                        .padding(.horizontal, 16)
+                        .padding(.top, 60)
+                        .padding(.bottom, 18)
+                    }
+                    .overlay(alignment: .top) {
+                        placesTopNavigation(for: response)
+                            .padding(.horizontal, 16)
+                    }
+                    .overlay(alignment: .trailing) {
+                        if !places.isEmpty {
+                            PlaceAlphabetIndex(
+                                availableLetters: Set(places.map(\.alphabetSectionID))
+                            ) { letter in
+                                scrollProxy.scrollTo(
+                                    letter,
+                                    anchor: UnitPoint(x: 0.5, y: 0.08)
+                                )
+                            }
+                            .padding(.trailing, 3)
+                            .padding(.top, 96)
+                            .padding(.bottom, 28)
                         }
                     }
-                    .padding(.horizontal, 16)
-                    .padding(.top, 60)
-                    .padding(.bottom, 18)
+                    .scrollIndicators(.hidden)
+                    .scrollDismissesKeyboard(.interactively)
+                    .modifier(ScrollableHeaderFadeTrackingModifier(opacity: $headerOpacity))
+                    .coordinateSpace(name: "places-scroll")
+                    .onPreferenceChange(ScrollableHeaderMinYPreferenceKey.self) { minY in
+                        headerOpacity = scrollableHeaderOpacity(for: minY)
+                    }
+                    .background(venuesBackground)
                 }
-                .overlay(alignment: .top) {
-                    placesTopNavigation(for: response)
-                        .padding(.horizontal, 16)
-                }
-                .scrollIndicators(.hidden)
-                .scrollDismissesKeyboard(.interactively)
-                .modifier(ScrollableHeaderFadeTrackingModifier(opacity: $headerOpacity))
-                .coordinateSpace(name: "places-scroll")
-                .onPreferenceChange(ScrollableHeaderMinYPreferenceKey.self) { minY in
-                    headerOpacity = scrollableHeaderOpacity(for: minY)
-                }
-                .background(venuesBackground)
             }
         }
     }
@@ -265,7 +283,7 @@ struct VenuesView: View {
                 .opacity(headerOpacity)
                 .allowsHitTesting(false)
         }
-        .frame(height: 46)
+        .frame(height: PlacesLayout.topNavigationHeight)
     }
 
     private var placeSearchControls: some View {
@@ -782,20 +800,119 @@ struct CompactPlaceListView: View {
         // Keep eager layout here: LazyVStack previously caused NavigationLink hit
         // targets to drift onto adjacent rows as their final heights resolved.
         VStack(alignment: .leading, spacing: rowSpacing) {
-            ForEach(sortedPlaces, id: \.listRowID) { place in
-                NavigationLink {
-                    PlaceDetailView(place: place)
-                } label: {
-                    PlaceRowView(place: place, style: .plain, logoCornerRadius: logoCornerRadius)
-                }
-                .buttonStyle(.plain)
-                .simultaneousGesture(
-                    TapGesture().onEnded {
-                        onSelect(place)
+            ForEach(alphabetSections, id: \.letter) { section in
+                ForEach(section.places, id: \.listRowID) { place in
+                    NavigationLink {
+                        PlaceDetailView(place: place)
+                    } label: {
+                        PlaceRowView(place: place, style: .plain, logoCornerRadius: logoCornerRadius)
                     }
-                )
+                    .buttonStyle(.plain)
+                    .simultaneousGesture(
+                        TapGesture().onEnded {
+                            onSelect(place)
+                        }
+                    )
+                    .id(
+                        place.listRowID == section.places.first?.listRowID
+                            ? section.letter
+                            : place.listRowID
+                    )
+                }
             }
         }
+    }
+
+    private var alphabetSections: [(letter: String, places: [PlaceListItem])] {
+        Dictionary(grouping: sortedPlaces, by: \.alphabetSectionID)
+            .map { (letter: $0.key, places: $0.value) }
+            .sorted { lhs, rhs in
+                alphabetSortOrder(for: lhs.letter) < alphabetSortOrder(for: rhs.letter)
+            }
+    }
+
+    private func alphabetSortOrder(for letter: String) -> Int {
+        guard let scalar = letter.unicodeScalars.first,
+              scalar.value >= 65,
+              scalar.value <= 90 else {
+            return 26
+        }
+
+        return Int(scalar.value - 65)
+    }
+}
+
+private enum PlacesLayout {
+    static let topNavigationHeight: CGFloat = 46
+}
+
+private struct PlaceAlphabetIndex: View {
+    private static let letters = Array("ABCDEFGHIJKLMNOPQRSTUVWXYZ").map(String.init) + ["#"]
+    private static let rowHeight: CGFloat = 14
+
+    let availableLetters: Set<String>
+    let onSelect: (String) -> Void
+    @State private var lastScrubbedLetter: String?
+
+    var body: some View {
+        GeometryReader { proxy in
+            VStack(spacing: 0) {
+                ForEach(Self.letters, id: \.self) { letter in
+                    Text(letter)
+                        .font(.system(size: 11, weight: .semibold, design: .rounded))
+                        .foregroundStyle(
+                            Color.gray.opacity(availableLetters.contains(letter) ? 0.82 : 0.28)
+                        )
+                        .frame(maxWidth: .infinity)
+                        .frame(height: Self.rowHeight)
+                        .contentShape(Rectangle())
+                        .onTapGesture {
+                            select(letter, providesFeedback: true)
+                        }
+                }
+            }
+            .contentShape(Rectangle())
+            .gesture(
+                DragGesture(minimumDistance: 0)
+                    .onChanged { value in
+                        let index = min(
+                            Self.letters.count - 1,
+                            max(0, Int(value.location.y / Self.rowHeight))
+                        )
+                        let letter = Self.letters[index]
+                        guard letter != lastScrubbedLetter else { return }
+                        lastScrubbedLetter = letter
+                        select(letter, providesFeedback: true)
+                    }
+                    .onEnded { _ in
+                        lastScrubbedLetter = nil
+                    }
+            )
+        }
+        .frame(
+            width: 20,
+            height: Self.rowHeight * CGFloat(Self.letters.count)
+        )
+        .accessibilityElement(children: .contain)
+        .accessibilityLabel("Places alphabet index")
+    }
+
+    private func select(_ letter: String, providesFeedback: Bool) {
+        if providesFeedback {
+            let feedback = UISelectionFeedbackGenerator()
+            feedback.selectionChanged()
+        }
+        guard availableLetters.contains(letter) else { return }
+        onSelect(letter)
+    }
+}
+
+private extension PlaceListItem {
+    var alphabetSectionID: String {
+        let trimmedName = name.trimmingCharacters(in: .whitespacesAndNewlines)
+        guard let first = trimmedName.first else { return "#" }
+        let letter = String(first).uppercased()
+        return letter.range(of: "^[A-Z]$", options: .regularExpression) == nil ? "#" : letter
     }
 }
 

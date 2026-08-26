@@ -7,12 +7,21 @@ import {
   useEffect,
   useState,
 } from "react";
-import { format, isSameDay, startOfDay, subDays } from "date-fns";
+import {
+  differenceInCalendarWeeks,
+  format,
+  isSameDay,
+  startOfDay,
+  startOfWeek,
+  subDays,
+} from "date-fns";
 import {
   CalendarIcon,
   ChevronLeft,
   ChevronRight,
+  ListFilter,
   Loader2,
+  Search,
   X,
 } from "lucide-react";
 import {
@@ -26,12 +35,21 @@ import { SearchInput } from "@/components/ui/search-input";
 import { ResponsiveSelect } from "@/components/ui/responsive-select";
 import { StickySearchBar } from "@/components/ui/sticky-search-bar";
 import { StickySectionHeader } from "@/components/ui/sticky-section-header";
+import {
+  DropdownMenu,
+  DropdownMenuCheckboxItem,
+  DropdownMenuContent,
+  DropdownMenuLabel,
+  DropdownMenuRadioGroup,
+  DropdownMenuRadioItem,
+  DropdownMenuSeparator,
+  DropdownMenuTrigger,
+} from "@/components/ui/dropdown-menu";
 import { cn } from "@/lib/utils";
 import { type EventFilterTab } from "@/types/events";
 import { type EventListItem } from "@/types/trpc";
 
-const DESKTOP_RAIL_SIDE_INSET =
-  "max(2rem, calc((100vw - 1200px) / 2 + 2rem))";
+const DESKTOP_RAIL_SIDE_INSET = "max(2rem, calc((100vw - 1200px) / 2 + 2rem))";
 
 type CityOption = {
   value: string;
@@ -98,6 +116,199 @@ interface EventBrowserSurfaceProps {
   defaultContent?: ReactNode;
 }
 
+const MOBILE_EVENT_FILTERS: Array<{ value: EventFilterTab; label: string }> = [
+  { value: "all", label: "All Events" },
+  { value: "following", label: "Following" },
+  { value: "friends", label: "Friends' Events" },
+  { value: "mine", label: "My Events" },
+];
+
+function MobileEventBrowserControls({
+  searchInputRef,
+  searchQuery,
+  onSearchQueryChange,
+  onSearchFocus,
+  isSearchView,
+  onSearchBack,
+  filterValue,
+  onFilterChange,
+  allowPersonalFilters,
+  visibleCategories,
+  selectedCategories,
+  onToggleCategory,
+  daysToDisplay,
+  isCurrentWeek,
+  onToday,
+  onPrevious,
+  onNext,
+}: Pick<
+  EventBrowserSurfaceProps,
+  | "searchInputRef"
+  | "searchQuery"
+  | "onSearchQueryChange"
+  | "onSearchFocus"
+  | "isSearchView"
+  | "onSearchBack"
+  | "filterValue"
+  | "onFilterChange"
+  | "allowPersonalFilters"
+  | "visibleCategories"
+  | "selectedCategories"
+  | "onToggleCategory"
+  | "daysToDisplay"
+  | "isCurrentWeek"
+  | "onToday"
+  | "onPrevious"
+  | "onNext"
+>) {
+  useEffect(() => {
+    if (!isSearchView) return;
+    const frame = window.requestAnimationFrame(() =>
+      searchInputRef?.current?.focus()
+    );
+    return () => window.cancelAnimationFrame(frame);
+  }, [isSearchView, searchInputRef]);
+
+  if (isSearchView) {
+    return (
+      <>
+        <div className="fixed inset-x-3 top-3 z-50 md:hidden">
+          <Suspense fallback={null}>
+            <SearchInput
+              ref={searchInputRef}
+              placeholder="Search events..."
+              value={searchQuery}
+              onChange={onSearchQueryChange}
+              showBack
+              onBack={onSearchBack}
+            />
+          </Suspense>
+        </div>
+        <div className="h-[3.75rem] md:hidden" aria-hidden="true" />
+      </>
+    );
+  }
+
+  const firstDay = daysToDisplay[0];
+  const lastDay = daysToDisplay[daysToDisplay.length - 1];
+  const filterOptions = allowPersonalFilters
+    ? MOBILE_EVENT_FILTERS
+    : MOBILE_EVENT_FILTERS.slice(0, 1);
+  const weeksAway = firstDay
+    ? Math.max(
+        0,
+        differenceInCalendarWeeks(
+          startOfWeek(firstDay, { weekStartsOn: 1 }),
+          startOfWeek(new Date(), { weekStartsOn: 1 })
+        )
+      )
+    : 0;
+  const weekLabel =
+    weeksAway === 0
+      ? "This Week"
+      : weeksAway === 1
+        ? "Next Week"
+        : `In ${weeksAway} Weeks`;
+
+  return (
+    <>
+      <div className="fixed inset-x-3 top-3 z-50 grid h-12 grid-cols-[5.75rem_minmax(0,1fr)_5.75rem] items-stretch gap-2 md:hidden">
+        <div className="flex h-12 overflow-hidden rounded-3xl border border-white/15 bg-[#242426]/85 shadow-[0_18px_50px_rgba(0,0,0,0.55)] backdrop-blur-2xl">
+          <DropdownMenu>
+            <DropdownMenuTrigger asChild>
+              <button
+                type="button"
+                className="flex flex-1 items-center justify-center"
+                aria-label="Filter events"
+              >
+                <ListFilter className="h-4 w-4" />
+              </button>
+            </DropdownMenuTrigger>
+            <DropdownMenuContent align="start" className="w-72">
+              <DropdownMenuLabel>Events</DropdownMenuLabel>
+              <DropdownMenuRadioGroup
+                value={filterValue}
+                onValueChange={(value) =>
+                  onFilterChange(value as EventFilterTab)
+                }
+              >
+                {filterOptions.map((option) => (
+                  <DropdownMenuRadioItem
+                    key={option.value}
+                    value={option.value}
+                  >
+                    {option.label}
+                  </DropdownMenuRadioItem>
+                ))}
+              </DropdownMenuRadioGroup>
+              {visibleCategories.length > 0 ? (
+                <>
+                  <DropdownMenuSeparator />
+                  <DropdownMenuLabel>Categories</DropdownMenuLabel>
+                  {visibleCategories.map((category) => (
+                    <DropdownMenuCheckboxItem
+                      key={category.id}
+                      checked={selectedCategories.includes(category.key)}
+                      onSelect={(event) => event.preventDefault()}
+                      onCheckedChange={() => onToggleCategory(category.key)}
+                    >
+                      {category.label}
+                    </DropdownMenuCheckboxItem>
+                  ))}
+                </>
+              ) : null}
+            </DropdownMenuContent>
+          </DropdownMenu>
+          <button
+            type="button"
+            onClick={onSearchFocus}
+            className="flex flex-1 items-center justify-center"
+            aria-label="Search events"
+          >
+            <Search className="h-[1.125rem] w-[1.125rem]" />
+          </button>
+        </div>
+
+        <button
+          type="button"
+          onClick={() => !isCurrentWeek && void onToday()}
+          className="flex h-12 min-w-0 flex-col items-center justify-center rounded-3xl border border-white/15 bg-[#242426]/85 px-2 shadow-[0_18px_50px_rgba(0,0,0,0.55)] backdrop-blur-2xl"
+        >
+          <span className="text-[11px] font-semibold leading-none text-muted-foreground">
+            {weekLabel}
+          </span>
+          <span className="mt-1 truncate text-xs font-semibold leading-none text-white">
+            {firstDay && lastDay
+              ? `${format(firstDay, "MMM d")} – ${format(lastDay, "MMM d")}`
+              : ""}
+          </span>
+        </button>
+
+        <div className="flex h-12 overflow-hidden rounded-3xl border border-white/15 bg-[#242426]/85 shadow-[0_18px_50px_rgba(0,0,0,0.55)] backdrop-blur-2xl">
+          <button
+            type="button"
+            onClick={() => void onPrevious()}
+            disabled={isCurrentWeek}
+            className="flex flex-1 items-center justify-center border-r border-white/10 disabled:opacity-35"
+            aria-label="Previous week"
+          >
+            <ChevronLeft className="h-5 w-5" />
+          </button>
+          <button
+            type="button"
+            onClick={() => void onNext()}
+            className="flex flex-1 items-center justify-center"
+            aria-label="Next week"
+          >
+            <ChevronRight className="h-5 w-5" />
+          </button>
+        </div>
+      </div>
+      <div className="h-[3.75rem] md:hidden" aria-hidden="true" />
+    </>
+  );
+}
+
 function getWeekSectionMeta(date: Date, isCurrentWeek: boolean) {
   const now = new Date();
   const isEarlyMorning = now.getHours() < 6;
@@ -111,8 +322,8 @@ function getWeekSectionMeta(date: Date, isCurrentWeek: boolean) {
     ? "Last Night's Events"
     : isToday
       ? isEvening
-        ? "Tonight's Events"
-        : "Today's Events"
+        ? "Tonight"
+        : "Today"
       : format(date, "EEE, MMM d");
 
   return {
@@ -134,28 +345,23 @@ function StickyDateHeader({
   onBackToStart?: () => void;
 }) {
   return (
-    <StickySectionHeader
-      leadingSlotVisible={showBackToStart}
-      leadingSlot={
-        <button
-          type="button"
-          aria-label="Scroll back to the beginning of this row"
-          aria-hidden={!showBackToStart}
-          tabIndex={showBackToStart ? 0 : -1}
-          disabled={!showBackToStart}
-          onClick={onBackToStart}
-          className={cn(
-            "flex h-8 w-8 items-center justify-center rounded-full text-muted-foreground transition-all duration-300 ease-out",
-            showBackToStart
-              ? "translate-x-0 opacity-100"
-              : "pointer-events-none translate-x-1 opacity-0"
-          )}
-        >
-          <ChevronLeft className="h-4 w-4" />
-        </button>
-      }
-    >
-      <span className={cn(isToday && "text-primary")}>{dateHeader}</span>
+    <StickySectionHeader stickyOnMobile={false}>
+      <button
+        type="button"
+        onClick={showBackToStart ? onBackToStart : undefined}
+        aria-label={
+          showBackToStart
+            ? `${dateHeader}: scroll events back to the beginning`
+            : undefined
+        }
+        className={cn(
+          "text-left",
+          isToday && "text-primary",
+          showBackToStart && "cursor-pointer"
+        )}
+      >
+        {dateHeader}
+      </button>
     </StickySectionHeader>
   );
 }
@@ -194,9 +400,9 @@ function DayEventSection({
       />
       <div className="container mx-auto px-4">
         {dayEvents.length === 0 ? (
-          emptyDayState ?? (
+          (emptyDayState ?? (
             <EmptyStateCard icon={CalendarIcon} title="No events scheduled" />
-          )
+          ))
         ) : (
           <HomeMobileEventRail
             events={dayEvents}
@@ -385,7 +591,7 @@ export function EventBrowserSurface({
         className={cn(
           "transition-all duration-700 ease-out",
           hasScrolled
-            ? "translate-y-0 opacity-100"
+            ? "opacity-100"
             : cn(
                 "pointer-events-none opacity-0",
                 revealFrom === "bottom" ? "translate-y-8" : "-translate-y-8"
@@ -396,7 +602,27 @@ export function EventBrowserSurface({
           {topSlot}
 
           <StickySearchBar innerClassName="w-full flex-col items-stretch sm:flex-col sm:items-stretch">
-            <div className="flex w-full flex-col gap-2 sm:flex-row sm:items-center">
+            <MobileEventBrowserControls
+              searchInputRef={searchInputRef}
+              searchQuery={searchQuery}
+              onSearchQueryChange={onSearchQueryChange}
+              onSearchFocus={onSearchFocus}
+              isSearchView={isSearchView}
+              onSearchBack={onSearchBack}
+              filterValue={filterValue}
+              onFilterChange={onFilterChange}
+              allowPersonalFilters={allowPersonalFilters}
+              visibleCategories={visibleCategories}
+              selectedCategories={selectedCategories}
+              onToggleCategory={onToggleCategory}
+              daysToDisplay={daysToDisplay}
+              isCurrentWeek={isCurrentWeek}
+              onToday={onToday}
+              onPrevious={onPrevious}
+              onNext={onNext}
+            />
+
+            <div className="hidden w-full flex-col gap-2 md:flex md:flex-row md:items-center">
               <div className="flex w-full flex-row items-center">
                 <div
                   className={cn(
@@ -523,7 +749,7 @@ export function EventBrowserSurface({
             </div>
 
             {(showSkeletons || visibleCategories.length > 0) && (
-              <div className="-mx-4 overflow-x-auto pt-1 [scrollbar-width:none] md:-mx-8 [&::-webkit-scrollbar]:hidden">
+              <div className="-mx-4 hidden overflow-x-auto pt-1 [scrollbar-width:none] md:-mx-8 md:block [&::-webkit-scrollbar]:hidden">
                 <div className="flex gap-1.5 px-4 md:px-8">
                   {showSkeletons
                     ? [64, 80, 56, 72].map((width, index) => (

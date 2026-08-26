@@ -50,3 +50,5 @@ apps/mobile/Config/Production.xcconfig
 # Xcode user interface state and workspace preferences
 apps/mobile/**/xcuserdata/
 apps/mobile/**/*.xcuserstate
+
+certificates

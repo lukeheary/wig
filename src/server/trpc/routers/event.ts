@@ -1946,7 +1946,7 @@ export const eventRouter = router({
       }));
     }),
 
-  getEventById: publicProcedure
+  getEventById: protectedProcedure
     .input(z.object({ eventId: publicOrUuidSchema }))
     .query(async ({ ctx, input }) => {
       const event = await ctx.db.query.events.findFirst({
@@ -2555,7 +2555,7 @@ export const eventRouter = router({
       return { success: true, deletedEvents: 1, deletedRecurring: false };
     }),
 
-  listPublicEventsByRange: publicProcedure
+  listPublicEventsByRange: protectedProcedure
     .input(
       z.object({
         search: z.string().optional(),

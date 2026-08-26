@@ -404,6 +404,9 @@ export const placeRouter = router({
       return placesList.map((p) => ({
         ...mapPlaceCategoryData(p),
         eventCount: countMap.get(p.id) ?? 0,
+        isFollowing: ctx.auth.userId
+          ? p.follows.some((follow) => follow.userId === ctx.auth.userId)
+          : false,
       }));
     }),
 

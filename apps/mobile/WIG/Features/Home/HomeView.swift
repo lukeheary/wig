@@ -2277,9 +2277,9 @@ private struct WhatsNewSection: View {
                     .buttonStyle(.plain)
                 }
             }
-            // Each filter represents a distinct feed. Recreate the carousel when
-            // it changes so its scroll position begins with that feed's first card.
-            .id(selection)
+            // Each filter and refresh represents a distinct feed. Recreate the
+            // carousel when either changes so it begins with the first card.
+            .id(carouselIdentity)
             .accessibilityElement(children: .contain)
             .accessibilityLabel("What’s New")
         } else {
@@ -2291,11 +2291,8 @@ private struct WhatsNewSection: View {
                 }
                 .padding(.horizontal, 16)
 
-                Text(emptyStateMessage)
-                    .font(.system(size: 14, weight: .medium))
-                    .foregroundStyle(.white.opacity(0.52))
+                EmptyEventDayPlaceholder(message: emptyStateMessage)
                     .padding(.horizontal, 16)
-                    .padding(.vertical, 8)
             }
         }
     }
@@ -2304,6 +2301,12 @@ private struct WhatsNewSection: View {
         Text("What’s New")
             .font(AppTheme.contentHeaderFont)
             .foregroundStyle(.white)
+    }
+
+    private var carouselIdentity: [String] {
+        [selection.rawValue] + updates.map { update in
+            "\(update.id.uuidString):\(update.activityDate.timeIntervalSinceReferenceDate)"
+        }
     }
 
     private var emptyStateMessage: String {
@@ -3849,13 +3852,19 @@ private extension String {
 }
 
 private struct EmptyEventDayPlaceholder: View {
+    let message: String
+
+    init(message: String = "No events scheduled") {
+        self.message = message
+    }
+
     var body: some View {
         RoundedRectangle(cornerRadius: 20, style: .continuous)
             .fill(Color.clear)
             .frame(maxWidth: .infinity)
             .frame(height: 140)
             .overlay {
-                Text("No events scheduled")
+                Text(message)
                     .font(.system(size: 15, weight: .medium))
                     .foregroundStyle(.white.opacity(0.58))
                     .multilineTextAlignment(.center)

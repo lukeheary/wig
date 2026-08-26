@@ -13,7 +13,6 @@ import { Button } from "@/components/ui/button";
 import { UserAvatar } from "@/components/ui/user-avatar";
 import {
   Calendar,
-  Link as LinkIcon,
   Check,
   ChevronLeft,
   ChevronRight,
@@ -26,9 +25,10 @@ import {
   Plane,
   Moon,
   CircleMinus,
+  MoreHorizontal,
+  Share2,
 } from "lucide-react";
 import { useToast } from "@/hooks/use-toast";
-import { differenceInCalendarDays, format, startOfDay } from "date-fns";
 import {
   cn,
   formatEventDate,
@@ -43,7 +43,6 @@ import { buildReturnTo, withReturnTo } from "@/lib/navigation";
 import { HapticPreset, useHaptics } from "@/hooks/use-haptics";
 import { useAuth } from "@clerk/nextjs";
 import { sendGoogleAnalyticsEvent } from "@/lib/google-analytics";
-import { CategoryPillList } from "@/components/categories/category-pill";
 import {
   Sheet,
   SheetContent,
@@ -63,6 +62,12 @@ import {
   type RsvpDeclineReason,
 } from "@/lib/rsvp";
 import { useMediaQuery } from "@/hooks/use-media-query";
+import {
+  DropdownMenu,
+  DropdownMenuContent,
+  DropdownMenuItem,
+  DropdownMenuTrigger,
+} from "@/components/ui/dropdown-menu";
 
 type RsvpStatus = "going" | "interested" | "not_going";
 type RsvpDialogScreen = "main" | "cant_go" | "more";
@@ -149,16 +154,9 @@ export default function EventPage() {
     { eventId: eventId ?? "00000000-0000-0000-0000-000000000000" },
     { enabled: Boolean(eventId) }
   );
-  const { data: activeCategories } = trpc.category.listActive.useQuery();
-  const categoryLabelMap = useMemo(
-    () =>
-      Object.fromEntries(
-        (activeCategories || []).map((category) => [
-          category.key,
-          category.label,
-        ])
-      ),
-    [activeCategories]
+  const { data: friendships = [] } = trpc.friends.listFriends.useQuery(
+    {},
+    { enabled: Boolean(isSignedIn) }
   );
 
   // Check if user is admin
@@ -394,7 +392,9 @@ export default function EventPage() {
     setIsRsvpDialogOpen(true);
   };
 
-  const chooseRsvpStatus = (status: Extract<RsvpStatus, "going" | "interested">) => {
+  const chooseRsvpStatus = (
+    status: Extract<RsvpStatus, "going" | "interested">
+  ) => {
     if (currentRsvpStatus === status) {
       setIsRsvpDialogOpen(false);
       return;
@@ -446,9 +446,12 @@ export default function EventPage() {
 
   const handleShare = async () => {
     try {
-      if (!navigator.clipboard?.writeText) return;
-
       const eventUrl = `${window.location.origin}/event/${event?.publicId ?? eventPublicId}`;
+      if (navigator.share) {
+        await navigator.share({ title: event?.title, url: eventUrl });
+        return;
+      }
+      if (!navigator.clipboard?.writeText) return;
       await navigator.clipboard.writeText(eventUrl);
       void triggerHaptic(HapticPreset.Light);
       setIsShareCopied(true);
@@ -481,6 +484,19 @@ export default function EventPage() {
     attendees?.filter((a) => a.status === "interested") || [];
   const notGoingAttendees =
     attendees?.filter((a) => a.status === "not_going") || [];
+  const friendIds = new Set(
+    friendships
+      .filter((friendship) => friendship.status === "accepted")
+      .map((friendship) => friendship.friend?.id)
+      .filter(Boolean)
+  );
+  const friendsGoing = goingAttendees.filter((attendee) =>
+    friendIds.has(attendee.userId)
+  );
+  const friendsInterested = interestedAttendees.filter((attendee) =>
+    friendIds.has(attendee.userId)
+  );
+  const friendAttendees = [...friendsGoing, ...friendsInterested];
   const goingCount = goingAttendees.length;
   const interestedCount = interestedAttendees.length;
   const notGoingCount = notGoingAttendees.length;
@@ -516,18 +532,6 @@ export default function EventPage() {
     event.timeZone,
     event.state
   );
-  const daysUntilEvent = differenceInCalendarDays(
-    startOfDay(eventDate),
-    startOfDay(new Date())
-  );
-  const relativeDateLabel =
-    daysUntilEvent === 1
-      ? "tomorrow"
-      : daysUntilEvent > 1
-        ? `in ${daysUntilEvent} days`
-        : daysUntilEvent <= -7 && daysUntilEvent > -14
-          ? "Last Week"
-          : null;
   const timezone =
     new Intl.DateTimeFormat("en-US", { timeZoneName: "short" })
       .formatToParts(eventDate)
@@ -541,7 +545,7 @@ export default function EventPage() {
     event.title
   );
   const imageOverlayButtonClassName =
-    "h-11 w-11 rounded-full bg-black/55 text-white shadow-[0_10px_28px_rgba(0,0,0,0.45)] backdrop-blur-sm transition-all hover:scale-[1.02] hover:bg-black/72 hover:text-white";
+    "h-12 w-12 rounded-3xl border border-white/15 bg-[#242426]/75 text-white shadow-[0_10px_28px_rgba(0,0,0,0.45)] backdrop-blur-2xl transition-all hover:bg-[#242426]/85 hover:text-white md:h-11 md:w-11 md:rounded-full md:border-0 md:bg-black/55 md:backdrop-blur-sm";
   const shouldShowAttendeeIdentities = Boolean(isSignedIn);
   const renderAttendeeCard = (attendee: (typeof goingAttendees)[number]) => {
     const attendeeName =
@@ -591,6 +595,12 @@ export default function EventPage() {
   // Check if user can edit this event
   const canEdit =
     isAdmin || (currentUser && event.createdByUserId === currentUser.id);
+  const ticketVendor = event.source
+    ? event.source
+        .split(/[-_\s]+/)
+        .map((part) => part.charAt(0).toUpperCase() + part.slice(1))
+        .join(" ")
+    : null;
   const rsvpButtonLabel =
     currentRsvpStatus === "going"
       ? "Going"
@@ -599,10 +609,7 @@ export default function EventPage() {
         : currentRsvpStatus === "not_going"
           ? "Can't Go"
           : "RSVP";
-  const declineReasonIcons: Record<
-    RsvpDeclineReason,
-    typeof Calendar
-  > = {
+  const declineReasonIcons: Record<RsvpDeclineReason, typeof Calendar> = {
     busy: Calendar,
     out_of_town: Plane,
     working: Briefcase,
@@ -612,7 +619,7 @@ export default function EventPage() {
     rsvpDialogScreen === "main" ? null : (
       <button
         type="button"
-        className="flex items-center gap-3 rounded-2xl px-1 py-2 text-lg font-semibold text-white/90 transition-colors hover:text-white"
+        className="flex items-center gap-3 rounded-2xl px-1 py-2 text-base font-semibold text-white/90 transition-colors hover:text-white md:text-lg"
         onClick={() => setRsvpDialogScreen("main")}
       >
         <ChevronLeft className="h-5 w-5" />
@@ -623,11 +630,11 @@ export default function EventPage() {
     <div className="space-y-2">
       <button
         type="button"
-        className="flex w-full items-center gap-5 rounded-2xl px-2 py-5 text-left text-xl font-semibold text-white transition-colors hover:bg-white/[0.08]"
+        className="flex w-full items-center gap-4 rounded-2xl px-2 py-4 text-left text-base font-semibold text-white transition-colors hover:bg-white/[0.08] md:gap-5 md:py-5 md:text-xl"
         onClick={() => chooseRsvpStatus("going")}
         disabled={isRsvpPending}
       >
-        <Check className="h-7 w-7 text-neon-teal" />
+        <Check className="h-5 w-5 text-neon-teal md:h-7 md:w-7" />
         <span className="flex-1">Going</span>
         {currentRsvpStatus === "going" ? (
           <Check className="h-5 w-5 text-neon-teal" />
@@ -635,11 +642,11 @@ export default function EventPage() {
       </button>
       <button
         type="button"
-        className="flex w-full items-center gap-5 rounded-2xl px-2 py-5 text-left text-xl font-semibold text-white transition-colors hover:bg-white/[0.08]"
+        className="flex w-full items-center gap-4 rounded-2xl px-2 py-4 text-left text-base font-semibold text-white transition-colors hover:bg-white/[0.08] md:gap-5 md:py-5 md:text-xl"
         onClick={() => chooseRsvpStatus("interested")}
         disabled={isRsvpPending}
       >
-        <Star className="h-7 w-7 fill-yellow-300 text-yellow-300" />
+        <Star className="h-5 w-5 fill-yellow-300 text-yellow-300 md:h-7 md:w-7" />
         <span className="flex-1">Interested</span>
         {currentRsvpStatus === "interested" ? (
           <Check className="h-5 w-5 text-neon-teal" />
@@ -647,21 +654,21 @@ export default function EventPage() {
       </button>
       <button
         type="button"
-        className="flex w-full items-center gap-5 rounded-2xl px-2 py-5 text-left text-xl font-semibold text-white transition-colors hover:bg-white/[0.08]"
+        className="flex w-full items-center gap-4 rounded-2xl px-2 py-4 text-left text-base font-semibold text-white transition-colors hover:bg-white/[0.08] md:gap-5 md:py-5 md:text-xl"
         onClick={handleCantGo}
         disabled={isRsvpPending}
       >
-        <X className="h-7 w-7 text-red-400" />
+        <X className="h-5 w-5 text-red-400 md:h-7 md:w-7" />
         <span className="flex-1">Can&apos;t Go</span>
         <ChevronRight className="h-5 w-5 text-white/60" />
       </button>
-      <div className="mx-2 border-t border-white/12" />
+      <div className="border-white/12 mx-2 border-t" />
       <button
         type="button"
-        className="flex w-full items-center gap-5 rounded-2xl px-2 py-5 text-left text-xl font-semibold text-white transition-colors hover:bg-white/[0.08]"
+        className="flex w-full items-center gap-4 rounded-2xl px-2 py-4 text-left text-base font-semibold text-white transition-colors hover:bg-white/[0.08] md:gap-5 md:py-5 md:text-xl"
         onClick={() => setRsvpDialogScreen("more")}
       >
-        <span className="h-7 w-7" />
+        <span className="h-5 w-5 md:h-7 md:w-7" />
         <span className="flex-1">More</span>
         <ChevronRight className="h-5 w-5 text-white/60" />
       </button>
@@ -670,7 +677,7 @@ export default function EventPage() {
   const rsvpCantGoContent = (
     <div className="space-y-2">
       {rsvpDialogBackButton}
-      <div className="mx-2 border-t border-white/12" />
+      <div className="border-white/12 mx-2 border-t" />
       {RSVP_DECLINE_REASON_VALUES.map((reason) => {
         const ReasonIcon = declineReasonIcons[reason];
 
@@ -678,17 +685,15 @@ export default function EventPage() {
           <button
             key={reason}
             type="button"
-            className="flex w-full items-center gap-5 rounded-2xl px-2 py-5 text-left text-xl font-semibold text-white transition-colors hover:bg-white/[0.08]"
+            className="flex w-full items-center gap-4 rounded-2xl px-2 py-4 text-left text-base font-semibold text-white transition-colors hover:bg-white/[0.08] md:gap-5 md:py-5 md:text-xl"
             onClick={() => {
               setCantGoReason(reason);
               submitCantGo(reason);
             }}
             disabled={isRsvpPending}
           >
-            <ReasonIcon className="h-7 w-7 text-white/90" />
-            <span className="flex-1">
-              {RSVP_DECLINE_REASON_LABELS[reason]}
-            </span>
+            <ReasonIcon className="h-5 w-5 text-white/90 md:h-7 md:w-7" />
+            <span className="flex-1">{RSVP_DECLINE_REASON_LABELS[reason]}</span>
             {currentNotGoingReason === reason ? (
               <Check className="h-5 w-5 text-neon-teal" />
             ) : null}
@@ -697,11 +702,11 @@ export default function EventPage() {
       })}
       <button
         type="button"
-        className="flex w-full items-center gap-5 rounded-2xl px-2 py-5 text-left text-xl font-semibold text-white transition-colors hover:bg-white/[0.08]"
+        className="flex w-full items-center gap-4 rounded-2xl px-2 py-4 text-left text-base font-semibold text-white transition-colors hover:bg-white/[0.08] md:gap-5 md:py-5 md:text-xl"
         onClick={() => submitCantGo(null)}
         disabled={isRsvpPending}
       >
-        <CircleMinus className="h-7 w-7 text-white/70" />
+        <CircleMinus className="h-5 w-5 text-white/70 md:h-7 md:w-7" />
         <span className="flex-1">No reason</span>
         {currentRsvpStatus === "not_going" && !currentNotGoingReason ? (
           <Check className="h-5 w-5 text-neon-teal" />
@@ -712,9 +717,9 @@ export default function EventPage() {
   const rsvpMoreContent = (
     <div className="space-y-2">
       {rsvpDialogBackButton}
-      <div className="mx-2 border-t border-white/12" />
+      <div className="border-white/12 mx-2 border-t" />
       {hasActivePartner && myPartner?.partner?.firstName ? (
-        <div className="flex items-center justify-between gap-5 rounded-2xl px-2 py-5 text-xl font-semibold text-white">
+        <div className="flex items-center justify-between gap-4 rounded-2xl px-2 py-4 text-base font-semibold text-white md:gap-5 md:py-5 md:text-xl">
           <span className="min-w-0 flex-1">
             RSVP with {myPartner.partner.firstName}
           </span>
@@ -752,7 +757,7 @@ export default function EventPage() {
           />
         </div>
       ) : null}
-      <div className="flex items-center justify-between gap-5 rounded-2xl px-2 py-5 text-xl font-semibold text-white">
+      <div className="flex items-center justify-between gap-4 rounded-2xl px-2 py-4 text-base font-semibold text-white md:gap-5 md:py-5 md:text-xl">
         <span className="min-w-0 flex-1">Notify Friends</span>
         <Switch
           checked
@@ -770,8 +775,21 @@ export default function EventPage() {
         : rsvpMainContent;
 
   return (
-    <div className="relative isolate -mt-14 min-h-screen pt-14 md:-mt-16 md:pt-16">
-      <div className="absolute inset-0 -z-20 bg-background" />
+    <div className="relative isolate min-h-screen md:-mt-16 md:pt-16">
+      <div className="absolute inset-0 -z-20 bg-black md:bg-background" />
+      {eventImageUrl ? (
+        <div className="pointer-events-none absolute inset-x-0 top-0 -z-10 h-[46rem] overflow-hidden md:hidden">
+          <Image
+            src={eventImageUrl}
+            alt=""
+            fill
+            sizes="100vw"
+            className="scale-125 object-cover opacity-45 blur-3xl"
+            aria-hidden
+          />
+          <div className="absolute inset-0 bg-gradient-to-b from-black/25 via-black/55 to-black" />
+        </div>
+      ) : null}
       {/* Image Modal */}
       {isImageModalOpen && eventImageUrl && (
         <div
@@ -825,7 +843,7 @@ export default function EventPage() {
       )}
 
       {/* Desktop two-column layout */}
-      <div className="container mx-auto w-full px-4 pb-6">
+      <div className="container mx-auto w-full px-4 pb-6 pt-4 md:pt-0">
         <div className="lg:flex lg:items-start lg:gap-10">
           {/* Cover Image - Left column on desktop */}
           <div className="lg:w-[420px] lg:flex-none">
@@ -889,37 +907,6 @@ export default function EventPage() {
 
               {/* Action Icons - Overlay on top right */}
               <div className="absolute right-2.5 top-2.5 flex gap-2">
-                {canEdit && (
-                  <Link href={editHref}>
-                    <Button
-                      size="icon"
-                      variant="ghost"
-                      className={imageOverlayButtonClassName}
-                    >
-                      <Edit className="h-4 w-4" />
-                    </Button>
-                  </Link>
-                )}
-                {/*<Button size="icon" variant="secondary" className="h-10 w-10">*/}
-                {/*  <Heart className="h-4 w-4" />*/}
-                {/*</Button>*/}
-                {event.eventUrl && (
-                  <Button
-                    size="icon"
-                    variant="ghost"
-                    className={imageOverlayButtonClassName}
-                    asChild
-                  >
-                    <a
-                      href={event.eventUrl}
-                      target="_blank"
-                      rel="noopener noreferrer"
-                      aria-label="Open event website"
-                    >
-                      <ExternalLink className="h-4 w-4" />
-                    </a>
-                  </Button>
-                )}
                 <Button
                   size="icon"
                   variant="ghost"
@@ -930,14 +917,53 @@ export default function EventPage() {
                   {isShareCopied ? (
                     <Check className="h-4 w-4" />
                   ) : (
-                    <LinkIcon className="h-4 w-4" />
+                    <Share2 className="h-5 w-5" />
                   )}
                 </Button>
+                {(canEdit || event.eventUrl) && (
+                  <DropdownMenu>
+                    <DropdownMenuTrigger asChild>
+                      <Button
+                        size="icon"
+                        variant="ghost"
+                        className={imageOverlayButtonClassName}
+                        aria-label="Event options"
+                      >
+                        <MoreHorizontal className="h-5 w-5" />
+                      </Button>
+                    </DropdownMenuTrigger>
+                    <DropdownMenuContent
+                      align="end"
+                      className="w-56 border-white/15 bg-[#242426]/95 p-2 backdrop-blur-2xl"
+                    >
+                      {event.eventUrl ? (
+                        <DropdownMenuItem asChild className="gap-3 py-3">
+                          <a
+                            href={event.eventUrl}
+                            target="_blank"
+                            rel="noopener noreferrer"
+                          >
+                            <ExternalLink />
+                            Open Event Website
+                          </a>
+                        </DropdownMenuItem>
+                      ) : null}
+                      {canEdit ? (
+                        <DropdownMenuItem asChild className="gap-3 py-3">
+                          <Link href={editHref}>
+                            <Edit />
+                            Edit Event
+                          </Link>
+                        </DropdownMenuItem>
+                      ) : null}
+                    </DropdownMenuContent>
+                  </DropdownMenu>
+                )}
               </div>
 
               {/* Avatars - Overlay on bottom right */}
               {shouldShowAttendeeIdentities && socialStackUsers.length > 0 && (
-                <div className="absolute bottom-2.5 right-2.5">
+                <div className="absolute bottom-2.5 right-2.5 hidden md:block">
                   <AvatarStack
                     users={socialStackUsers}
                     maxDisplay={5}
@@ -990,29 +1016,17 @@ export default function EventPage() {
                 <span className={"font-space-grotesk font-medium"}>
                   {formattedDate} at {formattedTime}
                 </span>
-                {relativeDateLabel ? (
-                  <span className="ml-2 text-sm text-muted-foreground">
-                    ({relativeDateLabel})
-                  </span>
-                ) : null}
               </span>
             </div>
 
-            {(event.venue?.name || (event.categories?.length ?? 0) > 0) && (
+            {event.venue?.name && (
               <div className="flex flex-wrap items-center gap-2 pt-0.5 md:pt-1">
-                {event.venue?.name && (
-                  <Link
-                    className="font-space-grotesk flex w-fit items-center gap-2 text-lg font-medium transition-colors hover:underline md:text-2xl"
-                    href={`/venue/${event.venue?.slug}`}
-                  >
-                    <span>{event.venue.name}</span>
-                  </Link>
-                )}
-                <CategoryPillList
-                  categories={event.categories || []}
-                  categoryLabelMap={categoryLabelMap}
-                  variant={"small"}
-                />
+                <Link
+                  className="font-space-grotesk flex w-fit items-center gap-2 text-lg font-medium transition-colors hover:underline md:text-2xl"
+                  href={`/venue/${event.venue?.slug}`}
+                >
+                  <span>{event.venue.name}</span>
+                </Link>
               </div>
             )}
 
@@ -1033,7 +1047,7 @@ export default function EventPage() {
                 <Button
                   variant="neon"
                   className={cn(
-                    "font-space-grotesk h-14 w-full rounded-xl px-4 text-base font-semibold lg:text-lg",
+                    "font-space-grotesk h-14 w-full rounded-full border border-white/15 bg-white/10 px-4 text-base font-semibold text-white backdrop-blur-xl hover:bg-white/15 md:rounded-xl md:border-0 md:bg-primary md:text-primary-foreground lg:text-lg",
                     currentRsvpStatus &&
                       "border-transparent bg-neon-teal text-black hover:bg-neon-teal-hover hover:text-black active:text-black"
                   )}
@@ -1047,6 +1061,62 @@ export default function EventPage() {
               </div>
             )}
 
+            {event.eventUrl ? (
+              <div className="pb-2 pt-1 md:hidden">
+                <Button
+                  asChild
+                  variant="outline"
+                  className="h-12 w-full rounded-full border-white/20 bg-black/15 text-sm font-semibold text-white backdrop-blur-xl hover:bg-white/10 hover:text-white"
+                >
+                  <a
+                    href={event.eventUrl}
+                    target="_blank"
+                    rel="noopener noreferrer"
+                  >
+                    View tickets{ticketVendor ? ` on ${ticketVendor}` : ""}
+                    <ExternalLink className="ml-2 h-4 w-4" />
+                  </a>
+                </Button>
+              </div>
+            ) : null}
+
+            {friendAttendees.length > 0 ? (
+              <Link
+                href={`/event/${event.publicId ?? eventPublicId}/friends`}
+                className="mt-3 block border-b border-white/10 pb-5 pt-2 md:hidden"
+              >
+                <div className="flex items-center justify-between gap-4">
+                  <h2 className="text-xl font-semibold text-white">Friends</h2>
+                  <p className="text-sm font-medium text-muted-foreground">
+                    {friendsGoing.length} Going · {friendsInterested.length}{" "}
+                    Interested
+                  </p>
+                </div>
+                <div className="mt-4 flex items-center gap-5">
+                  {friendAttendees.slice(0, 4).map((attendee) => {
+                    const firstName = attendee.user.firstName || "Friend";
+                    return (
+                      <div
+                        key={attendee.id}
+                        className="flex min-w-0 flex-col items-center gap-1.5"
+                      >
+                        <UserAvatar
+                          src={attendee.user.avatarImageUrl}
+                          name={firstName}
+                          className="h-14 w-14 rounded-full"
+                          size={56}
+                        />
+                        <span className="max-w-16 truncate text-xs text-muted-foreground">
+                          {firstName}
+                        </span>
+                      </div>
+                    );
+                  })}
+                  <ChevronRight className="ml-auto h-5 w-5 shrink-0 text-muted-foreground" />
+                </div>
+              </Link>
+            ) : null}
+
             {/*<Separator />*/}
 
             {/* About Section */}
@@ -1054,11 +1124,6 @@ export default function EventPage() {
               <h2 className="font-space-grotesk mb-2 text-2xl font-bold">
                 About
               </h2>
-
-              {/* Event Date */}
-              <div className="mb-6">
-                <p className="text-muted-foreground">{event.title}</p>
-              </div>
 
               {/* Description */}
               {event.description && (

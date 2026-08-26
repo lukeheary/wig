@@ -3,7 +3,7 @@
 import Link from "next/link";
 import { useCallback, useMemo, useState } from "react";
 import Image from "next/image";
-import { useParams } from "next/navigation";
+import { useParams, useRouter } from "next/navigation";
 import { trpc } from "@/lib/trpc";
 import { Button } from "@/components/ui/button";
 import {
@@ -13,6 +13,11 @@ import {
   Heart,
   Building,
   Building2,
+  ChevronDown,
+  ChevronLeft,
+  MoreHorizontal,
+  Plus,
+  Share2,
   X,
 } from "lucide-react";
 import { useToast } from "@/hooks/use-toast";
@@ -25,6 +30,12 @@ import { PlacePageSkeleton } from "@/components/places/place-page-skeleton";
 import { PlaceUpcomingEvents } from "@/components/places/place-upcoming-events";
 import { Tabs, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { HapticPreset, useHaptics } from "@/hooks/use-haptics";
+import {
+  DropdownMenu,
+  DropdownMenuContent,
+  DropdownMenuItem,
+  DropdownMenuTrigger,
+} from "@/components/ui/dropdown-menu";
 
 type PlacePageProps = {
   actionMenuType: "venue" | "organizer";
@@ -32,6 +43,7 @@ type PlacePageProps = {
 
 export function PlacePage({ actionMenuType }: PlacePageProps) {
   const params = useParams();
+  const router = useRouter();
   const slug = params.slug as string;
   const { toast } = useToast();
   const { triggerHaptic } = useHaptics();
@@ -149,9 +161,37 @@ export function PlacePage({ actionMenuType }: PlacePageProps) {
     isFollowing &&
       "border-transparent bg-neon-teal text-black hover:bg-neon-teal-hover hover:text-black active:text-black"
   );
+  const mobileAddress = [place.address, place.city, place.state]
+    .filter(Boolean)
+    .join(", ");
+  const createEventHref = `/event/new?${isVenue ? "venueId" : "organizerId"}=${place.id}`;
+  const sharePlace = async () => {
+    const url = window.location.href;
+    if (navigator.share) {
+      await navigator.share({ title: place.name, url });
+      return;
+    }
+    await navigator.clipboard.writeText(url);
+  };
+  const mobileEventSelector = (
+    <label className="relative flex items-center text-sm font-medium text-muted-foreground">
+      <select
+        aria-label="Place events"
+        value={eventsTab}
+        onChange={(event) =>
+          setEventsTab(event.target.value as "upcoming" | "past")
+        }
+        className="cursor-pointer appearance-none bg-transparent py-1 pl-3 pr-6 text-right capitalize"
+      >
+        <option value="upcoming">Upcoming</option>
+        <option value="past">Past</option>
+      </select>
+      <ChevronDown className="pointer-events-none absolute right-0 h-4 w-4" />
+    </label>
+  );
 
   return (
-    <div className="bg-background pb-6">
+    <div className="min-h-screen bg-black pb-6 md:bg-background">
       {expandedImage && (
         <div
           className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 p-4 backdrop-blur-xl"
@@ -180,7 +220,150 @@ export function PlacePage({ actionMenuType }: PlacePageProps) {
         </div>
       )}
 
-      <div className="container mx-auto">
+      <section className="mx-auto px-5 pb-4 pt-3 md:hidden">
+        <div className="flex h-12 items-center gap-3">
+          <Button
+            type="button"
+            variant="ghost"
+            size="icon"
+            onClick={() => router.back()}
+            className="h-12 w-12 shrink-0 rounded-3xl border border-white/15 bg-[#242426]/85 text-white shadow-[0_18px_50px_rgba(0,0,0,0.55)] backdrop-blur-2xl hover:bg-[#242426]/85"
+            aria-label="Go back"
+          >
+            <ChevronLeft className="h-5 w-5" />
+          </Button>
+          <h1 className="min-w-0 flex-1 truncate text-xl font-bold text-white">
+            {place.slug}
+          </h1>
+          {canEdit ? (
+            <Button
+              asChild
+              variant="ghost"
+              size="icon"
+              className="h-12 w-12 shrink-0 rounded-3xl border border-white/15 bg-[#242426]/85 text-white shadow-[0_18px_50px_rgba(0,0,0,0.55)] backdrop-blur-2xl hover:bg-[#242426]/85"
+            >
+              <Link href={createEventHref} aria-label="Create event">
+                <Plus className="h-5 w-5" />
+              </Link>
+            </Button>
+          ) : null}
+          {canEdit ? (
+            <PlaceActionMenu
+              placeId={place.id}
+              slug={slug}
+              type={actionMenuType}
+              isAdmin={isAdmin}
+              triggerClassName="h-12 w-12 shrink-0 rounded-3xl border border-white/15 bg-[#242426]/85 text-white shadow-[0_18px_50px_rgba(0,0,0,0.55)] backdrop-blur-2xl hover:bg-[#242426]/85"
+            />
+          ) : (
+            <DropdownMenu>
+              <DropdownMenuTrigger asChild>
+                <Button
+                  variant="ghost"
+                  size="icon"
+                  className="h-12 w-12 shrink-0 rounded-3xl border border-white/15 bg-[#242426]/85 text-white shadow-[0_18px_50px_rgba(0,0,0,0.55)] backdrop-blur-2xl hover:bg-[#242426]/85"
+                  aria-label="Place options"
+                >
+                  <MoreHorizontal className="h-5 w-5" />
+                </Button>
+              </DropdownMenuTrigger>
+              <DropdownMenuContent
+                align="end"
+                className="w-56 border-white/15 bg-[#242426]/95 p-2 backdrop-blur-2xl"
+              >
+                <DropdownMenuItem
+                  onSelect={() => void sharePlace()}
+                  className="cursor-pointer gap-4 py-3 text-base"
+                >
+                  <Share2 />
+                  Share Place
+                </DropdownMenuItem>
+              </DropdownMenuContent>
+            </DropdownMenu>
+          )}
+        </div>
+
+        <div className="mt-12 flex items-end gap-5">
+          <button
+            type="button"
+            onClick={() =>
+              place.logoImageUrl &&
+              setExpandedImage({
+                url: place.logoImageUrl,
+                alt: `${place.name} profile`,
+              })
+            }
+            className="relative h-28 w-28 shrink-0 overflow-hidden rounded-2xl border border-white/10 bg-[#111113]"
+          >
+            {place.logoImageUrl ? (
+              <Image
+                src={place.logoImageUrl}
+                alt={place.name}
+                fill
+                sizes="112px"
+                className="object-cover"
+              />
+            ) : (
+              <span className="flex h-full w-full items-center justify-center">
+                {isVenue ? (
+                  <Building className="h-8 w-8 text-white/25" />
+                ) : (
+                  <Building2 className="h-8 w-8 text-white/25" />
+                )}
+              </span>
+            )}
+          </button>
+
+          <div className="min-w-0 flex-1 pb-1">
+            <div className="translate-y-1.5">
+              <h2 className="truncate text-xl font-bold tracking-tight text-white">
+                {place.name}
+              </h2>
+              {mobileAddress ? (
+                <p className="mt-0.5 truncate text-xs font-medium text-muted-foreground">
+                  {mobileAddress}
+                </p>
+              ) : null}
+            </div>
+            <div className="mt-5 grid grid-cols-3">
+              <div className="flex flex-col">
+                <span className="text-lg font-semibold text-white">
+                  {place.events?.length ?? 0}
+                </span>
+                <span className="text-xs text-muted-foreground">Upcoming</span>
+              </div>
+              <div className="flex flex-col">
+                <span className="text-lg font-semibold text-white">
+                  {place.follows?.length ?? 0}
+                </span>
+                <span className="text-xs text-muted-foreground">Followers</span>
+              </div>
+              <div className="flex flex-col">
+                <span className="text-lg font-semibold text-white">
+                  {place.members?.length ?? 0}
+                </span>
+                <span className="text-xs text-muted-foreground">Members</span>
+              </div>
+            </div>
+          </div>
+        </div>
+
+        <Button
+          type="button"
+          onClick={handleFollowToggle}
+          disabled={followMutation.isPending || unfollowMutation.isPending}
+          className={cn(
+            "mt-6 h-12 w-full rounded-xl text-base font-semibold",
+            isFollowing
+              ? "border border-white/15 bg-white/[0.07] text-white hover:bg-white/[0.09]"
+              : "bg-sky-300 text-black hover:bg-sky-300/90"
+          )}
+        >
+          {isFollowing ? "Following" : "Follow"}
+        </Button>
+      </section>
+
+      <div className="container mx-auto hidden md:block">
         <div>
           <div className="flex flex-col gap-4 md:flex-row md:items-center md:justify-between">
             <div className="flex gap-4">
@@ -366,16 +549,20 @@ export function PlacePage({ actionMenuType }: PlacePageProps) {
         </div>
       </div>
 
-      {eventsTab === "past" && hasPastEvents ? (
+      {eventsTab === "past" ? (
         <PlaceUpcomingEvents
           events={pastEvents as any}
           mode="past"
+          headerTrailing={mobileEventSelector}
           hasMore={pastEventsQuery.hasNextPage ?? false}
           isLoadingMore={pastEventsQuery.isFetchingNextPage}
           onLoadMore={loadMorePastEvents}
         />
       ) : (
-        <PlaceUpcomingEvents events={place.events} />
+        <PlaceUpcomingEvents
+          events={place.events}
+          headerTrailing={mobileEventSelector}
+        />
       )}
     </div>
   );

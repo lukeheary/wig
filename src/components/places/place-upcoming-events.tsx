@@ -9,7 +9,7 @@ import {
   compareDesc,
   parseISO,
 } from "date-fns";
-import { useEffect, useRef } from "react";
+import { useEffect, useRef, type ReactNode } from "react";
 import { Loader2 } from "lucide-react";
 import { type EventCardItem } from "@/components/events/event-card-helpers";
 import { HomeMobileEventRail } from "@/components/events/home-mobile-event-rail";
@@ -23,6 +23,7 @@ interface PlaceUpcomingEventsProps {
   hasMore?: boolean;
   isLoadingMore?: boolean;
   onLoadMore?: () => void;
+  headerTrailing?: ReactNode;
 }
 
 function getWeekLabel(weeksAway: number) {
@@ -52,6 +53,7 @@ export function PlaceUpcomingEvents({
   hasMore = false,
   isLoadingMore = false,
   onLoadMore,
+  headerTrailing,
 }: PlaceUpcomingEventsProps) {
   const loadMoreRef = useRef<HTMLDivElement>(null);
 
@@ -72,6 +74,12 @@ export function PlaceUpcomingEvents({
   if (!events || events.length === 0) {
     return (
       <div className="container mx-auto pt-4">
+        <div className="flex items-center justify-between px-4 pb-2 md:hidden">
+          <h2 className="text-xl font-semibold tracking-tight">
+            {mode === "past" ? "Past" : "Upcoming"}
+          </h2>
+          {headerTrailing}
+        </div>
         <EventsPlaceholder />
       </div>
     );
@@ -127,11 +135,19 @@ export function PlaceUpcomingEvents({
 
   return (
     <>
-      {groupedEvents.map((group) => (
+      {groupedEvents.map((group, index) => (
         <div key={group.label} className="pt-4">
-          <StickySectionHeader>
-            <span>{group.label}</span>
-          </StickySectionHeader>
+          <div className="flex items-center justify-between px-4 pb-2 md:hidden">
+            <h2 className="text-xl font-semibold tracking-tight">
+              {group.label}
+            </h2>
+            {index === 0 ? headerTrailing : null}
+          </div>
+          <div className="hidden md:block">
+            <StickySectionHeader>
+              <span>{group.label}</span>
+            </StickySectionHeader>
+          </div>
           <div className="container mx-auto">
             <HomeMobileEventRail events={group.events} />
           </div>

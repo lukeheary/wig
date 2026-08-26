@@ -10,6 +10,7 @@
 		0225D821CFF385E0C146E58A /* RemoteImageView.swift in Sources */ = {isa = PBXBuildFile; fileRef = C4B12A3FE36D056CEF6A6FBD /* RemoteImageView.swift */; };
 		02A19F1536EC643E3CD2B226 /* AppConfig.swift in Sources */ = {isa = PBXBuildFile; fileRef = C47EB2040C338297AF811986 /* AppConfig.swift */; };
 		03091A08CECDB18FE3FED12A /* FloatingGlassIconButton.swift in Sources */ = {isa = PBXBuildFile; fileRef = 3A87D39D7D4AE13FC019729E /* FloatingGlassIconButton.swift */; };
+		0BBD4AC378DC839CEF56FE6B /* GoogleService-Info.plist in Resources */ = {isa = PBXBuildFile; fileRef = E400612F4660CAE410E11F6F /* GoogleService-Info.plist */; };
 		0E61E35C6BC9885882E28017 /* APIClient.swift in Sources */ = {isa = PBXBuildFile; fileRef = 209CCAB342734F97FABBA5D2 /* APIClient.swift */; };
 		196D7DA54199A138C311C529 /* EventDetailView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 8210D0E005DECC2D0CE8900C /* EventDetailView.swift */; };
 		1D348DDF86D014D61E9BAB1F /* GiftList.swift in Sources */ = {isa = PBXBuildFile; fileRef = 426D21E06189626A1AF56246 /* GiftList.swift */; };
@@ -112,6 +113,7 @@
 		C4B12A3FE36D056CEF6A6FBD /* RemoteImageView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = RemoteImageView.swift; sourceTree = "<group>"; };
 		CD2B5220253C407CE688D6CD /* FriendsFeed.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = FriendsFeed.swift; sourceTree = "<group>"; };
 		DC1F5481F6C16EA27B43C269 /* SignedOutView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SignedOutView.swift; sourceTree = "<group>"; };
+		E400612F4660CAE410E11F6F /* GoogleService-Info.plist */ = {isa = PBXFileReference; lastKnownFileType = text.plist; path = "GoogleService-Info.plist"; sourceTree = "<group>"; };
 		E9F25C520369E8D97B2E2329 /* AppSession.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AppSession.swift; sourceTree = "<group>"; };
 		EB564D2CF3E17440A471C692 /* WIGAuthSheetView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = WIGAuthSheetView.swift; sourceTree = "<group>"; };
 		F1A0ACCD8478786570AD3796 /* Debug.xcconfig */ = {isa = PBXFileReference; lastKnownFileType = text.xcconfig; path = Debug.xcconfig; sourceTree = "<group>"; };
@@ -202,6 +204,7 @@
 			isa = PBXGroup;
 			children = (
 				C0D13CF91B0EECB51C7BEBC0 /* Assets.xcassets */,
+				E400612F4660CAE410E11F6F /* GoogleService-Info.plist */,
 				205A0A05764438AFB15835AF /* Info.plist */,
 				7896662162549DA31678EB9F /* PrivacyInfo.xcprivacy */,
 				456417F474AB603C89D5B7D8 /* WIG.entitlements */,
@@ -398,6 +401,7 @@
 			buildActionMask = 2147483647;
 			files = (
 				59D822A7D7ADCABFCF108A54 /* Assets.xcassets in Resources */,
+				0BBD4AC378DC839CEF56FE6B /* GoogleService-Info.plist in Resources */,
 				87604ECE6938DBEBBB391499 /* PrivacyInfo.xcprivacy in Resources */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
@@ -593,7 +597,7 @@
 				CODE_SIGN_ENTITLEMENTS = WIG/Support/WIG.entitlements;
 				CODE_SIGN_IDENTITY = "iPhone Developer";
 				CODE_SIGN_STYLE = Automatic;
-				CURRENT_PROJECT_VERSION = 22;
+				CURRENT_PROJECT_VERSION = 24;
 				DEVELOPMENT_TEAM = V347D294CZ;
 				INFOPLIST_FILE = WIG/Support/Info.plist;
 				INFOPLIST_KEY_CFBundleDisplayName = "Who Is Going";
@@ -684,7 +688,7 @@
 				CODE_SIGN_ENTITLEMENTS = WIG/Support/WIG.entitlements;
 				CODE_SIGN_IDENTITY = "iPhone Developer";
 				CODE_SIGN_STYLE = Automatic;
-				CURRENT_PROJECT_VERSION = 22;
+				CURRENT_PROJECT_VERSION = 24;
 				DEVELOPMENT_TEAM = V347D294CZ;
 				INFOPLIST_FILE = WIG/Support/Info.plist;
 				INFOPLIST_KEY_CFBundleDisplayName = "Who Is Going";
@@ -711,7 +715,7 @@
 				CODE_SIGN_ENTITLEMENTS = WIG/Support/WIG.entitlements;
 				CODE_SIGN_IDENTITY = "iPhone Developer";
 				CODE_SIGN_STYLE = Automatic;
-				CURRENT_PROJECT_VERSION = 22;
+				CURRENT_PROJECT_VERSION = 24;
 				DEVELOPMENT_TEAM = V347D294CZ;
 				INFOPLIST_FILE = WIG/Support/Info.plist;
 				INFOPLIST_KEY_CFBundleDisplayName = "Who Is Going";

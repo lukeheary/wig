@@ -3169,17 +3169,47 @@ private struct FriendsListView: View {
 
 private struct FollowingPlacesView: View {
     let places: [PlaceListItem]
+    @State private var displayedPlaces: [PlaceListItem]
+
+    init(places: [PlaceListItem]) {
+        self.places = places
+        _displayedPlaces = State(initialValue: places)
+    }
 
     var body: some View {
         RelationshipListScreen(title: "Following") {
-            if places.isEmpty {
+            if displayedPlaces.isEmpty {
                 EmptyRelationshipCard(
                     message: "No followed places yet"
                 )
             } else {
-                CompactPlaceListView(places: places)
+                CompactPlaceListView(places: displayedPlaces)
             }
         }
+        .onChange(of: places) { _, places in
+            displayedPlaces = places
+        }
+        .onReceive(NotificationCenter.default.publisher(for: .placeFollowDidChange)) { notification in
+            guard let change = notification.object as? PlaceFollowChange else {
+                return
+            }
+
+            if change.isFollowed {
+                restorePlaceIfNeeded(slug: change.slug)
+            } else {
+                displayedPlaces.removeAll { $0.slug == change.slug }
+            }
+        }
+    }
+
+    private func restorePlaceIfNeeded(slug: String) {
+        guard !displayedPlaces.contains(where: { $0.slug == slug }),
+              let place = places.first(where: { $0.slug == slug }),
+              let originalIndex = places.firstIndex(where: { $0.slug == slug }) else {
+            return
+        }
+
+        displayedPlaces.insert(place, at: min(originalIndex, displayedPlaces.count))
     }
 }
 

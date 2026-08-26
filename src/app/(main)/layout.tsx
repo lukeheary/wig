@@ -14,6 +14,8 @@ import {
   Home,
   Search,
   Headset,
+  Zap,
+  CircleUserRound,
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { trpc } from "@/lib/trpc";
@@ -97,12 +99,14 @@ function MainLayoutContent({ children }: { children: React.ReactNode }) {
     pathname?.startsWith("/activity/") ||
     pathname === "/friends" ||
     pathname?.startsWith("/friends/");
-  const isProfile = pathname === "/profile";
+  const isProfile =
+    pathname === "/profile" || pathname?.startsWith("/profile/");
   const isSupport = pathname === "/support";
   const isMyPlaces = pathname === "/my-places";
   const isAdminPage = pathname?.startsWith("/admin");
   const isEventDetail =
     pathname?.startsWith("/event/") && !pathname?.includes("/edit");
+  const isSearchPage = pathname === "/activity/search";
   const shouldShowSignUp = !isSignedIn && isEventDetail;
 
   const handleSignOut = async () => {
@@ -137,6 +141,7 @@ function MainLayoutContent({ children }: { children: React.ReactNode }) {
       <header
         className={cn(
           "sticky top-0 z-40 border-transparent bg-background transition-colors duration-150",
+          hasMounted && isSignedIn && "hidden md:block",
           isEventDetail
             ? "border-transparent bg-background md:border-transparent md:bg-transparent"
             : (isHome || isPlaceDetail) && showNavbarSearch
@@ -540,8 +545,76 @@ function MainLayoutContent({ children }: { children: React.ReactNode }) {
       </header>
 
       {/* Main Content */}
-      <main className="relative flex-1">{children}</main>
+      <main
+        className={cn(
+          "relative flex-1",
+          hasMounted &&
+            isSignedIn &&
+            (isEventDetail
+              ? "bg-black md:bg-background"
+              : "bg-black pb-[calc(6.25rem+env(safe-area-inset-bottom))] md:bg-background md:pb-0")
+        )}
+      >
+        {children}
+      </main>
+
+      {hasMounted && isSignedIn && !isEventDetail ? (
+        <nav
+          aria-label="Primary navigation"
+          className="fixed inset-x-3 bottom-[calc(0.75rem+env(safe-area-inset-bottom))] z-50 mx-auto flex h-16 max-w-md items-stretch rounded-[2rem] border border-white/15 bg-[#242426]/85 p-1.5 shadow-[0_18px_50px_rgba(0,0,0,0.55)] backdrop-blur-2xl md:hidden"
+        >
+          <MobileTabLink href="/home" label="Home" active={isHome}>
+            <Home />
+          </MobileTabLink>
+          <MobileTabLink href="/places" label="Places" active={isPlaces}>
+            <Building />
+          </MobileTabLink>
+          <MobileTabLink
+            href="/activity"
+            label="Activity"
+            active={isFriends && !isSearchPage}
+          >
+            <Zap />
+          </MobileTabLink>
+          <MobileTabLink
+            href="/activity/search"
+            label="Search"
+            active={isSearchPage}
+          >
+            <Search />
+          </MobileTabLink>
+          <MobileTabLink href="/profile" label="Profile" active={isProfile}>
+            <CircleUserRound />
+          </MobileTabLink>
+        </nav>
+      ) : null}
     </div>
+  );
+}
+
+function MobileTabLink({
+  href,
+  label,
+  active,
+  children,
+}: {
+  href: string;
+  label: string;
+  active: boolean;
+  children: React.ReactElement<{ className?: string }>;
+}) {
+  return (
+    <Link
+      href={href}
+      aria-label={label}
+      aria-current={active ? "page" : undefined}
+      className={cn(
+        "flex min-w-0 flex-1 items-center justify-center rounded-full text-white/90 transition-colors active:bg-black/50 [&>svg]:h-7 [&>svg]:w-7 [&>svg]:stroke-[2.35]",
+        active && "bg-black/75 text-sky-300"
+      )}
+    >
+      {children}
+    </Link>
   );
 }
 
