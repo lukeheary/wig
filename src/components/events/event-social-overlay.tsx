@@ -13,7 +13,7 @@ interface EventSocialOverlayProps {
 export function EventSocialOverlay({
   users,
   size,
-  maxDisplay = 3,
+  maxDisplay = 4,
   placement = "bottom-right",
   stackClassName,
 }: EventSocialOverlayProps) {
@@ -24,7 +24,7 @@ export function EventSocialOverlay({
   const visibleCount = Math.min(users.length, maxDisplay);
   const hasOverflowBadge = users.length > maxDisplay;
   const avatarSize = size === "lg" ? 40 : 32;
-  const overlapOffset = 8;
+  const overlapOffset = size === "lg" ? 10 : 8;
   const avatarFootprint =
     avatarSize + Math.max(0, visibleCount - 1) * (avatarSize - overlapOffset);
   const overflowFootprint = hasOverflowBadge ? avatarSize + 6 : 0;

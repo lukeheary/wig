@@ -583,7 +583,7 @@ private enum ActivityFeedFilter: String, CaseIterable, Identifiable {
                 }
 
                 guard let event = activity.event else { return true }
-                return !event.isBeforeToday
+                return !event.hasEnded
             }
         case .past:
             return activities.filter { activity in
@@ -592,7 +592,7 @@ private enum ActivityFeedFilter: String, CaseIterable, Identifiable {
                 }
 
                 guard let event = activity.event else { return false }
-                return event.isBeforeToday
+                return event.hasEnded
             }
         }
     }
@@ -1102,8 +1102,7 @@ struct InlineLinkedActivityText: UIViewRepresentable {
 
     private var actionPhrase: String {
         let isPluralSubject = activity.partnerFirstName != nil
-        let eventStartAt = activity.event?.startAt ?? .distantFuture
-        let isPastEvent = eventStartAt < .now
+        let isPastEvent = activity.event?.hasEnded == true
 
         switch activity.type {
         case .rsvpGoing:

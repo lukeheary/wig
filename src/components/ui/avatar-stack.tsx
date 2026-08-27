@@ -29,7 +29,7 @@ export function AvatarStack({
       return aPriority - bPriority;
     })
     .slice(0, maxDisplay);
-  const remainingCount = users.length - maxDisplay;
+  const remainingCount = Math.max(0, users.length - displayedUsers.length);
 
   const sizeClasses = {
     sm: "h-6 w-6",
@@ -52,7 +52,14 @@ export function AvatarStack({
     return null;
   }
 
-  const overlapClass = size === "xl" ? "-space-x-4" : "-space-x-2";
+  const overlapClass =
+    size === "xl"
+      ? "-space-x-4"
+      : size === "lg"
+        ? "-space-x-2.5"
+        : "-space-x-2";
+  const overflowTextClass =
+    size === "lg" || size === "xl" ? "text-[13px]" : "text-[11px]";
 
   return (
     <div className={`flex items-center ${overlapClass} ${className}`}>
@@ -92,7 +99,11 @@ export function AvatarStack({
       </div>
       {remainingCount > 0 && (
         <div
-          className={`ml-1 flex ${sizeClass} z-10 items-center justify-center rounded-full border border-background bg-muted text-xs text-white`}
+          className={cn(
+            "z-10 flex items-center justify-center rounded-full border border-white/15 bg-black/50 font-bold text-white backdrop-blur-xl",
+            sizeClass,
+            overflowTextClass
+          )}
         >
           +{remainingCount}
         </div>

@@ -29,7 +29,20 @@ function isConfigured() {
 }
 
 function apnsPrivateKey() {
-  return APNS_PRIVATE_KEY?.replace(/\\n/g, "\n") ?? "";
+  const value = APNS_PRIVATE_KEY?.trim() ?? "";
+  const unquoted =
+    (value.startsWith('"') && value.endsWith('"')) ||
+    (value.startsWith("'") && value.endsWith("'"))
+      ? value.slice(1, -1)
+      : value;
+
+  return unquoted.replace(/\\n/g, "\n");
+}
+
+function logPushError(message: string, error: unknown) {
+  console.error(message, {
+    error: error instanceof Error ? error.message : String(error),
+  });
 }
 
 function createApnsJwt() {
@@ -237,13 +250,30 @@ export async function sendPushNotificationToUsers(
     title: payload.title,
   });
 
-  const jwt = createApnsJwt();
+  let jwt: string;
+  try {
+    jwt = createApnsJwt();
+  } catch (error) {
+    // Push delivery is a best-effort side effect. A malformed or rotated APNs
+    // key must not turn an already-committed RSVP (or other mutation) into a 500.
+    logPushError(
+      "APNs push skipped: signing failed; verify APNS_PRIVATE_KEY is the PEM contents of the Apple .p8 key",
+      error
+    );
+    return;
+  }
   const invalidTokens: string[] = [];
   let successCount = 0;
 
   await Promise.all(
     tokens.map(async ({ token }) => {
-      const response = await sendApnsRequest(token, jwt, payload);
+      let response: Awaited<ReturnType<typeof sendApnsRequest>>;
+      try {
+        response = await sendApnsRequest(token, jwt, payload);
+      } catch (error) {
+        logPushError("APNs push request failed", error);
+        return;
+      }
 
       if (response.status >= 200 && response.status < 300) {
         successCount += 1;
@@ -300,12 +330,27 @@ export async function sendBackgroundPushToUsers(
     return;
   }
 
-  const jwt = createApnsJwt();
+  let jwt: string;
+  try {
+    jwt = createApnsJwt();
+  } catch (error) {
+    logPushError(
+      "APNs background push skipped: signing failed; verify APNS_PRIVATE_KEY is the PEM contents of the Apple .p8 key",
+      error
+    );
+    return;
+  }
   const invalidTokens: string[] = [];
 
   await Promise.all(
     tokens.map(async ({ token }) => {
-      const response = await sendBackgroundApnsRequest(token, jwt, payload);
+      let response: Awaited<ReturnType<typeof sendBackgroundApnsRequest>>;
+      try {
+        response = await sendBackgroundApnsRequest(token, jwt, payload);
+      } catch (error) {
+        logPushError("APNs background push request failed", error);
+        return;
+      }
 
       if (response.status >= 200 && response.status < 300) {
         return;

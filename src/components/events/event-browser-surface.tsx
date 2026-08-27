@@ -23,7 +23,7 @@ import {
   Loader2,
   X,
 } from "lucide-react";
-import { MagnifyingGlass, SlidersHorizontal } from "@phosphor-icons/react";
+import { FunnelSimple, MagnifyingGlass } from "@phosphor-icons/react";
 import {
   HOME_MOBILE_EVENT_CARD_WIDTH,
   HomeMobileEventRail,
@@ -212,7 +212,7 @@ function MobileEventBrowserControls({
       <div className="fixed inset-x-3 top-[calc(env(safe-area-inset-top)+0.75rem)] z-50 grid h-12 grid-cols-[5.75rem_minmax(0,1fr)_5.75rem] items-stretch gap-2 md:hidden">
         <div className="flex h-12 overflow-hidden rounded-3xl border border-white/15 bg-[#242426]/50 shadow-[0_18px_50px_rgba(0,0,0,0.55)] backdrop-blur-[24px]">
           <label className="relative flex flex-1 cursor-pointer items-center justify-center">
-            <SlidersHorizontal
+            <FunnelSimple
               className="h-[1.125rem] w-[1.125rem]"
               aria-hidden="true"
             />
@@ -345,31 +345,46 @@ function StickyDateHeader({
   isToday,
   showBackToStart = false,
   onBackToStart,
+  scrollCounter,
 }: {
   dateHeader: string;
   isToday: boolean;
   showBackToStart?: boolean;
   onBackToStart?: () => void;
+  scrollCounter?: { current: number; total: number; visible: boolean };
 }) {
   return (
-    <StickySectionHeader stickyOnMobile={false}>
-      <button
-        type="button"
-        onClick={showBackToStart ? onBackToStart : undefined}
-        aria-label={
-          showBackToStart
-            ? `${dateHeader}: scroll events back to the beginning`
-            : undefined
-        }
-        className={cn(
-          "text-left",
-          isToday && "text-primary",
-          showBackToStart && "cursor-pointer"
-        )}
-      >
-        {dateHeader}
-      </button>
-    </StickySectionHeader>
+    <div className="relative">
+      <StickySectionHeader stickyOnMobile={false} className="pb-2 md:pb-0">
+        <button
+          type="button"
+          onClick={showBackToStart ? onBackToStart : undefined}
+          aria-label={
+            showBackToStart
+              ? `${dateHeader}: scroll events back to the beginning`
+              : undefined
+          }
+          className={cn(
+            "text-left",
+            isToday && "text-primary",
+            showBackToStart && "cursor-pointer"
+          )}
+        >
+          {dateHeader}
+        </button>
+      </StickySectionHeader>
+      {scrollCounter ? (
+        <span
+          aria-hidden={!scrollCounter.visible}
+          className={cn(
+            "font-space-grotesk pointer-events-none absolute right-4 top-0 text-[13px] font-medium tabular-nums text-white/50 transition-opacity duration-200 md:hidden",
+            scrollCounter.visible ? "opacity-100" : "opacity-0"
+          )}
+        >
+          {scrollCounter.current} / {scrollCounter.total}
+        </span>
+      ) : null}
+    </div>
   );
 }
 
@@ -387,6 +402,19 @@ function DayEventSection({
   const [canScrollBack, setCanScrollBack] = useState(false);
   const [scrollToStartSignal, setScrollToStartSignal] = useState(0);
   const [isResettingScroll, setIsResettingScroll] = useState(false);
+  const [scrollCounter, setScrollCounter] = useState({
+    current: 1,
+    total: dayEvents.length,
+    visible: false,
+  });
+
+  useEffect(() => {
+    setScrollCounter({
+      current: 1,
+      total: dayEvents.length,
+      visible: false,
+    });
+  }, [dayEvents.length]);
 
   useEffect(() => {
     if (!canScrollBack) {
@@ -404,6 +432,7 @@ function DayEventSection({
           setIsResettingScroll(true);
           setScrollToStartSignal((current) => current + 1);
         }}
+        scrollCounter={scrollCounter}
       />
       <div className="container mx-auto px-4">
         {dayEvents.length === 0 ? (
@@ -417,6 +446,7 @@ function DayEventSection({
             desktopBleed
             onCanScrollBackChange={setCanScrollBack}
             scrollToStartSignal={scrollToStartSignal}
+            onScrollCounterChange={setScrollCounter}
           />
         )}
       </div>

@@ -18,7 +18,7 @@ import {
   CircleUserRound,
 } from "lucide-react";
 import {
-  Building as PhosphorBuilding,
+  Buildings as PhosphorBuildings,
   House as PhosphorHouse,
   Lightning as PhosphorLightning,
   MagnifyingGlass as PhosphorMagnifyingGlass,
@@ -578,7 +578,7 @@ function MainLayoutContent({ children }: { children: React.ReactNode }) {
               <PhosphorHouse weight={isHome ? "fill" : "regular"} />
             </MobileTabLink>
             <MobileTabLink href="/places" label="Places" active={isPlaces}>
-              <PhosphorBuilding weight={isPlaces ? "fill" : "regular"} />
+              <PhosphorBuildings weight={isPlaces ? "fill" : "regular"} />
             </MobileTabLink>
             <MobileTabLink
               href="/activity"

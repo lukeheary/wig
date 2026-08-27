@@ -2219,6 +2219,7 @@ enum MobileScraperType: String, Codable, CaseIterable, Hashable, Sendable {
     case dice
     case posh
     case ticketmaster
+    case eventbrite
 
     var title: String {
         switch self {
@@ -2228,6 +2229,8 @@ enum MobileScraperType: String, Codable, CaseIterable, Hashable, Sendable {
             return "Posh"
         case .ticketmaster:
             return "Ticketmaster"
+        case .eventbrite:
+            return "Eventbrite"
         }
     }
 }

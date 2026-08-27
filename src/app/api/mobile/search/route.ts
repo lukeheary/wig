@@ -399,9 +399,6 @@ export async function GET(request: Request) {
             or(
               ...queryVariants.flatMap((variant) => [
                 accentInsensitiveLike(events.title, variant),
-                accentInsensitiveLike(events.description, variant, {
-                  coalesceToEmpty: true,
-                }),
                 accentInsensitiveLike(events.city, variant, {
                   coalesceToEmpty: true,
                 }),

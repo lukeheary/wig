@@ -4299,7 +4299,7 @@ struct MobileNewSupportRequestView: View {
                         Spacer()
 
                         Picker("Request Type", selection: $ticketType) {
-                            ForEach(MobileSupportTicketType.allCases) { option in
+                            ForEach(availableTicketTypes) { option in
                                 Text(option.title).tag(option)
                             }
                         }
@@ -4453,6 +4453,19 @@ struct MobileNewSupportRequestView: View {
 
     private var trimmedSubject: String {
         subject.trimmingCharacters(in: .whitespacesAndNewlines)
+    }
+
+    private var availableTicketTypes: [MobileSupportTicketType] {
+        MobileSupportTicketType.allCases.filter { type in
+            switch reportContext?.entityType {
+            case .event, .user:
+                type != .eventRequest && type != .placeRequest
+            case .place:
+                type != .placeRequest
+            case nil:
+                true
+            }
+        }
     }
 
     private var trimmedMessage: String {

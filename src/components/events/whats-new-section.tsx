@@ -148,20 +148,20 @@ function WhatsNewCard({ update }: { update: WhatsNewUpdate }) {
         )}
         <EventSocialOverlay
           users={socialUsers}
-          size="md"
+          size="lg"
           placement="top-right"
         />
       </div>
 
-      <div className="space-y-[3px] pt-2">
-        <h3 className="truncate text-[13px] font-semibold text-white">
+      <div className="space-y-0.5 pt-2">
+        <h3 className="truncate text-[13px] font-semibold leading-tight text-white">
           {event.title}
         </h3>
-        <p className="truncate text-xs font-medium text-sky-300">
+        <p className="truncate text-xs font-medium leading-tight text-sky-300">
           {date} at {time}
         </p>
         <div className="flex min-w-0 items-center gap-2">
-          <p className="min-w-0 flex-1 truncate text-xs font-medium text-white/60">
+          <p className="min-w-0 flex-1 truncate text-xs font-medium leading-tight text-white/60">
             {location}
           </p>
           {interestedCount > 0 ? (

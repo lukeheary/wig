@@ -33,6 +33,7 @@ import {
 } from "@/lib/utils";
 
 export const HOME_MOBILE_EVENT_CARD_WIDTH = 220;
+const HOME_MOBILE_EVENT_CARD_GAP = 12;
 const DESKTOP_RAIL_SIDE_INSET = "max(2rem, calc((100vw - 1200px) / 2 + 2rem))";
 const DESKTOP_SCROLL_STEP = 320;
 
@@ -253,12 +254,21 @@ function MobileRailScroller({
   events,
   onCanScrollBackChange,
   scrollToStartSignal,
+  onScrollCounterChange,
 }: {
   events: EventCardItem[];
   onCanScrollBackChange?: (value: boolean) => void;
   scrollToStartSignal?: number;
+  onScrollCounterChange?: (state: {
+    current: number;
+    total: number;
+    visible: boolean;
+  }) => void;
 }) {
   const scrollRef = useRef<HTMLDivElement>(null);
+  const counterFadeTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(
+    null
+  );
   const { canScrollLeft, scrollProgress, hasOverflow, isScrollActive } =
     useHorizontalScrollProgress(scrollRef, [events]);
 
@@ -271,6 +281,57 @@ function MobileRailScroller({
     scrollRef.current?.scrollTo({ left: 0, behavior: "smooth" });
   }, [scrollToStartSignal]);
 
+  useEffect(() => {
+    const scrollContainer = scrollRef.current;
+    if (!scrollContainer || !onScrollCounterChange) return;
+
+    const updateCounter = () => {
+      const current = Math.min(
+        events.length,
+        Math.max(
+          1,
+          Math.round(
+            scrollContainer.scrollLeft /
+              (HOME_MOBILE_EVENT_CARD_WIDTH + HOME_MOBILE_EVENT_CARD_GAP)
+          ) + 1
+        )
+      );
+
+      onScrollCounterChange({
+        current,
+        total: events.length,
+        visible: events.length > 1,
+      });
+
+      if (counterFadeTimeoutRef.current) {
+        clearTimeout(counterFadeTimeoutRef.current);
+      }
+      counterFadeTimeoutRef.current = setTimeout(() => {
+        onScrollCounterChange({
+          current,
+          total: events.length,
+          visible: false,
+        });
+      }, 450);
+    };
+
+    scrollContainer.addEventListener("scroll", updateCounter, {
+      passive: true,
+    });
+
+    return () => {
+      scrollContainer.removeEventListener("scroll", updateCounter);
+      if (counterFadeTimeoutRef.current) {
+        clearTimeout(counterFadeTimeoutRef.current);
+      }
+      onScrollCounterChange({
+        current: 1,
+        total: events.length,
+        visible: false,
+      });
+    };
+  }, [events.length, onScrollCounterChange]);
+
   return (
     <div className="relative md:hidden">
       {/*<RailProgressIndicator*/}
@@ -281,13 +342,13 @@ function MobileRailScroller({
       {/*/>*/}
       <div
         ref={scrollRef}
-        className="-mx-4 overflow-x-auto [scrollbar-width:none] [&::-webkit-scrollbar]:hidden"
+        className="-mx-4 touch-pan-x snap-x snap-mandatory scroll-px-4 overflow-x-auto overscroll-x-contain [scrollbar-width:none] [&::-webkit-scrollbar]:hidden"
       >
         <div className="flex w-max items-stretch gap-3 px-4 pb-1">
           {events.map((event) => (
             <div
               key={event.id}
-              className="shrink-0 self-stretch"
+              className="shrink-0 snap-start self-stretch"
               style={{ width: `${HOME_MOBILE_EVENT_CARD_WIDTH}px` }}
             >
               <HomeMiniEventCard event={event} />
@@ -348,9 +409,9 @@ function HomeMiniEventCard({ event }: { event: EventCardItem }) {
           )}
 
           <div
-            className="absolute inset-x-0 bottom-0 h-[57%]"
+            className="absolute inset-x-0 bottom-0 h-[80%]"
             style={{
-              background: `linear-gradient(to bottom, transparent 0%, color-mix(in srgb, ${shelfColor} 25%, transparent) 14%, color-mix(in srgb, ${shelfColor} 65%, transparent) 28%, ${shelfColor} 42%, ${shelfColor} 100%)`,
+              background: `linear-gradient(to bottom, transparent 0%, color-mix(in srgb, ${shelfColor} 10%, transparent) 15%, color-mix(in srgb, ${shelfColor} 30%, transparent) 35%, color-mix(in srgb, ${shelfColor} 55%, transparent) 50%, color-mix(in srgb, ${shelfColor} 80%, transparent) 62%, ${shelfColor} 74%, ${shelfColor} 100%)`,
             }}
           />
           <div className="absolute inset-0 bg-[linear-gradient(to_bottom,transparent_0%,transparent_40%,rgba(0,0,0,0.08)_54%,rgba(0,0,0,0.16)_100%)]" />
@@ -418,6 +479,7 @@ export function HomeMobileEventRail({
   desktopBleed = false,
   onCanScrollBackChange,
   scrollToStartSignal,
+  onScrollCounterChange,
 }: {
   events: EventCardItem[];
   mobileLayout?: "rail" | "grid";
@@ -425,6 +487,11 @@ export function HomeMobileEventRail({
   desktopBleed?: boolean;
   onCanScrollBackChange?: (value: boolean) => void;
   scrollToStartSignal?: number;
+  onScrollCounterChange?: (state: {
+    current: number;
+    total: number;
+    visible: boolean;
+  }) => void;
 }) {
   const isDesktop = useMediaQuery("(min-width: 768px)");
 
@@ -443,6 +510,7 @@ export function HomeMobileEventRail({
           events={events}
           onCanScrollBackChange={!isDesktop ? onCanScrollBackChange : undefined}
           scrollToStartSignal={!isDesktop ? scrollToStartSignal : undefined}
+          onScrollCounterChange={!isDesktop ? onScrollCounterChange : undefined}
         />
       )}
 
