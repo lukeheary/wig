@@ -342,7 +342,7 @@ function MobileRailScroller({
       {/*/>*/}
       <div
         ref={scrollRef}
-        className="-mx-4 touch-pan-x snap-x snap-mandatory scroll-px-4 overflow-x-auto overscroll-x-contain [scrollbar-width:none] [&::-webkit-scrollbar]:hidden"
+        className="-mx-4 touch-auto snap-x snap-mandatory scroll-px-4 overflow-x-auto overscroll-x-contain [scrollbar-width:none] [&::-webkit-scrollbar]:hidden"
       >
         <div className="flex w-max items-stretch gap-3 px-4 pb-1">
           {events.map((event) => (

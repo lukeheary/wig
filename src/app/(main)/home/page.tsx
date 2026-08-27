@@ -117,6 +117,10 @@ function sortEventsLikeNativeHome<
       getNativeDayRowPriority(a) - getNativeDayRowPriority(b);
     if (priorityDifference !== 0) return priorityDifference;
 
+    const rsvpCountDifference =
+      getFriendActivityCount(b) - getFriendActivityCount(a);
+    if (rsvpCountDifference !== 0) return rsvpCountDifference;
+
     const timeDifference =
       new Date(a.startAt).getTime() - new Date(b.startAt).getTime();
     if (timeDifference !== 0) return timeDifference;

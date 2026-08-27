@@ -1906,6 +1906,13 @@ struct HomeView: View {
             return lhsPriority < rhsPriority
         }
 
+        let lhsRSVPCount = lhs.socialRSVPCount
+        let rhsRSVPCount = rhs.socialRSVPCount
+
+        if lhsRSVPCount != rhsRSVPCount {
+            return lhsRSVPCount > rhsRSVPCount
+        }
+
         if lhs.startAt != rhs.startAt {
             return lhs.startAt < rhs.startAt
         }
@@ -3788,6 +3795,10 @@ private extension EventFeedItem {
         (friendsGoing + friendsInterested).contains { rsvp in
             rsvp.user.isFriend
         }
+    }
+
+    var socialRSVPCount: Int {
+        friendsGoing.count + friendsInterested.count
     }
 
     func matchesSearch(_ query: String) -> Bool {
