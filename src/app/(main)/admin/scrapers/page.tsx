@@ -739,9 +739,12 @@ export default function AdminScrapersPage() {
       }
 
       const nextResult = data as ScrapeResult;
-      setResult(nextResult);
+      const sortedEvents = [...nextResult.events].sort(
+        (a, b) => Date.parse(a.startAt) - Date.parse(b.startAt)
+      );
+      setResult({ ...nextResult, events: sortedEvents });
       setEditableEvents(
-        nextResult.events.map((event) => ({
+        sortedEvents.map((event) => ({
           ...event,
           editableStartAt: toDateTimeLocalInput(event.startAt),
           editableEndAt: toDateTimeLocalInput(event.endAt),

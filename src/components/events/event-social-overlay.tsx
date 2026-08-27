@@ -6,7 +6,13 @@ interface EventSocialOverlayProps {
   users: SocialUser[];
   size: "md" | "lg";
   maxDisplay?: number;
-  placement?: "bottom-right" | "top-center" | "top-right";
+  placement?:
+    | "bottom-left"
+    | "bottom-right"
+    | "top-center"
+    | "top-right"
+    | "inline";
+  reverse?: boolean;
   stackClassName?: string;
 }
 
@@ -15,6 +21,7 @@ export function EventSocialOverlay({
   size,
   maxDisplay = 4,
   placement = "bottom-right",
+  reverse = false,
   stackClassName,
 }: EventSocialOverlayProps) {
   if (users.length === 0) {
@@ -23,8 +30,8 @@ export function EventSocialOverlay({
 
   const visibleCount = Math.min(users.length, maxDisplay);
   const hasOverflowBadge = users.length > maxDisplay;
-  const avatarSize = size === "lg" ? 40 : 32;
-  const overlapOffset = size === "lg" ? 10 : 8;
+  const avatarSize = size === "lg" ? 40 : 28;
+  const overlapOffset = size === "lg" ? 10 : 7;
   const avatarFootprint =
     avatarSize + Math.max(0, visibleCount - 1) * (avatarSize - overlapOffset);
   const overflowFootprint = hasOverflowBadge ? avatarSize + 6 : 0;
@@ -32,10 +39,12 @@ export function EventSocialOverlay({
   const scrimHeight = avatarSize + 44;
   const isTopCenter = placement === "top-center";
   const isTopRight = placement === "top-right";
+  const isBottomLeft = placement === "bottom-left";
+  const isInline = placement === "inline";
 
   return (
     <>
-      {!isTopCenter && !isTopRight && (
+      {!isTopCenter && !isTopRight && !isBottomLeft && !isInline && (
         <div
           className="pointer-events-none absolute bottom-0 right-0"
           style={{
@@ -52,7 +61,11 @@ export function EventSocialOverlay({
             ? "absolute left-1/2 top-4 z-20 -translate-x-1/2 drop-shadow-[0_8px_22px_rgba(0,0,0,0.45)]"
             : isTopRight
               ? "absolute right-2 top-2 z-20 drop-shadow-[0_8px_22px_rgba(0,0,0,0.45)]"
-              : "absolute bottom-2 right-2 drop-shadow-[0_6px_18px_rgba(0,0,0,0.45)]",
+              : isBottomLeft
+                ? "absolute bottom-2 left-2 z-20 drop-shadow-[0_6px_18px_rgba(0,0,0,0.45)]"
+                : isInline
+                  ? "relative z-20 w-fit"
+                  : "absolute bottom-2 right-2 drop-shadow-[0_6px_18px_rgba(0,0,0,0.45)]",
           stackClassName
         )}
       >
@@ -60,6 +73,7 @@ export function EventSocialOverlay({
           users={users.map(({ rsvpStatus: _rsvpStatus, ...user }) => user)}
           maxDisplay={maxDisplay}
           size={size}
+          reverse={reverse}
         />
       </div>
     </>

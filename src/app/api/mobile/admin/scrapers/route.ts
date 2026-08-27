@@ -165,6 +165,12 @@ function safeUrlValue(value: string | null | undefined) {
   }
 }
 
+function normalizedDateValue(value: unknown) {
+  if (typeof value !== "string" || !value.trim()) return null;
+  const date = new Date(value);
+  return Number.isNaN(date.getTime()) ? null : date.toISOString();
+}
+
 function scoreScrapedVenueMatch(
   scraped: {
     venueName: string;
@@ -386,6 +392,59 @@ async function runSelectedScraper(
     });
   }
 
+  const normalizedEvents = (result.events ?? []).flatMap(
+    (event: any, index: number) => {
+      const startAt = normalizedDateValue(event.startAt);
+      if (!startAt) return [];
+
+      return [
+        {
+          title:
+            typeof event.title === "string" && event.title.trim()
+              ? event.title
+              : "Untitled Event",
+          description:
+            typeof event.description === "string" ? event.description : null,
+          coverImageUrl: safeUrlValue(event.coverImageUrl),
+          eventUrl: safeUrlValue(event.eventUrl),
+          externalId:
+            typeof event.externalId === "string" ? event.externalId : null,
+          startAt,
+          endAt: normalizedDateValue(event.endAt),
+          venueName:
+            typeof event.venueName === "string" ? event.venueName : "",
+          address: typeof event.address === "string" ? event.address : null,
+          city: typeof event.city === "string" ? event.city : "",
+          state: typeof event.state === "string" ? event.state : "",
+          categories: Array.isArray(event.categories)
+            ? event.categories.filter(
+                (category: unknown): category is string =>
+                  typeof category === "string"
+              )
+            : [],
+          visibility:
+            event.visibility === "private" ? "private" : "public",
+          source: typeof event.source === "string" ? event.source : null,
+          eventStatus:
+            typeof event.eventStatus === "string" ? event.eventStatus : null,
+          venueMatch: venueMatches[index]
+            ? {
+                id: venueMatches[index].id,
+                name: venueMatches[index].name,
+                city: venueMatches[index].city,
+                state: venueMatches[index].state,
+                website: safeUrlValue(venueMatches[index].website),
+              }
+            : null,
+        },
+      ];
+    }
+  );
+
+  normalizedEvents.sort(
+    (a, b) => Date.parse(a.startAt) - Date.parse(b.startAt)
+  );
+
   return {
     scraperRow: {
       id: row.id,
@@ -400,27 +459,38 @@ async function runSelectedScraper(
         type: row.place.type,
         slug: row.place.slug,
         name: row.place.name,
+        logoImageUrl: safeUrlValue(row.place.logoImageUrl),
         city: row.place.city,
         state: row.place.state,
         website: safeUrlValue(row.place.website),
       },
     },
-    venue: result.venue ?? null,
-    organizer: result.organizer ?? null,
-    totalEvents: result.totalEvents ?? result.events?.length ?? 0,
-    errors: result.errors ?? [],
-    events: (result.events ?? []).map((event: any, index: number) => ({
-      ...event,
-      venueMatch: venueMatches[index]
-        ? {
-            id: venueMatches[index].id,
-            name: venueMatches[index].name,
-            city: venueMatches[index].city,
-            state: venueMatches[index].state,
-            website: safeUrlValue(venueMatches[index].website),
-          }
-        : null,
-    })),
+    venue: result.venue
+      ? {
+          id: result.venue.id ?? null,
+          name: result.venue.name ?? row.place.name,
+          address: result.venue.address ?? "",
+          city: result.venue.city ?? row.place.city ?? "",
+          state: result.venue.state ?? row.place.state ?? "",
+        }
+      : null,
+    organizer: result.organizer
+      ? {
+          name: result.organizer.name ?? row.place.name,
+          url: safeUrlValue(result.organizer.url ?? row.place.website),
+        }
+      : null,
+    totalEvents: normalizedEvents.length,
+    errors: Array.isArray(result.errors)
+      ? result.errors.map((error: any) => ({
+          url: typeof error.url === "string" ? error.url : "Unknown URL",
+          error:
+            typeof error.error === "string"
+              ? error.error
+              : "Unknown scraper error",
+        }))
+      : [],
+    events: normalizedEvents,
   };
 }
 
@@ -464,6 +534,7 @@ export async function GET(request: Request) {
         type: row.place.type,
         slug: row.place.slug,
         name: row.place.name,
+        logoImageUrl: safeUrlValue(row.place.logoImageUrl),
         city: row.place.city,
         state: row.place.state,
         website: safeUrlValue(row.place.website),

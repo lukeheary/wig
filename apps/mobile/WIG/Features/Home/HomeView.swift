@@ -2374,7 +2374,7 @@ private struct LatestFromFollowsCard: View {
             }
             .frame(width: 164, height: 164)
             .clipped()
-            .overlay(alignment: .topTrailing) {
+            .overlay(alignment: .bottomLeading) {
                 EventSocialOverlayView(
                     attendees: goingAttendees,
                     size: .card

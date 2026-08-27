@@ -13,6 +13,7 @@ interface AvatarStackProps {
   users: User[];
   maxDisplay?: number;
   size?: "sm" | "md" | "lg" | "xl";
+  reverse?: boolean;
   className?: string;
 }
 
@@ -20,27 +21,29 @@ export function AvatarStack({
   users,
   maxDisplay = 5,
   size = "md",
+  reverse = false,
   className = "",
 }: AvatarStackProps) {
-  const displayedUsers = [...users]
+  const selectedUsers = [...users]
     .sort((a, b) => {
       const aPriority = a.rsvpStatus === "going" ? 1 : 0;
       const bPriority = b.rsvpStatus === "going" ? 1 : 0;
       return aPriority - bPriority;
     })
     .slice(0, maxDisplay);
+  const displayedUsers = reverse ? selectedUsers.reverse() : selectedUsers;
   const remainingCount = Math.max(0, users.length - displayedUsers.length);
 
   const sizeClasses = {
     sm: "h-6 w-6",
-    md: "h-8 w-8",
+    md: "h-7 w-7",
     lg: "h-10 w-10",
     xl: "h-11 w-11",
   };
 
   const sizePixels = {
     sm: 24,
-    md: 32,
+    md: 28,
     lg: 40,
     xl: 44,
   };
@@ -57,7 +60,9 @@ export function AvatarStack({
       ? "-space-x-4"
       : size === "lg"
         ? "-space-x-2.5"
-        : "-space-x-2";
+        : size === "md"
+          ? "-space-x-[7px]"
+          : "-space-x-2";
   const overflowTextClass =
     size === "lg" || size === "xl" ? "text-[13px]" : "text-[11px]";
 
@@ -76,7 +81,7 @@ export function AvatarStack({
             <div
               key={user.id}
               className={cn(
-                "relative rounded-full",
+                "relative rounded-full shadow-[0_1px_6px_rgba(0,0,0,0.7)]",
                 sizeClass,
                 rsvpIndicatorClassName
               )}

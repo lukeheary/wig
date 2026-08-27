@@ -148,8 +148,9 @@ function WhatsNewCard({ update }: { update: WhatsNewUpdate }) {
         )}
         <EventSocialOverlay
           users={socialUsers}
-          size="lg"
-          placement="top-right"
+          size="md"
+          placement="bottom-left"
+          reverse
         />
       </div>
 

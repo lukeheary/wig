@@ -416,13 +416,6 @@ function HomeMiniEventCard({ event }: { event: EventCardItem }) {
           />
           <div className="absolute inset-0 bg-[linear-gradient(to_bottom,transparent_0%,transparent_40%,rgba(0,0,0,0.08)_54%,rgba(0,0,0,0.16)_100%)]" />
 
-          <EventSocialOverlay
-            users={socialUsers}
-            size="lg"
-            placement="top-right"
-            stackClassName="drop-shadow-[0_8px_24px_rgba(0,0,0,0.45)]"
-          />
-
           {hasInactiveStatus && (
             <div className="absolute inset-x-3 top-3 z-10">
               <span className="inline-flex rounded-full bg-black/60 px-2 py-1 text-[10px] font-semibold uppercase tracking-[0.12em] text-white backdrop-blur">
@@ -432,7 +425,14 @@ function HomeMiniEventCard({ event }: { event: EventCardItem }) {
           )}
 
           <div className="font-space-grotesk relative z-10 mt-auto space-y-0.5 px-4 pb-4 pt-24 text-white">
-            <h3 className="line-clamp-2 text-sm/5 font-semibold tracking-tight transition-colors group-hover:text-white">
+            <EventSocialOverlay
+              users={socialUsers}
+              size="md"
+              placement="inline"
+              reverse
+              stackClassName="mb-1"
+            />
+            <h3 className="line-clamp-1 text-sm/5 font-semibold tracking-tight transition-colors group-hover:text-white">
               {titleMain}
               {trailingParenthetical ? (
                 <span className="whitespace-nowrap">

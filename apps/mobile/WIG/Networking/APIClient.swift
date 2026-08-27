@@ -1781,9 +1781,15 @@ struct MobileAdminScraperPlace: Decodable, Hashable, Sendable {
     let type: PlaceListItem.PlaceType
     let slug: String
     let name: String
+    let logoImageURL: URL?
     let city: String?
     let state: String?
     let website: URL?
+
+    enum CodingKeys: String, CodingKey {
+        case id, type, slug, name, city, state, website
+        case logoImageURL = "logoImageUrl"
+    }
 }
 
 struct MobileAdminScraperRunResponse: Decodable, Hashable, Sendable {
@@ -1804,7 +1810,7 @@ struct MobileAdminScraperVenueSummary: Decodable, Hashable, Sendable {
 }
 
 struct MobileAdminScraperOrganizerSummary: Decodable, Hashable, Sendable {
-    let name: String
+    let name: String?
     let url: URL?
 }
 
@@ -2388,6 +2394,8 @@ extension JSONDecoder {
 
             if let date = ISO8601DateFormatter.wigFractional.date(from: value)
                 ?? ISO8601DateFormatter.wigStandard.date(from: value)
+                ?? DateFormatter.wigLocalDateTime.date(from: value)
+                ?? DateFormatter.wigLocalDateTimeWithoutSeconds.date(from: value)
             {
                 return date
             }
@@ -2400,6 +2408,26 @@ extension JSONDecoder {
         decoder.keyDecodingStrategy = .convertFromSnakeCase
         return decoder
     }
+}
+
+extension DateFormatter {
+    static let wigLocalDateTime: DateFormatter = {
+        let formatter = DateFormatter()
+        formatter.locale = Locale(identifier: "en_US_POSIX")
+        formatter.calendar = Calendar(identifier: .iso8601)
+        formatter.timeZone = TimeZone(secondsFromGMT: 0)
+        formatter.dateFormat = "yyyy-MM-dd'T'HH:mm:ss"
+        return formatter
+    }()
+
+    static let wigLocalDateTimeWithoutSeconds: DateFormatter = {
+        let formatter = DateFormatter()
+        formatter.locale = Locale(identifier: "en_US_POSIX")
+        formatter.calendar = Calendar(identifier: .iso8601)
+        formatter.timeZone = TimeZone(secondsFromGMT: 0)
+        formatter.dateFormat = "yyyy-MM-dd'T'HH:mm"
+        return formatter
+    }()
 }
 
 extension ISO8601DateFormatter {

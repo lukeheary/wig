@@ -46,6 +46,7 @@ next-env.d.ts
 # local iOS build configuration
 apps/mobile/Config/Local.xcconfig
 apps/mobile/Config/Production.xcconfig
+!apps/mobile/Config/Production.xcconfig
 
 # Xcode user interface state and workspace preferences
 apps/mobile/**/xcuserdata/

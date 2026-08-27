@@ -1,0 +1,6 @@
+// Public production app configuration. These values must be embedded in the
+// built app so they remain available when it is launched outside Xcode.
+CLERK_PUBLISHABLE_KEY = pk_live_Y2xlcmsud2hvaXNnb2luZy5jb20k
+CLERK_FRONTEND_API = clerk.whoisgoing.com
+API_BASE_URL = https:/$()/api.whoisgoing.com
+CLERK_JWT_TEMPLATE =

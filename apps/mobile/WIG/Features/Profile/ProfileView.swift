@@ -5152,15 +5152,22 @@ private final class AdminScrapersViewModel: ObservableObject {
         }
     }
 
-    func runScraper(id: UUID, using apiClient: APIClient) async {
+    @discardableResult
+    func runScraper(
+        id: UUID,
+        using apiClient: APIClient
+    ) async -> MobileAdminScraperRunResponse? {
         isRunning = true
         resetSession()
         defer { isRunning = false }
 
         do {
-            runResult = try await apiClient.send(APIClient.mobileRunAdminScraper(scraperID: id))
+            let result = try await apiClient.send(APIClient.mobileRunAdminScraper(scraperID: id))
+            runResult = result
+            return result
         } catch {
             errorMessage = error.localizedDescription
+            return nil
         }
     }
 
@@ -5197,7 +5204,7 @@ private struct AdminScrapersView: View {
     @StateObject private var viewModel = AdminScrapersViewModel()
     @State private var searchText = ""
     @State private var selectedScraperID: UUID?
-    @State private var overrideExisting = false
+    @State private var presentedRunResult: MobileAdminScraperRunResponse?
     @State private var isRunAllPoshConfirmationPresented = false
 
     var body: some View {
@@ -5215,9 +5222,6 @@ private struct AdminScrapersView: View {
                     errorCard(errorMessage)
                 }
 
-                if let runResult = viewModel.runResult {
-                    runResultSection(runResult)
-                }
             }
             .padding(.horizontal, 16)
             .padding(.top, 74)
@@ -5228,6 +5232,9 @@ private struct AdminScrapersView: View {
         .background(SwipeBackEnabler())
         .toolbar(.hidden, for: .navigationBar)
         .navigationBarBackButtonHidden()
+        .navigationDestination(item: $presentedRunResult) { result in
+            AdminScraperResultsView(viewModel: viewModel, result: result)
+        }
         .overlay(alignment: .top) {
             ZStack {
                 Text("Scrapers")
@@ -5383,14 +5390,7 @@ private struct AdminScrapersView: View {
             viewModel.resetSession()
         } label: {
             HStack(spacing: 12) {
-                ZStack {
-                    RoundedRectangle(cornerRadius: 8, style: .continuous)
-                        .fill(.white.opacity(0.08))
-                    Image(systemName: row.place.type == .venue ? "building.2" : "person.2")
-                        .font(.system(size: 15, weight: .semibold))
-                        .foregroundStyle(AppTheme.accentBlue)
-                }
-                .frame(width: 42, height: 42)
+                AdminScraperPlaceImage(place: row.place, size: 42)
 
                 VStack(alignment: .leading, spacing: 3) {
                     Text(row.place.name)
@@ -5448,7 +5448,9 @@ private struct AdminScrapersView: View {
 
             Button {
                 Task {
-                    await viewModel.runScraper(id: row.id, using: apiClient)
+                    if let result = await viewModel.runScraper(id: row.id, using: apiClient) {
+                        presentedRunResult = result
+                    }
                 }
             } label: {
                 HStack(spacing: 8) {
@@ -5493,7 +5495,84 @@ private struct AdminScrapersView: View {
             )
     }
 
-    private func runResultSection(_ result: MobileAdminScraperRunResponse) -> some View {
+}
+
+private struct AdminScraperResultsView: View {
+    @Environment(\.dismiss) private var dismiss
+    @Environment(\.apiClient) private var apiClient
+    @ObservedObject var viewModel: AdminScrapersViewModel
+    let result: MobileAdminScraperRunResponse
+    @State private var overrideExisting = false
+
+    private var sortedEvents: [MobileAdminScrapedEvent] {
+        result.events.sorted { $0.startAt < $1.startAt }
+    }
+
+    var body: some View {
+        ScrollView {
+            VStack(alignment: .leading, spacing: 16) {
+                scraperSummary
+                resultContent
+            }
+            .padding(.horizontal, 16)
+            .padding(.top, 74)
+            .padding(.bottom, 18)
+        }
+        .scrollIndicators(.hidden)
+        .background(ProfileTheme.background.ignoresSafeArea())
+        .background(SwipeBackEnabler())
+        .toolbar(.hidden, for: .navigationBar)
+        .navigationBarBackButtonHidden()
+        .overlay(alignment: .top) {
+            ZStack {
+                Text(result.scraperRow.place.name)
+                    .font(.system(size: 17, weight: .semibold))
+                    .foregroundStyle(.white)
+                    .lineLimit(1)
+                    .padding(.horizontal, 58)
+
+                HStack {
+                    FloatingGlassIconButton(systemImage: "chevron.left") {
+                        dismiss()
+                    }
+                    Spacer()
+                }
+            }
+            .padding(.horizontal, 16)
+        }
+    }
+
+    private var scraperSummary: some View {
+        HStack(spacing: 14) {
+            AdminScraperPlaceImage(place: result.scraperRow.place, size: 58)
+
+            VStack(alignment: .leading, spacing: 5) {
+                Text(result.scraperRow.place.name)
+                    .font(.system(size: 17, weight: .semibold))
+                    .foregroundStyle(.white)
+                    .lineLimit(1)
+
+                Text(result.scraperRow.scraper.title)
+                    .font(.system(size: 13, weight: .semibold))
+                    .foregroundStyle(AppTheme.accentBlue)
+
+                Text(result.scraperRow.searchString)
+                    .font(.system(size: 11, weight: .medium, design: .monospaced))
+                    .foregroundStyle(.white.opacity(0.54))
+                    .lineLimit(2)
+            }
+
+            Spacer(minLength: 0)
+        }
+        .padding(16)
+        .frame(maxWidth: .infinity, alignment: .leading)
+        .background(
+            RoundedRectangle(cornerRadius: 20, style: .continuous)
+                .fill(ProfileTheme.cardBackground)
+        )
+    }
+
+    private var resultContent: some View {
         VStack(alignment: .leading, spacing: 16) {
             HStack {
                 Text("\(result.totalEvents) events found")
@@ -5525,7 +5604,7 @@ private struct AdminScrapersView: View {
                 Task {
                     await viewModel.importEvents(
                         scraperID: result.scraperRow.id,
-                        events: result.events,
+                        events: sortedEvents,
                         overrideExisting: overrideExisting,
                         using: apiClient
                     )
@@ -5570,11 +5649,36 @@ private struct AdminScrapersView: View {
             }
 
             VStack(spacing: 12) {
-                ForEach(result.events) { event in
+                ForEach(sortedEvents) { event in
                     AdminScrapedEventCard(event: event)
                 }
             }
         }
+    }
+}
+
+private struct AdminScraperPlaceImage: View {
+    let place: MobileAdminScraperPlace
+    let size: CGFloat
+
+    var body: some View {
+        AsyncImage(url: place.logoImageURL) { phase in
+            switch phase {
+            case .success(let image):
+                image
+                    .resizable()
+                    .scaledToFill()
+            default:
+                ZStack {
+                    Color.white.opacity(0.08)
+                    Image(systemName: place.type == .venue ? "building.2" : "person.2")
+                        .font(.system(size: size * 0.36, weight: .semibold))
+                        .foregroundStyle(AppTheme.accentBlue)
+                }
+            }
+        }
+        .frame(width: size, height: size)
+        .clipShape(RoundedRectangle(cornerRadius: size * 0.22, style: .continuous))
     }
 }
 
