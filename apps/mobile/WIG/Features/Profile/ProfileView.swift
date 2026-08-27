@@ -4577,7 +4577,7 @@ private struct MobileSupportReportedEntityPreview: View {
 private struct AdminSettingsView: View {
     @Environment(\.dismiss) private var dismiss
     @State private var presentedPlaceCreationType: PlaceListItem.PlaceType?
-    @State private var isMetroAreaSheetPresented = false
+    @State private var isMetroAreasPresented = false
     @State private var isAdminScrapersPresented = false
     @State private var isSupportRequestsPresented = false
     @State private var headerOpacity: CGFloat = 1
@@ -4600,10 +4600,10 @@ private struct AdminSettingsView: View {
                 }
 
                 AdminSettingsActionButton(
-                    title: "Add Metro Area",
+                    title: "Metro Areas",
                     systemImage: "mappin.and.ellipse"
                 ) {
-                    isMetroAreaSheetPresented = true
+                    isMetroAreasPresented = true
                 }
 
                 AdminSettingsActionButton(
@@ -4650,17 +4650,15 @@ private struct AdminSettingsView: View {
         .navigationDestination(isPresented: $isAdminScrapersPresented) {
             AdminScrapersView()
         }
+        .navigationDestination(isPresented: $isMetroAreasPresented) {
+            AdminMetroAreasView()
+        }
         .navigationDestination(isPresented: $isSupportRequestsPresented) {
             AdminSupportRequestsView()
         }
         .sheet(item: $presentedPlaceCreationType) { type in
             MobilePlaceCreationView(type: type)
                 .presentationDetents([.large])
-                .presentationDragIndicator(.visible)
-        }
-        .sheet(isPresented: $isMetroAreaSheetPresented) {
-            MetroAreaCreationView()
-                .presentationDetents([.medium, .large])
                 .presentationDragIndicator(.visible)
         }
     }
@@ -5630,6 +5628,284 @@ private struct AdminScrapedEventCard: View {
         return [event.city, event.state]
             .filter { !$0.isEmpty }
             .joined(separator: ", ")
+    }
+}
+
+@MainActor
+private final class AdminMetroAreasViewModel: ObservableObject {
+    @Published private(set) var metroAreas: [MobileAdminMetroArea] = []
+    @Published private(set) var isLoading = false
+    @Published var errorMessage: String?
+
+    func load(using apiClient: APIClient) async {
+        isLoading = true
+        errorMessage = nil
+        defer { isLoading = false }
+        do {
+            metroAreas = try await apiClient.send(APIClient.mobileAdminMetroAreas()).metroAreas
+        } catch is CancellationError {
+            return
+        } catch {
+            errorMessage = error.localizedDescription
+        }
+    }
+
+    func delete(id: UUID, using apiClient: APIClient) async throws {
+        _ = try await apiClient.send(APIClient.mobileDeleteMetroArea(id: id))
+        metroAreas.removeAll { $0.id == id }
+    }
+}
+
+private struct AdminMetroAreasView: View {
+    @Environment(\.apiClient) private var apiClient
+    @Environment(\.dismiss) private var dismiss
+    @StateObject private var viewModel = AdminMetroAreasViewModel()
+    @State private var isCreationPresented = false
+
+    var body: some View {
+        ScrollView {
+            LazyVStack(spacing: 12) {
+                if viewModel.isLoading, viewModel.metroAreas.isEmpty {
+                    NativeLoadingView(fillsAvailableSpace: false)
+                        .frame(minHeight: 120)
+                } else if viewModel.metroAreas.isEmpty {
+                    emptyState
+                } else {
+                    ForEach(viewModel.metroAreas) { metroArea in
+                        NavigationLink {
+                            AdminMetroAreaDetailView(
+                                metroArea: metroArea,
+                                onDelete: { id in
+                                    try await viewModel.delete(id: id, using: apiClient)
+                                }
+                            )
+                        } label: {
+                            metroAreaRow(metroArea)
+                        }
+                        .buttonStyle(.plain)
+                    }
+                }
+
+                if let errorMessage = viewModel.errorMessage {
+                    Text(errorMessage)
+                        .font(.system(size: 13, weight: .medium))
+                        .foregroundStyle(.red.opacity(0.9))
+                        .frame(maxWidth: .infinity, alignment: .leading)
+                        .padding(16)
+                        .background(
+                            RoundedRectangle(cornerRadius: 16, style: .continuous)
+                                .fill(Color.red.opacity(0.1))
+                        )
+                }
+            }
+            .padding(.horizontal, 16)
+            .padding(.top, 74)
+            .padding(.bottom, 18)
+        }
+        .scrollIndicators(.hidden)
+        .refreshable { await viewModel.load(using: apiClient) }
+        .background(ProfileTheme.background.ignoresSafeArea())
+        .background(SwipeBackEnabler())
+        .toolbar(.hidden, for: .navigationBar)
+        .navigationBarBackButtonHidden()
+        .overlay(alignment: .top) {
+            ZStack {
+                Text("Metro Areas")
+                    .font(.system(size: 17, weight: .semibold))
+                    .foregroundStyle(.white)
+                HStack {
+                    FloatingGlassIconButton(systemImage: "chevron.left") { dismiss() }
+                    Spacer()
+                    FloatingGlassIconButton(systemImage: "plus") {
+                        isCreationPresented = true
+                    }
+                    .accessibilityLabel("Add metro area")
+                }
+            }
+            .padding(.horizontal, 16)
+        }
+        .task { await viewModel.load(using: apiClient) }
+        .sheet(isPresented: $isCreationPresented, onDismiss: {
+            Task { await viewModel.load(using: apiClient) }
+        }) {
+            MetroAreaCreationView()
+                .presentationDetents([.medium, .large])
+                .presentationDragIndicator(.visible)
+        }
+    }
+
+    private var emptyState: some View {
+        VStack(spacing: 12) {
+            Image(systemName: "mappin.and.ellipse")
+                .font(.system(size: 28, weight: .semibold))
+                .foregroundStyle(.white.opacity(0.46))
+            Text("No Metro Areas")
+                .font(.system(size: 17, weight: .semibold))
+                .foregroundStyle(.white)
+            Text("Tap the plus button to add the first metro area.")
+                .font(.system(size: 13, weight: .medium))
+                .foregroundStyle(.white.opacity(0.5))
+                .multilineTextAlignment(.center)
+        }
+        .frame(maxWidth: .infinity)
+        .padding(.vertical, 44)
+    }
+
+    private func metroAreaRow(_ metroArea: MobileAdminMetroArea) -> some View {
+        HStack(spacing: 14) {
+            Image(systemName: "mappin.and.ellipse")
+                .font(.system(size: 18, weight: .semibold))
+                .foregroundStyle(AppTheme.accentBlue)
+                .frame(width: 42, height: 42)
+                .background(Circle().fill(AppTheme.accentBlue.opacity(0.12)))
+            VStack(alignment: .leading, spacing: 4) {
+                Text("\(metroArea.name), \(metroArea.state)")
+                    .font(.system(size: 16, weight: .semibold))
+                    .foregroundStyle(.white)
+                    .lineLimit(1)
+                Text("\(metroArea.placeCount) place\(metroArea.placeCount == 1 ? "" : "s") · \(metroArea.radiusMiles.formatted(.number.precision(.fractionLength(0 ... 1)))) mi radius")
+                    .font(.system(size: 13, weight: .medium))
+                    .foregroundStyle(.white.opacity(0.5))
+                    .lineLimit(1)
+            }
+            Spacer(minLength: 8)
+            Image(systemName: "chevron.right")
+                .font(.system(size: 13, weight: .semibold))
+                .foregroundStyle(.white.opacity(0.34))
+        }
+        .padding(.horizontal, 16)
+        .frame(height: 70)
+        .background(
+            RoundedRectangle(cornerRadius: 18, style: .continuous)
+                .fill(ProfileTheme.cardBackground)
+        )
+        .overlay(
+            RoundedRectangle(cornerRadius: 18, style: .continuous)
+                .strokeBorder(.white.opacity(0.08), lineWidth: 1)
+        )
+    }
+}
+
+private struct AdminMetroAreaDetailView: View {
+    @Environment(\.dismiss) private var dismiss
+    let metroArea: MobileAdminMetroArea
+    let onDelete: (UUID) async throws -> Void
+    @State private var isDeleteConfirmationPresented = false
+    @State private var isDeleting = false
+    @State private var errorMessage: String?
+
+    var body: some View {
+        ScrollView {
+            VStack(spacing: 16) {
+                detailCard
+                Button(role: .destructive) {
+                    isDeleteConfirmationPresented = true
+                } label: {
+                    HStack(spacing: 8) {
+                        if isDeleting { ProgressView().tint(.red) }
+                        Text(isDeleting ? "Deleting…" : "Delete Metro Area")
+                            .font(.system(size: 15, weight: .semibold))
+                    }
+                    .foregroundStyle(.red)
+                    .frame(maxWidth: .infinity)
+                    .frame(height: 48)
+                    .background(
+                        RoundedRectangle(cornerRadius: 16, style: .continuous)
+                            .fill(Color.red.opacity(0.1))
+                    )
+                }
+                .buttonStyle(.plain)
+                .disabled(isDeleting)
+                if let errorMessage {
+                    Text(errorMessage)
+                        .font(.system(size: 13, weight: .medium))
+                        .foregroundStyle(.red.opacity(0.9))
+                        .frame(maxWidth: .infinity, alignment: .leading)
+                }
+            }
+            .padding(.horizontal, 16)
+            .padding(.top, 74)
+            .padding(.bottom, 18)
+        }
+        .background(ProfileTheme.background.ignoresSafeArea())
+        .background(SwipeBackEnabler())
+        .toolbar(.hidden, for: .navigationBar)
+        .navigationBarBackButtonHidden()
+        .overlay(alignment: .top) {
+            ZStack {
+                Text("Metro Area")
+                    .font(.system(size: 17, weight: .semibold))
+                    .foregroundStyle(.white)
+                HStack {
+                    FloatingGlassIconButton(systemImage: "chevron.left") { dismiss() }
+                    Spacer()
+                }
+            }
+            .padding(.horizontal, 16)
+        }
+        .alert("Delete \(metroArea.name)?", isPresented: $isDeleteConfirmationPresented) {
+            Button("Cancel", role: .cancel) {}
+            Button("Delete", role: .destructive) {
+                Task { await deleteMetroArea() }
+            }
+        } message: {
+            Text("This removes the metro area configuration. Places themselves will not be deleted.")
+        }
+    }
+
+    private var detailCard: some View {
+        VStack(spacing: 0) {
+            detailRow(title: "Name", value: metroArea.name)
+            Divider().overlay(.white.opacity(0.08))
+            detailRow(title: "State", value: metroArea.state)
+            Divider().overlay(.white.opacity(0.08))
+            detailRow(title: "Places", value: metroArea.placeCount.formatted())
+            Divider().overlay(.white.opacity(0.08))
+            detailRow(title: "Radius", value: "\(metroArea.radiusMiles.formatted(.number.precision(.fractionLength(0 ... 1)))) miles")
+            Divider().overlay(.white.opacity(0.08))
+            detailRow(
+                title: "Center",
+                value: "\(metroArea.latitude.formatted(.number.precision(.fractionLength(4)))), \(metroArea.longitude.formatted(.number.precision(.fractionLength(4))))"
+            )
+            Divider().overlay(.white.opacity(0.08))
+            detailRow(title: "Created", value: metroArea.createdAt.formatted(date: .abbreviated, time: .omitted))
+        }
+        .padding(.horizontal, 16)
+        .background(
+            RoundedRectangle(cornerRadius: 18, style: .continuous)
+                .fill(ProfileTheme.cardBackground)
+        )
+        .overlay(
+            RoundedRectangle(cornerRadius: 18, style: .continuous)
+                .strokeBorder(.white.opacity(0.08), lineWidth: 1)
+        )
+    }
+
+    private func detailRow(title: String, value: String) -> some View {
+        HStack(alignment: .firstTextBaseline, spacing: 16) {
+            Text(title)
+                .font(.system(size: 14, weight: .medium))
+                .foregroundStyle(.white.opacity(0.5))
+            Spacer(minLength: 12)
+            Text(value)
+                .font(.system(size: 14, weight: .semibold))
+                .foregroundStyle(.white)
+                .multilineTextAlignment(.trailing)
+        }
+        .padding(.vertical, 15)
+    }
+
+    private func deleteMetroArea() async {
+        guard !isDeleting else { return }
+        isDeleting = true
+        errorMessage = nil
+        do {
+            try await onDelete(metroArea.id)
+            dismiss()
+        } catch {
+            errorMessage = error.localizedDescription
+            isDeleting = false
+        }
     }
 }
 
