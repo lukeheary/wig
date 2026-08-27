@@ -26,6 +26,13 @@ import { claimManualSeriesOccurrence } from "@/server/utils/scraper-event-reconc
 export const dynamic = "force-dynamic";
 export const maxDuration = 300; // 5 minutes
 
+const SCRAPER_TYPES = ["dice", "posh", "ticketmaster", "eventbrite"] as const;
+type ScraperType = (typeof SCRAPER_TYPES)[number];
+
+function isScraperType(value: string): value is ScraperType {
+  return SCRAPER_TYPES.some((scraper) => scraper === value);
+}
+
 function isAuthorized(request: NextRequest) {
   const cronSecret = process.env.CRON_SECRET;
   if (!cronSecret) return true;
@@ -631,7 +638,7 @@ async function runScraper(
   };
 }
 
-async function runAllScrapers() {
+async function runAllScrapers(scraperType: ScraperType) {
   // Find admin user for createdByUserId
   const [adminUser] = await db
     .select({ id: users.id })
@@ -646,12 +653,13 @@ async function runAllScrapers() {
     );
   }
 
-  // Posh stops returning expired events, so repair any existing WIG rows that
-  // still reference Posh's image host independently of the scrape response.
-  await rehostExistingScrapedEventImages();
+  // Repair externally hosted images for this source independently of the
+  // scrape response, without repeating the work for every scraper type.
+  await rehostExistingScrapedEventImages([scraperType]);
 
   // Load all scrapers with place data
   const allScrapers = await db.query.scrapers.findMany({
+    where: eq(scrapers.scraper, scraperType),
     with: {
       place: {
         columns: {
@@ -728,25 +736,53 @@ async function runAllScrapers() {
   return NextResponse.json({
     ok: true,
     ranAt: new Date().toISOString(),
+    scraper: scraperType,
     totalScrapers: allScrapers.length,
     totalEventsAdded: results.reduce((sum, r) => sum + r.eventsAdded, 0),
     results,
   });
 }
 
-export async function GET(request: NextRequest) {
+type RouteContext = {
+  params: Promise<{ scraper: string }>;
+};
+
+export async function GET(request: NextRequest, context: RouteContext) {
   if (!isAuthorized(request)) {
     return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
   }
 
+  const { scraper } = await context.params;
+  if (!isScraperType(scraper)) {
+    return NextResponse.json(
+      { error: `Unknown scraper type: ${scraper}` },
+      { status: 404 }
+    );
+  }
+
+  if (
+    scraper === "posh" &&
+    process.env.POSH_CRON_ENABLED?.toLowerCase() !== "true"
+  ) {
+    return NextResponse.json({
+      ok: true,
+      skipped: true,
+      scraper,
+      reason: "Posh cron is disabled",
+    });
+  }
+
   try {
-    return await runAllScrapers();
+    return await runAllScrapers(scraper);
   } catch (error) {
-    console.error("Scraper cron failed:", error);
-    return NextResponse.json({ error: "Scraper cron failed" }, { status: 500 });
+    console.error(`${scraper} scraper cron failed:`, error);
+    return NextResponse.json(
+      { error: `${scraper} scraper cron failed` },
+      { status: 500 }
+    );
   }
 }
 
-export async function POST(request: NextRequest) {
-  return GET(request);
+export async function POST(request: NextRequest, context: RouteContext) {
+  return GET(request, context);
 }

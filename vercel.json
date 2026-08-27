@@ -5,8 +5,20 @@
       "schedule": "0 8 * * *"
     },
     {
-      "path": "/api/cron/run-scrapers",
+      "path": "/api/cron/run-scrapers/dice",
       "schedule": "0 2 * * *"
+    },
+    {
+      "path": "/api/cron/run-scrapers/posh",
+      "schedule": "10 2 * * *"
+    },
+    {
+      "path": "/api/cron/run-scrapers/ticketmaster",
+      "schedule": "20 2 * * *"
+    },
+    {
+      "path": "/api/cron/run-scrapers/eventbrite",
+      "schedule": "30 2 * * *"
     }
   ]
 }

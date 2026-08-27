@@ -14,7 +14,6 @@ const timeZoneFormatterCache = new Map<string, Intl.DateTimeFormat>();
 interface PoshFetchResult {
   response: Response;
   body: string;
-  transport: "direct" | "scrape.do-datacenter" | "scrape.do-residential";
 }
 
 function isBotChallenge(response: Response, body: string): boolean {
@@ -25,15 +24,11 @@ function isBotChallenge(response: Response, body: string): boolean {
 }
 
 function describePoshResponse(result: PoshFetchResult): string {
-  const { response, body, transport } = result;
+  const { response, body } = result;
   const details = [
     `HTTP ${response.status}${response.statusText ? ` ${response.statusText}` : ""}`,
     `content-type ${response.headers.get("content-type") || "unknown"}`,
-    transport === "scrape.do-datacenter"
-      ? "via Scrape.do datacenter"
-      : transport === "scrape.do-residential"
-        ? "via Scrape.do residential"
-        : "direct from Posh",
+    "direct from Posh",
   ];
   const botCategory = response.headers.get("x-amzn-waf-waf-bot-category");
 
@@ -44,118 +39,19 @@ function describePoshResponse(result: PoshFetchResult): string {
   return details.join("; ");
 }
 
-function shouldEscalateScrapeDoResult(
-  result: PoshFetchResult,
-  accept: string
-): boolean {
-  if (
-    result.response.status === 403 ||
-    result.response.status === 429 ||
-    result.response.status >= 500 ||
-    isBotChallenge(result.response, result.body)
-  ) {
-    return true;
-  }
-
-  if (result.response.ok && accept.includes("application/json")) {
-    try {
-      JSON.parse(result.body);
-    } catch {
-      return true;
-    }
-  }
-
-  return false;
-}
-
-async function fetchViaScrapeDo(
-  url: string,
-  accept: string,
-  token: string,
-  residential: boolean
-): Promise<PoshFetchResult> {
-  const scrapeDoUrl = new URL("https://api.scrape.do/");
-  scrapeDoUrl.searchParams.set("token", token);
-  scrapeDoUrl.searchParams.set("url", url);
-  scrapeDoUrl.searchParams.set("super", residential ? "true" : "false");
-  scrapeDoUrl.searchParams.set("geoCode", "us");
-  scrapeDoUrl.searchParams.set("render", "false");
-  scrapeDoUrl.searchParams.set("output", "raw");
-  scrapeDoUrl.searchParams.set("timeout", residential ? "25000" : "8000");
-  scrapeDoUrl.searchParams.set("retryTimeout", "5000");
-  if (!residential) {
-    scrapeDoUrl.searchParams.set("disableRetry", "true");
-  }
-
-  const response = await fetch(scrapeDoUrl, {
-    headers: { Accept: accept },
-    signal: AbortSignal.timeout(residential ? 30000 : 12000),
-  });
-  return {
-    response,
-    body: await response.text(),
-    transport: residential ? "scrape.do-residential" : "scrape.do-datacenter",
-  };
-}
-
 async function fetchPoshResource(
   url: string,
   accept: string
 ): Promise<PoshFetchResult> {
-  let directResult: PoshFetchResult | null = null;
+  const response = await fetch(url, {
+    headers: {
+      "User-Agent": POSH_USER_AGENT,
+      Accept: accept,
+    },
+    signal: AbortSignal.timeout(5000),
+  });
 
-  try {
-    const response = await fetch(url, {
-      headers: {
-        "User-Agent": POSH_USER_AGENT,
-        Accept: accept,
-      },
-      signal: AbortSignal.timeout(5000),
-    });
-    directResult = {
-      response,
-      body: await response.text(),
-      transport: "direct",
-    };
-
-    const shouldRetryWithProxy =
-      response.status === 403 ||
-      response.status === 429 ||
-      isBotChallenge(response, directResult.body);
-    if (!shouldRetryWithProxy) return directResult;
-  } catch {
-    // A configured Scrape.do fallback can also recover network-level errors.
-  }
-
-  const scrapeDoToken = process.env.SCRAPE_DO_TOKEN?.trim();
-  if (!scrapeDoToken) {
-    if (directResult) return directResult;
-    throw new Error(
-      "Direct Posh request failed and SCRAPE_DO_TOKEN is not configured"
-    );
-  }
-
-  try {
-    const datacenterResult = await fetchViaScrapeDo(
-      url,
-      accept,
-      scrapeDoToken,
-      false
-    );
-    if (!shouldEscalateScrapeDoResult(datacenterResult, accept)) {
-      return datacenterResult;
-    }
-  } catch {
-    // Escalate network and timeout failures to the residential pool.
-  }
-
-  try {
-    return await fetchViaScrapeDo(url, accept, scrapeDoToken, true);
-  } catch {
-    throw new Error(
-      "Scrape.do datacenter and residential requests failed before receiving a response"
-    );
-  }
+  return { response, body: await response.text() };
 }
 
 interface PoshJsonLd {
