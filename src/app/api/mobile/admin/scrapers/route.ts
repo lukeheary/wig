@@ -442,7 +442,8 @@ async function runSelectedScraper(
   );
 
   normalizedEvents.sort(
-    (a, b) => Date.parse(a.startAt) - Date.parse(b.startAt)
+    (a: { startAt: string }, b: { startAt: string }) =>
+      Date.parse(a.startAt) - Date.parse(b.startAt)
   );
 
   return {
