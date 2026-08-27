@@ -226,7 +226,9 @@ final class AddUserToPlaceViewModel: ObservableObject {
         defer { isSearching = false }
 
         do {
-            let response = try await apiClient.send(APIClient.mobileSearch(query: query))
+            let response = try await apiClient.send(
+                APIClient.mobileSearch(query: query, includeCurrentUser: true)
+            )
             searchResults = response.users
         } catch {
             searchResults = []

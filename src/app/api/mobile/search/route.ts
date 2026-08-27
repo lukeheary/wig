@@ -78,6 +78,16 @@ export async function GET(request: Request) {
     const { searchParams } = new URL(request.url);
     const query = searchParams.get("query")?.trim() ?? "";
     const queryVariants = searchQueryVariants(query);
+    const userQueryVariants = [
+      ...new Set(
+        queryVariants.flatMap((variant) => [
+          variant,
+          variant.replace(/^@+/, ""),
+        ])
+      ),
+    ].filter(Boolean);
+    const includeCurrentUser =
+      searchParams.get("includeCurrentUser") === "true";
     const limitParam = Number(searchParams.get("limit") ?? "20");
     const limit = Number.isFinite(limitParam)
       ? Math.min(Math.max(limitParam, 1), 30)
@@ -151,7 +161,7 @@ export async function GET(request: Request) {
 
     const userBaseConditions = [
       eq(users.isOnboarding, false),
-      ...(userId ? [ne(users.id, userId)] : []),
+      ...(userId && !includeCurrentUser ? [ne(users.id, userId)] : []),
       ...(blockedUserIds.length > 0
         ? [notInArray(users.id, blockedUserIds)]
         : []),
@@ -162,7 +172,7 @@ export async function GET(request: Request) {
           where: and(
             ...userBaseConditions,
             or(
-              ...queryVariants.flatMap((variant) => [
+              ...userQueryVariants.flatMap((variant) => [
                 accentInsensitiveLike(users.username, variant),
                 accentInsensitiveLike(users.firstName, variant, {
                   coalesceToEmpty: true,

@@ -544,12 +544,20 @@ struct APIClient: Sendable {
         )
     }
 
-    static func mobileSearch(query: String, limit: Int = 20) -> Endpoint<MobileSearchResponse> {
+    static func mobileSearch(
+        query: String,
+        limit: Int = 20,
+        includeCurrentUser: Bool = false
+    ) -> Endpoint<MobileSearchResponse> {
         Endpoint(
             path: "/api/mobile/search",
             queryItems: [
                 URLQueryItem(name: "query", value: query),
                 URLQueryItem(name: "limit", value: String(limit)),
+                URLQueryItem(
+                    name: "includeCurrentUser",
+                    value: includeCurrentUser ? "true" : "false"
+                ),
             ],
             requiresAuthentication: false,
             includesAuthenticationIfAvailable: true
