@@ -690,6 +690,8 @@ struct ProfileView: View {
                     requestCount: max(current.requestCount - 1, 0),
                     followingCount: current.followingCount,
                     followedPlaces: current.followedPlaces,
+                    memberPlaceCount: current.memberPlaceCount,
+                    memberPlaces: current.memberPlaces,
                     friends: current.friends + [
                         FriendUserSummary(
                             id: resolvedRequest.id,
@@ -717,6 +719,8 @@ struct ProfileView: View {
                     requestCount: max(current.requestCount - 1, 0),
                     followingCount: current.followingCount,
                     followedPlaces: current.followedPlaces,
+                    memberPlaceCount: current.memberPlaceCount,
+                    memberPlaces: current.memberPlaces,
                     friends: current.friends,
                     receivedRequests: current.receivedRequests.filter { $0.id != resolvedRequest.id },
                     sentRequests: current.sentRequests,
@@ -1635,6 +1639,8 @@ struct UserProfileView: View {
                 friendCount: current.friendCount,
                 followingCount: current.followingCount,
                 followedPlaces: current.followedPlaces,
+                memberPlaceCount: current.memberPlaceCount,
+                memberPlaces: current.memberPlaces,
                 friends: current.friends,
                 upcomingEvents: current.upcomingEvents,
                 pastEvents: current.pastEvents
@@ -1674,6 +1680,8 @@ struct UserProfileView: View {
                         friendCount: current.friendCount,
                         followingCount: current.followingCount,
                         followedPlaces: current.followedPlaces,
+                        memberPlaceCount: current.memberPlaceCount,
+                        memberPlaces: current.memberPlaces,
                         friends: current.friends,
                         upcomingEvents: current.upcomingEvents,
                         pastEvents: current.pastEvents
@@ -1730,6 +1738,8 @@ struct UserProfileView: View {
                 friendCount: current.friendCount,
                 followingCount: current.followingCount,
                 followedPlaces: current.followedPlaces,
+                memberPlaceCount: current.memberPlaceCount,
+                memberPlaces: current.memberPlaces,
                 friends: current.friends,
                 upcomingEvents: current.upcomingEvents,
                 pastEvents: current.pastEvents
@@ -1798,6 +1808,8 @@ struct UserProfileView: View {
                 friendCount: max(current.friendCount - 1, 0),
                 followingCount: current.followingCount,
                 followedPlaces: current.followedPlaces,
+                memberPlaceCount: current.memberPlaceCount,
+                memberPlaces: current.memberPlaces,
                 friends: current.friends.filter { $0.id != profile.id },
                 upcomingEvents: current.upcomingEvents,
                 pastEvents: current.pastEvents
@@ -1838,6 +1850,8 @@ struct UserProfileView: View {
                 friendCount: current.friendCount,
                 followingCount: current.followingCount,
                 followedPlaces: current.followedPlaces,
+                memberPlaceCount: current.memberPlaceCount,
+                memberPlaces: current.memberPlaces,
                 friends: current.friends,
                 upcomingEvents: current.upcomingEvents,
                 pastEvents: current.pastEvents
@@ -1865,6 +1879,8 @@ struct UserProfileView: View {
                         friendCount: current.friendCount,
                         followingCount: current.followingCount,
                         followedPlaces: current.followedPlaces,
+                        memberPlaceCount: current.memberPlaceCount,
+                        memberPlaces: current.memberPlaces,
                         friends: current.friends,
                         upcomingEvents: current.upcomingEvents,
                         pastEvents: current.pastEvents
@@ -2613,6 +2629,18 @@ private struct RelationshipSummaryRow: View {
             }
             .buttonStyle(.plain)
 
+            if let memberPlaces = response.memberPlaces, !memberPlaces.isEmpty {
+                NavigationLink {
+                    UserPlacesView(memberships: memberPlaces)
+                } label: {
+                    RelationshipSummaryLink(
+                        count: response.memberPlaceCount ?? memberPlaces.count,
+                        label: "Places"
+                    )
+                }
+                .buttonStyle(.plain)
+            }
+
             NavigationLink {
                 FriendRequestsView(
                     receivedRequests: response.receivedRequests,
@@ -3099,9 +3127,21 @@ private struct UserRelationshipSummaryRow: View {
             }
             .buttonStyle(.plain)
 
-            RelationshipSummaryLink(count: 0, label: "Requests")
-                .hidden()
-                .accessibilityHidden(true)
+            if let memberPlaces = response.memberPlaces, !memberPlaces.isEmpty {
+                NavigationLink {
+                    UserPlacesView(memberships: memberPlaces)
+                } label: {
+                    RelationshipSummaryLink(
+                        count: response.memberPlaceCount ?? memberPlaces.count,
+                        label: "Places"
+                    )
+                }
+                .buttonStyle(.plain)
+            } else {
+                RelationshipSummaryLink(count: 0, label: "Places")
+                    .hidden()
+                    .accessibilityHidden(true)
+            }
         }
         .frame(maxWidth: .infinity)
     }
@@ -3210,6 +3250,41 @@ private struct FollowingPlacesView: View {
         }
 
         displayedPlaces.insert(place, at: min(originalIndex, displayedPlaces.count))
+    }
+}
+
+private struct UserPlacesView: View {
+    let memberships: [UserPlaceMembership]
+
+    private var sortedMemberships: [UserPlaceMembership] {
+        memberships.sorted {
+            $0.place.name.localizedCaseInsensitiveCompare($1.place.name) == .orderedAscending
+        }
+    }
+
+    var body: some View {
+        RelationshipListScreen(title: "Places") {
+            VStack(spacing: 2) {
+                ForEach(sortedMemberships) { membership in
+                    NavigationLink {
+                        PlaceDetailView(place: membership.place)
+                    } label: {
+                        HStack(spacing: 12) {
+                            PlaceRowView(place: membership.place, style: .plain)
+
+                            Text(membership.role.displayName)
+                                .font(.system(size: 11, weight: .semibold))
+                                .foregroundStyle(.white.opacity(0.72))
+                                .padding(.horizontal, 10)
+                                .padding(.vertical, 5)
+                                .background(.white.opacity(0.10), in: Capsule())
+                        }
+                        .contentShape(Rectangle())
+                    }
+                    .buttonStyle(.plain)
+                }
+            }
+        }
     }
 }
 
@@ -3703,6 +3778,8 @@ struct RequestsPageView: View {
                     requestCount: max(current.requestCount - 1, 0),
                     followingCount: current.followingCount,
                     followedPlaces: current.followedPlaces,
+                    memberPlaceCount: current.memberPlaceCount,
+                    memberPlaces: current.memberPlaces,
                     friends: current.friends + [
                         FriendUserSummary(
                             id: resolvedRequest.id,
@@ -3730,6 +3807,8 @@ struct RequestsPageView: View {
                     requestCount: max(current.requestCount - 1, 0),
                     followingCount: current.followingCount,
                     followedPlaces: current.followedPlaces,
+                    memberPlaceCount: current.memberPlaceCount,
+                    memberPlaces: current.memberPlaces,
                     friends: current.friends,
                     receivedRequests: current.receivedRequests.filter { $0.id != resolvedRequest.id },
                     sentRequests: current.sentRequests,

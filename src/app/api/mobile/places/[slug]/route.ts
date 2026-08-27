@@ -521,6 +521,7 @@ export async function GET(
     isFollowed: Boolean(follow),
     isHiddenFromHome: Boolean(homeHide),
     canManage: canManagePlace,
+    currentUserRole: editPermissions.placeRoleById.get(place.id) ?? null,
     events: upcomingEvents.map((event) =>
       mapMobileEvent(
         event,
@@ -572,6 +573,15 @@ export async function PATCH(
     const permissions = await resolveMobileEventEditPermissions(userId);
     if (!permissions.isAdmin && !permissions.manageablePlaceIds.has(place.id)) {
       return NextResponse.json({ error: "Forbidden" }, { status: 403 });
+    }
+    if (
+      !permissions.isAdmin &&
+      permissions.placeRoleById.get(place.id) === "promoter"
+    ) {
+      return NextResponse.json(
+        { error: "Promoters can view place settings but cannot change them" },
+        { status: 403 }
+      );
     }
 
     const body = mobileUpdatePlaceSchema.parse(await request.json());

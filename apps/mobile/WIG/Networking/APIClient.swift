@@ -355,10 +355,23 @@ struct APIClient: Sendable {
         )
     }
 
-    static func mobileHomeActivity(limit: Int = 3) -> Endpoint<ActivityFeedResponse> {
-        Endpoint(
+    static func mobileHomeActivity(
+        limit: Int = 3,
+        metroCity: String? = nil,
+        metroState: String? = nil,
+        includesAllMetros: Bool = false
+    ) -> Endpoint<ActivityFeedResponse> {
+        var queryItems = [URLQueryItem(name: "limit", value: String(limit))]
+        if includesAllMetros {
+            queryItems.append(URLQueryItem(name: "metroScope", value: "all"))
+        } else if let metroCity, let metroState {
+            queryItems.append(URLQueryItem(name: "metroCity", value: metroCity))
+            queryItems.append(URLQueryItem(name: "metroState", value: metroState))
+        }
+
+        return Endpoint(
             path: "/api/mobile/home-activity",
-            queryItems: [URLQueryItem(name: "limit", value: String(limit))],
+            queryItems: queryItems,
             requiresAuthentication: false,
             includesAuthenticationIfAvailable: true
         )
@@ -1653,7 +1666,7 @@ struct MobileAdminStatusResponse: Decodable, Hashable, Sendable {
     let isAdmin: Bool
 }
 
-enum PlaceMemberRole: String, Codable, CaseIterable, Sendable {
+enum PlaceMemberRole: String, Codable, CaseIterable, Hashable, Sendable {
     case owner
     case manager
     case promoter

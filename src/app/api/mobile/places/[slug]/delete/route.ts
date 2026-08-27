@@ -54,6 +54,15 @@ export async function POST(
     if (!permissions.isAdmin && !permissions.manageablePlaceIds.has(place.id)) {
       return NextResponse.json({ error: "Forbidden" }, { status: 403 });
     }
+    if (
+      !permissions.isAdmin &&
+      permissions.placeRoleById.get(place.id) === "promoter"
+    ) {
+      return NextResponse.json(
+        { error: "Promoters cannot delete places" },
+        { status: 403 }
+      );
+    }
 
     const now = new Date();
     const upcomingEvents = await db.query.events.findMany({

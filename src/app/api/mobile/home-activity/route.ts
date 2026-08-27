@@ -94,6 +94,10 @@ export async function GET(request: Request) {
   const limit = Number.isFinite(limitParam)
     ? Math.min(Math.max(limitParam, 1), 10)
     : 3;
+  const requestedMetroCity = searchParams.get("metroCity")?.trim() ?? "";
+  const requestedMetroState =
+    searchParams.get("metroState")?.trim().toUpperCase() ?? "";
+  const includesAllMetros = searchParams.get("metroScope") === "all";
   const previewWindow = Math.min(50, Math.max(limit * 4, limit + 6));
   const userId = await currentMobileUserId();
 
@@ -193,6 +197,16 @@ export async function GET(request: Request) {
       ? resolveMetroArea({ city: currentUser.city, state: currentUser.state }) ??
         { city: currentUser.city, state: currentUser.state }
       : null;
+  const requestedMetroArea =
+    requestedMetroCity && requestedMetroState
+      ? resolveMetroArea({
+          city: requestedMetroCity,
+          state: requestedMetroState,
+        })
+      : null;
+  const selectedActivityMetro = includesAllMetros
+    ? null
+    : (requestedMetroArea ?? currentUserLocation);
   const friendIds = friendConnections.map((friendship) =>
     friendship.userId === userId ? friendship.friendUserId : friendship.userId
   );
@@ -232,6 +246,20 @@ export async function GET(request: Request) {
       if (!friendIdSet.has(activity.actorUserId)) return false;
       if (activity.event.visibility !== "public" || activity.event.status !== "active") {
         return false;
+      }
+
+      if (!includesAllMetros) {
+        if (!selectedActivityMetro) return false;
+        const activityMetro = resolveMetroArea({
+          city: activity.event.city,
+          state: activity.event.state,
+        });
+        if (
+          activityMetro?.city !== selectedActivityMetro.city ||
+          activityMetro?.state !== selectedActivityMetro.state
+        ) {
+          return false;
+        }
       }
 
       // Match the web home preview: activity for an event remains visible for
@@ -518,6 +546,10 @@ export async function GET(request: Request) {
       activity.actor.username ||
       "Someone";
     const event = mapEventCategoryData(activity.event!);
+    const eventMetroArea = resolveMetroArea({
+      city: event.city,
+      state: event.state,
+    });
     const venue = event.venue;
     const currentUserRsvp = currentUserRsvpMap.get(event.id) ?? null;
 
@@ -550,6 +582,8 @@ export async function GET(request: Request) {
         address: event.address,
         city: event.city,
         state: event.state,
+        metroAreaCity: eventMetroArea?.city ?? null,
+        metroAreaState: eventMetroArea?.state ?? null,
         timeZone: event.timeZone,
         venueId: event.venueId,
         venueName: venue?.name ?? null,

@@ -6,6 +6,8 @@ struct FriendsFeedResponse: Decodable, Sendable {
     let requestCount: Int
     let followingCount: Int
     let followedPlaces: [PlaceListItem]
+    let memberPlaceCount: Int?
+    let memberPlaces: [UserPlaceMembership]?
     let friends: [FriendUserSummary]
     let receivedRequests: [FriendUserSummary]
     let sentRequests: [FriendUserSummary]
@@ -18,6 +20,8 @@ struct FriendsFeedResponse: Decodable, Sendable {
         requestCount: Int,
         followingCount: Int = 0,
         followedPlaces: [PlaceListItem] = [],
+        memberPlaceCount: Int? = nil,
+        memberPlaces: [UserPlaceMembership]? = nil,
         friends: [FriendUserSummary],
         receivedRequests: [FriendUserSummary],
         sentRequests: [FriendUserSummary],
@@ -29,6 +33,8 @@ struct FriendsFeedResponse: Decodable, Sendable {
         self.requestCount = requestCount
         self.followingCount = followingCount
         self.followedPlaces = followedPlaces
+        self.memberPlaceCount = memberPlaceCount
+        self.memberPlaces = memberPlaces
         self.friends = friends
         self.receivedRequests = receivedRequests
         self.sentRequests = sentRequests
@@ -42,6 +48,8 @@ struct UserProfileResponse: Decodable, Sendable {
     let friendCount: Int
     let followingCount: Int?
     let followedPlaces: [PlaceListItem]?
+    let memberPlaceCount: Int?
+    let memberPlaces: [UserPlaceMembership]?
     let friends: [FriendUserSummary]
     let upcomingEvents: [EventFeedItem]
     let pastEvents: [EventFeedItem]
@@ -51,6 +59,8 @@ struct UserProfileResponse: Decodable, Sendable {
         friendCount: Int,
         followingCount: Int? = nil,
         followedPlaces: [PlaceListItem]? = nil,
+        memberPlaceCount: Int? = nil,
+        memberPlaces: [UserPlaceMembership]? = nil,
         friends: [FriendUserSummary],
         upcomingEvents: [EventFeedItem],
         pastEvents: [EventFeedItem]
@@ -59,10 +69,19 @@ struct UserProfileResponse: Decodable, Sendable {
         self.friendCount = friendCount
         self.followingCount = followingCount
         self.followedPlaces = followedPlaces
+        self.memberPlaceCount = memberPlaceCount
+        self.memberPlaces = memberPlaces
         self.friends = friends
         self.upcomingEvents = upcomingEvents
         self.pastEvents = pastEvents
     }
+}
+
+struct UserPlaceMembership: Decodable, Identifiable, Sendable {
+    let place: PlaceListItem
+    let role: PlaceMemberRole
+
+    var id: String { place.listRowID }
 }
 
 struct FriendUserSummary: Codable, Identifiable, Hashable, Sendable {
@@ -148,6 +167,8 @@ extension FriendsFeedResponse {
             requestCount: requestCount,
             followingCount: followingCount,
             followedPlaces: followedPlaces,
+            memberPlaceCount: memberPlaceCount,
+            memberPlaces: memberPlaces,
             friends: friends,
             receivedRequests: receivedRequests,
             sentRequests: sentRequests,

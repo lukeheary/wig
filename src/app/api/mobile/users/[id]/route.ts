@@ -8,6 +8,7 @@ import {
   eventRsvps,
   metroAreas,
   placeFollows,
+  placeMembers,
   userFriends,
   userFriendsMutedNotifications,
   users,
@@ -207,6 +208,8 @@ export async function GET(_request: Request, context: RouteContext) {
         friendCount: 0,
         followingCount: 0,
         followedPlaces: [],
+        memberPlaceCount: 0,
+        memberPlaces: [],
         friends: [],
         upcomingEvents: [],
         pastEvents: [],
@@ -252,6 +255,7 @@ export async function GET(_request: Request, context: RouteContext) {
     upcomingRsvps,
     pastRsvps,
     targetFollowedPlaces,
+    targetPlaceMemberships,
     followedPlaceIds,
     editPermissions,
     viewerFriendships,
@@ -312,6 +316,21 @@ export async function GET(_request: Request, context: RouteContext) {
         },
       },
       orderBy: [desc(placeFollows.createdAt)],
+    }),
+    db.query.placeMembers.findMany({
+      where: eq(placeMembers.userId, id),
+      with: {
+        place: {
+          with: {
+            categoryLinks: {
+              with: {
+                category: true,
+              },
+            },
+          },
+        },
+      },
+      orderBy: [asc(placeMembers.createdAt)],
     }),
     viewerUserId
       ? db.query.placeFollows.findMany({
@@ -610,6 +629,38 @@ export async function GET(_request: Request, context: RouteContext) {
         isFollowed: followedPlaceIdSet.has(mappedPlace.id),
         categories: mappedPlace.categories,
         categoryLabels: mappedPlace.categoryLabels,
+      };
+    }),
+    memberPlaceCount: targetPlaceMemberships.length,
+    memberPlaces: targetPlaceMemberships.map(({ place, role }) => {
+      const mappedPlace = mapPlaceCategoryData(place);
+      const metroArea = resolveMetroArea({
+        city: place.city,
+        state: place.state,
+      });
+
+      return {
+        place: {
+          id: mappedPlace.id,
+          type: mappedPlace.type,
+          slug: mappedPlace.slug,
+          name: mappedPlace.name,
+          logoImageUrl: mappedPlace.logoImageUrl,
+          address: mappedPlace.address,
+          city: mappedPlace.city,
+          state: mappedPlace.state,
+          website: mappedPlace.website,
+          instagram: mappedPlace.instagram,
+          metroAreaCity: metroArea?.city ?? null,
+          metroAreaState: metroArea?.state ?? null,
+          upcomingEventCount: 0,
+          updatedAt: mappedPlace.updatedAt,
+          isFollowed: followedPlaceIdSet.has(mappedPlace.id),
+          isMember: true,
+          categories: mappedPlace.categories,
+          categoryLabels: mappedPlace.categoryLabels,
+        },
+        role,
       };
     }),
     friends,

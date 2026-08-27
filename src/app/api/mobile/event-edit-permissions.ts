@@ -5,6 +5,7 @@ import { placeMembers, users } from "@/server/db/schema";
 export interface MobileEventEditPermissions {
   isAdmin: boolean;
   manageablePlaceIds: Set<string>;
+  placeRoleById: Map<string, "owner" | "manager" | "promoter" | "staff">;
 }
 
 export async function resolveMobileEventEditPermissions(
@@ -14,6 +15,7 @@ export async function resolveMobileEventEditPermissions(
     return {
       isAdmin: false,
       manageablePlaceIds: new Set<string>(),
+      placeRoleById: new Map(),
     };
   }
 
@@ -28,6 +30,7 @@ export async function resolveMobileEventEditPermissions(
       where: eq(placeMembers.userId, userId),
       columns: {
         placeId: true,
+        role: true,
       },
     }),
   ]);
@@ -35,6 +38,11 @@ export async function resolveMobileEventEditPermissions(
   return {
     isAdmin: user?.role === "admin",
     manageablePlaceIds: new Set(memberships.map((membership) => membership.placeId)),
+    placeRoleById: new Map(
+      memberships.map(
+        (membership) => [membership.placeId, membership.role] as const
+      )
+    ),
   };
 }
 

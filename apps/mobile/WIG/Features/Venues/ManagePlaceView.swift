@@ -185,7 +185,7 @@ struct ManagePlaceView: View {
                         .lineLimit(2)
                         .multilineTextAlignment(.leading)
 
-                    Text("Edit place profile")
+                    Text(placeDetail.currentUserRole == .promoter ? "View place profile" : "Edit place profile")
                         .font(.system(size: 13, weight: .medium))
                         .foregroundStyle(.white.opacity(0.45))
                 }
@@ -230,21 +230,23 @@ struct ManagePlaceView: View {
                     )
             }
 
-            // Camera badge
-            ZStack {
-                Circle()
-                    .fill(Color(red: 0.10, green: 0.10, blue: 0.12))
-                    .frame(width: 24, height: 24)
+            if placeDetail.currentUserRole != .promoter {
+                // Camera badge
+                ZStack {
+                    Circle()
+                        .fill(Color(red: 0.10, green: 0.10, blue: 0.12))
+                        .frame(width: 24, height: 24)
 
-                Circle()
-                    .fill(.white.opacity(0.12))
-                    .frame(width: 22, height: 22)
+                    Circle()
+                        .fill(.white.opacity(0.12))
+                        .frame(width: 22, height: 22)
 
-                Image(systemName: "camera.fill")
-                    .font(.system(size: 10, weight: .semibold))
-                    .foregroundStyle(.white.opacity(0.85))
+                    Image(systemName: "camera.fill")
+                        .font(.system(size: 10, weight: .semibold))
+                        .foregroundStyle(.white.opacity(0.85))
+                }
+                .offset(x: 4, y: 4)
             }
-            .offset(x: 4, y: 4)
         }
     }
 
