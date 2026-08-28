@@ -444,6 +444,17 @@ private struct EventCardContent: View {
                 Spacer(minLength: 0)
 
                 VStack(alignment: .leading, spacing: 3) {
+                    if let promo = event.promo, !promo.isEmpty {
+                        Text(promo)
+                            .font(.system(size: 11, weight: .bold))
+                            .foregroundStyle(.black)
+                            .lineLimit(1)
+                            .padding(.horizontal, 8)
+                            .frame(height: 22)
+                            .background(AppTheme.accentBlue, in: Capsule())
+                            .padding(.bottom, 2)
+                    }
+
                     if isAuthenticated {
                         EventSocialOverlayView(attendees: goingAttendees, size: .card)
                             .padding(.bottom, 4)

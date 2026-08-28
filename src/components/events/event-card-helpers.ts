@@ -6,6 +6,7 @@ export type EventCardItem = Omit<
 > & {
   friendsInterested?: EventListItem["friendsInterested"];
   isFollowed?: EventListItem["isFollowed"];
+  promo?: string | null;
 };
 
 export type SocialUser = {

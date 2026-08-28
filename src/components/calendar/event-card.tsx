@@ -92,6 +92,11 @@ export function EventCard({ event }: EventCardProps) {
           )}
 
           <div className="font-space-grotesk relative z-10 mt-auto space-y-1 px-4 pb-4 pt-28 text-white md:px-5 md:pb-5">
+            {event.promo ? (
+              <div className="mb-1 w-fit max-w-full truncate rounded-full bg-neon-teal px-2 py-1 text-[10px] font-bold leading-none text-black">
+                {event.promo}
+              </div>
+            ) : null}
             <EventSocialOverlay
               users={socialUsers}
               size="md"

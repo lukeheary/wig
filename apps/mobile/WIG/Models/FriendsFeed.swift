@@ -90,6 +90,29 @@ struct UserPlaceMembership: Decodable, Identifiable, Sendable {
     var id: String { place.listRowID }
 }
 
+struct PromotableEventsResponse: Decodable, Sendable {
+    let events: [PromotableEvent]
+}
+
+struct PromotableEvent: Decodable, Identifiable, Hashable, Sendable {
+    let id: UUID
+    let title: String
+    let startAt: Date
+    let placeName: String?
+    var isPromoted: Bool
+    var promo: String?
+}
+
+struct PromotedEventUpdateRequest: Encodable, Sendable {
+    let eventId: UUID
+    let promoted: Bool
+    let promo: String?
+}
+
+struct PromotedEventUpdateResponse: Decodable, Sendable {
+    let promoted: Bool
+}
+
 struct FriendUserSummary: Codable, Identifiable, Hashable, Sendable {
     enum FriendStatus: String, Codable, Hashable, Sendable {
         case none

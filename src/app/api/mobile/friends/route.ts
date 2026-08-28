@@ -20,18 +20,20 @@ import {
   metroAreas,
   placeFollows,
   placeMembers,
+  userPromotedEvents,
   userFriends,
   users,
 } from "@/server/db/schema";
-import {
-  createMobileMetroResolver,
-} from "@/app/api/mobile/metro";
+import { createMobileMetroResolver } from "@/app/api/mobile/metro";
 import {
   canEditMobileEvent,
   resolveMobileEventEditPermissions,
 } from "@/app/api/mobile/event-edit-permissions";
 import { eventTimeZone } from "@/lib/utils";
-import { mapEventCategoryData, mapPlaceCategoryData } from "@/server/utils/categories";
+import {
+  mapEventCategoryData,
+  mapPlaceCategoryData,
+} from "@/server/utils/categories";
 
 type UserSummary = {
   id: string;
@@ -130,7 +132,9 @@ function startOfDayInTimeZone(date: Date, timeZone: string) {
     return fallback;
   }
 
-  const naiveUtcMidnight = new Date(Date.UTC(parts.year, parts.month - 1, parts.day));
+  const naiveUtcMidnight = new Date(
+    Date.UTC(parts.year, parts.month - 1, parts.day)
+  );
   const offset = getTimeZoneOffsetMs(naiveUtcMidnight, timeZone) ?? 0;
 
   return new Date(naiveUtcMidnight.getTime() - offset);
@@ -162,7 +166,9 @@ function currentWeekBoundsInTimeZone(date: Date, timeZone: string) {
   };
 }
 
-function userSummary(user: typeof users.$inferSelect | null | undefined): UserSummary | null {
+function userSummary(
+  user: typeof users.$inferSelect | null | undefined
+): UserSummary | null {
   if (!user) return null;
 
   const name =
@@ -220,7 +226,13 @@ export async function GET() {
   }
 
   const now = new Date();
-  const [currentUser, availableMetroAreas, cityCoordinates, profileRecord, friendships] = await Promise.all([
+  const [
+    currentUser,
+    availableMetroAreas,
+    cityCoordinates,
+    profileRecord,
+    friendships,
+  ] = await Promise.all([
     db.query.users.findFirst({
       where: eq(users.id, userId),
       columns: {
@@ -250,7 +262,10 @@ export async function GET() {
       where: eq(users.id, userId),
     }),
     db.query.userFriends.findMany({
-      where: or(eq(userFriends.userId, userId), eq(userFriends.friendUserId, userId)),
+      where: or(
+        eq(userFriends.userId, userId),
+        eq(userFriends.friendUserId, userId)
+      ),
       orderBy: [asc(userFriends.createdAt)],
       with: {
         user: true,
@@ -327,7 +342,10 @@ export async function GET() {
     editPermissions,
   ] = await Promise.all([
     db.query.eventRsvps.findMany({
-      where: and(eq(eventRsvps.userId, userId), inArray(eventRsvps.status, ["going", "interested"])),
+      where: and(
+        eq(eventRsvps.userId, userId),
+        inArray(eventRsvps.status, ["going", "interested"])
+      ),
       with: {
         event: {
           with: {
@@ -344,7 +362,10 @@ export async function GET() {
       orderBy: [asc(eventRsvps.updatedAt)],
     }),
     db.query.eventRsvps.findMany({
-      where: and(eq(eventRsvps.userId, userId), inArray(eventRsvps.status, ["going", "interested"])),
+      where: and(
+        eq(eventRsvps.userId, userId),
+        inArray(eventRsvps.status, ["going", "interested"])
+      ),
       with: {
         event: {
           with: {
@@ -408,38 +429,48 @@ export async function GET() {
   const { weekEnd } = currentWeekBoundsInTimeZone(now, feedTimeZone);
   const promotingEventsRaw =
     promoterPlaceIds.length > 0
-      ? await db.query.events.findMany({
-          where: and(
-            or(
-              inArray(events.venueId, promoterPlaceIds),
-              inArray(events.organizerId, promoterPlaceIds)
-            ),
-            gte(events.startAt, now),
-            lt(events.startAt, weekEnd),
-            eq(events.visibility, "public"),
-            eq(events.status, "active")
-          ),
-          with: {
-            venue: true,
-            organizer: true,
-            categoryLinks: {
-              with: {
-                category: true,
+      ? await db.query.userPromotedEvents
+          .findMany({
+            where: eq(userPromotedEvents.userId, userId),
+            with: {
+              event: {
+                with: {
+                  venue: true,
+                  organizer: true,
+                  categoryLinks: { with: { category: true } },
+                },
               },
             },
-          },
-          orderBy: [asc(events.startAt)],
-        })
+          })
+          .then((selections) =>
+            selections
+              .filter(
+                ({ event }) =>
+                  event.startAt >= now &&
+                  event.startAt < weekEnd &&
+                  event.visibility === "public" &&
+                  event.status === "active" &&
+                  ((event.venueId !== null &&
+                    promoterPlaceIds.includes(event.venueId)) ||
+                    (event.organizerId !== null &&
+                      promoterPlaceIds.includes(event.organizerId)))
+              )
+              .sort(
+                (a, b) => a.event.startAt.getTime() - b.event.startAt.getTime()
+              )
+          )
       : [];
 
-  const followedPlaceIdSet = new Set(followedPlaces.map((follow) => follow.placeId));
+  const followedPlaceIdSet = new Set(
+    followedPlaces.map((follow) => follow.placeId)
+  );
   const upcomingEventIds = upcomingEventsRaw.map((event) => event.id);
   const pastEventIds = pastEventsRaw.map((event) => event.id);
   const allEventIds = [
     ...new Set([
       ...upcomingEventIds,
       ...pastEventIds,
-      ...promotingEventsRaw.map((event) => event.id),
+      ...promotingEventsRaw.map(({ event }) => event.id),
     ]),
   ];
 
@@ -457,42 +488,49 @@ export async function GET() {
       : []
   );
 
-  const [currentUserRsvps, mirroredPartnerRsvps, friendRsvps] = allEventIds.length
-    ? await Promise.all([
-        db.query.eventRsvps.findMany({
-          where: and(inArray(eventRsvps.eventId, allEventIds), eq(eventRsvps.userId, userId)),
-          with: {
-            user: true,
-          },
-        }),
-        db.query.eventRsvps.findMany({
-          where: and(
-            inArray(eventRsvps.eventId, allEventIds),
-            eq(eventRsvps.partnerRsvpByUserId, userId),
-            inArray(eventRsvps.status, ["going", "interested"])
-          ),
-          with: {
-            user: true,
-          },
-        }),
-        acceptedFriendIds.length > 0
-          ? db.query.eventRsvps.findMany({
-              where: and(
-                inArray(eventRsvps.eventId, allEventIds),
-                inArray(eventRsvps.userId, acceptedFriendIds),
-                inArray(eventRsvps.status, ["going", "interested"])
-              ),
-              with: {
-                user: true,
-              },
-            })
-          : Promise.resolve([]),
-      ])
-    : [[], [], []];
+  const [currentUserRsvps, mirroredPartnerRsvps, friendRsvps] =
+    allEventIds.length
+      ? await Promise.all([
+          db.query.eventRsvps.findMany({
+            where: and(
+              inArray(eventRsvps.eventId, allEventIds),
+              eq(eventRsvps.userId, userId)
+            ),
+            with: {
+              user: true,
+            },
+          }),
+          db.query.eventRsvps.findMany({
+            where: and(
+              inArray(eventRsvps.eventId, allEventIds),
+              eq(eventRsvps.partnerRsvpByUserId, userId),
+              inArray(eventRsvps.status, ["going", "interested"])
+            ),
+            with: {
+              user: true,
+            },
+          }),
+          acceptedFriendIds.length > 0
+            ? db.query.eventRsvps.findMany({
+                where: and(
+                  inArray(eventRsvps.eventId, allEventIds),
+                  inArray(eventRsvps.userId, acceptedFriendIds),
+                  inArray(eventRsvps.status, ["going", "interested"])
+                ),
+                with: {
+                  user: true,
+                },
+              })
+            : Promise.resolve([]),
+        ])
+      : [[], [], []];
 
   const currentUserRsvpMap = new Map<
     string,
-    { status: "going" | "interested" | "not_going"; notGoingReason: string | null }
+    {
+      status: "going" | "interested" | "not_going";
+      notGoingReason: string | null;
+    }
   >();
   for (const rsvp of currentUserRsvps) {
     currentUserRsvpMap.set(rsvp.eventId, {
@@ -508,10 +546,15 @@ export async function GET() {
     }
 
     const attendees = socialRsvpsMap.get(rsvp.eventId)!;
-    const existingIndex = attendees.findIndex((attendee: any) => attendee.userId === rsvp.userId);
+    const existingIndex = attendees.findIndex(
+      (attendee: any) => attendee.userId === rsvp.userId
+    );
 
     if (existingIndex >= 0) {
-      if (attendees[existingIndex].status === "interested" && rsvp.status === "going") {
+      if (
+        attendees[existingIndex].status === "interested" &&
+        rsvp.status === "going"
+      ) {
         attendees[existingIndex] = rsvp;
       }
       return;
@@ -520,8 +563,17 @@ export async function GET() {
     attendees.push(rsvp);
   };
 
-  for (const rsvp of [...currentUserRsvps, ...mirroredPartnerRsvps, ...friendRsvps]) {
-    if (!rsvp.user || (rsvp.status !== "going" && rsvp.status !== "interested" && rsvp.status !== "not_going")) {
+  for (const rsvp of [
+    ...currentUserRsvps,
+    ...mirroredPartnerRsvps,
+    ...friendRsvps,
+  ]) {
+    if (
+      !rsvp.user ||
+      (rsvp.status !== "going" &&
+        rsvp.status !== "interested" &&
+        rsvp.status !== "not_going")
+    ) {
       continue;
     }
 
@@ -542,7 +594,7 @@ export async function GET() {
     });
   }
 
-  const mapMobileEvent = (event: typeof upcomingEventsRaw[number]) => {
+  const mapMobileEvent = (event: (typeof upcomingEventsRaw)[number]) => {
     const mapped = mapEventCategoryData(event);
     const socialRsvps = socialRsvpsMap.get(mapped.id) ?? [];
     const currentUserRsvp = currentUserRsvpMap.get(mapped.id) ?? null;
@@ -585,14 +637,21 @@ export async function GET() {
       }),
       isFollowed:
         (mapped.venueId ? followedPlaceIdSet.has(mapped.venueId) : false) ||
-        (mapped.organizerId ? followedPlaceIdSet.has(mapped.organizerId) : false),
-      isCreatedByCurrentUser: Boolean(userId) && mapped.createdByUserId === userId,
+        (mapped.organizerId
+          ? followedPlaceIdSet.has(mapped.organizerId)
+          : false),
+      isCreatedByCurrentUser:
+        Boolean(userId) && mapped.createdByUserId === userId,
       userRsvpStatus: currentUserRsvp?.status ?? null,
       userRsvpNotGoingReason: currentUserRsvp?.notGoingReason ?? null,
       currentUserReview: currentUserReviewMap.get(mapped.id) ?? null,
       friendsGoing: socialRsvps.filter((rsvp: any) => rsvp.status === "going"),
-      friendsInterested: socialRsvps.filter((rsvp: any) => rsvp.status === "interested"),
-      friendsNotGoing: socialRsvps.filter((rsvp: any) => rsvp.status === "not_going"),
+      friendsInterested: socialRsvps.filter(
+        (rsvp: any) => rsvp.status === "interested"
+      ),
+      friendsNotGoing: socialRsvps.filter(
+        (rsvp: any) => rsvp.status === "not_going"
+      ),
     };
   };
 
@@ -603,7 +662,10 @@ export async function GET() {
     followingCount: followedPlaces.length,
     followedPlaces: followedPlaces.map(({ place }) => {
       const mappedPlace = mapPlaceCategoryData(place);
-      const metroArea = resolveMetroArea({ city: place.city, state: place.state });
+      const metroArea = resolveMetroArea({
+        city: place.city,
+        state: place.state,
+      });
 
       return {
         id: mappedPlace.id,
@@ -628,7 +690,10 @@ export async function GET() {
     memberPlaceCount: placeMemberships.length,
     memberPlaces: placeMemberships.map(({ place, role }) => {
       const mappedPlace = mapPlaceCategoryData(place);
-      const metroArea = resolveMetroArea({ city: place.city, state: place.state });
+      const metroArea = resolveMetroArea({
+        city: place.city,
+        state: place.state,
+      });
 
       return {
         place: {
@@ -657,7 +722,10 @@ export async function GET() {
     friends: [...acceptedByUserId.values()],
     receivedRequests,
     sentRequests,
-    promotingEvents: promotingEventsRaw.map(mapMobileEvent),
+    promotingEvents: promotingEventsRaw.map(({ event, promo }) => ({
+      ...mapMobileEvent(event),
+      promo,
+    })),
     upcomingEvents: upcomingEventsRaw.map(mapMobileEvent),
     pastEvents: pastEventsRaw.map(mapMobileEvent),
   });

@@ -43,6 +43,7 @@ struct ProfileView: View {
     @State private var friendRequestActionErrorMessage: String?
     @State private var isAdminSettingsPresented = false
     @State private var isEditProfilePresented = false
+    @State private var isManagePromotingPresented = false
     @State private var isHelpAndFeedbackPresented = false
     @State private var isSignOutConfirmationPresented = false
     @State private var profileShareURL: URL?
@@ -234,6 +235,9 @@ struct ProfileView: View {
                         NotificationCenter.default.post(name: .activationDidChange, object: nil)
                         isEditProfilePresented = false
                     }
+                }
+                .navigationDestination(isPresented: $isManagePromotingPresented) {
+                    ManagePromotingView()
                 }
                 .navigationDestination(isPresented: $isHelpAndFeedbackPresented) {
                     MobileHelpAndFeedbackView()
@@ -805,6 +809,18 @@ struct ProfileView: View {
                 .tint(.white)
             }
 
+            if case .loaded(let response) = viewModel.state,
+               response.memberPlaces?.contains(where: { $0.role == .promoter }) == true
+            {
+                Button {
+                    isManagePromotingPresented = true
+                } label: {
+                    Label("Manage Promoting", systemImage: "megaphone")
+                        .foregroundStyle(.white)
+                }
+                .tint(.white)
+            }
+
             if appSession.isAdmin {
                 Button {
                     isAdminSettingsPresented = true
@@ -853,6 +869,205 @@ struct ProfileView: View {
 
         return error.localizedDescription.trimmingCharacters(in: .whitespacesAndNewlines)
             .localizedCaseInsensitiveCompare("cancelled") == .orderedSame
+    }
+}
+
+private struct ManagePromotingView: View {
+    @Environment(\.apiClient) private var apiClient
+    @Environment(\.dismiss) private var dismiss
+    @State private var events: [PromotableEvent] = []
+    @State private var isLoading = true
+    @State private var updatingEventID: UUID?
+    @State private var errorMessage: String?
+
+    var body: some View {
+        VStack(spacing: 0) {
+            ZStack {
+                Text("Manage Promoting")
+                    .font(.system(size: 17, weight: .semibold))
+                    .foregroundStyle(.white)
+
+                HStack {
+                    Button { dismiss() } label: {
+                        Image(systemName: "chevron.left")
+                            .font(.system(size: 18, weight: .bold))
+                            .foregroundStyle(.white)
+                            .frame(width: 46, height: 46)
+                            .profileLiquidGlass(in: Circle())
+                    }
+                    .buttonStyle(.plain)
+                    Spacer()
+                }
+            }
+            .padding(.horizontal, 16)
+            .padding(.top, 12)
+
+            Text("Choose upcoming events from places where you’re a promoter. Only selections happening this week appear on your profile.")
+                .font(.system(size: 13, weight: .medium))
+                .foregroundStyle(.white.opacity(0.55))
+                .frame(maxWidth: .infinity, alignment: .leading)
+                .padding(.horizontal, 20)
+                .padding(.top, 18)
+                .padding(.bottom, 12)
+
+            Group {
+                if isLoading {
+                    Spacer()
+                    ProgressView().tint(.white)
+                    Spacer()
+                } else if events.isEmpty {
+                    Spacer()
+                    ContentUnavailableView(
+                        "No Eligible Events",
+                        systemImage: "calendar.badge.exclamationmark",
+                        description: Text("Upcoming events from your promoter places will appear here.")
+                    )
+                    .foregroundStyle(.white)
+                    Spacer()
+                } else {
+                    ScrollView {
+                        LazyVStack(spacing: 2) {
+                            ForEach(events) { event in
+                                VStack(spacing: 0) {
+                                    Button {
+                                        Task { await toggle(event) }
+                                    } label: {
+                                        HStack(spacing: 12) {
+                                            VStack(alignment: .leading, spacing: 3) {
+                                                Text(event.title)
+                                                    .font(.system(size: 15, weight: .semibold))
+                                                    .foregroundStyle(.white)
+                                                    .lineLimit(1)
+                                                Text(eventSubtitle(event))
+                                                    .font(.system(size: 12, weight: .medium))
+                                                    .foregroundStyle(.white.opacity(0.55))
+                                                    .lineLimit(1)
+                                            }
+                                            Spacer(minLength: 8)
+                                            if updatingEventID == event.id {
+                                                ProgressView().tint(.white)
+                                            } else {
+                                                Image(systemName: event.isPromoted ? "checkmark.circle.fill" : "circle")
+                                                    .font(.system(size: 22, weight: .semibold))
+                                                    .foregroundStyle(event.isPromoted ? Color(red: 0.49, green: 0.78, blue: 0.98) : .white.opacity(0.35))
+                                            }
+                                        }
+                                        .padding(.horizontal, 20)
+                                        .frame(minHeight: 62)
+                                        .contentShape(Rectangle())
+                                    }
+                                    .buttonStyle(.plain)
+                                    .disabled(updatingEventID != nil)
+
+                                    if event.isPromoted {
+                                        HStack(spacing: 8) {
+                                            TextField(
+                                                "Promo, e.g. Free with RSVP",
+                                                text: promoBinding(for: event.id)
+                                            )
+                                            .font(.system(size: 14, weight: .medium))
+                                            .foregroundStyle(.white)
+                                            .padding(.horizontal, 12)
+                                            .frame(height: 40)
+                                            .background(Color.white.opacity(0.07), in: RoundedRectangle(cornerRadius: 12, style: .continuous))
+
+                                            Button("Save") {
+                                                Task { await savePromo(for: event.id) }
+                                            }
+                                            .font(.system(size: 13, weight: .bold))
+                                            .foregroundStyle(AppTheme.accentBlue)
+                                            .disabled(updatingEventID != nil)
+                                        }
+                                        .padding(.horizontal, 20)
+                                        .padding(.bottom, 10)
+                                    }
+                                }
+                            }
+                        }
+                        .padding(.bottom, 32)
+                    }
+                }
+            }
+        }
+        .background(ProfileTheme.background.ignoresSafeArea())
+        .toolbar(.hidden, for: .navigationBar)
+        .task { await load() }
+        .alert("Unable to Update", isPresented: Binding(
+            get: { errorMessage != nil },
+            set: { if !$0 { errorMessage = nil } }
+        )) {
+            Button("OK", role: .cancel) {}
+        } message: {
+            Text(errorMessage ?? "Please try again.")
+        }
+    }
+
+    private func eventSubtitle(_ event: PromotableEvent) -> String {
+        let date = event.startAt.formatted(.dateTime.weekday(.abbreviated).month(.abbreviated).day().hour().minute())
+        return [date, event.placeName].compactMap { $0 }.joined(separator: " · ")
+    }
+
+    private func load() async {
+        do {
+            events = try await apiClient.send(APIClient.mobilePromotableEvents()).events
+        } catch {
+            errorMessage = error.localizedDescription
+        }
+        isLoading = false
+    }
+
+    private func toggle(_ event: PromotableEvent) async {
+        updatingEventID = event.id
+        let promoted = !event.isPromoted
+        do {
+            _ = try await apiClient.send(
+                try APIClient.setMobileEventPromoted(
+                    eventID: event.id,
+                    promoted: promoted,
+                    promo: event.promo
+                )
+            )
+            if let index = events.firstIndex(where: { $0.id == event.id }) {
+                events[index].isPromoted = promoted
+            }
+            ProfileViewModel.invalidateCache()
+            UserProfileViewModel.invalidateAllCaches()
+            NotificationCenter.default.post(name: .appDataDidChange, object: nil)
+        } catch {
+            errorMessage = error.localizedDescription
+        }
+        updatingEventID = nil
+    }
+
+    private func promoBinding(for eventID: UUID) -> Binding<String> {
+        Binding(
+            get: { events.first(where: { $0.id == eventID })?.promo ?? "" },
+            set: { value in
+                if let index = events.firstIndex(where: { $0.id == eventID }) {
+                    events[index].promo = String(value.prefix(255))
+                }
+            }
+        )
+    }
+
+    private func savePromo(for eventID: UUID) async {
+        guard let event = events.first(where: { $0.id == eventID }) else { return }
+        updatingEventID = eventID
+        do {
+            _ = try await apiClient.send(
+                try APIClient.setMobileEventPromoted(
+                    eventID: eventID,
+                    promoted: true,
+                    promo: event.promo?.trimmingCharacters(in: .whitespacesAndNewlines)
+                )
+            )
+            ProfileViewModel.invalidateCache()
+            UserProfileViewModel.invalidateAllCaches()
+            NotificationCenter.default.post(name: .appDataDidChange, object: nil)
+        } catch {
+            errorMessage = error.localizedDescription
+        }
+        updatingEventID = nil
     }
 }
 

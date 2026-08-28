@@ -385,6 +385,24 @@ struct APIClient: Sendable {
         )
     }
 
+    static func mobilePromotableEvents() -> Endpoint<PromotableEventsResponse> {
+        Endpoint(path: "/api/mobile/profile/promoting")
+    }
+
+    static func setMobileEventPromoted(
+        eventID: UUID,
+        promoted: Bool,
+        promo: String? = nil
+    ) throws -> Endpoint<PromotedEventUpdateResponse> {
+        Endpoint(
+            path: "/api/mobile/profile/promoting",
+            method: .patch,
+            body: try JSONEncoder().encode(
+                PromotedEventUpdateRequest(eventId: eventID, promoted: promoted, promo: promo)
+            )
+        )
+    }
+
     static func mobileAdminStatus() -> Endpoint<MobileAdminStatusResponse> {
         Endpoint(
             path: "/api/mobile/admin-status",

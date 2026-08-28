@@ -20,6 +20,7 @@ import {
   metroAreas,
   placeFollows,
   placeMembers,
+  userPromotedEvents,
   userFriends,
   userFriendsMutedNotifications,
   users,
@@ -432,28 +433,36 @@ export async function GET(_request: Request, context: RouteContext) {
   const { weekEnd } = currentWeekBoundsInTimeZone(now, feedTimeZone);
   const promotingEventsRaw =
     promoterPlaceIds.length > 0
-      ? await db.query.events.findMany({
-          where: and(
-            or(
-              inArray(events.venueId, promoterPlaceIds),
-              inArray(events.organizerId, promoterPlaceIds)
-            ),
-            gte(events.startAt, now),
-            lt(events.startAt, weekEnd),
-            eq(events.visibility, "public"),
-            eq(events.status, "active")
-          ),
-          with: {
-            venue: true,
-            organizer: true,
-            categoryLinks: {
-              with: {
-                category: true,
+      ? await db.query.userPromotedEvents
+          .findMany({
+            where: eq(userPromotedEvents.userId, id),
+            with: {
+              event: {
+                with: {
+                  venue: true,
+                  organizer: true,
+                  categoryLinks: { with: { category: true } },
+                },
               },
             },
-          },
-          orderBy: [asc(events.startAt)],
-        })
+          })
+          .then((selections) =>
+            selections
+              .filter(
+                ({ event }) =>
+                  event.startAt >= now &&
+                  event.startAt < weekEnd &&
+                  event.visibility === "public" &&
+                  event.status === "active" &&
+                  ((event.venueId !== null &&
+                    promoterPlaceIds.includes(event.venueId)) ||
+                    (event.organizerId !== null &&
+                      promoterPlaceIds.includes(event.organizerId)))
+              )
+              .sort(
+                (a, b) => a.event.startAt.getTime() - b.event.startAt.getTime()
+              )
+          )
       : [];
 
   const followedPlaceIdSet = new Set(
@@ -471,7 +480,7 @@ export async function GET(_request: Request, context: RouteContext) {
     ...new Set([
       ...upcomingEventsRaw.map((event) => event.id),
       ...pastEventsRaw.map((event) => event.id),
-      ...promotingEventsRaw.map((event) => event.id),
+      ...promotingEventsRaw.map(({ event }) => event.id),
     ]),
   ];
 
@@ -733,7 +742,10 @@ export async function GET(_request: Request, context: RouteContext) {
       };
     }),
     friends,
-    promotingEvents: promotingEventsRaw.map(mapMobileEvent),
+    promotingEvents: promotingEventsRaw.map(({ event, promo }) => ({
+      ...mapMobileEvent(event),
+      promo,
+    })),
     upcomingEvents: upcomingEventsRaw.map(mapMobileEvent),
     pastEvents: pastEventsRaw.map(mapMobileEvent),
   });
