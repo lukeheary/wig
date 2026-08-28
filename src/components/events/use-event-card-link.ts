@@ -7,11 +7,18 @@ import {
   withReturnTo,
 } from "@/lib/navigation";
 
-export function useEventCardLink(eventPublicId: string) {
+export function useEventCardLink(
+  eventPublicId: string,
+  profilePromo?: string | null
+) {
   const pathname = usePathname();
   const searchParams = useSearchParams();
   const returnTo = buildReturnTo(pathname, searchParams);
-  const eventHref = withReturnTo(`/event/${eventPublicId}`, returnTo);
+  const promo = profilePromo?.trim();
+  const eventPath = promo
+    ? `/event/${eventPublicId}?profilePromo=${encodeURIComponent(promo)}`
+    : `/event/${eventPublicId}`;
+  const eventHref = withReturnTo(eventPath, returnTo);
 
   const handleClick = () => {
     if (typeof window === "undefined") return;

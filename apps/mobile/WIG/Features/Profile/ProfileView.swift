@@ -876,8 +876,10 @@ private struct ManagePromotingView: View {
     @Environment(\.apiClient) private var apiClient
     @Environment(\.dismiss) private var dismiss
     @State private var events: [PromotableEvent] = []
+    @State private var savedEvents: [PromotableEvent] = []
+    @State private var editingPromoEventIDs = Set<UUID>()
     @State private var isLoading = true
-    @State private var updatingEventID: UUID?
+    @State private var isSaving = false
     @State private var errorMessage: String?
 
     var body: some View {
@@ -897,6 +899,26 @@ private struct ManagePromotingView: View {
                     }
                     .buttonStyle(.plain)
                     Spacer()
+
+                    Button {
+                        Task { await saveChanges() }
+                    } label: {
+                        if isSaving {
+                            ProgressView()
+                                .tint(.white)
+                                .frame(width: 66, height: 46)
+                                .profileLiquidGlass(in: Capsule())
+                        } else {
+                            Text("Save")
+                                .font(.system(size: 14, weight: .bold))
+                                .foregroundStyle(hasChanges ? .white : .white.opacity(0.35))
+                                .padding(.horizontal, 16)
+                                .frame(height: 46)
+                                .profileLiquidGlass(in: Capsule())
+                        }
+                    }
+                    .buttonStyle(.plain)
+                    .disabled(!hasChanges || isSaving)
                 }
             }
             .padding(.horizontal, 16)
@@ -926,13 +948,18 @@ private struct ManagePromotingView: View {
                     Spacer()
                 } else {
                     ScrollView {
-                        LazyVStack(spacing: 2) {
-                            ForEach(events) { event in
-                                VStack(spacing: 0) {
-                                    Button {
-                                        Task { await toggle(event) }
-                                    } label: {
-                                        HStack(spacing: 12) {
+                        LazyVStack(alignment: .leading, spacing: 18) {
+                            ForEach(promotionWeekGroups) { group in
+                                VStack(alignment: .leading, spacing: 2) {
+                                    Text(group.label)
+                                        .font(.system(size: 17, weight: .bold))
+                                        .foregroundStyle(.white)
+                                        .padding(.horizontal, 20)
+                                        .padding(.bottom, 2)
+
+                                    ForEach(group.events) { event in
+                                        VStack(spacing: 0) {
+                                    HStack(spacing: 12) {
                                             RemoteImageView(url: event.coverImageURL) { image in
                                                 image
                                                     .resizable()
@@ -963,21 +990,21 @@ private struct ManagePromotingView: View {
                                                     .lineLimit(1)
                                             }
                                             Spacer(minLength: 8)
-                                            if updatingEventID == event.id {
-                                                ProgressView().tint(.white)
-                                            } else {
+                                            Button {
+                                                toggle(event)
+                                            } label: {
                                                 Image(systemName: event.isPromoted ? "checkmark.circle.fill" : "circle")
                                                     .font(.system(size: 22, weight: .semibold))
                                                     .foregroundStyle(event.isPromoted ? Color(red: 0.49, green: 0.78, blue: 0.98) : .white.opacity(0.35))
+                                                    .frame(width: 38, height: 38)
+                                                    .contentShape(Circle())
                                             }
+                                            .buttonStyle(.plain)
+                                            .disabled(isSaving)
                                         }
                                         .padding(.horizontal, 20)
                                         .padding(.vertical, 5)
                                         .frame(minHeight: 52)
-                                        .contentShape(Rectangle())
-                                    }
-                                    .buttonStyle(.plain)
-                                    .disabled(updatingEventID != nil)
 
                                     if event.isPromoted {
                                         HStack(spacing: 8) {
@@ -990,16 +1017,24 @@ private struct ManagePromotingView: View {
                                             .padding(.horizontal, 12)
                                             .frame(height: 40)
                                             .background(Color.white.opacity(0.07), in: RoundedRectangle(cornerRadius: 12, style: .continuous))
+                                            .disabled(!editingPromoEventIDs.contains(event.id) || isSaving)
 
-                                            Button("Save") {
-                                                Task { await savePromo(for: event.id) }
+                                            Button(editingPromoEventIDs.contains(event.id) ? "Done" : "Edit") {
+                                                if editingPromoEventIDs.contains(event.id) {
+                                                    editingPromoEventIDs.remove(event.id)
+                                                } else {
+                                                    editingPromoEventIDs.insert(event.id)
+                                                }
                                             }
                                             .font(.system(size: 13, weight: .bold))
                                             .foregroundStyle(AppTheme.accentBlue)
-                                            .disabled(updatingEventID != nil)
+                                            .disabled(isSaving)
                                         }
                                         .padding(.horizontal, 20)
+                                        .padding(.top, 4)
                                         .padding(.bottom, 10)
+                                    }
+                                        }
                                     }
                                 }
                             }
@@ -1027,10 +1062,42 @@ private struct ManagePromotingView: View {
         return [date, event.placeName].compactMap { $0 }.joined(separator: " · ")
     }
 
+    private var promotionWeekGroups: [PromotionWeekGroup] {
+        var calendar = Calendar(identifier: .gregorian)
+        calendar.firstWeekday = 2
+        let now = Date()
+        let currentWeekStart = calendar.dateInterval(of: .weekOfYear, for: now)?.start ?? now
+        let sortedEvents = events.sorted { $0.startAt < $1.startAt }
+
+        return sortedEvents.reduce(into: [PromotionWeekGroup]()) { groups, event in
+            let eventWeekStart = calendar.dateInterval(of: .weekOfYear, for: event.startAt)?.start ?? event.startAt
+            let weeksAway = calendar.dateComponents(
+                [.weekOfYear],
+                from: currentWeekStart,
+                to: eventWeekStart
+            ).weekOfYear ?? 0
+            let label: String
+            if weeksAway <= 0 {
+                label = "This Week"
+            } else if weeksAway == 1 {
+                label = "Next Week"
+            } else {
+                label = "In \(weeksAway) Weeks"
+            }
+
+            if let lastIndex = groups.indices.last, groups[lastIndex].label == label {
+                groups[lastIndex].events.append(event)
+            } else {
+                groups.append(PromotionWeekGroup(label: label, events: [event]))
+            }
+        }
+    }
+
     private func load() async {
         do {
             events = try await apiClient.send(APIClient.mobilePromotableEvents()).events
             await hydrateMissingEventImages()
+            savedEvents = events
         } catch {
             errorMessage = error.localizedDescription
         }
@@ -1061,27 +1128,14 @@ private struct ManagePromotingView: View {
         }
     }
 
-    private func toggle(_ event: PromotableEvent) async {
-        updatingEventID = event.id
-        let promoted = !event.isPromoted
-        do {
-            _ = try await apiClient.send(
-                try APIClient.setMobileEventPromoted(
-                    eventID: event.id,
-                    promoted: promoted,
-                    promo: event.promo
-                )
-            )
-            if let index = events.firstIndex(where: { $0.id == event.id }) {
-                events[index].isPromoted = promoted
-            }
-            ProfileViewModel.invalidateCache()
-            UserProfileViewModel.invalidateAllCaches()
-            NotificationCenter.default.post(name: .appDataDidChange, object: nil)
-        } catch {
-            errorMessage = error.localizedDescription
+    private func toggle(_ event: PromotableEvent) {
+        guard let index = events.firstIndex(where: { $0.id == event.id }) else { return }
+        events[index].isPromoted.toggle()
+        if events[index].isPromoted {
+            editingPromoEventIDs.insert(event.id)
+        } else {
+            editingPromoEventIDs.remove(event.id)
         }
-        updatingEventID = nil
     }
 
     private func promoBinding(for eventID: UUID) -> Binding<String> {
@@ -1095,25 +1149,53 @@ private struct ManagePromotingView: View {
         )
     }
 
-    private func savePromo(for eventID: UUID) async {
-        guard let event = events.first(where: { $0.id == eventID }) else { return }
-        updatingEventID = eventID
+    private var hasChanges: Bool {
+        events.contains { event in
+            guard let saved = savedEvents.first(where: { $0.id == event.id }) else { return true }
+            return event.isPromoted != saved.isPromoted || normalizedPromo(event.promo) != normalizedPromo(saved.promo)
+        }
+    }
+
+    private func normalizedPromo(_ promo: String?) -> String? {
+        let value = promo?.trimmingCharacters(in: .whitespacesAndNewlines) ?? ""
+        return value.isEmpty ? nil : value
+    }
+
+    private func saveChanges() async {
+        let changedEvents = events.filter { event in
+            guard let saved = savedEvents.first(where: { $0.id == event.id }) else { return true }
+            return event.isPromoted != saved.isPromoted || normalizedPromo(event.promo) != normalizedPromo(saved.promo)
+        }
+        guard !changedEvents.isEmpty else { return }
+
+        isSaving = true
         do {
-            _ = try await apiClient.send(
-                try APIClient.setMobileEventPromoted(
-                    eventID: eventID,
-                    promoted: true,
-                    promo: event.promo?.trimmingCharacters(in: .whitespacesAndNewlines)
+            for event in changedEvents {
+                _ = try await apiClient.send(
+                    try APIClient.setMobileEventPromoted(
+                        eventID: event.id,
+                        promoted: event.isPromoted,
+                        promo: normalizedPromo(event.promo)
+                    )
                 )
-            )
+            }
+            savedEvents = events
+            editingPromoEventIDs.removeAll()
             ProfileViewModel.invalidateCache()
             UserProfileViewModel.invalidateAllCaches()
             NotificationCenter.default.post(name: .appDataDidChange, object: nil)
+            dismiss()
         } catch {
             errorMessage = error.localizedDescription
         }
-        updatingEventID = nil
+        isSaving = false
     }
+}
+
+private struct PromotionWeekGroup: Identifiable {
+    let label: String
+    var events: [PromotableEvent]
+    var id: String { label }
 }
 
 private struct MobileBlockedUsersView: View {

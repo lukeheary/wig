@@ -361,7 +361,10 @@ function MobileRailScroller({
 }
 
 function HomeMiniEventCard({ event }: { event: EventCardItem }) {
-  const { eventHref, handleClick } = useEventCardLink(event.publicId);
+  const { eventHref, handleClick } = useEventCardLink(
+    event.publicId,
+    event.promo
+  );
   const dayOfWeek = formatEventDate(
     event.startAt,
     event.timeZone,

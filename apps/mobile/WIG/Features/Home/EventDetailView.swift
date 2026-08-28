@@ -625,6 +625,19 @@ struct EventDetailView: View {
                 .lineSpacing(0.5)
                 .fixedSize(horizontal: false, vertical: true)
 
+            if let promo = currentEvent.promo?.trimmingCharacters(in: .whitespacesAndNewlines),
+               !promo.isEmpty
+            {
+                Text(promo)
+                    .font(.system(size: 12, weight: .bold))
+                    .foregroundStyle(.black)
+                    .lineLimit(2)
+                    .padding(.horizontal, 10)
+                    .padding(.vertical, 6)
+                    .background(AppTheme.accentBlue, in: Capsule())
+                    .padding(.top, 8)
+            }
+
             HStack(alignment: .firstTextBaseline, spacing: 6) {
                 Text(compactEventDateTimeText)
                     .font(.system(size: 15, weight: .medium))
@@ -1790,7 +1803,8 @@ struct EventDetailView: View {
             userRsvpNotGoingReason: currentEvent.userRsvpNotGoingReason,
             friendsGoing: currentEvent.friendsGoing,
             friendsInterested: currentEvent.friendsInterested,
-            friendsNotGoing: currentEvent.friendsNotGoing
+            friendsNotGoing: currentEvent.friendsNotGoing,
+            promo: currentEvent.promo
         )
     }
 }

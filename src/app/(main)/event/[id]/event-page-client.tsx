@@ -128,6 +128,7 @@ export default function EventPage() {
   const [isImageModalOpen, setIsImageModalOpen] = useState(false);
   const [isShareCopied, setIsShareCopied] = useState(false);
   const returnTo = searchParams.get("returnTo");
+  const profilePromo = searchParams.get("profilePromo")?.trim().slice(0, 255);
   const signInHref = withReturnTo(
     "/sign-in",
     buildReturnTo(pathname, searchParams)
@@ -1005,6 +1006,12 @@ export default function EventPage() {
                 ) : null}
               </h1>
             </div>
+
+            {profilePromo ? (
+              <div className="mt-2 w-fit max-w-full rounded-full bg-neon-teal px-3 py-1.5 text-sm font-bold leading-tight text-black md:text-base">
+                {profilePromo}
+              </div>
+            ) : null}
 
             <div
               className={cn(

@@ -27,7 +27,10 @@ interface EventCardProps {
 }
 
 export function EventCard({ event }: EventCardProps) {
-  const { eventHref, handleClick } = useEventCardLink(event.publicId);
+  const { eventHref, handleClick } = useEventCardLink(
+    event.publicId,
+    event.promo
+  );
   const dayOfWeek = formatEventDate(
     event.startAt,
     event.timeZone,
