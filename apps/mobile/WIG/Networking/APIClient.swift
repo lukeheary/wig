@@ -355,10 +355,23 @@ struct APIClient: Sendable {
         )
     }
 
-    static func mobileHomeActivity(limit: Int = 3) -> Endpoint<ActivityFeedResponse> {
-        Endpoint(
+    static func mobileHomeActivity(
+        limit: Int = 3,
+        metroCity: String? = nil,
+        metroState: String? = nil,
+        includesAllMetros: Bool = false
+    ) -> Endpoint<ActivityFeedResponse> {
+        var queryItems = [URLQueryItem(name: "limit", value: String(limit))]
+        if includesAllMetros {
+            queryItems.append(URLQueryItem(name: "metroScope", value: "all"))
+        } else if let metroCity, let metroState {
+            queryItems.append(URLQueryItem(name: "metroCity", value: metroCity))
+            queryItems.append(URLQueryItem(name: "metroState", value: metroState))
+        }
+
+        return Endpoint(
             path: "/api/mobile/home-activity",
-            queryItems: [URLQueryItem(name: "limit", value: String(limit))],
+            queryItems: queryItems,
             requiresAuthentication: false,
             includesAuthenticationIfAvailable: true
         )
@@ -369,6 +382,24 @@ struct APIClient: Sendable {
             path: "/api/mobile/friends",
             requiresAuthentication: false,
             includesAuthenticationIfAvailable: true
+        )
+    }
+
+    static func mobilePromotableEvents() -> Endpoint<PromotableEventsResponse> {
+        Endpoint(path: "/api/mobile/profile/promoting")
+    }
+
+    static func setMobileEventPromoted(
+        eventID: UUID,
+        promoted: Bool,
+        promo: String? = nil
+    ) throws -> Endpoint<PromotedEventUpdateResponse> {
+        Endpoint(
+            path: "/api/mobile/profile/promoting",
+            method: .patch,
+            body: try JSONEncoder().encode(
+                PromotedEventUpdateRequest(eventId: eventID, promoted: promoted, promo: promo)
+            )
         )
     }
 
@@ -531,12 +562,20 @@ struct APIClient: Sendable {
         )
     }
 
-    static func mobileSearch(query: String, limit: Int = 20) -> Endpoint<MobileSearchResponse> {
+    static func mobileSearch(
+        query: String,
+        limit: Int = 20,
+        includeCurrentUser: Bool = false
+    ) -> Endpoint<MobileSearchResponse> {
         Endpoint(
             path: "/api/mobile/search",
             queryItems: [
                 URLQueryItem(name: "query", value: query),
                 URLQueryItem(name: "limit", value: String(limit)),
+                URLQueryItem(
+                    name: "includeCurrentUser",
+                    value: includeCurrentUser ? "true" : "false"
+                ),
             ],
             requiresAuthentication: false,
             includesAuthenticationIfAvailable: true
@@ -1653,7 +1692,7 @@ struct MobileAdminStatusResponse: Decodable, Hashable, Sendable {
     let isAdmin: Bool
 }
 
-enum PlaceMemberRole: String, Codable, CaseIterable, Sendable {
+enum PlaceMemberRole: String, Codable, CaseIterable, Hashable, Sendable {
     case owner
     case manager
     case promoter
@@ -1781,9 +1820,15 @@ struct MobileAdminScraperPlace: Decodable, Hashable, Sendable {
     let type: PlaceListItem.PlaceType
     let slug: String
     let name: String
+    let logoImageURL: URL?
     let city: String?
     let state: String?
     let website: URL?
+
+    enum CodingKeys: String, CodingKey {
+        case id, type, slug, name, city, state, website
+        case logoImageURL = "logoImageUrl"
+    }
 }
 
 struct MobileAdminScraperRunResponse: Decodable, Hashable, Sendable {
@@ -1804,7 +1849,7 @@ struct MobileAdminScraperVenueSummary: Decodable, Hashable, Sendable {
 }
 
 struct MobileAdminScraperOrganizerSummary: Decodable, Hashable, Sendable {
-    let name: String
+    let name: String?
     let url: URL?
 }
 
@@ -2388,6 +2433,8 @@ extension JSONDecoder {
 
             if let date = ISO8601DateFormatter.wigFractional.date(from: value)
                 ?? ISO8601DateFormatter.wigStandard.date(from: value)
+                ?? DateFormatter.wigLocalDateTime.date(from: value)
+                ?? DateFormatter.wigLocalDateTimeWithoutSeconds.date(from: value)
             {
                 return date
             }
@@ -2400,6 +2447,26 @@ extension JSONDecoder {
         decoder.keyDecodingStrategy = .convertFromSnakeCase
         return decoder
     }
+}
+
+extension DateFormatter {
+    static let wigLocalDateTime: DateFormatter = {
+        let formatter = DateFormatter()
+        formatter.locale = Locale(identifier: "en_US_POSIX")
+        formatter.calendar = Calendar(identifier: .iso8601)
+        formatter.timeZone = TimeZone(secondsFromGMT: 0)
+        formatter.dateFormat = "yyyy-MM-dd'T'HH:mm:ss"
+        return formatter
+    }()
+
+    static let wigLocalDateTimeWithoutSeconds: DateFormatter = {
+        let formatter = DateFormatter()
+        formatter.locale = Locale(identifier: "en_US_POSIX")
+        formatter.calendar = Calendar(identifier: .iso8601)
+        formatter.timeZone = TimeZone(secondsFromGMT: 0)
+        formatter.dateFormat = "yyyy-MM-dd'T'HH:mm"
+        return formatter
+    }()
 }
 
 extension ISO8601DateFormatter {

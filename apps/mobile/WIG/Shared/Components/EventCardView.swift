@@ -329,7 +329,6 @@ struct EventCardView: View {
                         palette: artworkPalette,
                         cardWidth: cardWidth,
                         cardHeight: cardHeight,
-                        artworkOverlayHeight: artworkOverlayHeight,
                         isAuthenticated: isAuthenticated
                     )
                 }
@@ -378,10 +377,6 @@ struct EventCardView: View {
 
     private var cardShape: some Shape {
         RoundedRectangle(cornerRadius: cardCornerRadius, style: .continuous)
-    }
-
-    private var artworkOverlayHeight: CGFloat {
-        cardHeight * 0.68
     }
 
     private func loadArtwork(from url: URL) async {
@@ -433,7 +428,6 @@ private struct EventCardContent: View {
     let palette: EventCardPalette
     let cardWidth: CGFloat
     let cardHeight: CGFloat
-    let artworkOverlayHeight: CGFloat
     let isAuthenticated: Bool
 
     var body: some View {
@@ -447,24 +441,30 @@ private struct EventCardContent: View {
             )
 
             VStack(alignment: .leading, spacing: 0) {
-                ZStack(alignment: .topTrailing) {
-                    if isAuthenticated {
-                        EventSocialOverlayView(attendees: goingAttendees, size: .card)
-                            .padding(.trailing, 10)
-                            .padding(.top, 10)
-                    }
-                }
-                .frame(width: cardWidth, height: artworkOverlayHeight, alignment: .topTrailing)
-
                 Spacer(minLength: 0)
 
                 VStack(alignment: .leading, spacing: 3) {
+                    if let promo = event.promo, !promo.isEmpty {
+                        Text(promo)
+                            .font(.system(size: 11, weight: .bold))
+                            .foregroundStyle(.black)
+                            .lineLimit(1)
+                            .padding(.horizontal, 8)
+                            .frame(height: 22)
+                            .background(AppTheme.accentBlue, in: Capsule())
+                            .padding(.bottom, 2)
+                    }
+
+                    if isAuthenticated {
+                        EventSocialOverlayView(attendees: goingAttendees, size: .card)
+                            .padding(.bottom, 4)
+                    }
+
                     Text(event.title)
                         .font(.system(size: 14, weight: .semibold))
                         .foregroundStyle(.white)
                         .multilineTextAlignment(.leading)
-                        .lineLimit(2)
-                        .lineSpacing(1)
+                        .lineLimit(1)
                         .frame(maxWidth: .infinity, alignment: .leading)
 
                     Text(event.formattedCardStart)
@@ -853,6 +853,15 @@ struct EventSocialOverlayView: View {
         )
     }
 
+    private var displayedAttendees: [EventSocialAttendee] {
+        switch size {
+        case .card:
+            return Array(visibleAttendees.reversed())
+        default:
+            return visibleAttendees
+        }
+    }
+
     private var remainingCount: Int {
         max(0, (totalAttendeeCount ?? attendees.count) - visibleAttendees.count)
     }
@@ -860,7 +869,7 @@ struct EventSocialOverlayView: View {
     var body: some View {
         if !attendees.isEmpty || remainingCount > 0 {
             HStack(spacing: size.avatarSpacing) {
-                ForEach(visibleAttendees) { attendee in
+                ForEach(displayedAttendees) { attendee in
                     EventSocialAvatarView(
                         attendee: attendee,
                         size: size.avatarSize,
@@ -901,7 +910,7 @@ struct EventSocialOverlayView: View {
         var avatarSize: CGFloat {
             switch self {
             case .card:
-                return 40
+                return 28
             case .detail:
                 return 54
             case .searchRow:
@@ -916,7 +925,7 @@ struct EventSocialOverlayView: View {
         var avatarSpacing: CGFloat {
             switch self {
             case .card:
-                return -10
+                return -7
             case .detail:
                 return -14
             case .searchRow:
@@ -994,7 +1003,7 @@ struct EventSocialOverlayView: View {
         var overflowFontSize: CGFloat {
             switch self {
             case .card:
-                return 13
+                return 10
             case .detail:
                 return 15
             case .searchRow:

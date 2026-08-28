@@ -93,6 +93,15 @@ export async function PUT(
     if (!permissions.isAdmin && !permissions.manageablePlaceIds.has(place.id)) {
       return NextResponse.json({ error: "Forbidden" }, { status: 403 });
     }
+    if (
+      !permissions.isAdmin &&
+      permissions.placeRoleById.get(place.id) === "promoter"
+    ) {
+      return NextResponse.json(
+        { error: "Promoters cannot change place scrapers" },
+        { status: 403 }
+      );
+    }
 
     const body = replaceScrapersSchema.parse(await request.json());
     const normalizedScrapers = body.scrapers.map((scraper) => {

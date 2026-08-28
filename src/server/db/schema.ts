@@ -227,6 +227,7 @@ export const usersRelations = relations(users, ({ many }) => ({
   placeFollows: many(placeFollows),
   placeHomeHides: many(placeHomeHides),
   rsvps: many(eventRsvps),
+  promotedEvents: many(userPromotedEvents),
   eventSeries: many(eventSeries),
   sentFriendRequests: many(userFriends, { relationName: "sentRequests" }),
   receivedFriendRequests: many(userFriends, {
@@ -939,9 +940,48 @@ export const eventsRelations = relations(events, ({ one, many }) => ({
     references: [eventSeries.id],
   }),
   rsvps: many(eventRsvps),
+  promoters: many(userPromotedEvents),
   categoryLinks: many(eventCategories),
   activities: many(eventActivity),
 }));
+
+// Explicit event selections made by place members with the promoter role.
+export const userPromotedEvents = pgTable(
+  "user_promoted_events",
+  {
+    id: uuid("id").defaultRandom().primaryKey(),
+    userId: text("user_id")
+      .notNull()
+      .references(() => users.id, { onDelete: "cascade" }),
+    eventId: uuid("event_id")
+      .notNull()
+      .references(() => events.id, { onDelete: "cascade" }),
+    promo: varchar("promo", { length: 255 }),
+    createdAt: timestamp("created_at").defaultNow().notNull(),
+  },
+  (table) => ({
+    userEventIdx: uniqueIndex("user_promoted_events_user_event_idx").on(
+      table.userId,
+      table.eventId
+    ),
+    userIdx: index("user_promoted_events_user_idx").on(table.userId),
+    eventIdx: index("user_promoted_events_event_idx").on(table.eventId),
+  })
+);
+
+export const userPromotedEventsRelations = relations(
+  userPromotedEvents,
+  ({ one }) => ({
+    user: one(users, {
+      fields: [userPromotedEvents.userId],
+      references: [users.id],
+    }),
+    event: one(events, {
+      fields: [userPromotedEvents.eventId],
+      references: [events.id],
+    }),
+  })
+);
 
 // ============================================================================
 // EVENT CATEGORIES TABLE (many-to-many between events and categories)

@@ -104,6 +104,7 @@ struct EventFeedItem: Codable, Identifiable, Hashable, Sendable {
     var friendsInterested: [EventSocialRSVP] = []
     var friendsNotGoing: [EventSocialRSVP] = []
     var goingCount: Int? = nil
+    var promo: String? = nil
 
     enum CodingKeys: String, CodingKey {
         case id
@@ -148,6 +149,7 @@ struct EventFeedItem: Codable, Identifiable, Hashable, Sendable {
         case userRsvpNotGoingReason
         case currentUserReview
         case friendsGoing
+        case promo
         case friendsInterested
         case friendsNotGoing
         case goingCount

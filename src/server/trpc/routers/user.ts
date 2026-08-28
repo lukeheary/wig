@@ -8,15 +8,17 @@ import {
 } from "../init";
 import {
   eventRsvps,
+  events,
   placeFollows,
   placeMembers,
+  userPromotedEvents,
   userFriends,
   users,
   userSurfaceState,
 } from "@/server/db/schema";
-import { eq, and, ne, or, inArray, asc } from "drizzle-orm";
+import { eq, and, ne, or, inArray, asc, gte, lt } from "drizzle-orm";
 import { clerkClient } from "@clerk/nextjs/server";
-import { addDays } from "date-fns";
+import { addDays, addWeeks, startOfWeek } from "date-fns";
 import { USER_SURFACE_VALUES } from "@/lib/user-surface-state";
 import { isReservedUsername } from "@/lib/reserved-usernames";
 import { mapEventCategoryData } from "@/server/utils/categories";
@@ -74,6 +76,125 @@ export const userRouter = router({
 
     return memberships.length > 0;
   }),
+
+  getPromotionOptions: protectedProcedure.query(async ({ ctx }) => {
+    const memberships = await ctx.db.query.placeMembers.findMany({
+      where: and(
+        eq(placeMembers.userId, ctx.auth.userId),
+        eq(placeMembers.role, "promoter")
+      ),
+      columns: { placeId: true },
+    });
+    const placeIds = memberships.map((membership) => membership.placeId);
+    if (placeIds.length === 0) return [];
+
+    const [eligibleEvents, selections] = await Promise.all([
+      ctx.db.query.events.findMany({
+        where: and(
+          or(
+            inArray(events.venueId, placeIds),
+            inArray(events.organizerId, placeIds)
+          ),
+          gte(events.startAt, new Date()),
+          eq(events.visibility, "public"),
+          eq(events.status, "active")
+        ),
+        with: { venue: true, organizer: true },
+        orderBy: [asc(events.startAt)],
+      }),
+      ctx.db.query.userPromotedEvents.findMany({
+        where: eq(userPromotedEvents.userId, ctx.auth.userId),
+        columns: { eventId: true, promo: true },
+      }),
+    ]);
+    const selectedIds = new Set(
+      selections.map((selection) => selection.eventId)
+    );
+
+    return eligibleEvents.map((event) => ({
+      id: event.id,
+      title: event.title,
+      startAt: event.startAt,
+      coverImageUrl: event.coverImageUrl,
+      placeName: event.venue?.name ?? event.organizer?.name ?? null,
+      isPromoted: selectedIds.has(event.id),
+      promo:
+        selections.find((selection) => selection.eventId === event.id)?.promo ??
+        null,
+    }));
+  }),
+
+  setEventPromoted: contentMutationProcedure
+    .input(
+      z.object({
+        eventId: z.string().uuid(),
+        promoted: z.boolean(),
+        promo: z.string().trim().max(255).nullable().optional(),
+      })
+    )
+    .mutation(async ({ ctx, input }) => {
+      if (input.promo) {
+        assertTRPCTextContentAllowed([{ field: "promo", value: input.promo }]);
+      }
+      if (!input.promoted) {
+        await ctx.db
+          .delete(userPromotedEvents)
+          .where(
+            and(
+              eq(userPromotedEvents.userId, ctx.auth.userId),
+              eq(userPromotedEvents.eventId, input.eventId)
+            )
+          );
+        return { promoted: false };
+      }
+
+      const event = await ctx.db.query.events.findFirst({
+        where: and(
+          eq(events.id, input.eventId),
+          eq(events.visibility, "public"),
+          eq(events.status, "active"),
+          gte(events.startAt, new Date())
+        ),
+        columns: { venueId: true, organizerId: true },
+      });
+      const placeIds = [event?.venueId, event?.organizerId].filter(
+        (placeId): placeId is string => Boolean(placeId)
+      );
+      if (placeIds.length === 0) {
+        throw new TRPCError({
+          code: "FORBIDDEN",
+          message: "This event is not eligible for promotion.",
+        });
+      }
+      const membership = await ctx.db.query.placeMembers.findFirst({
+        where: and(
+          eq(placeMembers.userId, ctx.auth.userId),
+          eq(placeMembers.role, "promoter"),
+          inArray(placeMembers.placeId, placeIds)
+        ),
+        columns: { id: true },
+      });
+      if (!membership) {
+        throw new TRPCError({
+          code: "FORBIDDEN",
+          message:
+            "You can only promote events for places where you are a promoter.",
+        });
+      }
+
+      await ctx.db
+        .insert(userPromotedEvents)
+        .values({
+          userId: ctx.auth.userId,
+          eventId: input.eventId,
+          promo: input.promo || null,
+        })
+        .onConflictDoUpdate({
+          target: [userPromotedEvents.userId, userPromotedEvents.eventId],
+          set: { promo: input.promo || null },
+        });
+      return { promoted: true };
+    }),
 
   updateUsername: contentMutationProcedure
     .input(
@@ -267,6 +388,7 @@ export const userRouter = router({
         viewerTargetFriendship,
         profileRsvps,
         followedPlaces,
+        targetPlaceMemberships,
       ] = await Promise.all([
         ctx.db.query.userFriends.findMany({
           where: and(
@@ -325,7 +447,56 @@ export const userRouter = router({
           where: eq(placeFollows.userId, targetUser.id),
           columns: { id: true },
         }),
+        ctx.db.query.placeMembers.findMany({
+          where: and(
+            eq(placeMembers.userId, targetUser.id),
+            eq(placeMembers.role, "promoter")
+          ),
+          columns: { placeId: true },
+        }),
       ]);
+
+      const currentWeekStart = startOfWeek(now, { weekStartsOn: 1 });
+      const nextWeekStart = addWeeks(currentWeekStart, 1);
+      const promoterPlaceIds = targetPlaceMemberships.map(
+        (membership) => membership.placeId
+      );
+      const promotingEvents =
+        promoterPlaceIds.length > 0
+          ? await ctx.db.query.userPromotedEvents
+              .findMany({
+                where: eq(userPromotedEvents.userId, targetUser.id),
+                with: {
+                  event: {
+                    with: {
+                      venue: true,
+                      organizer: true,
+                      categoryLinks: {
+                        with: { category: true },
+                      },
+                    },
+                  },
+                },
+              })
+              .then((selections) =>
+                selections
+                  .filter(
+                    ({ event }) =>
+                      event.startAt >= now &&
+                      event.startAt < nextWeekStart &&
+                      event.visibility === "public" &&
+                      event.status === "active" &&
+                      ((event.venueId !== null &&
+                        promoterPlaceIds.includes(event.venueId)) ||
+                        (event.organizerId !== null &&
+                          promoterPlaceIds.includes(event.organizerId)))
+                  )
+                  .sort(
+                    (a, b) =>
+                      a.event.startAt.getTime() - b.event.startAt.getTime()
+                  )
+              )
+          : [];
 
       const friendSummaries = friendships.flatMap((friendship) => {
         const friend =
@@ -385,6 +556,16 @@ export const userRouter = router({
         };
       };
 
+      const mapPromotingEvent = (
+        promotingEvent: (typeof promotingEvents)[number]
+      ) => ({
+        ...mapEventCategoryData(promotingEvent.event),
+        promo: promotingEvent.promo,
+        userRsvp: null,
+        friendsGoing: [],
+        friendsInterested: [],
+      });
+
       return {
         profile: {
           id: targetUser.id,
@@ -405,9 +586,11 @@ export const userRouter = router({
         },
         friendCount: friendSummaries.length,
         followingCount: followedPlaces.length,
+        isPromoter: targetPlaceMemberships.length > 0,
         requestCount:
           viewerUserId === targetUser.id ? pendingRequests.length : 0,
         friends: friendSummaries,
+        promotingEvents: promotingEvents.map(mapPromotingEvent),
         upcomingEvents: upcomingRsvps.map(mapProfileEvent).filter(Boolean),
         pastEvents: pastRsvps.map(mapProfileEvent).filter(Boolean),
       };

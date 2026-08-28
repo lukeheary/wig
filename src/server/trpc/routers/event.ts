@@ -2701,6 +2701,9 @@ export const eventRouter = router({
     )
     .query(async ({ ctx, input }) => {
       const startDate = input.startDate ?? new Date();
+      // Match the native app's signed-out experience: guests browse the Boston
+      // metro instead of receiving an unbounded, multi-city event feed.
+      const effectiveCity = ctx.auth.userId ? input.city : "Boston";
 
       const conditions = [
         eq(events.visibility, "public"),
@@ -2711,17 +2714,17 @@ export const eventRouter = router({
         conditions.push(lte(events.startAt, input.endDate));
       }
 
-      if (input.city) {
+      if (effectiveCity) {
         // Look up metro area for coordinates and radius
         const metro = await ctx.db.query.metroAreas.findFirst({
-          where: eq(metroAreas.name, input.city),
+          where: eq(metroAreas.name, effectiveCity),
         });
 
         // Fall back to cities table if not a metro area
         const originCity =
           metro ??
           (await ctx.db.query.cities.findFirst({
-            where: eq(cities.name, input.city),
+            where: eq(cities.name, effectiveCity),
           }));
 
         if (originCity?.latitude != null && originCity?.longitude != null) {
@@ -2769,7 +2772,7 @@ export const eventRouter = router({
             )
           );
         } else {
-          conditions.push(eq(events.city, input.city));
+          conditions.push(eq(events.city, effectiveCity));
         }
       }
 

@@ -78,6 +78,16 @@ export async function GET(request: Request) {
     const { searchParams } = new URL(request.url);
     const query = searchParams.get("query")?.trim() ?? "";
     const queryVariants = searchQueryVariants(query);
+    const userQueryVariants = [
+      ...new Set(
+        queryVariants.flatMap((variant) => [
+          variant,
+          variant.replace(/^@+/, ""),
+        ])
+      ),
+    ].filter(Boolean);
+    const includeCurrentUser =
+      searchParams.get("includeCurrentUser") === "true";
     const limitParam = Number(searchParams.get("limit") ?? "20");
     const limit = Number.isFinite(limitParam)
       ? Math.min(Math.max(limitParam, 1), 30)
@@ -123,6 +133,17 @@ export async function GET(request: Request) {
       searchUser?.city && searchUser?.state
         ? resolveMetroArea({ city: searchUser.city, state: searchUser.state })
         : null;
+    const isInCurrentMetroArea = (location: {
+      city: string | null;
+      state: string | null;
+    }) => {
+      if (!currentMetroArea) return false;
+      const metroArea = resolveMetroArea(location);
+      return (
+        metroArea?.city === currentMetroArea.city &&
+        metroArea?.state === currentMetroArea.state
+      );
+    };
     const matchedUsers = userId
       ? await db.query.userFriends.findMany({
           where: or(
@@ -140,7 +161,7 @@ export async function GET(request: Request) {
 
     const userBaseConditions = [
       eq(users.isOnboarding, false),
-      ...(userId ? [ne(users.id, userId)] : []),
+      ...(userId && !includeCurrentUser ? [ne(users.id, userId)] : []),
       ...(blockedUserIds.length > 0
         ? [notInArray(users.id, blockedUserIds)]
         : []),
@@ -151,7 +172,7 @@ export async function GET(request: Request) {
           where: and(
             ...userBaseConditions,
             or(
-              ...queryVariants.flatMap((variant) => [
+              ...userQueryVariants.flatMap((variant) => [
                 accentInsensitiveLike(users.username, variant),
                 accentInsensitiveLike(users.firstName, variant, {
                   coalesceToEmpty: true,
@@ -347,7 +368,7 @@ export async function GET(request: Request) {
           })
         : [];
 
-    const matchingPlaces = query
+    const matchingPlaces = query && currentMetroArea
       ? (
           await db.query.places.findMany({
             where: and(
@@ -369,17 +390,7 @@ export async function GET(request: Request) {
             limit: 200,
           })
         )
-          .filter((place) => {
-            const metroArea = resolveMetroArea({
-              city: place.city,
-              state: place.state,
-            });
-
-            return (
-              metroArea?.city === currentMetroArea?.city &&
-              metroArea?.state === currentMetroArea?.state
-            );
-          })
+          .filter(isInCurrentMetroArea)
           .slice(0, limit)
       : [];
     const metroPlaces =
@@ -390,12 +401,14 @@ export async function GET(request: Request) {
             limit: 200,
           })
         : [];
-    const matchingEvents = query
-      ? await db.query.events.findMany({
+    const matchingEventCandidates =
+      query && currentMetroArea
+        ? await db.query.events.findMany({
           where: and(
             eq(events.visibility, "public"),
             eq(events.status, "active"),
             gte(events.startAt, new Date()),
+            eq(events.state, currentMetroArea.state),
             or(
               ...queryVariants.flatMap((variant) => [
                 accentInsensitiveLike(events.title, variant),
@@ -409,7 +422,7 @@ export async function GET(request: Request) {
             )
           ),
           orderBy: [asc(events.startAt)],
-          limit,
+          limit: 200,
           with: {
             venue: true,
             organizer: true,
@@ -420,16 +433,21 @@ export async function GET(request: Request) {
             },
           },
         })
-      : [];
-    const upcomingEvents = !query
-      ? await db.query.events.findMany({
+        : [];
+    const matchingEvents = matchingEventCandidates
+      .filter(isInCurrentMetroArea)
+      .slice(0, limit);
+    const upcomingEventCandidates =
+      !query && currentMetroArea
+        ? await db.query.events.findMany({
           where: and(
             eq(events.visibility, "public"),
             eq(events.status, "active"),
-            gte(events.startAt, new Date())
+            gte(events.startAt, new Date()),
+            eq(events.state, currentMetroArea.state)
           ),
           orderBy: [sql`random()`],
-          limit: 10,
+          limit: 200,
           with: {
             venue: true,
             organizer: true,
@@ -440,18 +458,11 @@ export async function GET(request: Request) {
             },
           },
         })
-      : [];
-    const suggestedPlaces = metroPlaces.filter((place) => {
-      const metroArea = resolveMetroArea({
-        city: place.city,
-        state: place.state,
-      });
-
-      return (
-        metroArea?.city === currentMetroArea?.city &&
-        metroArea?.state === currentMetroArea?.state
-      );
-    });
+        : [];
+    const upcomingEvents = upcomingEventCandidates
+      .filter(isInCurrentMetroArea)
+      .slice(0, 10);
+    const suggestedPlaces = metroPlaces.filter(isInCurrentMetroArea);
     const eventsToMap = query ? matchingEvents : upcomingEvents;
     const eventIds = eventsToMap.map((event) => event.id);
     const goingRsvpCounts = await goingRsvpCountsForEventIds(eventIds);

@@ -443,6 +443,9 @@ struct HomeView: View {
                 .onChange(of: selectedLocationFilter) { _, newValue in
                     appSession.selectedCityContext = newValue?.selectedCityContext
                 }
+                .task(id: recentActivityLocationKey) {
+                    await loadRecentActivity(using: apiClient)
+                }
                 .onChange(of: isSearchPresented) { _, isPresented in
                     guard showsNativeSearch,
                           !isPresented,
@@ -638,7 +641,15 @@ struct HomeView: View {
 
                 if shouldShowRecentActivity {
                     HomeRecentActivitySection(
-                        activities: recentActivityViewModel.activities,
+                        activities: recentActivityViewModel.activities.filter {
+                            activity in
+                            guard !activity.type.isRequest,
+                                  let event = activity.event
+                            else {
+                                return true
+                            }
+                            return effectiveLocationFilter.includes(event)
+                        },
                         onShowActivity: onShowActivity,
                         onRespondToRequest: { activity, response in
                             do {
@@ -654,9 +665,8 @@ struct HomeView: View {
                                 default:
                                     return
                                 }
-                                await recentActivityViewModel.load(
+                                await loadRecentActivity(
                                     using: apiClient,
-                                    cacheIdentity: eventFeedCacheIdentity,
                                     forceRefresh: true
                                 )
                             } catch {
@@ -1781,11 +1791,23 @@ struct HomeView: View {
             return
         }
 
-        await recentActivityViewModel.load(
-            using: apiClient,
-            cacheIdentity: eventFeedCacheIdentity,
-            forceRefresh: forceRefresh
-        )
+        switch effectiveLocationFilter {
+        case .all:
+            await recentActivityViewModel.load(
+                using: apiClient,
+                cacheIdentity: recentActivityCacheIdentity,
+                includesAllMetros: true,
+                forceRefresh: forceRefresh
+            )
+        case .city(let city, let state):
+            await recentActivityViewModel.load(
+                using: apiClient,
+                cacheIdentity: recentActivityCacheIdentity,
+                metroCity: city,
+                metroState: state,
+                forceRefresh: forceRefresh
+            )
+        }
     }
 
     private func loadPostEventFeedbackPrompt(using apiClient: APIClient) async {
@@ -1801,6 +1823,19 @@ struct HomeView: View {
 
     private var eventFeedCacheIdentity: String {
         appSession.isAuthBypassed ? "bypass" : clerk.user?.id ?? "guest"
+    }
+
+    private var recentActivityLocationKey: String {
+        switch effectiveLocationFilter {
+        case .all:
+            return "all"
+        case .city(let city, let state):
+            return "\(city.lowercased())|\(state.uppercased())"
+        }
+    }
+
+    private var recentActivityCacheIdentity: String {
+        "\(eventFeedCacheIdentity)|\(recentActivityLocationKey)"
     }
 
     private func loadCompletedPostEventFeedbackIDs() {
@@ -2374,7 +2409,7 @@ private struct LatestFromFollowsCard: View {
             }
             .frame(width: 164, height: 164)
             .clipped()
-            .overlay(alignment: .topTrailing) {
+            .overlay(alignment: .bottomLeading) {
                 EventSocialOverlayView(
                     attendees: goingAttendees,
                     size: .card
@@ -2995,6 +3030,19 @@ private enum HomeLocationFilter: Hashable, Identifiable {
                 eventState.localizedCaseInsensitiveCompare(state) == .orderedSame
         }
     }
+
+    func includes(_ event: ActivityEventSummary) -> Bool {
+        switch self {
+        case .all:
+            return true
+        case .city(let city, let state):
+            let eventCity = event.metroAreaCity ?? event.city
+            let eventState = event.metroAreaState ?? event.state
+
+            return eventCity.localizedCaseInsensitiveCompare(city) == .orderedSame &&
+                eventState.localizedCaseInsensitiveCompare(state) == .orderedSame
+        }
+    }
 }
 
 private enum HomeEventFilter: String, CaseIterable, Identifiable {
@@ -3470,6 +3518,9 @@ final class HomeRecentActivityViewModel: ObservableObject {
     func load(
         using apiClient: APIClient,
         cacheIdentity: String,
+        metroCity: String? = nil,
+        metroState: String? = nil,
+        includesAllMetros: Bool = false,
         forceRefresh: Bool = false
     ) async {
         if !forceRefresh, let cached = Self.cachedActivities[cacheIdentity] {
@@ -3490,7 +3541,14 @@ final class HomeRecentActivityViewModel: ObservableObject {
 
         let token = UUID()
         let loadTask = Task {
-            try await apiClient.send(APIClient.mobileHomeActivity(limit: 3))
+            try await apiClient.send(
+                APIClient.mobileHomeActivity(
+                    limit: 3,
+                    metroCity: metroCity,
+                    metroState: metroState,
+                    includesAllMetros: includesAllMetros
+                )
+            )
         }
         Self.inFlightLoads[cacheIdentity] = loadTask
         Self.inFlightTokens[cacheIdentity] = token

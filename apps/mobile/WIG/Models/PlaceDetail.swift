@@ -24,6 +24,7 @@ struct PlaceDetail: Decodable, Identifiable, Hashable, Sendable {
     var isFollowed = false
     var isHiddenFromHome = false
     var canManage = false
+    var currentUserRole: PlaceMemberRole? = nil
     let events: [EventFeedItem]
     var pastEvents: [EventFeedItem]
     var pastEventsNextCursor: PlaceEventsCursor? = nil
@@ -52,6 +53,7 @@ struct PlaceDetail: Decodable, Identifiable, Hashable, Sendable {
         case isFollowed
         case isHiddenFromHome
         case canManage
+        case currentUserRole
         case events
         case pastEvents
         case pastEventsNextCursor
@@ -143,6 +145,7 @@ extension PlaceDetail {
             isEnabled: true,
             isFollowed: listItem.isFollowed,
             canManage: false,
+            currentUserRole: nil,
             events: [],
             pastEvents: []
         )
@@ -174,6 +177,7 @@ extension PlaceDetail {
         isFollowed = try container.decodeIfPresent(Bool.self, forKey: .isFollowed) ?? false
         isHiddenFromHome = try container.decodeIfPresent(Bool.self, forKey: .isHiddenFromHome) ?? false
         canManage = try container.decodeIfPresent(Bool.self, forKey: .canManage) ?? false
+        currentUserRole = try container.decodeIfPresent(PlaceMemberRole.self, forKey: .currentUserRole)
         events = try container.decodeIfPresent([EventFeedItem].self, forKey: .events) ?? []
         pastEvents = try container.decodeIfPresent([EventFeedItem].self, forKey: .pastEvents) ?? []
         pastEventsNextCursor = try container.decodeIfPresent(PlaceEventsCursor.self, forKey: .pastEventsNextCursor)

@@ -99,6 +99,8 @@ struct ActivityEventSummary: Decodable, Identifiable, Hashable, Sendable {
     let address: String?
     let city: String
     let state: String
+    let metroAreaCity: String?
+    let metroAreaState: String?
     let timeZone: String?
     let venueID: UUID?
     let venueName: String?
@@ -132,6 +134,8 @@ struct ActivityEventSummary: Decodable, Identifiable, Hashable, Sendable {
         case address
         case city
         case state
+        case metroAreaCity
+        case metroAreaState
         case timeZone
         case venueID = "venueId"
         case venueName
@@ -181,6 +185,8 @@ struct ActivityEventSummary: Decodable, Identifiable, Hashable, Sendable {
             city: city,
             state: state,
             timeZone: timeZone,
+            metroAreaCity: metroAreaCity,
+            metroAreaState: metroAreaState,
             venueID: venueID,
             venueName: venueName,
             venueSlug: venueSlug,
@@ -241,6 +247,8 @@ extension ActivityEventSummary {
         address = try container.decodeIfPresent(String.self, forKey: .address)
         city = try container.decode(String.self, forKey: .city)
         state = try container.decode(String.self, forKey: .state)
+        metroAreaCity = try container.decodeIfPresent(String.self, forKey: .metroAreaCity)
+        metroAreaState = try container.decodeIfPresent(String.self, forKey: .metroAreaState)
         timeZone = try container.decodeIfPresent(String.self, forKey: .timeZone)
         venueID = try container.decodeIfPresent(UUID.self, forKey: .venueID)
         venueName = try container.decodeIfPresent(String.self, forKey: .venueName)

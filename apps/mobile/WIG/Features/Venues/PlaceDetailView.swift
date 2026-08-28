@@ -936,8 +936,7 @@ private struct PlaceFollowersView: View {
                     ContentUnavailableView("Couldn't Load Followers", systemImage: "wifi.exclamationmark")
                         .foregroundStyle(.white)
                 } else if followers.isEmpty {
-                    ContentUnavailableView("No Followers Yet", systemImage: "person.slash")
-                        .foregroundStyle(.white)
+                    PlaceRelationshipEmptyPlaceholder(message: "No followers yet")
                 } else {
                     VStack(spacing: 2) {
                         ForEach(followers) { user in

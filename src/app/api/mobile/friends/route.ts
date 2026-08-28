@@ -1,25 +1,39 @@
 import { auth } from "@clerk/nextjs/server";
 import { NextResponse } from "next/server";
-import { and, asc, desc, eq, inArray, isNotNull, or } from "drizzle-orm";
+import {
+  and,
+  asc,
+  desc,
+  eq,
+  gte,
+  inArray,
+  isNotNull,
+  lt,
+  or,
+} from "drizzle-orm";
 import { db } from "@/server/db";
 import {
   cities,
+  events,
   eventReviews,
   eventRsvps,
   metroAreas,
   placeFollows,
+  placeMembers,
+  userPromotedEvents,
   userFriends,
   users,
 } from "@/server/db/schema";
-import {
-  createMobileMetroResolver,
-} from "@/app/api/mobile/metro";
+import { createMobileMetroResolver } from "@/app/api/mobile/metro";
 import {
   canEditMobileEvent,
   resolveMobileEventEditPermissions,
 } from "@/app/api/mobile/event-edit-permissions";
 import { eventTimeZone } from "@/lib/utils";
-import { mapEventCategoryData, mapPlaceCategoryData } from "@/server/utils/categories";
+import {
+  mapEventCategoryData,
+  mapPlaceCategoryData,
+} from "@/server/utils/categories";
 
 type UserSummary = {
   id: string;
@@ -118,13 +132,43 @@ function startOfDayInTimeZone(date: Date, timeZone: string) {
     return fallback;
   }
 
-  const naiveUtcMidnight = new Date(Date.UTC(parts.year, parts.month - 1, parts.day));
+  const naiveUtcMidnight = new Date(
+    Date.UTC(parts.year, parts.month - 1, parts.day)
+  );
   const offset = getTimeZoneOffsetMs(naiveUtcMidnight, timeZone) ?? 0;
 
   return new Date(naiveUtcMidnight.getTime() - offset);
 }
 
-function userSummary(user: typeof users.$inferSelect | null | undefined): UserSummary | null {
+function currentWeekBoundsInTimeZone(date: Date, timeZone: string) {
+  const parts = getTimeZoneDateTimeParts(date, timeZone);
+  if (!parts) {
+    const weekStart = new Date(date);
+    const daysSinceMonday = (weekStart.getDay() + 6) % 7;
+    weekStart.setDate(weekStart.getDate() - daysSinceMonday);
+    weekStart.setHours(0, 0, 0, 0);
+    const weekEnd = new Date(weekStart);
+    weekEnd.setDate(weekEnd.getDate() + 7);
+    return { weekStart, weekEnd };
+  }
+
+  const localDate = new Date(Date.UTC(parts.year, parts.month - 1, parts.day));
+  const daysSinceMonday = (localDate.getUTCDay() + 6) % 7;
+  const mondayNoonUtc = new Date(
+    Date.UTC(parts.year, parts.month - 1, parts.day - daysSinceMonday, 12)
+  );
+  const nextMondayNoonUtc = new Date(mondayNoonUtc);
+  nextMondayNoonUtc.setUTCDate(nextMondayNoonUtc.getUTCDate() + 7);
+
+  return {
+    weekStart: startOfDayInTimeZone(mondayNoonUtc, timeZone),
+    weekEnd: startOfDayInTimeZone(nextMondayNoonUtc, timeZone),
+  };
+}
+
+function userSummary(
+  user: typeof users.$inferSelect | null | undefined
+): UserSummary | null {
   if (!user) return null;
 
   const name =
@@ -170,16 +214,25 @@ export async function GET() {
       requestCount: 0,
       followingCount: 0,
       followedPlaces: [],
+      memberPlaceCount: 0,
+      memberPlaces: [],
       friends: [],
       receivedRequests: [],
       sentRequests: [],
+      promotingEvents: [],
       upcomingEvents: [],
       pastEvents: [],
     });
   }
 
   const now = new Date();
-  const [currentUser, availableMetroAreas, cityCoordinates, profileRecord, friendships] = await Promise.all([
+  const [
+    currentUser,
+    availableMetroAreas,
+    cityCoordinates,
+    profileRecord,
+    friendships,
+  ] = await Promise.all([
     db.query.users.findFirst({
       where: eq(users.id, userId),
       columns: {
@@ -209,7 +262,10 @@ export async function GET() {
       where: eq(users.id, userId),
     }),
     db.query.userFriends.findMany({
-      where: or(eq(userFriends.userId, userId), eq(userFriends.friendUserId, userId)),
+      where: or(
+        eq(userFriends.userId, userId),
+        eq(userFriends.friendUserId, userId)
+      ),
       orderBy: [asc(userFriends.createdAt)],
       with: {
         user: true,
@@ -278,9 +334,18 @@ export async function GET() {
   }
 
   const acceptedFriendIds = [...acceptedByUserId.keys()];
-  const [upcomingRsvps, pastRsvps, followedPlaces, editPermissions] = await Promise.all([
+  const [
+    upcomingRsvps,
+    pastRsvps,
+    followedPlaces,
+    placeMemberships,
+    editPermissions,
+  ] = await Promise.all([
     db.query.eventRsvps.findMany({
-      where: and(eq(eventRsvps.userId, userId), inArray(eventRsvps.status, ["going", "interested"])),
+      where: and(
+        eq(eventRsvps.userId, userId),
+        inArray(eventRsvps.status, ["going", "interested"])
+      ),
       with: {
         event: {
           with: {
@@ -297,7 +362,10 @@ export async function GET() {
       orderBy: [asc(eventRsvps.updatedAt)],
     }),
     db.query.eventRsvps.findMany({
-      where: and(eq(eventRsvps.userId, userId), inArray(eventRsvps.status, ["going", "interested"])),
+      where: and(
+        eq(eventRsvps.userId, userId),
+        inArray(eventRsvps.status, ["going", "interested"])
+      ),
       with: {
         event: {
           with: {
@@ -328,6 +396,21 @@ export async function GET() {
       },
       orderBy: [desc(placeFollows.createdAt)],
     }),
+    db.query.placeMembers.findMany({
+      where: eq(placeMembers.userId, userId),
+      with: {
+        place: {
+          with: {
+            categoryLinks: {
+              with: {
+                category: true,
+              },
+            },
+          },
+        },
+      },
+      orderBy: [asc(placeMembers.createdAt)],
+    }),
     resolveMobileEventEditPermissions(userId),
   ]);
 
@@ -340,10 +423,56 @@ export async function GET() {
     .filter((event): event is NonNullable<typeof event> => Boolean(event))
     .filter((event) => event.startAt < today);
 
-  const followedPlaceIdSet = new Set(followedPlaces.map((follow) => follow.placeId));
+  const promoterPlaceIds = placeMemberships
+    .filter((membership) => membership.role === "promoter")
+    .map((membership) => membership.placeId);
+  const { weekEnd } = currentWeekBoundsInTimeZone(now, feedTimeZone);
+  const promotingEventsRaw =
+    promoterPlaceIds.length > 0
+      ? await db.query.userPromotedEvents
+          .findMany({
+            where: eq(userPromotedEvents.userId, userId),
+            with: {
+              event: {
+                with: {
+                  venue: true,
+                  organizer: true,
+                  categoryLinks: { with: { category: true } },
+                },
+              },
+            },
+          })
+          .then((selections) =>
+            selections
+              .filter(
+                ({ event }) =>
+                  event.startAt >= now &&
+                  event.startAt < weekEnd &&
+                  event.visibility === "public" &&
+                  event.status === "active" &&
+                  ((event.venueId !== null &&
+                    promoterPlaceIds.includes(event.venueId)) ||
+                    (event.organizerId !== null &&
+                      promoterPlaceIds.includes(event.organizerId)))
+              )
+              .sort(
+                (a, b) => a.event.startAt.getTime() - b.event.startAt.getTime()
+              )
+          )
+      : [];
+
+  const followedPlaceIdSet = new Set(
+    followedPlaces.map((follow) => follow.placeId)
+  );
   const upcomingEventIds = upcomingEventsRaw.map((event) => event.id);
   const pastEventIds = pastEventsRaw.map((event) => event.id);
-  const allEventIds = [...new Set([...upcomingEventIds, ...pastEventIds])];
+  const allEventIds = [
+    ...new Set([
+      ...upcomingEventIds,
+      ...pastEventIds,
+      ...promotingEventsRaw.map(({ event }) => event.id),
+    ]),
+  ];
 
   const currentUserReviewMap = new Map(
     allEventIds.length > 0
@@ -359,42 +488,49 @@ export async function GET() {
       : []
   );
 
-  const [currentUserRsvps, mirroredPartnerRsvps, friendRsvps] = allEventIds.length
-    ? await Promise.all([
-        db.query.eventRsvps.findMany({
-          where: and(inArray(eventRsvps.eventId, allEventIds), eq(eventRsvps.userId, userId)),
-          with: {
-            user: true,
-          },
-        }),
-        db.query.eventRsvps.findMany({
-          where: and(
-            inArray(eventRsvps.eventId, allEventIds),
-            eq(eventRsvps.partnerRsvpByUserId, userId),
-            inArray(eventRsvps.status, ["going", "interested"])
-          ),
-          with: {
-            user: true,
-          },
-        }),
-        acceptedFriendIds.length > 0
-          ? db.query.eventRsvps.findMany({
-              where: and(
-                inArray(eventRsvps.eventId, allEventIds),
-                inArray(eventRsvps.userId, acceptedFriendIds),
-                inArray(eventRsvps.status, ["going", "interested"])
-              ),
-              with: {
-                user: true,
-              },
-            })
-          : Promise.resolve([]),
-      ])
-    : [[], [], []];
+  const [currentUserRsvps, mirroredPartnerRsvps, friendRsvps] =
+    allEventIds.length
+      ? await Promise.all([
+          db.query.eventRsvps.findMany({
+            where: and(
+              inArray(eventRsvps.eventId, allEventIds),
+              eq(eventRsvps.userId, userId)
+            ),
+            with: {
+              user: true,
+            },
+          }),
+          db.query.eventRsvps.findMany({
+            where: and(
+              inArray(eventRsvps.eventId, allEventIds),
+              eq(eventRsvps.partnerRsvpByUserId, userId),
+              inArray(eventRsvps.status, ["going", "interested"])
+            ),
+            with: {
+              user: true,
+            },
+          }),
+          acceptedFriendIds.length > 0
+            ? db.query.eventRsvps.findMany({
+                where: and(
+                  inArray(eventRsvps.eventId, allEventIds),
+                  inArray(eventRsvps.userId, acceptedFriendIds),
+                  inArray(eventRsvps.status, ["going", "interested"])
+                ),
+                with: {
+                  user: true,
+                },
+              })
+            : Promise.resolve([]),
+        ])
+      : [[], [], []];
 
   const currentUserRsvpMap = new Map<
     string,
-    { status: "going" | "interested" | "not_going"; notGoingReason: string | null }
+    {
+      status: "going" | "interested" | "not_going";
+      notGoingReason: string | null;
+    }
   >();
   for (const rsvp of currentUserRsvps) {
     currentUserRsvpMap.set(rsvp.eventId, {
@@ -410,10 +546,15 @@ export async function GET() {
     }
 
     const attendees = socialRsvpsMap.get(rsvp.eventId)!;
-    const existingIndex = attendees.findIndex((attendee: any) => attendee.userId === rsvp.userId);
+    const existingIndex = attendees.findIndex(
+      (attendee: any) => attendee.userId === rsvp.userId
+    );
 
     if (existingIndex >= 0) {
-      if (attendees[existingIndex].status === "interested" && rsvp.status === "going") {
+      if (
+        attendees[existingIndex].status === "interested" &&
+        rsvp.status === "going"
+      ) {
         attendees[existingIndex] = rsvp;
       }
       return;
@@ -422,8 +563,17 @@ export async function GET() {
     attendees.push(rsvp);
   };
 
-  for (const rsvp of [...currentUserRsvps, ...mirroredPartnerRsvps, ...friendRsvps]) {
-    if (!rsvp.user || (rsvp.status !== "going" && rsvp.status !== "interested" && rsvp.status !== "not_going")) {
+  for (const rsvp of [
+    ...currentUserRsvps,
+    ...mirroredPartnerRsvps,
+    ...friendRsvps,
+  ]) {
+    if (
+      !rsvp.user ||
+      (rsvp.status !== "going" &&
+        rsvp.status !== "interested" &&
+        rsvp.status !== "not_going")
+    ) {
       continue;
     }
 
@@ -444,7 +594,7 @@ export async function GET() {
     });
   }
 
-  const mapMobileEvent = (event: typeof upcomingEventsRaw[number]) => {
+  const mapMobileEvent = (event: (typeof upcomingEventsRaw)[number]) => {
     const mapped = mapEventCategoryData(event);
     const socialRsvps = socialRsvpsMap.get(mapped.id) ?? [];
     const currentUserRsvp = currentUserRsvpMap.get(mapped.id) ?? null;
@@ -487,14 +637,21 @@ export async function GET() {
       }),
       isFollowed:
         (mapped.venueId ? followedPlaceIdSet.has(mapped.venueId) : false) ||
-        (mapped.organizerId ? followedPlaceIdSet.has(mapped.organizerId) : false),
-      isCreatedByCurrentUser: Boolean(userId) && mapped.createdByUserId === userId,
+        (mapped.organizerId
+          ? followedPlaceIdSet.has(mapped.organizerId)
+          : false),
+      isCreatedByCurrentUser:
+        Boolean(userId) && mapped.createdByUserId === userId,
       userRsvpStatus: currentUserRsvp?.status ?? null,
       userRsvpNotGoingReason: currentUserRsvp?.notGoingReason ?? null,
       currentUserReview: currentUserReviewMap.get(mapped.id) ?? null,
       friendsGoing: socialRsvps.filter((rsvp: any) => rsvp.status === "going"),
-      friendsInterested: socialRsvps.filter((rsvp: any) => rsvp.status === "interested"),
-      friendsNotGoing: socialRsvps.filter((rsvp: any) => rsvp.status === "not_going"),
+      friendsInterested: socialRsvps.filter(
+        (rsvp: any) => rsvp.status === "interested"
+      ),
+      friendsNotGoing: socialRsvps.filter(
+        (rsvp: any) => rsvp.status === "not_going"
+      ),
     };
   };
 
@@ -505,7 +662,10 @@ export async function GET() {
     followingCount: followedPlaces.length,
     followedPlaces: followedPlaces.map(({ place }) => {
       const mappedPlace = mapPlaceCategoryData(place);
-      const metroArea = resolveMetroArea({ city: place.city, state: place.state });
+      const metroArea = resolveMetroArea({
+        city: place.city,
+        state: place.state,
+      });
 
       return {
         id: mappedPlace.id,
@@ -527,9 +687,45 @@ export async function GET() {
         categoryLabels: mappedPlace.categoryLabels,
       };
     }),
+    memberPlaceCount: placeMemberships.length,
+    memberPlaces: placeMemberships.map(({ place, role }) => {
+      const mappedPlace = mapPlaceCategoryData(place);
+      const metroArea = resolveMetroArea({
+        city: place.city,
+        state: place.state,
+      });
+
+      return {
+        place: {
+          id: mappedPlace.id,
+          type: mappedPlace.type,
+          slug: mappedPlace.slug,
+          name: mappedPlace.name,
+          logoImageUrl: mappedPlace.logoImageUrl,
+          address: mappedPlace.address,
+          city: mappedPlace.city,
+          state: mappedPlace.state,
+          website: mappedPlace.website,
+          instagram: mappedPlace.instagram,
+          metroAreaCity: metroArea?.city ?? null,
+          metroAreaState: metroArea?.state ?? null,
+          upcomingEventCount: 0,
+          updatedAt: mappedPlace.updatedAt,
+          isFollowed: followedPlaceIdSet.has(mappedPlace.id),
+          isMember: true,
+          categories: mappedPlace.categories,
+          categoryLabels: mappedPlace.categoryLabels,
+        },
+        role,
+      };
+    }),
     friends: [...acceptedByUserId.values()],
     receivedRequests,
     sentRequests,
+    promotingEvents: promotingEventsRaw.map(({ event, promo }) => ({
+      ...mapMobileEvent(event),
+      promo,
+    })),
     upcomingEvents: upcomingEventsRaw.map(mapMobileEvent),
     pastEvents: pastEventsRaw.map(mapMobileEvent),
   });

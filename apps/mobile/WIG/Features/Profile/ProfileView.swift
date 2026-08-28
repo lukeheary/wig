@@ -43,6 +43,7 @@ struct ProfileView: View {
     @State private var friendRequestActionErrorMessage: String?
     @State private var isAdminSettingsPresented = false
     @State private var isEditProfilePresented = false
+    @State private var isManagePromotingPresented = false
     @State private var isHelpAndFeedbackPresented = false
     @State private var isSignOutConfirmationPresented = false
     @State private var profileShareURL: URL?
@@ -235,6 +236,9 @@ struct ProfileView: View {
                         isEditProfilePresented = false
                     }
                 }
+                .navigationDestination(isPresented: $isManagePromotingPresented) {
+                    ManagePromotingView()
+                }
                 .navigationDestination(isPresented: $isHelpAndFeedbackPresented) {
                     MobileHelpAndFeedbackView()
                 }
@@ -384,7 +388,9 @@ struct ProfileView: View {
             }
             .task(id: profileEventPrefetchKey(response: response)) {
                 await EventArtworkPrefetcher.prefetch(
-                    events: response.upcomingEvents + response.pastEvents
+                    events: (response.promotingEvents ?? [])
+                        + response.upcomingEvents
+                        + response.pastEvents
                 )
             }
         }
@@ -402,6 +408,11 @@ struct ProfileView: View {
         let groups = ProfileEventGrouper.groups(for: events, mode: selectedEventsTab)
 
         VStack(alignment: .leading, spacing: 18) {
+            if let promotingEvents = response.promotingEvents,
+               !promotingEvents.isEmpty {
+                ProfilePromotingEventsSection(events: promotingEvents)
+            }
+
             if groups.isEmpty {
                 ProfileEventsSectionHeader(
                     title: selectedEventsTab.title,
@@ -510,7 +521,7 @@ struct ProfileView: View {
     }
 
     private func profileEventPrefetchKey(response: FriendsFeedResponse) -> String {
-        (response.upcomingEvents + response.pastEvents)
+        ((response.promotingEvents ?? []) + response.upcomingEvents + response.pastEvents)
             .map(\.id.uuidString)
             .joined(separator: ",")
     }
@@ -690,6 +701,8 @@ struct ProfileView: View {
                     requestCount: max(current.requestCount - 1, 0),
                     followingCount: current.followingCount,
                     followedPlaces: current.followedPlaces,
+                    memberPlaceCount: current.memberPlaceCount,
+                    memberPlaces: current.memberPlaces,
                     friends: current.friends + [
                         FriendUserSummary(
                             id: resolvedRequest.id,
@@ -705,6 +718,7 @@ struct ProfileView: View {
                     ],
                     receivedRequests: current.receivedRequests.filter { $0.id != resolvedRequest.id },
                     sentRequests: current.sentRequests,
+                    promotingEvents: current.promotingEvents,
                     upcomingEvents: current.upcomingEvents,
                     pastEvents: current.pastEvents
                 )
@@ -717,9 +731,12 @@ struct ProfileView: View {
                     requestCount: max(current.requestCount - 1, 0),
                     followingCount: current.followingCount,
                     followedPlaces: current.followedPlaces,
+                    memberPlaceCount: current.memberPlaceCount,
+                    memberPlaces: current.memberPlaces,
                     friends: current.friends,
                     receivedRequests: current.receivedRequests.filter { $0.id != resolvedRequest.id },
                     sentRequests: current.sentRequests,
+                    promotingEvents: current.promotingEvents,
                     upcomingEvents: current.upcomingEvents,
                     pastEvents: current.pastEvents
                 )
@@ -792,6 +809,18 @@ struct ProfileView: View {
                 .tint(.white)
             }
 
+            if case .loaded(let response) = viewModel.state,
+               response.memberPlaces?.contains(where: { $0.role == .promoter }) == true
+            {
+                Button {
+                    isManagePromotingPresented = true
+                } label: {
+                    Label("Manage Promoting", systemImage: "megaphone")
+                        .foregroundStyle(.white)
+                }
+                .tint(.white)
+            }
+
             if appSession.isAdmin {
                 Button {
                     isAdminSettingsPresented = true
@@ -840,6 +869,250 @@ struct ProfileView: View {
 
         return error.localizedDescription.trimmingCharacters(in: .whitespacesAndNewlines)
             .localizedCaseInsensitiveCompare("cancelled") == .orderedSame
+    }
+}
+
+private struct ManagePromotingView: View {
+    @Environment(\.apiClient) private var apiClient
+    @Environment(\.dismiss) private var dismiss
+    @State private var events: [PromotableEvent] = []
+    @State private var isLoading = true
+    @State private var updatingEventID: UUID?
+    @State private var errorMessage: String?
+
+    var body: some View {
+        VStack(spacing: 0) {
+            ZStack {
+                Text("Manage Promoting")
+                    .font(.system(size: 17, weight: .semibold))
+                    .foregroundStyle(.white)
+
+                HStack {
+                    Button { dismiss() } label: {
+                        Image(systemName: "chevron.left")
+                            .font(.system(size: 18, weight: .bold))
+                            .foregroundStyle(.white)
+                            .frame(width: 46, height: 46)
+                            .profileLiquidGlass(in: Circle())
+                    }
+                    .buttonStyle(.plain)
+                    Spacer()
+                }
+            }
+            .padding(.horizontal, 16)
+            .padding(.top, 12)
+
+            Text("Choose upcoming events from places where you’re a promoter. Only selections happening this week appear on your profile.")
+                .font(.system(size: 13, weight: .medium))
+                .foregroundStyle(.white.opacity(0.55))
+                .frame(maxWidth: .infinity, alignment: .leading)
+                .padding(.horizontal, 20)
+                .padding(.top, 18)
+                .padding(.bottom, 12)
+
+            Group {
+                if isLoading {
+                    Spacer()
+                    ProgressView().tint(.white)
+                    Spacer()
+                } else if events.isEmpty {
+                    Spacer()
+                    ContentUnavailableView(
+                        "No Eligible Events",
+                        systemImage: "calendar.badge.exclamationmark",
+                        description: Text("Upcoming events from your promoter places will appear here.")
+                    )
+                    .foregroundStyle(.white)
+                    Spacer()
+                } else {
+                    ScrollView {
+                        LazyVStack(spacing: 2) {
+                            ForEach(events) { event in
+                                VStack(spacing: 0) {
+                                    Button {
+                                        Task { await toggle(event) }
+                                    } label: {
+                                        HStack(spacing: 12) {
+                                            RemoteImageView(url: event.coverImageURL) { image in
+                                                image
+                                                    .resizable()
+                                                    .scaledToFill()
+                                            } placeholder: {
+                                                Color.white.opacity(0.08)
+                                                    .overlay {
+                                                        Image(systemName: "calendar")
+                                                            .font(.system(size: 16, weight: .semibold))
+                                                            .foregroundStyle(.white.opacity(0.64))
+                                                    }
+                                            }
+                                            .frame(width: 42, height: 42)
+                                            .clipShape(RoundedRectangle(cornerRadius: 8, style: .continuous))
+                                            .overlay {
+                                                RoundedRectangle(cornerRadius: 8, style: .continuous)
+                                                    .strokeBorder(.white.opacity(0.14), lineWidth: 1)
+                                            }
+
+                                            VStack(alignment: .leading, spacing: 3) {
+                                                Text(event.title)
+                                                    .font(.system(size: 14, weight: .medium))
+                                                    .foregroundStyle(.white)
+                                                    .lineLimit(1)
+                                                Text(eventSubtitle(event))
+                                                    .font(.system(size: 10, weight: .medium))
+                                                    .foregroundStyle(.white.opacity(0.58))
+                                                    .lineLimit(1)
+                                            }
+                                            Spacer(minLength: 8)
+                                            if updatingEventID == event.id {
+                                                ProgressView().tint(.white)
+                                            } else {
+                                                Image(systemName: event.isPromoted ? "checkmark.circle.fill" : "circle")
+                                                    .font(.system(size: 22, weight: .semibold))
+                                                    .foregroundStyle(event.isPromoted ? Color(red: 0.49, green: 0.78, blue: 0.98) : .white.opacity(0.35))
+                                            }
+                                        }
+                                        .padding(.horizontal, 20)
+                                        .padding(.vertical, 5)
+                                        .frame(minHeight: 52)
+                                        .contentShape(Rectangle())
+                                    }
+                                    .buttonStyle(.plain)
+                                    .disabled(updatingEventID != nil)
+
+                                    if event.isPromoted {
+                                        HStack(spacing: 8) {
+                                            TextField(
+                                                "Promo, e.g. Free with RSVP",
+                                                text: promoBinding(for: event.id)
+                                            )
+                                            .font(.system(size: 14, weight: .medium))
+                                            .foregroundStyle(.white)
+                                            .padding(.horizontal, 12)
+                                            .frame(height: 40)
+                                            .background(Color.white.opacity(0.07), in: RoundedRectangle(cornerRadius: 12, style: .continuous))
+
+                                            Button("Save") {
+                                                Task { await savePromo(for: event.id) }
+                                            }
+                                            .font(.system(size: 13, weight: .bold))
+                                            .foregroundStyle(AppTheme.accentBlue)
+                                            .disabled(updatingEventID != nil)
+                                        }
+                                        .padding(.horizontal, 20)
+                                        .padding(.bottom, 10)
+                                    }
+                                }
+                            }
+                        }
+                        .padding(.bottom, 32)
+                    }
+                }
+            }
+        }
+        .background(ProfileTheme.background.ignoresSafeArea())
+        .toolbar(.hidden, for: .navigationBar)
+        .task { await load() }
+        .alert("Unable to Update", isPresented: Binding(
+            get: { errorMessage != nil },
+            set: { if !$0 { errorMessage = nil } }
+        )) {
+            Button("OK", role: .cancel) {}
+        } message: {
+            Text(errorMessage ?? "Please try again.")
+        }
+    }
+
+    private func eventSubtitle(_ event: PromotableEvent) -> String {
+        let date = event.startAt.formatted(.dateTime.weekday(.abbreviated).month(.abbreviated).day().hour().minute())
+        return [date, event.placeName].compactMap { $0 }.joined(separator: " · ")
+    }
+
+    private func load() async {
+        do {
+            events = try await apiClient.send(APIClient.mobilePromotableEvents()).events
+            await hydrateMissingEventImages()
+        } catch {
+            errorMessage = error.localizedDescription
+        }
+        isLoading = false
+    }
+
+    private func hydrateMissingEventImages() async {
+        let missingEvents = events.filter { $0.coverImageURL == nil }
+        guard !missingEvents.isEmpty else { return }
+
+        await withTaskGroup(of: (UUID, URL?).self) { group in
+            for event in missingEvents {
+                group.addTask {
+                    let detail = try? await apiClient.send(
+                        APIClient.mobileEventDetail(eventPublicID: event.id.uuidString)
+                    )
+                    return (event.id, detail?.posterImageURL)
+                }
+            }
+
+            for await (eventID, imageURL) in group {
+                guard
+                    let imageURL,
+                    let index = events.firstIndex(where: { $0.id == eventID })
+                else { continue }
+                events[index].coverImageURL = imageURL
+            }
+        }
+    }
+
+    private func toggle(_ event: PromotableEvent) async {
+        updatingEventID = event.id
+        let promoted = !event.isPromoted
+        do {
+            _ = try await apiClient.send(
+                try APIClient.setMobileEventPromoted(
+                    eventID: event.id,
+                    promoted: promoted,
+                    promo: event.promo
+                )
+            )
+            if let index = events.firstIndex(where: { $0.id == event.id }) {
+                events[index].isPromoted = promoted
+            }
+            ProfileViewModel.invalidateCache()
+            UserProfileViewModel.invalidateAllCaches()
+            NotificationCenter.default.post(name: .appDataDidChange, object: nil)
+        } catch {
+            errorMessage = error.localizedDescription
+        }
+        updatingEventID = nil
+    }
+
+    private func promoBinding(for eventID: UUID) -> Binding<String> {
+        Binding(
+            get: { events.first(where: { $0.id == eventID })?.promo ?? "" },
+            set: { value in
+                if let index = events.firstIndex(where: { $0.id == eventID }) {
+                    events[index].promo = String(value.prefix(255))
+                }
+            }
+        )
+    }
+
+    private func savePromo(for eventID: UUID) async {
+        guard let event = events.first(where: { $0.id == eventID }) else { return }
+        updatingEventID = eventID
+        do {
+            _ = try await apiClient.send(
+                try APIClient.setMobileEventPromoted(
+                    eventID: eventID,
+                    promoted: true,
+                    promo: event.promo?.trimmingCharacters(in: .whitespacesAndNewlines)
+                )
+            )
+            ProfileViewModel.invalidateCache()
+            UserProfileViewModel.invalidateAllCaches()
+            NotificationCenter.default.post(name: .appDataDidChange, object: nil)
+        } catch {
+            errorMessage = error.localizedDescription
+        }
+        updatingEventID = nil
     }
 }
 
@@ -1226,7 +1499,9 @@ struct UserProfileView: View {
                 }
 
                 await EventArtworkPrefetcher.prefetch(
-                    events: response.upcomingEvents + response.pastEvents
+                    events: (response.promotingEvents ?? [])
+                        + response.upcomingEvents
+                        + response.pastEvents
                 )
             }
     }
@@ -1635,7 +1910,10 @@ struct UserProfileView: View {
                 friendCount: current.friendCount,
                 followingCount: current.followingCount,
                 followedPlaces: current.followedPlaces,
+                memberPlaceCount: current.memberPlaceCount,
+                memberPlaces: current.memberPlaces,
                 friends: current.friends,
+                promotingEvents: current.promotingEvents,
                 upcomingEvents: current.upcomingEvents,
                 pastEvents: current.pastEvents
             )
@@ -1674,7 +1952,10 @@ struct UserProfileView: View {
                         friendCount: current.friendCount,
                         followingCount: current.followingCount,
                         followedPlaces: current.followedPlaces,
+                        memberPlaceCount: current.memberPlaceCount,
+                        memberPlaces: current.memberPlaces,
                         friends: current.friends,
+                        promotingEvents: current.promotingEvents,
                         upcomingEvents: current.upcomingEvents,
                         pastEvents: current.pastEvents
                     )
@@ -1730,7 +2011,10 @@ struct UserProfileView: View {
                 friendCount: current.friendCount,
                 followingCount: current.followingCount,
                 followedPlaces: current.followedPlaces,
+                memberPlaceCount: current.memberPlaceCount,
+                memberPlaces: current.memberPlaces,
                 friends: current.friends,
+                promotingEvents: current.promotingEvents,
                 upcomingEvents: current.upcomingEvents,
                 pastEvents: current.pastEvents
             )
@@ -1798,7 +2082,10 @@ struct UserProfileView: View {
                 friendCount: max(current.friendCount - 1, 0),
                 followingCount: current.followingCount,
                 followedPlaces: current.followedPlaces,
+                memberPlaceCount: current.memberPlaceCount,
+                memberPlaces: current.memberPlaces,
                 friends: current.friends.filter { $0.id != profile.id },
+                promotingEvents: current.promotingEvents,
                 upcomingEvents: current.upcomingEvents,
                 pastEvents: current.pastEvents
             )
@@ -1838,7 +2125,10 @@ struct UserProfileView: View {
                 friendCount: current.friendCount,
                 followingCount: current.followingCount,
                 followedPlaces: current.followedPlaces,
+                memberPlaceCount: current.memberPlaceCount,
+                memberPlaces: current.memberPlaces,
                 friends: current.friends,
+                promotingEvents: current.promotingEvents,
                 upcomingEvents: current.upcomingEvents,
                 pastEvents: current.pastEvents
             )
@@ -1865,7 +2155,10 @@ struct UserProfileView: View {
                         friendCount: current.friendCount,
                         followingCount: current.followingCount,
                         followedPlaces: current.followedPlaces,
+                        memberPlaceCount: current.memberPlaceCount,
+                        memberPlaces: current.memberPlaces,
                         friends: current.friends,
+                        promotingEvents: current.promotingEvents,
                         upcomingEvents: current.upcomingEvents,
                         pastEvents: current.pastEvents
                     )
@@ -1907,7 +2200,7 @@ struct UserProfileView: View {
             return "idle"
         }
 
-        return (response.upcomingEvents + response.pastEvents)
+        return ((response.promotingEvents ?? []) + response.upcomingEvents + response.pastEvents)
             .map(\.id.uuidString)
             .joined(separator: ",")
     }
@@ -2256,6 +2549,27 @@ private enum ProfileEventsRSVPFilter: String, CaseIterable, Identifiable {
     }
 }
 
+private struct ProfilePromotingEventsSection: View {
+    let events: [EventFeedItem]
+
+    var body: some View {
+        EventCardCarousel(
+            events: events,
+            cardWidth: 220,
+            verticalSpacing: 10
+        ) {
+            Text("Promoting")
+                .font(AppTheme.contentHeaderFont)
+                .foregroundStyle(.white)
+        } card: { event in
+            EventDetailNavigationLink(event: event) {
+                EventCardView(event: event)
+            }
+        }
+        .padding(.horizontal, -16)
+    }
+}
+
 private struct UserProfileEventsSection: View {
     let response: UserProfileResponse
     let isCurrentUser: Bool
@@ -2277,6 +2591,11 @@ private struct UserProfileEventsSection: View {
         let groups = ProfileEventGrouper.groups(for: events, mode: selectedEventsTab)
 
         VStack(alignment: .leading, spacing: 18) {
+            if let promotingEvents = response.promotingEvents,
+               !promotingEvents.isEmpty {
+                ProfilePromotingEventsSection(events: promotingEvents)
+            }
+
             if groups.isEmpty {
                 ProfileEventsSectionHeader(
                     title: selectedEventsTab.title,
@@ -2612,6 +2931,18 @@ private struct RelationshipSummaryRow: View {
                 RelationshipSummaryLink(count: response.followingCount, label: "Following")
             }
             .buttonStyle(.plain)
+
+            if let memberPlaces = response.memberPlaces, !memberPlaces.isEmpty {
+                NavigationLink {
+                    UserPlacesView(memberships: memberPlaces)
+                } label: {
+                    RelationshipSummaryLink(
+                        count: response.memberPlaceCount ?? memberPlaces.count,
+                        label: "Places"
+                    )
+                }
+                .buttonStyle(.plain)
+            }
 
             NavigationLink {
                 FriendRequestsView(
@@ -3099,9 +3430,21 @@ private struct UserRelationshipSummaryRow: View {
             }
             .buttonStyle(.plain)
 
-            RelationshipSummaryLink(count: 0, label: "Requests")
-                .hidden()
-                .accessibilityHidden(true)
+            if let memberPlaces = response.memberPlaces, !memberPlaces.isEmpty {
+                NavigationLink {
+                    UserPlacesView(memberships: memberPlaces)
+                } label: {
+                    RelationshipSummaryLink(
+                        count: response.memberPlaceCount ?? memberPlaces.count,
+                        label: "Places"
+                    )
+                }
+                .buttonStyle(.plain)
+            } else {
+                RelationshipSummaryLink(count: 0, label: "Places")
+                    .hidden()
+                    .accessibilityHidden(true)
+            }
         }
         .frame(maxWidth: .infinity)
     }
@@ -3210,6 +3553,41 @@ private struct FollowingPlacesView: View {
         }
 
         displayedPlaces.insert(place, at: min(originalIndex, displayedPlaces.count))
+    }
+}
+
+private struct UserPlacesView: View {
+    let memberships: [UserPlaceMembership]
+
+    private var sortedMemberships: [UserPlaceMembership] {
+        memberships.sorted {
+            $0.place.name.localizedCaseInsensitiveCompare($1.place.name) == .orderedAscending
+        }
+    }
+
+    var body: some View {
+        RelationshipListScreen(title: "Places") {
+            VStack(spacing: 2) {
+                ForEach(sortedMemberships) { membership in
+                    NavigationLink {
+                        PlaceDetailView(place: membership.place)
+                    } label: {
+                        HStack(spacing: 12) {
+                            PlaceRowView(place: membership.place, style: .plain)
+
+                            Text(membership.role.displayName)
+                                .font(.system(size: 11, weight: .semibold))
+                                .foregroundStyle(.white.opacity(0.72))
+                                .padding(.horizontal, 10)
+                                .padding(.vertical, 5)
+                                .background(.white.opacity(0.10), in: Capsule())
+                        }
+                        .contentShape(Rectangle())
+                    }
+                    .buttonStyle(.plain)
+                }
+            }
+        }
     }
 }
 
@@ -3703,6 +4081,8 @@ struct RequestsPageView: View {
                     requestCount: max(current.requestCount - 1, 0),
                     followingCount: current.followingCount,
                     followedPlaces: current.followedPlaces,
+                    memberPlaceCount: current.memberPlaceCount,
+                    memberPlaces: current.memberPlaces,
                     friends: current.friends + [
                         FriendUserSummary(
                             id: resolvedRequest.id,
@@ -3718,6 +4098,7 @@ struct RequestsPageView: View {
                     ],
                     receivedRequests: current.receivedRequests.filter { $0.id != resolvedRequest.id },
                     sentRequests: current.sentRequests,
+                    promotingEvents: current.promotingEvents,
                     upcomingEvents: current.upcomingEvents,
                     pastEvents: current.pastEvents
                 )
@@ -3730,9 +4111,12 @@ struct RequestsPageView: View {
                     requestCount: max(current.requestCount - 1, 0),
                     followingCount: current.followingCount,
                     followedPlaces: current.followedPlaces,
+                    memberPlaceCount: current.memberPlaceCount,
+                    memberPlaces: current.memberPlaces,
                     friends: current.friends,
                     receivedRequests: current.receivedRequests.filter { $0.id != resolvedRequest.id },
                     sentRequests: current.sentRequests,
+                    promotingEvents: current.promotingEvents,
                     upcomingEvents: current.upcomingEvents,
                     pastEvents: current.pastEvents
                 )
@@ -5152,15 +5536,22 @@ private final class AdminScrapersViewModel: ObservableObject {
         }
     }
 
-    func runScraper(id: UUID, using apiClient: APIClient) async {
+    @discardableResult
+    func runScraper(
+        id: UUID,
+        using apiClient: APIClient
+    ) async -> MobileAdminScraperRunResponse? {
         isRunning = true
         resetSession()
         defer { isRunning = false }
 
         do {
-            runResult = try await apiClient.send(APIClient.mobileRunAdminScraper(scraperID: id))
+            let result = try await apiClient.send(APIClient.mobileRunAdminScraper(scraperID: id))
+            runResult = result
+            return result
         } catch {
             errorMessage = error.localizedDescription
+            return nil
         }
     }
 
@@ -5197,7 +5588,7 @@ private struct AdminScrapersView: View {
     @StateObject private var viewModel = AdminScrapersViewModel()
     @State private var searchText = ""
     @State private var selectedScraperID: UUID?
-    @State private var overrideExisting = false
+    @State private var presentedRunResult: MobileAdminScraperRunResponse?
     @State private var isRunAllPoshConfirmationPresented = false
 
     var body: some View {
@@ -5215,9 +5606,6 @@ private struct AdminScrapersView: View {
                     errorCard(errorMessage)
                 }
 
-                if let runResult = viewModel.runResult {
-                    runResultSection(runResult)
-                }
             }
             .padding(.horizontal, 16)
             .padding(.top, 74)
@@ -5228,6 +5616,9 @@ private struct AdminScrapersView: View {
         .background(SwipeBackEnabler())
         .toolbar(.hidden, for: .navigationBar)
         .navigationBarBackButtonHidden()
+        .navigationDestination(item: $presentedRunResult) { result in
+            AdminScraperResultsView(viewModel: viewModel, result: result)
+        }
         .overlay(alignment: .top) {
             ZStack {
                 Text("Scrapers")
@@ -5383,14 +5774,7 @@ private struct AdminScrapersView: View {
             viewModel.resetSession()
         } label: {
             HStack(spacing: 12) {
-                ZStack {
-                    RoundedRectangle(cornerRadius: 8, style: .continuous)
-                        .fill(.white.opacity(0.08))
-                    Image(systemName: row.place.type == .venue ? "building.2" : "person.2")
-                        .font(.system(size: 15, weight: .semibold))
-                        .foregroundStyle(AppTheme.accentBlue)
-                }
-                .frame(width: 42, height: 42)
+                AdminScraperPlaceImage(place: row.place, size: 42)
 
                 VStack(alignment: .leading, spacing: 3) {
                     Text(row.place.name)
@@ -5448,7 +5832,9 @@ private struct AdminScrapersView: View {
 
             Button {
                 Task {
-                    await viewModel.runScraper(id: row.id, using: apiClient)
+                    if let result = await viewModel.runScraper(id: row.id, using: apiClient) {
+                        presentedRunResult = result
+                    }
                 }
             } label: {
                 HStack(spacing: 8) {
@@ -5493,7 +5879,84 @@ private struct AdminScrapersView: View {
             )
     }
 
-    private func runResultSection(_ result: MobileAdminScraperRunResponse) -> some View {
+}
+
+private struct AdminScraperResultsView: View {
+    @Environment(\.dismiss) private var dismiss
+    @Environment(\.apiClient) private var apiClient
+    @ObservedObject var viewModel: AdminScrapersViewModel
+    let result: MobileAdminScraperRunResponse
+    @State private var overrideExisting = false
+
+    private var sortedEvents: [MobileAdminScrapedEvent] {
+        result.events.sorted { $0.startAt < $1.startAt }
+    }
+
+    var body: some View {
+        ScrollView {
+            VStack(alignment: .leading, spacing: 16) {
+                scraperSummary
+                resultContent
+            }
+            .padding(.horizontal, 16)
+            .padding(.top, 74)
+            .padding(.bottom, 18)
+        }
+        .scrollIndicators(.hidden)
+        .background(ProfileTheme.background.ignoresSafeArea())
+        .background(SwipeBackEnabler())
+        .toolbar(.hidden, for: .navigationBar)
+        .navigationBarBackButtonHidden()
+        .overlay(alignment: .top) {
+            ZStack {
+                Text(result.scraperRow.place.name)
+                    .font(.system(size: 17, weight: .semibold))
+                    .foregroundStyle(.white)
+                    .lineLimit(1)
+                    .padding(.horizontal, 58)
+
+                HStack {
+                    FloatingGlassIconButton(systemImage: "chevron.left") {
+                        dismiss()
+                    }
+                    Spacer()
+                }
+            }
+            .padding(.horizontal, 16)
+        }
+    }
+
+    private var scraperSummary: some View {
+        HStack(spacing: 14) {
+            AdminScraperPlaceImage(place: result.scraperRow.place, size: 58)
+
+            VStack(alignment: .leading, spacing: 5) {
+                Text(result.scraperRow.place.name)
+                    .font(.system(size: 17, weight: .semibold))
+                    .foregroundStyle(.white)
+                    .lineLimit(1)
+
+                Text(result.scraperRow.scraper.title)
+                    .font(.system(size: 13, weight: .semibold))
+                    .foregroundStyle(AppTheme.accentBlue)
+
+                Text(result.scraperRow.searchString)
+                    .font(.system(size: 11, weight: .medium, design: .monospaced))
+                    .foregroundStyle(.white.opacity(0.54))
+                    .lineLimit(2)
+            }
+
+            Spacer(minLength: 0)
+        }
+        .padding(16)
+        .frame(maxWidth: .infinity, alignment: .leading)
+        .background(
+            RoundedRectangle(cornerRadius: 20, style: .continuous)
+                .fill(ProfileTheme.cardBackground)
+        )
+    }
+
+    private var resultContent: some View {
         VStack(alignment: .leading, spacing: 16) {
             HStack {
                 Text("\(result.totalEvents) events found")
@@ -5525,7 +5988,7 @@ private struct AdminScrapersView: View {
                 Task {
                     await viewModel.importEvents(
                         scraperID: result.scraperRow.id,
-                        events: result.events,
+                        events: sortedEvents,
                         overrideExisting: overrideExisting,
                         using: apiClient
                     )
@@ -5570,11 +6033,36 @@ private struct AdminScrapersView: View {
             }
 
             VStack(spacing: 12) {
-                ForEach(result.events) { event in
+                ForEach(sortedEvents) { event in
                     AdminScrapedEventCard(event: event)
                 }
             }
         }
+    }
+}
+
+private struct AdminScraperPlaceImage: View {
+    let place: MobileAdminScraperPlace
+    let size: CGFloat
+
+    var body: some View {
+        AsyncImage(url: place.logoImageURL) { phase in
+            switch phase {
+            case .success(let image):
+                image
+                    .resizable()
+                    .scaledToFill()
+            default:
+                ZStack {
+                    Color.white.opacity(0.08)
+                    Image(systemName: place.type == .venue ? "building.2" : "person.2")
+                        .font(.system(size: size * 0.36, weight: .semibold))
+                        .foregroundStyle(AppTheme.accentBlue)
+                }
+            }
+        }
+        .frame(width: size, height: size)
+        .clipShape(RoundedRectangle(cornerRadius: size * 0.22, style: .continuous))
     }
 }
 

@@ -1065,9 +1065,9 @@ private final class MobileOnboardingViewModel: ObservableObject {
         isSubmitting = true
         defer { isSubmitting = false }
 
-        let endpoint = try switch mode {
+        let endpoint = switch mode {
         case .onboarding:
-            APIClient.completeMobileOnboarding(
+            try APIClient.completeMobileOnboarding(
                 firstName: firstName,
                 lastName: lastName,
                 username: username,
@@ -1077,7 +1077,7 @@ private final class MobileOnboardingViewModel: ObservableObject {
                 dateOfBirth: dateOfBirth
             )
         case .editing:
-            APIClient.updateMobileProfile(
+            try APIClient.updateMobileProfile(
                 firstName: firstName,
                 lastName: lastName,
                 username: username,

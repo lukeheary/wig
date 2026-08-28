@@ -115,6 +115,9 @@ export function UserProfilePage({
       case "share":
         await shareProfile();
         break;
+      case "promoting":
+        router.push("/profile/promoting");
+        break;
       case "admin":
         router.push("/admin");
         break;
@@ -179,6 +182,9 @@ export function UserProfilePage({
               className="absolute inset-0 h-full w-full cursor-pointer opacity-0"
             >
               {showSettings ? <option value="edit">Edit Profile</option> : null}
+              {showSettings && data.isPromoter ? (
+                <option value="promoting">Manage Promoting</option>
+              ) : null}
               <option value="share">Share Profile</option>
               {showSettings && adminStatus?.isAdmin ? (
                 <option value="admin">Admin Settings</option>
@@ -290,6 +296,10 @@ export function UserProfilePage({
           ) : null}
         </section>
 
+        {data.promotingEvents.length > 0 ? (
+          <ProfilePromotingSection events={data.promotingEvents} />
+        ) : null}
+
         <ProfileEventSections
           sections={eventSections}
           mode={eventMode}
@@ -297,6 +307,21 @@ export function UserProfilePage({
         />
       </div>
     </main>
+  );
+}
+
+function ProfilePromotingSection({ events }: { events: any[] }) {
+  return (
+    <section className="mb-8">
+      <div className="container mx-auto px-4">
+        <ProfileMonthHeader title="Promoting" />
+        <HomeMobileEventRail
+          events={events}
+          desktopLayout="rail"
+          desktopBleed
+        />
+      </div>
+    </section>
   );
 }
 

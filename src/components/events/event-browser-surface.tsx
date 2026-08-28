@@ -326,7 +326,7 @@ function getWeekSectionMeta(date: Date, isCurrentWeek: boolean) {
   const isEvening = now.getHours() >= 17;
 
   const dateHeader = isLastNightSection
-    ? "Last Night's Events"
+    ? "Last Night"
     : isToday
       ? isEvening
         ? "Tonight"

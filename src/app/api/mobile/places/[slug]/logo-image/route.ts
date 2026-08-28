@@ -61,6 +61,15 @@ export async function POST(
       ) {
         return NextResponse.json({ error: "Forbidden" }, { status: 403 });
       }
+      if (
+        !permissions.isAdmin &&
+        permissions.placeRoleById.get(place.id) === "promoter"
+      ) {
+        return NextResponse.json(
+          { error: "Promoters cannot change place images" },
+          { status: 403 }
+        );
+      }
     }
 
     await db

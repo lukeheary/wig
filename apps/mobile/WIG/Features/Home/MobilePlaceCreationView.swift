@@ -92,22 +92,41 @@ struct MobilePlaceCreationView: View {
     var body: some View {
         NavigationStack {
             Form {
+                if isReadOnlyPromoter {
+                    Section {
+                        Label(
+                            "Promoters can view place settings but can’t change them.",
+                            systemImage: "eye"
+                        )
+                        .font(.system(size: 13, weight: .medium))
+                        .foregroundStyle(.secondary)
+                    }
+                }
+
                 logoSection
+                    .disabled(isReadOnlyPromoter)
                 if isVenue {
                     locationSection
+                        .disabled(isReadOnlyPromoter)
                     detailsSection
+                        .disabled(isReadOnlyPromoter)
                 } else {
                     detailsSection
+                        .disabled(isReadOnlyPromoter)
                     locationSection
+                        .disabled(isReadOnlyPromoter)
                 }
                 categoriesSection
+                    .disabled(isReadOnlyPromoter)
                 if isVenue {
                     venueAliasesSection
+                        .disabled(isReadOnlyPromoter)
                 }
                 if showsScrapersSection {
                     placeScrapersSection
+                        .disabled(isReadOnlyPromoter)
                 }
-                if case .edit = mode {
+                if case .edit = mode, !isReadOnlyPromoter {
                     placeActionsSection
                 }
             }
@@ -117,12 +136,14 @@ struct MobilePlaceCreationView: View {
             .navigationBarTitleDisplayMode(.inline)
             .toolbar {
                 ToolbarItem(placement: .confirmationAction) {
-                    Button(submitButtonTitle) {
-                        Task {
-                            await submit()
+                    if !isReadOnlyPromoter {
+                        Button(submitButtonTitle) {
+                            Task {
+                                await submit()
+                            }
                         }
+                        .disabled(isSubmitting)
                     }
-                    .disabled(isSubmitting)
                 }
             }
             .task {
@@ -183,6 +204,14 @@ struct MobilePlaceCreationView: View {
 
     private var isVenue: Bool {
         type == .venue
+    }
+
+    private var isReadOnlyPromoter: Bool {
+        guard case .edit(let place) = mode else {
+            return false
+        }
+
+        return place.currentUserRole == .promoter
     }
 
     private var venueAliasesSection: some View {
@@ -614,7 +643,7 @@ struct MobilePlaceCreationView: View {
     }
 
     private func submit() async {
-        guard !isSubmitting else {
+        guard !isSubmitting, !isReadOnlyPromoter else {
             return
         }
 
@@ -761,7 +790,7 @@ struct MobilePlaceCreationView: View {
     }
 
     private func deletePlace() async {
-        guard !isDeleting else {
+        guard !isDeleting, !isReadOnlyPromoter else {
             return
         }
 
@@ -829,7 +858,9 @@ struct MobilePlaceCreationView: View {
     }
 
     private func saveVenueScrapers(slug: String) async throws {
-        guard showsScrapersSection, venueScraperRows != savedVenueScraperRows else {
+        guard !isReadOnlyPromoter,
+              showsScrapersSection,
+              venueScraperRows != savedVenueScraperRows else {
             return
         }
 

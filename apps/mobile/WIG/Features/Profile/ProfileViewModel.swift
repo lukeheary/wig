@@ -112,9 +112,12 @@ final class ProfileViewModel: ObservableObject {
                 requestCount: response.requestCount,
                 followingCount: response.followingCount,
                 followedPlaces: response.followedPlaces,
+                memberPlaceCount: response.memberPlaceCount,
+                memberPlaces: response.memberPlaces,
                 friends: response.friends.filter { $0.id != userID },
                 receivedRequests: response.receivedRequests,
                 sentRequests: response.sentRequests,
+                promotingEvents: response.promotingEvents,
                 upcomingEvents: response.upcomingEvents,
                 pastEvents: response.pastEvents
             )
@@ -227,9 +230,12 @@ final class ProfileViewModel: ObservableObject {
             requestCount: receivedRequests.count,
             followingCount: response.followingCount,
             followedPlaces: response.followedPlaces,
+            memberPlaceCount: response.memberPlaceCount,
+            memberPlaces: response.memberPlaces,
             friends: friends,
             receivedRequests: receivedRequests,
             sentRequests: sentRequests,
+            promotingEvents: response.promotingEvents,
             upcomingEvents: response.upcomingEvents,
             pastEvents: response.pastEvents
         )
@@ -307,9 +313,12 @@ final class ProfileViewModel: ObservableObject {
             ),
             followingCount: response.followingCount,
             followedPlaces: response.followedPlaces,
+            memberPlaceCount: response.memberPlaceCount,
+            memberPlaces: response.memberPlaces,
             friends: friends,
             receivedRequests: receivedRequests,
             sentRequests: sentRequests,
+            promotingEvents: response.promotingEvents,
             upcomingEvents: response.upcomingEvents,
             pastEvents: response.pastEvents
         )

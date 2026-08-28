@@ -7,24 +7,27 @@ struct AddUserToPlaceView: View {
     @Environment(\.apiClient) private var apiClient
     @Environment(\.dismiss) private var dismiss
     @StateObject private var viewModel = AddUserToPlaceViewModel()
+    @FocusState private var isSearchFocused: Bool
 
     var body: some View {
         NavigationStack {
             VStack(spacing: 0) {
-                searchField
-                    .padding(.horizontal, 16)
-                    .padding(.vertical, 12)
-
-                Divider()
-
                 if let selected = viewModel.selectedUser {
-                    selectedUserSection(selected)
-                        .padding(.horizontal, 16)
-                        .padding(.top, 16)
+                    ScrollView {
+                        selectedUserSection(selected)
+                            .padding(16)
+                    }
                 } else {
+                    searchField
+                        .padding(.horizontal, 16)
+                        .padding(.vertical, 12)
+
+                    Divider()
+
                     userResultsList
                 }
             }
+            .animation(.easeInOut(duration: 0.2), value: viewModel.selectedUser?.id)
             .background(AppTheme.background.ignoresSafeArea())
             .navigationTitle("Add User to Place")
             .navigationBarTitleDisplayMode(.inline)
@@ -62,6 +65,7 @@ struct AddUserToPlaceView: View {
                 .foregroundStyle(.secondary)
 
             TextField("Search users", text: $viewModel.searchText)
+                .focused($isSearchFocused)
                 .autocorrectionDisabled()
                 .textInputAutocapitalization(.never)
                 .onChange(of: viewModel.searchText) { _, query in
@@ -85,6 +89,7 @@ struct AddUserToPlaceView: View {
                 } else {
                     ForEach(viewModel.searchResults) { user in
                         Button {
+                            isSearchFocused = false
                             viewModel.selectUser(user)
                         } label: {
                             CompactUserListRowView(
@@ -103,6 +108,7 @@ struct AddUserToPlaceView: View {
             }
             .padding(.vertical, 8)
         }
+        .scrollDismissesKeyboard(.interactively)
     }
 
     private func selectedUserSection(_ user: FriendUserSummary) -> some View {
@@ -119,6 +125,7 @@ struct AddUserToPlaceView: View {
 
                 Button {
                     viewModel.clearSelection()
+                    isSearchFocused = true
                 } label: {
                     Image(systemName: "xmark.circle.fill")
                         .foregroundStyle(.secondary)
@@ -219,7 +226,9 @@ final class AddUserToPlaceViewModel: ObservableObject {
         defer { isSearching = false }
 
         do {
-            let response = try await apiClient.send(APIClient.mobileSearch(query: query))
+            let response = try await apiClient.send(
+                APIClient.mobileSearch(query: query, includeCurrentUser: true)
+            )
             searchResults = response.users
         } catch {
             searchResults = []
