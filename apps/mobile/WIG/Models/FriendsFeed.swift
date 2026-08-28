@@ -97,10 +97,16 @@ struct PromotableEventsResponse: Decodable, Sendable {
 struct PromotableEvent: Decodable, Identifiable, Hashable, Sendable {
     let id: UUID
     let title: String
+    var coverImageURL: URL?
     let startAt: Date
     let placeName: String?
     var isPromoted: Bool
     var promo: String?
+
+    enum CodingKeys: String, CodingKey {
+        case id, title, startAt, placeName, isPromoted, promo
+        case coverImageURL = "coverImageUrl"
+    }
 }
 
 struct PromotedEventUpdateRequest: Encodable, Sendable {

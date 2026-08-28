@@ -933,14 +933,33 @@ private struct ManagePromotingView: View {
                                         Task { await toggle(event) }
                                     } label: {
                                         HStack(spacing: 12) {
+                                            RemoteImageView(url: event.coverImageURL) { image in
+                                                image
+                                                    .resizable()
+                                                    .scaledToFill()
+                                            } placeholder: {
+                                                Color.white.opacity(0.08)
+                                                    .overlay {
+                                                        Image(systemName: "calendar")
+                                                            .font(.system(size: 16, weight: .semibold))
+                                                            .foregroundStyle(.white.opacity(0.64))
+                                                    }
+                                            }
+                                            .frame(width: 42, height: 42)
+                                            .clipShape(RoundedRectangle(cornerRadius: 8, style: .continuous))
+                                            .overlay {
+                                                RoundedRectangle(cornerRadius: 8, style: .continuous)
+                                                    .strokeBorder(.white.opacity(0.14), lineWidth: 1)
+                                            }
+
                                             VStack(alignment: .leading, spacing: 3) {
                                                 Text(event.title)
-                                                    .font(.system(size: 15, weight: .semibold))
+                                                    .font(.system(size: 14, weight: .medium))
                                                     .foregroundStyle(.white)
                                                     .lineLimit(1)
                                                 Text(eventSubtitle(event))
-                                                    .font(.system(size: 12, weight: .medium))
-                                                    .foregroundStyle(.white.opacity(0.55))
+                                                    .font(.system(size: 10, weight: .medium))
+                                                    .foregroundStyle(.white.opacity(0.58))
                                                     .lineLimit(1)
                                             }
                                             Spacer(minLength: 8)
@@ -953,7 +972,8 @@ private struct ManagePromotingView: View {
                                             }
                                         }
                                         .padding(.horizontal, 20)
-                                        .frame(minHeight: 62)
+                                        .padding(.vertical, 5)
+                                        .frame(minHeight: 52)
                                         .contentShape(Rectangle())
                                     }
                                     .buttonStyle(.plain)
@@ -1010,10 +1030,35 @@ private struct ManagePromotingView: View {
     private func load() async {
         do {
             events = try await apiClient.send(APIClient.mobilePromotableEvents()).events
+            await hydrateMissingEventImages()
         } catch {
             errorMessage = error.localizedDescription
         }
         isLoading = false
+    }
+
+    private func hydrateMissingEventImages() async {
+        let missingEvents = events.filter { $0.coverImageURL == nil }
+        guard !missingEvents.isEmpty else { return }
+
+        await withTaskGroup(of: (UUID, URL?).self) { group in
+            for event in missingEvents {
+                group.addTask {
+                    let detail = try? await apiClient.send(
+                        APIClient.mobileEventDetail(eventPublicID: event.id.uuidString)
+                    )
+                    return (event.id, detail?.posterImageURL)
+                }
+            }
+
+            for await (eventID, imageURL) in group {
+                guard
+                    let imageURL,
+                    let index = events.firstIndex(where: { $0.id == eventID })
+                else { continue }
+                events[index].coverImageURL = imageURL
+            }
+        }
     }
 
     private func toggle(_ event: PromotableEvent) async {

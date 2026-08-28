@@ -1,7 +1,8 @@
 "use client";
 
 import { format } from "date-fns";
-import { Loader2 } from "lucide-react";
+import Image from "next/image";
+import { CalendarDays, Loader2 } from "lucide-react";
 import { useState } from "react";
 import { BackButtonHeader } from "@/components/shared/back-button-header";
 import { PageContainer } from "@/components/shared/page-container";
@@ -73,6 +74,7 @@ function PromotionOptionRow({
     title: string;
     startAt: Date;
     placeName: string | null;
+    coverImageUrl: string | null;
     isPromoted: boolean;
     promo: string | null;
   };
@@ -82,13 +84,28 @@ function PromotionOptionRow({
   const [promo, setPromo] = useState(event.promo ?? "");
 
   return (
-    <div className="rounded-2xl bg-white/[0.06] px-4 py-3">
-      <label className="flex cursor-pointer items-center gap-3">
+    <div className="rounded-xl px-2 py-2 transition-colors active:bg-white/[0.06]">
+      <label className="flex min-h-[3.75rem] cursor-pointer items-center gap-2.5">
+        <span className="relative h-11 w-11 shrink-0 overflow-hidden rounded-xl border border-white/10 bg-[#111113]">
+          {event.coverImageUrl ? (
+            <Image
+              src={event.coverImageUrl}
+              alt={event.title}
+              fill
+              sizes="44px"
+              className="object-cover"
+            />
+          ) : (
+            <span className="flex h-full w-full items-center justify-center">
+              <CalendarDays className="h-5 w-5 text-white/25" />
+            </span>
+          )}
+        </span>
         <span className="min-w-0 flex-1">
-          <span className="block truncate text-[15px] font-semibold">
+          <span className="block truncate text-[13px] font-semibold leading-tight">
             {event.title}
           </span>
-          <span className="mt-0.5 block truncate text-xs text-white/55">
+          <span className="mt-0.5 block truncate text-[10px] font-medium leading-tight text-white/50">
             {format(event.startAt, "EEE, MMM d 'at' h:mm a")}
             {event.placeName ? ` · ${event.placeName}` : ""}
           </span>

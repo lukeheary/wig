@@ -53,6 +53,7 @@ export async function GET() {
     events: eligibleEvents.map((event) => ({
       id: event.id,
       title: event.title,
+      coverImageUrl: event.coverImageUrl,
       startAt: event.startAt,
       placeName: event.venue?.name ?? event.organizer?.name ?? null,
       isPromoted: selectedIds.has(event.id),
