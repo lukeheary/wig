@@ -777,6 +777,24 @@ struct APIClient: Sendable {
         )
     }
 
+    static func mobileAdminMetroAreas() -> Endpoint<MobileAdminMetroAreasResponse> {
+        Endpoint(
+            path: "/api/mobile/admin/metro-areas",
+            method: .get,
+            requiresAuthentication: false,
+            includesAuthenticationIfAvailable: true
+        )
+    }
+
+    static func mobileDeleteMetroArea(id: UUID) -> Endpoint<DeleteSuccessResponse> {
+        Endpoint(
+            path: "/api/mobile/admin/metro-areas/\(id.uuidString)",
+            method: .delete,
+            requiresAuthentication: false,
+            includesAuthenticationIfAvailable: true
+        )
+    }
+
     static func mobileUpdatePlace(
         slug: String,
         updatedSlug: String,
@@ -2209,6 +2227,22 @@ struct MobileMetroAreaCreateResponse: Decodable, Hashable, Sendable {
     let latitude: Double
     let longitude: Double
     let radiusMiles: Double
+}
+
+struct MobileAdminMetroAreasResponse: Decodable, Hashable, Sendable {
+    let metroAreas: [MobileAdminMetroArea]
+}
+
+struct MobileAdminMetroArea: Decodable, Hashable, Identifiable, Sendable {
+    let id: UUID
+    let name: String
+    let state: String
+    let latitude: Double
+    let longitude: Double
+    let radiusMiles: Double
+    let placeCount: Int
+    let createdAt: Date
+    let updatedAt: Date
 }
 
 struct DeleteSuccessResponse: Decodable, Hashable, Sendable {

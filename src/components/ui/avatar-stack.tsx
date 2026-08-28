@@ -76,7 +76,7 @@ export function AvatarStack({
             <div
               key={user.id}
               className={cn(
-                "relative rounded-full",
+                "relative rounded-full shadow-[0_1px_6px_rgba(0,0,0,0.7)]",
                 sizeClass,
                 rsvpIndicatorClassName
               )}
