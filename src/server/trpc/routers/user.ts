@@ -8,15 +8,16 @@ import {
 } from "../init";
 import {
   eventRsvps,
+  events,
   placeFollows,
   placeMembers,
   userFriends,
   users,
   userSurfaceState,
 } from "@/server/db/schema";
-import { eq, and, ne, or, inArray, asc } from "drizzle-orm";
+import { eq, and, ne, or, inArray, asc, gte, lt } from "drizzle-orm";
 import { clerkClient } from "@clerk/nextjs/server";
-import { addDays } from "date-fns";
+import { addDays, addWeeks, startOfWeek } from "date-fns";
 import { USER_SURFACE_VALUES } from "@/lib/user-surface-state";
 import { isReservedUsername } from "@/lib/reserved-usernames";
 import { mapEventCategoryData } from "@/server/utils/categories";
@@ -267,6 +268,7 @@ export const userRouter = router({
         viewerTargetFriendship,
         profileRsvps,
         followedPlaces,
+        targetPlaceMemberships,
       ] = await Promise.all([
         ctx.db.query.userFriends.findMany({
           where: and(
@@ -325,7 +327,45 @@ export const userRouter = router({
           where: eq(placeFollows.userId, targetUser.id),
           columns: { id: true },
         }),
+        ctx.db.query.placeMembers.findMany({
+          where: and(
+            eq(placeMembers.userId, targetUser.id),
+            eq(placeMembers.role, "promoter")
+          ),
+          columns: { placeId: true },
+        }),
       ]);
+
+      const currentWeekStart = startOfWeek(now, { weekStartsOn: 1 });
+      const nextWeekStart = addWeeks(currentWeekStart, 1);
+      const promoterPlaceIds = targetPlaceMemberships.map(
+        (membership) => membership.placeId
+      );
+      const promotingEvents =
+        promoterPlaceIds.length > 0
+          ? await ctx.db.query.events.findMany({
+              where: and(
+                or(
+                  inArray(events.venueId, promoterPlaceIds),
+                  inArray(events.organizerId, promoterPlaceIds)
+                ),
+                gte(events.startAt, now),
+                lt(events.startAt, nextWeekStart),
+                eq(events.visibility, "public"),
+                eq(events.status, "active")
+              ),
+              with: {
+                venue: true,
+                organizer: true,
+                categoryLinks: {
+                  with: {
+                    category: true,
+                  },
+                },
+              },
+              orderBy: [asc(events.startAt)],
+            })
+          : [];
 
       const friendSummaries = friendships.flatMap((friendship) => {
         const friend =
@@ -385,6 +425,15 @@ export const userRouter = router({
         };
       };
 
+      const mapPromotingEvent = (
+        promotingEvent: (typeof promotingEvents)[number]
+      ) => ({
+        ...mapEventCategoryData(promotingEvent),
+        userRsvp: null,
+        friendsGoing: [],
+        friendsInterested: [],
+      });
+
       return {
         profile: {
           id: targetUser.id,
@@ -408,6 +457,7 @@ export const userRouter = router({
         requestCount:
           viewerUserId === targetUser.id ? pendingRequests.length : 0,
         friends: friendSummaries,
+        promotingEvents: promotingEvents.map(mapPromotingEvent),
         upcomingEvents: upcomingRsvps.map(mapProfileEvent).filter(Boolean),
         pastEvents: pastRsvps.map(mapProfileEvent).filter(Boolean),
       };

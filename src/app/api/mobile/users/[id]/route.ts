@@ -1,9 +1,20 @@
 import { auth } from "@clerk/nextjs/server";
 import { NextResponse } from "next/server";
-import { and, asc, desc, eq, inArray, isNotNull, or } from "drizzle-orm";
+import {
+  and,
+  asc,
+  desc,
+  eq,
+  gte,
+  inArray,
+  isNotNull,
+  lt,
+  or,
+} from "drizzle-orm";
 import { db } from "@/server/db";
 import {
   cities,
+  events,
   eventReviews,
   eventRsvps,
   metroAreas,
@@ -138,6 +149,32 @@ function startOfDayInTimeZone(date: Date, timeZone: string) {
   return new Date(naiveUtcMidnight.getTime() - offset);
 }
 
+function currentWeekBoundsInTimeZone(date: Date, timeZone: string) {
+  const parts = getTimeZoneDateTimeParts(date, timeZone);
+  if (!parts) {
+    const weekStart = new Date(date);
+    const daysSinceMonday = (weekStart.getDay() + 6) % 7;
+    weekStart.setDate(weekStart.getDate() - daysSinceMonday);
+    weekStart.setHours(0, 0, 0, 0);
+    const weekEnd = new Date(weekStart);
+    weekEnd.setDate(weekEnd.getDate() + 7);
+    return { weekStart, weekEnd };
+  }
+
+  const localDate = new Date(Date.UTC(parts.year, parts.month - 1, parts.day));
+  const daysSinceMonday = (localDate.getUTCDay() + 6) % 7;
+  const mondayNoonUtc = new Date(
+    Date.UTC(parts.year, parts.month - 1, parts.day - daysSinceMonday, 12)
+  );
+  const nextMondayNoonUtc = new Date(mondayNoonUtc);
+  nextMondayNoonUtc.setUTCDate(nextMondayNoonUtc.getUTCDate() + 7);
+
+  return {
+    weekStart: startOfDayInTimeZone(mondayNoonUtc, timeZone),
+    weekEnd: startOfDayInTimeZone(nextMondayNoonUtc, timeZone),
+  };
+}
+
 async function currentMobileUserId() {
   const { userId } = await auth();
 
@@ -211,6 +248,7 @@ export async function GET(_request: Request, context: RouteContext) {
         memberPlaceCount: 0,
         memberPlaces: [],
         friends: [],
+        promotingEvents: [],
         upcomingEvents: [],
         pastEvents: [],
       },
@@ -388,6 +426,36 @@ export async function GET(_request: Request, context: RouteContext) {
     .filter((event): event is NonNullable<typeof event> => Boolean(event))
     .filter((event) => event.startAt < today);
 
+  const promoterPlaceIds = targetPlaceMemberships
+    .filter((membership) => membership.role === "promoter")
+    .map((membership) => membership.placeId);
+  const { weekEnd } = currentWeekBoundsInTimeZone(now, feedTimeZone);
+  const promotingEventsRaw =
+    promoterPlaceIds.length > 0
+      ? await db.query.events.findMany({
+          where: and(
+            or(
+              inArray(events.venueId, promoterPlaceIds),
+              inArray(events.organizerId, promoterPlaceIds)
+            ),
+            gte(events.startAt, now),
+            lt(events.startAt, weekEnd),
+            eq(events.visibility, "public"),
+            eq(events.status, "active")
+          ),
+          with: {
+            venue: true,
+            organizer: true,
+            categoryLinks: {
+              with: {
+                category: true,
+              },
+            },
+          },
+          orderBy: [asc(events.startAt)],
+        })
+      : [];
+
   const followedPlaceIdSet = new Set(
     followedPlaceIds.map((follow) => follow.placeId)
   );
@@ -403,6 +471,7 @@ export async function GET(_request: Request, context: RouteContext) {
     ...new Set([
       ...upcomingEventsRaw.map((event) => event.id),
       ...pastEventsRaw.map((event) => event.id),
+      ...promotingEventsRaw.map((event) => event.id),
     ]),
   ];
 
@@ -664,6 +733,7 @@ export async function GET(_request: Request, context: RouteContext) {
       };
     }),
     friends,
+    promotingEvents: promotingEventsRaw.map(mapMobileEvent),
     upcomingEvents: upcomingEventsRaw.map(mapMobileEvent),
     pastEvents: pastEventsRaw.map(mapMobileEvent),
   });

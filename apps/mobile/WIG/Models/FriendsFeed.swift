@@ -11,6 +11,7 @@ struct FriendsFeedResponse: Decodable, Sendable {
     let friends: [FriendUserSummary]
     let receivedRequests: [FriendUserSummary]
     let sentRequests: [FriendUserSummary]
+    let promotingEvents: [EventFeedItem]?
     let upcomingEvents: [EventFeedItem]
     let pastEvents: [EventFeedItem]
 
@@ -25,6 +26,7 @@ struct FriendsFeedResponse: Decodable, Sendable {
         friends: [FriendUserSummary],
         receivedRequests: [FriendUserSummary],
         sentRequests: [FriendUserSummary],
+        promotingEvents: [EventFeedItem]? = nil,
         upcomingEvents: [EventFeedItem] = [],
         pastEvents: [EventFeedItem] = []
     ) {
@@ -38,6 +40,7 @@ struct FriendsFeedResponse: Decodable, Sendable {
         self.friends = friends
         self.receivedRequests = receivedRequests
         self.sentRequests = sentRequests
+        self.promotingEvents = promotingEvents
         self.upcomingEvents = upcomingEvents
         self.pastEvents = pastEvents
     }
@@ -51,6 +54,7 @@ struct UserProfileResponse: Decodable, Sendable {
     let memberPlaceCount: Int?
     let memberPlaces: [UserPlaceMembership]?
     let friends: [FriendUserSummary]
+    let promotingEvents: [EventFeedItem]?
     let upcomingEvents: [EventFeedItem]
     let pastEvents: [EventFeedItem]
 
@@ -62,6 +66,7 @@ struct UserProfileResponse: Decodable, Sendable {
         memberPlaceCount: Int? = nil,
         memberPlaces: [UserPlaceMembership]? = nil,
         friends: [FriendUserSummary],
+        promotingEvents: [EventFeedItem]? = nil,
         upcomingEvents: [EventFeedItem],
         pastEvents: [EventFeedItem]
     ) {
@@ -72,6 +77,7 @@ struct UserProfileResponse: Decodable, Sendable {
         self.memberPlaceCount = memberPlaceCount
         self.memberPlaces = memberPlaces
         self.friends = friends
+        self.promotingEvents = promotingEvents
         self.upcomingEvents = upcomingEvents
         self.pastEvents = pastEvents
     }
@@ -172,6 +178,7 @@ extension FriendsFeedResponse {
             friends: friends,
             receivedRequests: receivedRequests,
             sentRequests: sentRequests,
+            promotingEvents: promotingEvents,
             upcomingEvents: upcomingEvents,
             pastEvents: pastEvents
         )

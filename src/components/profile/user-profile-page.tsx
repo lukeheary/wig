@@ -290,6 +290,10 @@ export function UserProfilePage({
           ) : null}
         </section>
 
+        {data.promotingEvents.length > 0 ? (
+          <ProfilePromotingSection events={data.promotingEvents} />
+        ) : null}
+
         <ProfileEventSections
           sections={eventSections}
           mode={eventMode}
@@ -297,6 +301,21 @@ export function UserProfilePage({
         />
       </div>
     </main>
+  );
+}
+
+function ProfilePromotingSection({ events }: { events: any[] }) {
+  return (
+    <section className="mb-8">
+      <div className="container mx-auto px-4">
+        <ProfileMonthHeader title="Promoting" />
+        <HomeMobileEventRail
+          events={events}
+          desktopLayout="rail"
+          desktopBleed
+        />
+      </div>
+    </section>
   );
 }
 

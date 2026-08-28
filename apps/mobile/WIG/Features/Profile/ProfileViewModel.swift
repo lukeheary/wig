@@ -117,6 +117,7 @@ final class ProfileViewModel: ObservableObject {
                 friends: response.friends.filter { $0.id != userID },
                 receivedRequests: response.receivedRequests,
                 sentRequests: response.sentRequests,
+                promotingEvents: response.promotingEvents,
                 upcomingEvents: response.upcomingEvents,
                 pastEvents: response.pastEvents
             )
@@ -234,6 +235,7 @@ final class ProfileViewModel: ObservableObject {
             friends: friends,
             receivedRequests: receivedRequests,
             sentRequests: sentRequests,
+            promotingEvents: response.promotingEvents,
             upcomingEvents: response.upcomingEvents,
             pastEvents: response.pastEvents
         )
@@ -316,6 +318,7 @@ final class ProfileViewModel: ObservableObject {
             friends: friends,
             receivedRequests: receivedRequests,
             sentRequests: sentRequests,
+            promotingEvents: response.promotingEvents,
             upcomingEvents: response.upcomingEvents,
             pastEvents: response.pastEvents
         )

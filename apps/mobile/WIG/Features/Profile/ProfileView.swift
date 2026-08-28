@@ -384,7 +384,9 @@ struct ProfileView: View {
             }
             .task(id: profileEventPrefetchKey(response: response)) {
                 await EventArtworkPrefetcher.prefetch(
-                    events: response.upcomingEvents + response.pastEvents
+                    events: (response.promotingEvents ?? [])
+                        + response.upcomingEvents
+                        + response.pastEvents
                 )
             }
         }
@@ -402,6 +404,11 @@ struct ProfileView: View {
         let groups = ProfileEventGrouper.groups(for: events, mode: selectedEventsTab)
 
         VStack(alignment: .leading, spacing: 18) {
+            if let promotingEvents = response.promotingEvents,
+               !promotingEvents.isEmpty {
+                ProfilePromotingEventsSection(events: promotingEvents)
+            }
+
             if groups.isEmpty {
                 ProfileEventsSectionHeader(
                     title: selectedEventsTab.title,
@@ -510,7 +517,7 @@ struct ProfileView: View {
     }
 
     private func profileEventPrefetchKey(response: FriendsFeedResponse) -> String {
-        (response.upcomingEvents + response.pastEvents)
+        ((response.promotingEvents ?? []) + response.upcomingEvents + response.pastEvents)
             .map(\.id.uuidString)
             .joined(separator: ",")
     }
@@ -707,6 +714,7 @@ struct ProfileView: View {
                     ],
                     receivedRequests: current.receivedRequests.filter { $0.id != resolvedRequest.id },
                     sentRequests: current.sentRequests,
+                    promotingEvents: current.promotingEvents,
                     upcomingEvents: current.upcomingEvents,
                     pastEvents: current.pastEvents
                 )
@@ -724,6 +732,7 @@ struct ProfileView: View {
                     friends: current.friends,
                     receivedRequests: current.receivedRequests.filter { $0.id != resolvedRequest.id },
                     sentRequests: current.sentRequests,
+                    promotingEvents: current.promotingEvents,
                     upcomingEvents: current.upcomingEvents,
                     pastEvents: current.pastEvents
                 )
@@ -1230,7 +1239,9 @@ struct UserProfileView: View {
                 }
 
                 await EventArtworkPrefetcher.prefetch(
-                    events: response.upcomingEvents + response.pastEvents
+                    events: (response.promotingEvents ?? [])
+                        + response.upcomingEvents
+                        + response.pastEvents
                 )
             }
     }
@@ -1642,6 +1653,7 @@ struct UserProfileView: View {
                 memberPlaceCount: current.memberPlaceCount,
                 memberPlaces: current.memberPlaces,
                 friends: current.friends,
+                promotingEvents: current.promotingEvents,
                 upcomingEvents: current.upcomingEvents,
                 pastEvents: current.pastEvents
             )
@@ -1683,6 +1695,7 @@ struct UserProfileView: View {
                         memberPlaceCount: current.memberPlaceCount,
                         memberPlaces: current.memberPlaces,
                         friends: current.friends,
+                        promotingEvents: current.promotingEvents,
                         upcomingEvents: current.upcomingEvents,
                         pastEvents: current.pastEvents
                     )
@@ -1741,6 +1754,7 @@ struct UserProfileView: View {
                 memberPlaceCount: current.memberPlaceCount,
                 memberPlaces: current.memberPlaces,
                 friends: current.friends,
+                promotingEvents: current.promotingEvents,
                 upcomingEvents: current.upcomingEvents,
                 pastEvents: current.pastEvents
             )
@@ -1811,6 +1825,7 @@ struct UserProfileView: View {
                 memberPlaceCount: current.memberPlaceCount,
                 memberPlaces: current.memberPlaces,
                 friends: current.friends.filter { $0.id != profile.id },
+                promotingEvents: current.promotingEvents,
                 upcomingEvents: current.upcomingEvents,
                 pastEvents: current.pastEvents
             )
@@ -1853,6 +1868,7 @@ struct UserProfileView: View {
                 memberPlaceCount: current.memberPlaceCount,
                 memberPlaces: current.memberPlaces,
                 friends: current.friends,
+                promotingEvents: current.promotingEvents,
                 upcomingEvents: current.upcomingEvents,
                 pastEvents: current.pastEvents
             )
@@ -1882,6 +1898,7 @@ struct UserProfileView: View {
                         memberPlaceCount: current.memberPlaceCount,
                         memberPlaces: current.memberPlaces,
                         friends: current.friends,
+                        promotingEvents: current.promotingEvents,
                         upcomingEvents: current.upcomingEvents,
                         pastEvents: current.pastEvents
                     )
@@ -1923,7 +1940,7 @@ struct UserProfileView: View {
             return "idle"
         }
 
-        return (response.upcomingEvents + response.pastEvents)
+        return ((response.promotingEvents ?? []) + response.upcomingEvents + response.pastEvents)
             .map(\.id.uuidString)
             .joined(separator: ",")
     }
@@ -2272,6 +2289,27 @@ private enum ProfileEventsRSVPFilter: String, CaseIterable, Identifiable {
     }
 }
 
+private struct ProfilePromotingEventsSection: View {
+    let events: [EventFeedItem]
+
+    var body: some View {
+        EventCardCarousel(
+            events: events,
+            cardWidth: 220,
+            verticalSpacing: 10
+        ) {
+            Text("Promoting")
+                .font(AppTheme.contentHeaderFont)
+                .foregroundStyle(.white)
+        } card: { event in
+            EventDetailNavigationLink(event: event) {
+                EventCardView(event: event)
+            }
+        }
+        .padding(.horizontal, -16)
+    }
+}
+
 private struct UserProfileEventsSection: View {
     let response: UserProfileResponse
     let isCurrentUser: Bool
@@ -2293,6 +2331,11 @@ private struct UserProfileEventsSection: View {
         let groups = ProfileEventGrouper.groups(for: events, mode: selectedEventsTab)
 
         VStack(alignment: .leading, spacing: 18) {
+            if let promotingEvents = response.promotingEvents,
+               !promotingEvents.isEmpty {
+                ProfilePromotingEventsSection(events: promotingEvents)
+            }
+
             if groups.isEmpty {
                 ProfileEventsSectionHeader(
                     title: selectedEventsTab.title,
@@ -3795,6 +3838,7 @@ struct RequestsPageView: View {
                     ],
                     receivedRequests: current.receivedRequests.filter { $0.id != resolvedRequest.id },
                     sentRequests: current.sentRequests,
+                    promotingEvents: current.promotingEvents,
                     upcomingEvents: current.upcomingEvents,
                     pastEvents: current.pastEvents
                 )
@@ -3812,6 +3856,7 @@ struct RequestsPageView: View {
                     friends: current.friends,
                     receivedRequests: current.receivedRequests.filter { $0.id != resolvedRequest.id },
                     sentRequests: current.sentRequests,
+                    promotingEvents: current.promotingEvents,
                     upcomingEvents: current.upcomingEvents,
                     pastEvents: current.pastEvents
                 )
