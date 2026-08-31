@@ -1,7 +1,9 @@
 import { clerkMiddleware, createRouteMatcher } from "@clerk/nextjs/server";
 import { NextResponse } from "next/server";
+import { PUBLIC_EVENT_PATH_PATTERN } from "@/lib/public-id";
 
 const isPublicRoute = createRouteMatcher([
+  PUBLIC_EVENT_PATH_PATTERN,
   "/",
   "/sign-in(.*)",
   "/sign-up(.*)",

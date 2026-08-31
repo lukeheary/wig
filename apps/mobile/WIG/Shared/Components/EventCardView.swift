@@ -443,20 +443,20 @@ private struct EventCardContent: View {
             let promo = event.promo?.trimmingCharacters(in: .whitespacesAndNewlines) ?? ""
             if !promo.isEmpty || event.promoLinkURL != nil {
                 HStack(spacing: 5) {
-                    if event.promoLinkURL != nil {
-                        Image(systemName: "link")
-                            .font(.system(size: 12, weight: .semibold))
-                            .foregroundStyle(AppTheme.accentBlue)
-                            .accessibilityHidden(true)
-                    }
+                    Image(systemName: "megaphone")
+                        .font(.system(size: 11, weight: .semibold))
+                        .fixedSize()
+                        .accessibilityLabel("Promotion")
                     Text(promo.isEmpty ? "View Promo" : promo)
                         .font(.system(size: 11, weight: .medium))
-                        .foregroundStyle(.black)
                         .lineLimit(1)
-                        .padding(.horizontal, 8)
-                        .frame(height: 22)
-                        .background(AppTheme.accentBlue, in: Capsule())
+
                 }
+                .foregroundStyle(.black)
+                .padding(.horizontal, 8)
+                .frame(height: 22)
+                .background(AppTheme.accentBlue, in: Capsule())
+                .shadow(color: .black.opacity(0.7), radius: 3, x: 0, y: 1)
                 .padding(12)
             }
 

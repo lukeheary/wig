@@ -5,6 +5,8 @@ import EventPageClient from "./event-page-client";
 import { db } from "@/server/db";
 import { events } from "@/server/db/schema";
 import { formatEventDate, formatEventTime } from "@/lib/utils";
+import Link from "next/link";
+import { withReturnTo } from "@/lib/navigation";
 
 function getEventMetaDescription(event: {
   description: string | null;
@@ -58,6 +60,7 @@ export async function generateMetadata({
 
   const imageUrl =
     event.coverImageUrl ||
+    event.sourceImageUrl ||
     event.venue?.logoImageUrl ||
     event.organizer?.logoImageUrl ||
     undefined;
@@ -93,6 +96,28 @@ export async function generateMetadata({
   };
 }
 
-export default function EventPage() {
+export default async function EventPage({
+  params,
+}: {
+  params: Promise<{ id: string }>;
+}) {
+  const { userId } = await auth();
+  if (!userId) {
+    const { id } = await params;
+    // Serve the event's metadata to unauthenticated link-preview crawlers,
+    // without exposing the authenticated event API or redirecting away from it.
+    return (
+      <main className="mx-auto max-w-lg px-6 py-16 text-center">
+        <h1 className="text-2xl font-semibold">Sign in to view this event</h1>
+        <p className="mt-3 text-muted-foreground">Join WIG to see event details and who’s going.</p>
+        <Link
+          href={withReturnTo("/sign-in", `/event/${id}`)}
+          className="mt-6 inline-flex rounded-full bg-neon-teal px-6 py-3 font-semibold text-black"
+        >
+          Sign in
+        </Link>
+      </main>
+    );
+  }
   return <EventPageClient />;
 }

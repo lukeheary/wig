@@ -331,21 +331,26 @@ struct EventDetailView: View {
     private var promoBadge: some View {
         let text = currentEvent.promo?.trimmingCharacters(in: .whitespacesAndNewlines) ?? ""
         return HStack(spacing: 6) {
-            if currentEvent.promoLinkURL != nil {
-                Image(systemName: "link")
-                    .font(.system(size: 13, weight: .semibold))
-                    .foregroundStyle(AppTheme.accentBlue)
-                    .accessibilityHidden(true)
-            }
+            Image(systemName: "megaphone")
+                .font(.system(size: 12, weight: .semibold))
+                .fixedSize()
+                .accessibilityLabel("Promotion")
             Text(text.isEmpty ? "View Promo" : text)
                 .font(.system(size: 12, weight: .medium))
-                .foregroundStyle(.black)
                 .lineLimit(2)
                 .multilineTextAlignment(.leading)
-                .padding(.horizontal, 10)
-                .padding(.vertical, 6)
-                .background(AppTheme.accentBlue, in: Capsule())
+            if currentEvent.promoLinkURL != nil {
+                Image(systemName: "arrow.up.right")
+                    .font(.system(size: 13, weight: .semibold))
+                    .fixedSize()
+                    .accessibilityHidden(true)
+            }
         }
+        .foregroundStyle(.black)
+        .padding(.horizontal, 10)
+        .padding(.vertical, 6)
+        .background(AppTheme.accentBlue, in: Capsule())
+        .shadow(color: .black.opacity(0.7), radius: 3, x: 0, y: 1)
     }
 
     private func closeEventDetail() {

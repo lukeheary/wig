@@ -3,6 +3,13 @@ import test from "node:test";
 import { promoUrlSchema } from "./promo-validation";
 import { moderateTextFields } from "./content-moderation";
 
+test("promo links supply HTTPS when the scheme is missing", () => {
+  assert.equal(promoUrlSchema.parse(" example.com/promo?code=VIP "), "https://example.com/promo?code=VIP");
+  assert.equal(promoUrlSchema.parse("www.example.com"), "https://www.example.com");
+  assert.equal(promoUrlSchema.parse("//example.com/promo"), "https://example.com/promo");
+  assert.equal(promoUrlSchema.parse("https://example.com"), "https://example.com");
+});
+
 test("promo links accept web URLs and normalize clearing separately from omission", () => {
   assert.equal(
     promoUrlSchema.parse(" https://example.com/deal?code=VIP "),

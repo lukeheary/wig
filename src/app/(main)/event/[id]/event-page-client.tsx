@@ -18,6 +18,7 @@ import {
   ChevronRight,
   Edit,
   ExternalLink,
+  ArrowUpRight,
   X,
   Expand,
   Star,
@@ -27,7 +28,7 @@ import {
   CircleMinus,
   MoreHorizontal,
   Share2,
-  Link2,
+  Megaphone,
 } from "lucide-react";
 import { useToast } from "@/hooks/use-toast";
 import {
@@ -988,11 +989,17 @@ export default function EventPage() {
 
               {profilePromo || profilePromoUrl ? (
                 <div className="absolute bottom-2.5 left-[4.5rem] right-2.5 z-10 flex items-center justify-end gap-1.5">
-                  {profilePromoUrl && <Link2 aria-hidden="true" className="h-4 w-4 shrink-0 text-neon-teal" />}
                   {profilePromoUrl ? (
-                    <a href={profilePromoUrl} target="_blank" rel="noopener noreferrer" className="min-w-0 rounded-2xl bg-neon-teal px-3 py-1.5 text-left text-sm font-medium leading-tight text-black line-clamp-2 [overflow-wrap:anywhere]">{profilePromo || "View Promo"}</a>
+                    <a href={profilePromoUrl} target="_blank" rel="noopener noreferrer" className="flex min-w-0 items-center gap-1.5 rounded-2xl bg-neon-teal shadow-[0_1px_6px_rgba(0,0,0,0.7)] px-3 py-1.5 text-left text-sm font-medium leading-tight text-black">
+                      <Megaphone aria-label="Promotion" className="h-4 w-4 shrink-0 text-black" />
+                      <span className="min-w-0 line-clamp-2 [overflow-wrap:anywhere]">{profilePromo || "View Promo"}</span>
+                      <ArrowUpRight aria-hidden="true" className="h-4 w-4 shrink-0 text-black" />
+                    </a>
                   ) : (
-                    <span className="min-w-0 rounded-2xl bg-neon-teal px-3 py-1.5 text-left text-sm font-medium leading-tight text-black line-clamp-2 [overflow-wrap:anywhere]">{profilePromo}</span>
+                    <span className="flex min-w-0 items-center gap-1.5 rounded-2xl bg-neon-teal shadow-[0_1px_6px_rgba(0,0,0,0.7)] px-3 py-1.5 text-left text-sm font-medium leading-tight text-black">
+                      <Megaphone aria-label="Promotion" className="h-4 w-4 shrink-0 text-black" />
+                      <span className="min-w-0 line-clamp-2 [overflow-wrap:anywhere]">{profilePromo}</span>
+                    </span>
                   )}
                 </div>
               ) : null}
