@@ -392,13 +392,14 @@ struct APIClient: Sendable {
     static func setMobileEventPromoted(
         eventID: UUID,
         promoted: Bool,
-        promo: String? = nil
+        promo: String? = nil,
+        promoUrl: String? = nil
     ) throws -> Endpoint<PromotedEventUpdateResponse> {
         Endpoint(
             path: "/api/mobile/profile/promoting",
             method: .patch,
             body: try JSONEncoder().encode(
-                PromotedEventUpdateRequest(eventId: eventID, promoted: promoted, promo: promo)
+                PromotedEventUpdateRequest(eventId: eventID, promoted: promoted, promo: promo, promoUrl: promoUrl ?? "")
             )
         )
     }

@@ -1,5 +1,6 @@
 import SwiftUI
 import UIKit
+import ObjectiveC
 
 struct SwipeBackEnabler: UIViewControllerRepresentable {
     var onInteractivePopGestureStateChange: ((UIGestureRecognizer.State, Bool) -> Void)? = nil
@@ -91,13 +92,48 @@ struct SwipeBackEnabler: UIViewControllerRepresentable {
 
 private extension UIViewController {
     func enableInteractivePopWhenReady() {
-        DispatchQueue.main.async {
-            guard let navigationController = self.navigationController else {
+        DispatchQueue.main.async { [weak self] in
+            guard let navigationController = self?.navigationController,
+                  navigationController.transitionCoordinator == nil,
+                  let gesture = navigationController.interactivePopGestureRecognizer
+            else {
                 return
             }
 
-            navigationController.interactivePopGestureRecognizer?.isEnabled = true
-            navigationController.interactivePopGestureRecognizer?.delegate = nil
+            let delegate: InteractivePopDelegate
+            if let installed = objc_getAssociatedObject(
+                navigationController, &InteractivePopDelegate.associationKey
+            ) as? InteractivePopDelegate {
+                delegate = installed
+            } else {
+                delegate = InteractivePopDelegate(navigationController: navigationController)
+                // Gesture delegates are weak. Keep this guard alive with the stack,
+                // including after the Place screen that installed it is popped.
+                objc_setAssociatedObject(
+                    navigationController, &InteractivePopDelegate.associationKey,
+                    delegate, .OBJC_ASSOCIATION_RETAIN_NONATOMIC
+                )
+            }
+
+            gesture.delegate = delegate
+            gesture.isEnabled = navigationController.viewControllers.count > 1
         }
+    }
+}
+
+private final class InteractivePopDelegate: NSObject, UIGestureRecognizerDelegate {
+    static var associationKey: UInt8 = 0
+    private weak var navigationController: UINavigationController?
+
+    init(navigationController: UINavigationController) {
+        self.navigationController = navigationController
+    }
+
+    func gestureRecognizerShouldBegin(_ gestureRecognizer: UIGestureRecognizer) -> Bool {
+        guard let navigationController else { return false }
+        // At the root, the enclosing event's interactive modal dismissal must
+        // receive the swipe. Starting a pop with no destination steals that swipe.
+        return navigationController.viewControllers.count > 1
+            && navigationController.transitionCoordinator == nil
     }
 }

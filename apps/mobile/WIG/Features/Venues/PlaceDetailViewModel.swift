@@ -18,6 +18,28 @@ final class PlaceDetailViewModel: ObservableObject {
     private static var cachedDetails: [String: PlaceDetail] = [:]
     private static var inFlightLoads: [String: Task<PlaceDetail, Error>] = [:]
 
+    init(slug: String? = nil) {
+        if let slug, let detail = Self.cachedDetail(for: slug) {
+            state = .loaded(detail)
+        }
+    }
+
+    static func prefetch(place: PlaceListItem, using apiClient: APIClient) async {
+        // Warm the feed's logo while the full profile request is in flight.
+        async let seedLogo: Void = RemoteImagePipeline.shared.prefetch(
+            urls: [place.displayLogoURL].compactMap { $0 }
+        )
+        if cachedDetail(for: place.slug) == nil {
+            let loader = PlaceDetailViewModel()
+            // Reuse the same in-flight request if the user opens Place now.
+            await loader.load(slug: place.slug, using: apiClient)
+        }
+        if let logoURL = cachedDetail(for: place.slug)?.displayLogoURL {
+            await RemoteImagePipeline.shared.prefetch(urls: [logoURL])
+        }
+        await seedLogo
+    }
+
     static func cachedDetail(for slug: String) -> PlaceDetail? {
         cachedDetails[slug]
     }

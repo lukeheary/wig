@@ -1,6 +1,7 @@
 import ClerkKit
 import EventKit
 import EventKitUI
+import SafariServices
 import SwiftUI
 import UIKit
 
@@ -32,6 +33,7 @@ struct EventDetailView: View {
     @EnvironmentObject private var appSession: AppSession
     @StateObject private var rsvpViewModel = EventRSVPViewModel()
     @State private var isShareSheetPresented = false
+    @State private var presentedPromoLink: EventPromoLinkDestination?
     @State private var isImageViewerPresented = false
     @State private var isEditEventPresented = false
     @State private var reportContext: MobileSupportReportContext?
@@ -55,9 +57,6 @@ struct EventDetailView: View {
     @State private var presentedPlace: PlaceListItem?
     @State private var presentedRoute: EventDetailRoute?
     @State private var eventPageBackgroundColor = Color(red: 0.11, green: 0.10, blue: 0.10)
-
-    private let placeNavigationAnimation = Animation.easeInOut(duration: 0.30)
-    private let routeNavigationAnimation = Animation.easeInOut(duration: 0.24)
 
     init(event: EventFeedItem, preloadedRSVPState: EventRSVPState? = nil) {
         self.event = event
@@ -120,6 +119,16 @@ struct EventDetailView: View {
                                     isImageViewerPresented = true
                                 }
                             }
+                        },
+                        trailingAccessory: {
+                            if let promoURL = currentEvent.promoLinkURL {
+                                Button {
+                                    presentedPromoLink = EventPromoLinkDestination(url: promoURL)
+                                } label: { promoBadge }
+                                .buttonStyle(.plain)
+                            } else if currentEvent.promo?.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty == false {
+                                promoBadge
+                            }
                         }
                     )
 
@@ -140,6 +149,9 @@ struct EventDetailView: View {
             // scroll content underlaps the status bar while the nav bar is hidden, iOS
             // injects an automatic status-bar scrim (the "black fade" at the top).
             .background(eventPageBackgroundColor.ignoresSafeArea())
+        // Reconcile the pop gesture when returning from Place/Friends: a root
+        // event dismisses its zoom presentation, while a nested event pops.
+        .background(SwipeBackEnabler())
         .navigationBarBackButtonHidden()
         .toolbar(.hidden, for: .navigationBar)
         .overlay {
@@ -222,6 +234,17 @@ struct EventDetailView: View {
                 rsvpViewModel.setIncludePartner(true)
             }
         }
+        .task(id: [linkedPlace?.slug, organizerPlace?.slug]) {
+            let places = [linkedPlace, organizerPlace].compactMap { $0 }
+            var seenSlugs = Set<String>()
+            await withTaskGroup(of: Void.self) { group in
+                for place in places where seenSlugs.insert(place.slug).inserted {
+                    group.addTask {
+                        await PlaceDetailViewModel.prefetch(place: place, using: apiClient)
+                    }
+                }
+            }
+        }
         .onChange(of: isAuthenticated) { _, isAuthenticated in
             guard !isAuthenticated else {
                 if currentEvent.hasEnded, currentUserReview == nil {
@@ -251,6 +274,10 @@ struct EventDetailView: View {
             WIGAuthSheetView(isDismissible: true)
                 .presentationDetents([.large])
                 .presentationDragIndicator(.visible)
+        }
+        .sheet(item: $presentedPromoLink) { destination in
+            EventPromoBrowser(url: destination.url)
+                .ignoresSafeArea()
         }
         .sheet(isPresented: $isShareSheetPresented) {
             ShareSheet(activityItems: [shareURL])
@@ -285,32 +312,39 @@ struct EventDetailView: View {
                 EventArtworkViewer(imageURL: posterImageURL)
             }
         }
-        .overlay {
-            ZStack {
-                if let presentedPlace {
-                    EventPlaceDetailRouteView(
-                        place: presentedPlace,
-                        onDismiss: dismissPresentedPlace
-                    )
-                    .transition(.move(edge: .trailing))
-                    .zIndex(1)
-                }
-
-                if presentedRoute != nil {
-                    EventRSVPListRouteView(
-                        goingAttendees: friendGoingAttendees,
-                        interestedAttendees: friendInterestedAttendees,
-                        notGoingAttendees: friendNotGoingAttendees,
-                        isPastEvent: currentEvent.hasEnded,
-                        eventID: currentEvent.id,
-                        attendeeReviewRatings: attendeeReviewRatings,
-                        onDismiss: dismissPresentedRoute
-                    )
-                    .transition(.move(edge: .trailing))
-                    .zIndex(2)
-                }
-            }
+        .navigationDestination(item: $presentedPlace) { place in
+            EventPlaceDetailRouteView(place: place)
         }
+        .navigationDestination(item: $presentedRoute) { _ in
+            EventRSVPListRouteView(
+                goingAttendees: friendGoingAttendees,
+                interestedAttendees: friendInterestedAttendees,
+                notGoingAttendees: friendNotGoingAttendees,
+                isPastEvent: currentEvent.hasEnded,
+                eventID: currentEvent.id,
+                attendeeReviewRatings: attendeeReviewRatings
+            )
+        }
+        }
+    }
+
+    private var promoBadge: some View {
+        let text = currentEvent.promo?.trimmingCharacters(in: .whitespacesAndNewlines) ?? ""
+        return HStack(spacing: 6) {
+            if currentEvent.promoLinkURL != nil {
+                Image(systemName: "link")
+                    .font(.system(size: 13, weight: .semibold))
+                    .foregroundStyle(AppTheme.accentBlue)
+                    .accessibilityHidden(true)
+            }
+            Text(text.isEmpty ? "View Promo" : text)
+                .font(.system(size: 12, weight: .medium))
+                .foregroundStyle(.black)
+                .lineLimit(2)
+                .multilineTextAlignment(.leading)
+                .padding(.horizontal, 10)
+                .padding(.vertical, 6)
+                .background(AppTheme.accentBlue, in: Capsule())
         }
     }
 
@@ -323,27 +357,15 @@ struct EventDetailView: View {
     }
 
     private func presentPlace(_ place: PlaceListItem) {
-        withAnimation(placeNavigationAnimation) {
+        // Explicitly animate the programmatic push, including when the place
+        // is already cached and its content is available immediately.
+        withAnimation(.default) {
             presentedPlace = place
         }
     }
 
-    private func dismissPresentedPlace() {
-        withAnimation(placeNavigationAnimation) {
-            presentedPlace = nil
-        }
-    }
-
     private func presentRSVPList() {
-        withAnimation(routeNavigationAnimation) {
-            presentedRoute = .rsvpList
-        }
-    }
-
-    private func dismissPresentedRoute() {
-        withAnimation(routeNavigationAnimation) {
-            presentedRoute = nil
-        }
+        presentedRoute = .rsvpList
     }
 
     private var reviewSheetEvent: MobileEventReviewPrompt {
@@ -624,19 +646,6 @@ struct EventDetailView: View {
                 .foregroundStyle(.white)
                 .lineSpacing(0.5)
                 .fixedSize(horizontal: false, vertical: true)
-
-            if let promo = currentEvent.promo?.trimmingCharacters(in: .whitespacesAndNewlines),
-               !promo.isEmpty
-            {
-                Text(promo)
-                    .font(.system(size: 12, weight: .bold))
-                    .foregroundStyle(.black)
-                    .lineLimit(2)
-                    .padding(.horizontal, 10)
-                    .padding(.vertical, 6)
-                    .background(AppTheme.accentBlue, in: Capsule())
-                    .padding(.top, 8)
-            }
 
             HStack(alignment: .firstTextBaseline, spacing: 6) {
                 Text(compactEventDateTimeText)
@@ -1961,7 +1970,7 @@ private struct EventFriendAvatarTile: View {
     }
 }
 
-private enum EventDetailRoute: Identifiable {
+private enum EventDetailRoute: Identifiable, Hashable {
     case rsvpList
 
     var id: String {
@@ -1977,45 +1986,27 @@ private enum EventDetailRoute: Identifiable {
 // full-screen cover falls back to the default upward modal transition.
 private struct EventPlaceDetailRouteView: View {
     let place: PlaceListItem
-    let onDismiss: () -> Void
 
     @Environment(\.eventDetailTransitionNamespace) private var transitionNamespace
     @State private var presentedEventDetail: EventDetailPresentation?
 
     var body: some View {
-        NavigationStack {
-            PlaceDetailView(place: place, onDismiss: onDismiss)
-                .environment(\.eventDetailTransitionNamespace, transitionNamespace)
-                .environment(\.eventDetailPresentationAction) { event, transitionSourceID in
-                    presentedEventDetail = EventDetailPresentation(
-                        event: event,
-                        transitionSourceID: transitionSourceID
-                    )
-                }
-                .navigationDestination(item: $presentedEventDetail, destination: { presentation in
-                    NestedEventDetailPresentationView(
-                        presentation: presentation,
-                        transitionNamespace: transitionNamespace
-                    )
-                })
+        // Share the event's navigation stack so UIKit can interactively pop back
+        // to the event, and keep nested event pushes in the same history.
+        PlaceDetailView(place: place)
+            .environment(\.eventDetailTransitionNamespace, transitionNamespace)
+            .environment(\.eventDetailPresentationAction) { event, transitionSourceID in
+                presentedEventDetail = EventDetailPresentation(
+                    event: event,
+                    transitionSourceID: transitionSourceID
+                )
             }
-            .simultaneousGesture(
-                DragGesture(minimumDistance: 12)
-                    .onEnded { value in
-                        let isLeadingEdgeSwipe = value.startLocation.x < 32
-                        let isPrimarilyHorizontal = abs(value.predictedEndTranslation.width)
-                            > abs(value.predictedEndTranslation.height)
-
-                        guard isLeadingEdgeSwipe,
-                              isPrimarilyHorizontal,
-                              value.predictedEndTranslation.width > 110
-                        else {
-                            return
-                        }
-
-                        onDismiss()
-                    }
-            )
+            .navigationDestination(item: $presentedEventDetail) { presentation in
+                NestedEventDetailPresentationView(
+                    presentation: presentation,
+                    transitionNamespace: transitionNamespace
+                )
+            }
     }
 }
 
@@ -2048,62 +2039,42 @@ private struct EventRSVPListRouteView: View {
     let isPastEvent: Bool
     let eventID: UUID
     let attendeeReviewRatings: [String: EventReviewRating]
-    let onDismiss: () -> Void
-    @State private var navigationPath = NavigationPath()
+    @Environment(\.dismiss) private var dismiss
 
     var body: some View {
-        NavigationStack(path: $navigationPath) {
-            EventRSVPListView(
-                goingAttendees: goingAttendees,
-                interestedAttendees: interestedAttendees,
-                notGoingAttendees: notGoingAttendees,
-                isPastEvent: isPastEvent,
-                eventID: eventID,
-                attendeeReviewRatings: attendeeReviewRatings
+        EventRSVPListView(
+            goingAttendees: goingAttendees,
+            interestedAttendees: interestedAttendees,
+            notGoingAttendees: notGoingAttendees,
+            isPastEvent: isPastEvent,
+            eventID: eventID,
+            attendeeReviewRatings: attendeeReviewRatings
+        )
+        .navigationDestination(for: EventRSVPAttendeeRoute.self) { route in
+            UserProfileView(
+                userID: route.userID,
+                showsFriendAction: !route.isCurrentUser
             )
-            .navigationDestination(for: EventRSVPAttendeeRoute.self) { route in
-                UserProfileView(
-                    userID: route.userID,
-                    showsFriendAction: !route.isCurrentUser
-                )
-            }
         }
         .background(AppTheme.background.ignoresSafeArea())
+        .background(SwipeBackEnabler())
+        .navigationBarBackButtonHidden()
+        .toolbar(.hidden, for: .navigationBar)
         .safeAreaInset(edge: .top, spacing: 0) {
-            if navigationPath.isEmpty {
-                ZStack {
-                    Text("Friends")
-                        .font(.system(size: 17, weight: .semibold))
-                        .foregroundStyle(.white)
+            ZStack {
+                Text("Friends")
+                    .font(.system(size: 17, weight: .semibold))
+                    .foregroundStyle(.white)
 
-                    HStack {
-                        FloatingGlassIconButton(systemImage: "chevron.left", action: onDismiss)
-                        Spacer()
-                    }
+                HStack {
+                    FloatingGlassIconButton(systemImage: "chevron.left") { dismiss() }
+                    Spacer()
                 }
-                .padding(.horizontal, 16)
-                .frame(height: 46)
-                .background(AppTheme.background)
             }
+            .padding(.horizontal, 16)
+            .frame(height: 46)
+            .background(AppTheme.background)
         }
-        .simultaneousGesture(
-            DragGesture(minimumDistance: 12)
-            .onEnded { value in
-                let isLeadingEdgeSwipe = value.startLocation.x < 32
-                let isPrimarilyHorizontal = abs(value.predictedEndTranslation.width)
-                    > abs(value.predictedEndTranslation.height)
-
-                guard navigationPath.isEmpty,
-                      isLeadingEdgeSwipe,
-                      isPrimarilyHorizontal,
-                      value.predictedEndTranslation.width > 110
-                else {
-                    return
-                }
-
-                onDismiss()
-            }
-        )
     }
 }
 
@@ -3160,4 +3131,19 @@ private final class EventRSVPViewModel: ObservableObject {
             updatedAt: nil
         )
     )
+}
+
+private struct EventPromoLinkDestination: Identifiable {
+    let url: URL
+    var id: String { url.absoluteString }
+}
+
+private struct EventPromoBrowser: UIViewControllerRepresentable {
+    let url: URL
+
+    func makeUIViewController(context: Context) -> SFSafariViewController {
+        SFSafariViewController(url: url)
+    }
+
+    func updateUIViewController(_ controller: SFSafariViewController, context: Context) {}
 }

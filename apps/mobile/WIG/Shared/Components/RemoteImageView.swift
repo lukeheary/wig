@@ -5,7 +5,14 @@ actor RemoteImagePipeline {
     static let shared = RemoteImagePipeline()
 
     private let session: URLSession
-    private let memoryCache = NSCache<NSURL, UIImage>()
+    private var inFlightImages: [URL: Task<UIImage?, Never>] = [:]
+    // NSCache is thread-safe; synchronous reads let SwiftUI draw a prefetched
+    // image on its first frame instead of waiting for an asynchronous task.
+    nonisolated(unsafe) private let memoryCache = NSCache<NSURL, UIImage>()
+
+    nonisolated func cachedImage(for url: URL) -> UIImage? {
+        memoryCache.object(forKey: url as NSURL)
+    }
 
     init() {
         let configuration = URLSessionConfiguration.default
@@ -26,6 +33,19 @@ actor RemoteImagePipeline {
         if let cachedImage = memoryCache.object(forKey: cacheKey) {
             return cachedImage
         }
+
+        if let task = inFlightImages[url] {
+            return await task.value
+        }
+
+        let task = Task { await downloadImage(for: url) }
+        inFlightImages[url] = task
+        defer { inFlightImages[url] = nil }
+        return await task.value
+    }
+
+    private func downloadImage(for url: URL) async -> UIImage? {
+        let cacheKey = url as NSURL
 
         var request = URLRequest(url: url)
         request.cachePolicy = .returnCacheDataElseLoad
@@ -82,11 +102,13 @@ struct RemoteImageView<Content: View, Placeholder: View>: View {
     @ViewBuilder let placeholder: () -> Placeholder
 
     @State private var loadedImage: UIImage?
+    @State private var loadedURL: URL?
 
     var body: some View {
         Group {
-            if let loadedImage {
-                content(Image(uiImage: loadedImage))
+            if let image = url.flatMap({ RemoteImagePipeline.shared.cachedImage(for: $0) })
+                ?? (loadedURL == url ? loadedImage : nil) {
+                content(Image(uiImage: image))
             } else {
                 placeholder()
             }
@@ -94,10 +116,14 @@ struct RemoteImageView<Content: View, Placeholder: View>: View {
         .task(id: url) {
             guard let url else {
                 loadedImage = nil
+                loadedURL = nil
                 return
             }
 
-            loadedImage = await RemoteImagePipeline.shared.image(for: url)
+            let image = await RemoteImagePipeline.shared.image(for: url)
+            guard !Task.isCancelled else { return }
+            loadedURL = url
+            loadedImage = image
         }
     }
 }

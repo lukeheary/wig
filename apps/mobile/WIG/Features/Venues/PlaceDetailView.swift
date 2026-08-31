@@ -5,13 +5,12 @@ import UIKit
 
 struct PlaceDetailView: View {
     let place: PlaceListItem
-    var onDismiss: (() -> Void)? = nil
 
     @Environment(\.apiClient) private var apiClient
     @Environment(\.dismiss) private var dismiss
     @Environment(Clerk.self) private var clerk
     @EnvironmentObject private var appSession: AppSession
-    @StateObject private var viewModel = PlaceDetailViewModel()
+    @StateObject private var viewModel: PlaceDetailViewModel
     @State private var selectedTab: PlaceEventsTab = .upcoming
     @State private var isManagePlaceActive = false
     @State private var managePlaceDetail: PlaceDetail?
@@ -22,6 +21,11 @@ struct PlaceDetailView: View {
     @State private var reportContext: MobileSupportReportContext?
     @State private var headerOpacity: CGFloat = 1
     private let eventCardWidth: CGFloat = 220
+
+    init(place: PlaceListItem) {
+        self.place = place
+        _viewModel = StateObject(wrappedValue: PlaceDetailViewModel(slug: place.slug))
+    }
 
     var body: some View {
         ScrollView {
@@ -38,9 +42,9 @@ struct PlaceDetailView: View {
                                 logoURL: seededDetail.displayLogoURL,
                                 addressText: seededDetail.address,
                                 cityStateText: seededDetail.cityStateText,
-                                followerCount: seededDetail.followerCount,
-                                memberCount: seededDetail.memberCount,
-                                upcomingEventCount: place.upcomingEventCount,
+                                followerCount: PlaceDetailViewModel.cachedDetail(for: place.slug)?.followerCount,
+                                memberCount: PlaceDetailViewModel.cachedDetail(for: place.slug)?.memberCount,
+                                upcomingEventCount: PlaceDetailViewModel.cachedDetail(for: place.slug)?.events.count,
                                 onOpenInMaps: { openInMaps($0) }
                             )
 
@@ -63,9 +67,9 @@ struct PlaceDetailView: View {
                                 logoURL: seededDetail.displayLogoURL,
                                 addressText: seededDetail.address,
                                 cityStateText: seededDetail.cityStateText,
-                                followerCount: seededDetail.followerCount,
-                                memberCount: seededDetail.memberCount,
-                                upcomingEventCount: place.upcomingEventCount,
+                                followerCount: PlaceDetailViewModel.cachedDetail(for: place.slug)?.followerCount,
+                                memberCount: PlaceDetailViewModel.cachedDetail(for: place.slug)?.memberCount,
+                                upcomingEventCount: PlaceDetailViewModel.cachedDetail(for: place.slug)?.events.count,
                                 onOpenInMaps: { openInMaps($0) }
                             )
 
@@ -121,14 +125,7 @@ struct PlaceDetailView: View {
         }
         .modifier(ScrollableHeaderFadeTrackingModifier(opacity: $headerOpacity))
         .background(AppTheme.background.ignoresSafeArea())
-        .background {
-            // When embedded over an event, UIKit's native pop gesture targets the
-            // event presentation underneath this page. The host supplies a local
-            // edge swipe instead.
-            if onDismiss == nil {
-                SwipeBackEnabler()
-            }
-        }
+        .background(SwipeBackEnabler())
         .navigationBarBackButtonHidden()
         .toolbar(.hidden, for: .navigationBar)
         .overlay(alignment: .top) {
@@ -214,12 +211,8 @@ struct PlaceDetailView: View {
             }
         }
         .task {
-            if case .idle = viewModel.state {
-                await viewModel.load(
-                    slug: place.slug,
-                    using: apiClient
-                )
-            }
+            // Refresh without replacing the cached first frame with a loading UI.
+            await viewModel.load(slug: place.slug, using: apiClient)
         }
         .task(id: placeEventPrefetchKey) {
             guard case .loaded(let detail) = viewModel.state else {
@@ -275,11 +268,7 @@ struct PlaceDetailView: View {
     }
 
     private func closePlaceDetail() {
-        if let onDismiss {
-            onDismiss()
-        } else {
-            dismiss()
-        }
+        dismiss()
     }
 
     private var seededDetailState: PlaceDetail {
@@ -694,9 +683,9 @@ private struct PlaceDetailHeader: View {
     let logoURL: URL?
     let addressText: String?
     let cityStateText: String?
-    let followerCount: Int
-    let memberCount: Int
-    let upcomingEventCount: Int
+    let followerCount: Int?
+    let memberCount: Int?
+    let upcomingEventCount: Int?
     let onOpenInMaps: (String) -> Void
     @State private var isImageViewerPresented = false
 
@@ -837,7 +826,7 @@ private struct PlaceDetailHeader: View {
 }
 
 private struct PlaceDetailStat: View {
-    let count: Int
+    let count: Int?
     let label: String
 
     private var displayLabel: String {
@@ -852,7 +841,7 @@ private struct PlaceDetailStat: View {
 
     var body: some View {
         VStack(alignment: .leading, spacing: 3) {
-            Text("\(count)")
+            Text(count.map { String($0) } ?? "—")
                 .font(.system(size: 16, weight: .semibold))
                 .foregroundStyle(.white)
 

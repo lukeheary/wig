@@ -10,7 +10,7 @@ import {
 import Image from "next/image";
 import Link from "next/link";
 import { format } from "date-fns";
-import { Calendar, ChevronLeft, ChevronRight, Star } from "lucide-react";
+import { Link2, Calendar, ChevronLeft, ChevronRight, Star } from "lucide-react";
 import { Card } from "@/components/ui/card";
 import { EventSocialOverlay } from "@/components/events/event-social-overlay";
 import { EventCardGrid } from "@/components/events/event-card-grid";
@@ -363,7 +363,8 @@ function MobileRailScroller({
 function HomeMiniEventCard({ event }: { event: EventCardItem }) {
   const { eventHref, handleClick } = useEventCardLink(
     event.publicId,
-    event.promo
+    event.promo,
+    event.promoUrl
   );
   const dayOfWeek = formatEventDate(
     event.startAt,
@@ -427,12 +428,16 @@ function HomeMiniEventCard({ event }: { event: EventCardItem }) {
             </div>
           )}
 
+          {event.promo || event.promoUrl ? (
+            <div className="absolute left-3 top-3 z-10 flex max-w-[calc(100%-1.5rem)] items-center gap-1.5">
+              {event.promoUrl && <Link2 aria-hidden="true" className="h-3.5 w-3.5 shrink-0 text-neon-teal" />}
+              <span className="truncate rounded-full bg-neon-teal px-2 py-1 text-[10px] font-medium leading-none text-black">
+                {event.promo || "View Promo"}
+              </span>
+            </div>
+          ) : null}
+
           <div className="font-space-grotesk relative z-10 mt-auto space-y-0.5 px-4 pb-4 pt-24 text-white">
-            {event.promo ? (
-              <div className="mb-1 w-fit max-w-full truncate rounded-full bg-neon-teal px-2 py-1 text-[10px] font-bold leading-none text-black">
-                {event.promo}
-              </div>
-            ) : null}
             <EventSocialOverlay
               users={socialUsers}
               size="md"

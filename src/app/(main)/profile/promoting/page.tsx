@@ -35,7 +35,8 @@ export default function ProfilePromotingPage() {
         return (
           !saved ||
           saved.isPromoted !== draft.isPromoted ||
-          normalizePromo(saved.promo) !== normalizePromo(draft.promo)
+          normalizePromo(saved.promo) !== normalizePromo(draft.promo) ||
+          normalizePromo(saved.promoUrl) !== normalizePromo(draft.promoUrl)
         );
       }),
     [drafts, savedDrafts]
@@ -51,6 +52,7 @@ export default function ProfilePromotingPage() {
           eventId: draft.id,
           promoted: draft.isPromoted,
           promo: normalizePromo(draft.promo),
+          promoUrl: normalizePromo(draft.promoUrl),
         });
       }
       setSavedDrafts(drafts);
@@ -148,8 +150,8 @@ function PromotionOptionRow({
   disabled: boolean;
   onChange: (updates: Partial<PromotionDraft>) => void;
 }) {
-  const [isEditingPromo, setIsEditingPromo] = useState(false);
-
+  const [showPromo, setShowPromo] = useState(Boolean(event.promo));
+  const [showPromoLink, setShowPromoLink] = useState(Boolean(event.promoUrl));
   return (
     <div className="rounded-xl px-2 py-2 transition-colors active:bg-white/[0.06]">
       <div className="flex min-h-[3.75rem] items-center gap-2.5">
@@ -183,32 +185,44 @@ function PromotionOptionRow({
           checked={event.isPromoted}
           disabled={disabled}
           onChange={(changeEvent) => {
+            if (!changeEvent.target.checked) {
+              setShowPromo(false);
+              setShowPromoLink(false);
+            }
             onChange({ isPromoted: changeEvent.target.checked });
-            setIsEditingPromo(changeEvent.target.checked);
           }}
           className="h-5 w-5 cursor-pointer accent-sky-300"
         />
       </div>
       {event.isPromoted ? (
-        <div className="mt-4 flex items-center gap-2">
-          <input
+        <div className="mt-2 space-y-2">
+          {showPromo && <input
+            aria-label={`Promo for ${event.title}`}
             value={event.promo ?? ""}
             maxLength={255}
-            disabled={!isEditingPromo || disabled}
-            onChange={(changeEvent) =>
-              onChange({ promo: changeEvent.target.value })
-            }
-            placeholder="Promo, e.g. Free with RSVP"
-            className="h-10 min-w-0 flex-1 rounded-xl border border-white/10 bg-black/35 px-3 text-sm text-white outline-none placeholder:text-white/30 focus:border-sky-300/60 disabled:text-white/65"
-          />
-          <button
-            type="button"
             disabled={disabled}
-            onClick={() => setIsEditingPromo((current) => !current)}
-            className="px-1 text-[13px] font-bold text-sky-300 disabled:text-white/30"
-          >
-            {isEditingPromo ? "Done" : "Edit"}
-          </button>
+            onChange={(e) => onChange({ promo: e.target.value })}
+            placeholder="Promo, e.g. Free with RSVP"
+            className="h-10 w-full rounded-xl border border-white/10 bg-black/35 px-3 text-sm text-white"
+          />}
+          {showPromoLink && <input
+            aria-label={`Promo link for ${event.title}`}
+            type="url"
+            autoCapitalize="none"
+            spellCheck={false}
+            value={event.promoUrl ?? ""}
+            maxLength={2048}
+            disabled={disabled}
+            onChange={(e) => onChange({ promoUrl: e.target.value })}
+            placeholder="https://example.com/promo"
+            className="h-10 w-full rounded-xl border border-white/10 bg-black/35 px-3 text-sm text-white"
+          />}
+          {(!showPromo || !showPromoLink) && (
+            <div className="flex gap-2.5 text-sm font-semibold text-sky-300">
+              {!showPromo && <button type="button" disabled={disabled} onClick={() => setShowPromo(true)} className="min-h-11 min-w-0 flex-1 rounded-xl bg-white/[0.07] px-2 disabled:opacity-50">Add Promo</button>}
+              {!showPromoLink && <button type="button" disabled={disabled} onClick={() => setShowPromoLink(true)} className="min-h-11 min-w-0 flex-1 rounded-xl bg-white/[0.07] px-2 disabled:opacity-50">Add Promo Link</button>}
+            </div>
+          )}
         </div>
       ) : null}
     </div>
@@ -223,6 +237,7 @@ type PromotionDraft = {
   coverImageUrl: string | null;
   isPromoted: boolean;
   promo: string | null;
+  promoUrl: string | null;
 };
 
 function normalizePromo(value: string | null | undefined) {

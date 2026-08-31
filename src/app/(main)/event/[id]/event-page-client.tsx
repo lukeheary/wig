@@ -27,6 +27,7 @@ import {
   CircleMinus,
   MoreHorizontal,
   Share2,
+  Link2,
 } from "lucide-react";
 import { useToast } from "@/hooks/use-toast";
 import {
@@ -129,6 +130,12 @@ export default function EventPage() {
   const [isShareCopied, setIsShareCopied] = useState(false);
   const returnTo = searchParams.get("returnTo");
   const profilePromo = searchParams.get("profilePromo")?.trim().slice(0, 255);
+  const profilePromoUrl = (() => {
+    try {
+      const url = new URL(searchParams.get("profilePromoUrl") ?? "");
+      return ["https:", "http:"].includes(url.protocol) && !url.username && !url.password ? url.href : null;
+    } catch { return null; }
+  })();
   const signInHref = withReturnTo(
     "/sign-in",
     buildReturnTo(pathname, searchParams)
@@ -965,7 +972,12 @@ export default function EventPage() {
 
               {/* Avatars - Overlay on bottom right */}
               {shouldShowAttendeeIdentities && socialStackUsers.length > 0 && (
-                <div className="absolute bottom-2.5 right-2.5 hidden md:block">
+                <div
+                  className={cn(
+                    "absolute right-2.5 hidden md:block",
+                    (profilePromo || profilePromoUrl) ? "bottom-12" : "bottom-2.5"
+                  )}
+                >
                   <AvatarStack
                     users={socialStackUsers}
                     maxDisplay={5}
@@ -973,6 +985,17 @@ export default function EventPage() {
                   />
                 </div>
               )}
+
+              {profilePromo || profilePromoUrl ? (
+                <div className="absolute bottom-2.5 left-[4.5rem] right-2.5 z-10 flex items-center justify-end gap-1.5">
+                  {profilePromoUrl && <Link2 aria-hidden="true" className="h-4 w-4 shrink-0 text-neon-teal" />}
+                  {profilePromoUrl ? (
+                    <a href={profilePromoUrl} target="_blank" rel="noopener noreferrer" className="min-w-0 rounded-2xl bg-neon-teal px-3 py-1.5 text-left text-sm font-medium leading-tight text-black line-clamp-2 [overflow-wrap:anywhere]">{profilePromo || "View Promo"}</a>
+                  ) : (
+                    <span className="min-w-0 rounded-2xl bg-neon-teal px-3 py-1.5 text-left text-sm font-medium leading-tight text-black line-clamp-2 [overflow-wrap:anywhere]">{profilePromo}</span>
+                  )}
+                </div>
+              ) : null}
 
               {/* Expand Button - bottom left */}
               {eventImageUrl && (
@@ -1006,12 +1029,6 @@ export default function EventPage() {
                 ) : null}
               </h1>
             </div>
-
-            {profilePromo ? (
-              <div className="mt-2 w-fit max-w-full rounded-full bg-neon-teal px-3 py-1.5 text-sm font-bold leading-tight text-black md:text-base">
-                {profilePromo}
-              </div>
-            ) : null}
 
             <div
               className={cn(

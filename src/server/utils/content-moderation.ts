@@ -2,6 +2,7 @@ export const CONTENT_MODERATION_REJECTION_MESSAGE =
   "This content may violate WIG's Community Guidelines. Please revise it and try again.";
 
 export type ContentModerationCategory =
+  | "profanity"
   | "hate_or_harassment"
   | "sexual_exploitation"
   | "sexual_solicitation"
@@ -19,6 +20,7 @@ export type ContentModerationResult =
 type ModeratedField = {
   field: string;
   value: string | null | undefined;
+  rejectProfanity?: boolean;
 };
 
 const CHARACTER_SUBSTITUTIONS: Record<string, string> = {
@@ -77,6 +79,11 @@ const BLOCKED_PATTERNS: Array<{
   },
 ];
 
+// Word boundaries avoid rejecting ordinary names such as Scunthorpe or cocktails.
+// Permit separators between letters to catch common punctuation-based evasions.
+const PROMO_PROFANITY =
+  /\b(?:mother\s*)?(?:f\s*(?:u\s*)?c\s*k(?:s|ed|er|ers|ing)?|s\s*h\s*(?:i\s*)?t(?:s|ty|ting|head)?|bullshit|bitch(?:es|ing)?|ass(?:hole|holes)?|bastard(?:s)?|cunt(?:s)?|dick(?:s|head)?|pussy|piss(?:ed|ing)?|damn(?:ed|it)?)\b/;
+
 function normalizeForModeration(value: string): string {
   return value
     .normalize("NFKD")
@@ -100,6 +107,13 @@ export function moderateTextFields(
     if (!value) continue;
 
     const normalized = normalizeForModeration(value);
+    if (
+      field.rejectProfanity &&
+      (PROMO_PROFANITY.test(normalized) ||
+        PROMO_PROFANITY.test(normalized.replace(/([a-z])\1+/g, "$1")))
+    ) {
+      return { allowed: false, category: "profanity", field: field.field };
+    }
     for (const rule of BLOCKED_PATTERNS) {
       if (rule.patterns.some((pattern) => pattern.test(normalized))) {
         return { allowed: false, category: rule.category, field: field.field };

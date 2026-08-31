@@ -441,6 +441,13 @@
       "when": 1787927943318,
       "tag": "0071_odd_zombie",
       "breakpoints": true
+    },
+    {
+      "idx": 72,
+      "version": "7",
+      "when": 1788199409070,
+      "tag": "0072_add_promo_url",
+      "breakpoints": true
     }
   ]
 }

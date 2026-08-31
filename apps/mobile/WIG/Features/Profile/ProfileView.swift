@@ -408,7 +408,8 @@ struct ProfileView: View {
         let groups = ProfileEventGrouper.groups(for: events, mode: selectedEventsTab)
 
         VStack(alignment: .leading, spacing: 18) {
-            if let promotingEvents = response.promotingEvents,
+            if selectedEventsTab == .upcoming,
+               let promotingEvents = response.promotingEvents,
                !promotingEvents.isEmpty {
                 ProfilePromotingEventsSection(events: promotingEvents)
             }
@@ -877,7 +878,8 @@ private struct ManagePromotingView: View {
     @Environment(\.dismiss) private var dismiss
     @State private var events: [PromotableEvent] = []
     @State private var savedEvents: [PromotableEvent] = []
-    @State private var editingPromoEventIDs = Set<UUID>()
+    @State private var expandedPromos = Set<UUID>()
+    @State private var expandedPromoLinks = Set<UUID>()
     @State private var isLoading = true
     @State private var isSaving = false
     @State private var errorMessage: String?
@@ -1007,29 +1009,46 @@ private struct ManagePromotingView: View {
                                         .frame(minHeight: 52)
 
                                     if event.isPromoted {
-                                        HStack(spacing: 8) {
-                                            TextField(
-                                                "Promo, e.g. Free with RSVP",
-                                                text: promoBinding(for: event.id)
-                                            )
-                                            .font(.system(size: 14, weight: .medium))
-                                            .foregroundStyle(.white)
-                                            .padding(.horizontal, 12)
-                                            .frame(height: 40)
-                                            .background(Color.white.opacity(0.07), in: RoundedRectangle(cornerRadius: 12, style: .continuous))
-                                            .disabled(!editingPromoEventIDs.contains(event.id) || isSaving)
+                                        VStack(alignment: .leading, spacing: 10) {
 
-                                            Button(editingPromoEventIDs.contains(event.id) ? "Done" : "Edit") {
-                                                if editingPromoEventIDs.contains(event.id) {
-                                                    editingPromoEventIDs.remove(event.id)
-                                                } else {
-                                                    editingPromoEventIDs.insert(event.id)
-                                                }
+                                            if expandedPromos.contains(event.id) {
+                                                TextField("Promo, e.g. Free with RSVP", text: promoBinding(for: event.id))
+                                                    .promoEditorField()
                                             }
-                                            .font(.system(size: 13, weight: .bold))
-                                            .foregroundStyle(AppTheme.accentBlue)
-                                            .disabled(isSaving)
+                                            if expandedPromoLinks.contains(event.id) {
+                                                TextField("https://example.com/promo", text: promoLinkBinding(for: event.id))
+                                                    .keyboardType(.URL)
+                                                    .textInputAutocapitalization(.never)
+                                                    .autocorrectionDisabled()
+                                                    .promoEditorField()
+                                            }
+                                            if !expandedPromos.contains(event.id) || !expandedPromoLinks.contains(event.id) {
+                                                HStack(spacing: 10) {
+                                                    if !expandedPromos.contains(event.id) {
+                                                        Button {
+                                                            expandedPromos.insert(event.id)
+                                                        } label: {
+                                                            Text("Add Promo")
+                                                                .frame(maxWidth: .infinity, minHeight: 44)
+                                                                .background(Color.white.opacity(0.07), in: RoundedRectangle(cornerRadius: 12))
+                                                        }
+                                                    }
+                                                    if !expandedPromoLinks.contains(event.id) {
+                                                        Button {
+                                                            expandedPromoLinks.insert(event.id)
+                                                        } label: {
+                                                            Text("Add Promo Link")
+                                                                .frame(maxWidth: .infinity, minHeight: 44)
+                                                                .background(Color.white.opacity(0.07), in: RoundedRectangle(cornerRadius: 12))
+                                                        }
+                                                    }
+                                                }
+                                                .font(.system(size: 13, weight: .semibold))
+                                                .foregroundStyle(AppTheme.accentBlue)
+                                                .buttonStyle(.plain)
+                                            }
                                         }
+                                        .disabled(isSaving)
                                         .padding(.horizontal, 20)
                                         .padding(.top, 4)
                                         .padding(.bottom, 10)
@@ -1096,6 +1115,8 @@ private struct ManagePromotingView: View {
     private func load() async {
         do {
             events = try await apiClient.send(APIClient.mobilePromotableEvents()).events
+            expandedPromos = Set(events.filter { normalizedPromo($0.promo) != nil }.map(\.id))
+            expandedPromoLinks = Set(events.filter { normalizedPromo($0.promoUrl) != nil }.map(\.id))
             await hydrateMissingEventImages()
             savedEvents = events
         } catch {
@@ -1131,10 +1152,9 @@ private struct ManagePromotingView: View {
     private func toggle(_ event: PromotableEvent) {
         guard let index = events.firstIndex(where: { $0.id == event.id }) else { return }
         events[index].isPromoted.toggle()
-        if events[index].isPromoted {
-            editingPromoEventIDs.insert(event.id)
-        } else {
-            editingPromoEventIDs.remove(event.id)
+        if !events[index].isPromoted {
+            expandedPromos.remove(event.id)
+            expandedPromoLinks.remove(event.id)
         }
     }
 
@@ -1149,10 +1169,22 @@ private struct ManagePromotingView: View {
         )
     }
 
+    private func promoLinkBinding(for eventID: UUID) -> Binding<String> {
+        Binding(
+            get: { events.first(where: { $0.id == eventID })?.promoUrl ?? "" },
+            set: { value in
+                if let index = events.firstIndex(where: { $0.id == eventID }) {
+                    events[index].promoUrl = String(value.prefix(2048))
+                }
+            }
+        )
+    }
+
     private var hasChanges: Bool {
         events.contains { event in
             guard let saved = savedEvents.first(where: { $0.id == event.id }) else { return true }
             return event.isPromoted != saved.isPromoted || normalizedPromo(event.promo) != normalizedPromo(saved.promo)
+                || normalizedPromo(event.promoUrl) != normalizedPromo(saved.promoUrl)
         }
     }
 
@@ -1165,6 +1197,7 @@ private struct ManagePromotingView: View {
         let changedEvents = events.filter { event in
             guard let saved = savedEvents.first(where: { $0.id == event.id }) else { return true }
             return event.isPromoted != saved.isPromoted || normalizedPromo(event.promo) != normalizedPromo(saved.promo)
+                || normalizedPromo(event.promoUrl) != normalizedPromo(saved.promoUrl)
         }
         guard !changedEvents.isEmpty else { return }
 
@@ -1175,12 +1208,12 @@ private struct ManagePromotingView: View {
                     try APIClient.setMobileEventPromoted(
                         eventID: event.id,
                         promoted: event.isPromoted,
-                        promo: normalizedPromo(event.promo)
+                        promo: normalizedPromo(event.promo),
+                        promoUrl: normalizedPromo(event.promoUrl)
                     )
                 )
             }
             savedEvents = events
-            editingPromoEventIDs.removeAll()
             ProfileViewModel.invalidateCache()
             UserProfileViewModel.invalidateAllCaches()
             NotificationCenter.default.post(name: .appDataDidChange, object: nil)
@@ -1189,6 +1222,16 @@ private struct ManagePromotingView: View {
             errorMessage = error.localizedDescription
         }
         isSaving = false
+    }
+}
+
+private extension View {
+    func promoEditorField() -> some View {
+        self.font(.system(size: 14, weight: .medium))
+            .foregroundStyle(.white)
+            .padding(.horizontal, 12)
+            .frame(height: 40)
+            .background(Color.white.opacity(0.07), in: RoundedRectangle(cornerRadius: 12))
     }
 }
 
@@ -2673,7 +2716,8 @@ private struct UserProfileEventsSection: View {
         let groups = ProfileEventGrouper.groups(for: events, mode: selectedEventsTab)
 
         VStack(alignment: .leading, spacing: 18) {
-            if let promotingEvents = response.promotingEvents,
+            if selectedEventsTab == .upcoming,
+               let promotingEvents = response.promotingEvents,
                !promotingEvents.isEmpty {
                 ProfilePromotingEventsSection(events: promotingEvents)
             }

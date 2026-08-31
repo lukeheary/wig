@@ -742,9 +742,10 @@ export async function GET(_request: Request, context: RouteContext) {
       };
     }),
     friends,
-    promotingEvents: promotingEventsRaw.map(({ event, promo }) => ({
+    promotingEvents: promotingEventsRaw.map(({ event, promo, promoUrl }) => ({
       ...mapMobileEvent(event),
       promo,
+      promoUrl,
     })),
     upcomingEvents: upcomingEventsRaw.map(mapMobileEvent),
     pastEvents: pastEventsRaw.map(mapMobileEvent),

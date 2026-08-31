@@ -9,7 +9,7 @@ import {
   formatEventTime,
   splitTrailingParenthetical,
 } from "@/lib/utils";
-import { Calendar, Star } from "lucide-react";
+import { Link2, Calendar, Star } from "lucide-react";
 import { format } from "date-fns";
 import { EventSocialOverlay } from "@/components/events/event-social-overlay";
 import {
@@ -29,7 +29,8 @@ interface EventCardProps {
 export function EventCard({ event }: EventCardProps) {
   const { eventHref, handleClick } = useEventCardLink(
     event.publicId,
-    event.promo
+    event.promo,
+    event.promoUrl
   );
   const dayOfWeek = formatEventDate(
     event.startAt,
@@ -94,12 +95,16 @@ export function EventCard({ event }: EventCardProps) {
             </div>
           )}
 
+          {event.promo || event.promoUrl ? (
+            <div className="absolute left-3 top-3 z-10 flex max-w-[calc(100%-1.5rem)] items-center gap-1.5">
+              {event.promoUrl && <Link2 aria-hidden="true" className="h-3.5 w-3.5 shrink-0 text-neon-teal" />}
+              <span className="truncate rounded-full bg-neon-teal px-2 py-1 text-[10px] font-medium leading-none text-black">
+                {event.promo || "View Promo"}
+              </span>
+            </div>
+          ) : null}
+
           <div className="font-space-grotesk relative z-10 mt-auto space-y-1 px-4 pb-4 pt-28 text-white md:px-5 md:pb-5">
-            {event.promo ? (
-              <div className="mb-1 w-fit max-w-full truncate rounded-full bg-neon-teal px-2 py-1 text-[10px] font-bold leading-none text-black">
-                {event.promo}
-              </div>
-            ) : null}
             <EventSocialOverlay
               users={socialUsers}
               size="md"

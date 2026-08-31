@@ -105,6 +105,16 @@ struct EventFeedItem: Codable, Identifiable, Hashable, Sendable {
     var friendsNotGoing: [EventSocialRSVP] = []
     var goingCount: Int? = nil
     var promo: String? = nil
+    var promoUrl: String? = nil
+
+    var promoLinkURL: URL? {
+        guard let promoUrl,
+              let url = URL(string: promoUrl),
+              ["http", "https"].contains(url.scheme?.lowercased() ?? ""),
+              url.host != nil, url.user == nil, url.password == nil
+        else { return nil }
+        return url
+    }
 
     enum CodingKeys: String, CodingKey {
         case id
@@ -150,6 +160,7 @@ struct EventFeedItem: Codable, Identifiable, Hashable, Sendable {
         case currentUserReview
         case friendsGoing
         case promo
+        case promoUrl
         case friendsInterested
         case friendsNotGoing
         case goingCount
@@ -479,6 +490,8 @@ extension EventFeedItem {
         friendsInterested = try container.decodeIfPresent([EventSocialRSVP].self, forKey: .friendsInterested) ?? []
         friendsNotGoing = try container.decodeIfPresent([EventSocialRSVP].self, forKey: .friendsNotGoing) ?? []
         goingCount = try container.decodeIfPresent(Int.self, forKey: .goingCount)
+        promo = try container.decodeIfPresent(String.self, forKey: .promo)
+        promoUrl = try container.decodeIfPresent(String.self, forKey: .promoUrl)
     }
 }
 

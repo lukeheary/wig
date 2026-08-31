@@ -257,13 +257,15 @@ struct EventDetailHero<
                 topTrailingControls
                     .padding(cornerControlInset)
             }
-            .overlay(alignment: .bottomLeading) {
-                leadingAccessory
-                    .padding(accessoryInset)
-            }
-            .overlay(alignment: .bottomTrailing) {
-                trailingAccessory
-                    .padding(accessoryInset)
+            .overlay(alignment: .bottom) {
+                // Share the available width so a long promo cannot cover Expand.
+                HStack(alignment: .bottom, spacing: 0) {
+                    leadingAccessory
+                        .fixedSize()
+                    Spacer(minLength: 12)
+                    trailingAccessory
+                }
+                .padding(accessoryInset)
             }
             .frame(maxWidth: .infinity)
     }

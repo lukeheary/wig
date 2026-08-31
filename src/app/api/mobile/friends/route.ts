@@ -722,9 +722,10 @@ export async function GET() {
     friends: [...acceptedByUserId.values()],
     receivedRequests,
     sentRequests,
-    promotingEvents: promotingEventsRaw.map(({ event, promo }) => ({
+    promotingEvents: promotingEventsRaw.map(({ event, promo, promoUrl }) => ({
       ...mapMobileEvent(event),
       promo,
+      promoUrl,
     })),
     upcomingEvents: upcomingEventsRaw.map(mapMobileEvent),
     pastEvents: pastEventsRaw.map(mapMobileEvent),

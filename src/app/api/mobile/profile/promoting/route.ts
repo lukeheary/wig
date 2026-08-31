@@ -1,3 +1,4 @@
+import { promoUrlSchema } from "@/server/utils/promo-validation";
 import { auth } from "@clerk/nextjs/server";
 import { NextResponse } from "next/server";
 import { and, asc, eq, gte, inArray, or } from "drizzle-orm";
@@ -44,7 +45,7 @@ export async function GET() {
     }),
     db.query.userPromotedEvents.findMany({
       where: eq(userPromotedEvents.userId, userId),
-      columns: { eventId: true, promo: true },
+      columns: { eventId: true, promo: true, promoUrl: true },
     }),
   ]);
   const selectedIds = new Set(selections.map((selection) => selection.eventId));
@@ -57,6 +58,7 @@ export async function GET() {
       startAt: event.startAt,
       placeName: event.venue?.name ?? event.organizer?.name ?? null,
       isPromoted: selectedIds.has(event.id),
+      promoUrl: selections.find((selection) => selection.eventId === event.id)?.promoUrl ?? null,
       promo:
         selections.find((selection) => selection.eventId === event.id)?.promo ??
         null,
@@ -73,6 +75,7 @@ export async function PATCH(request: Request) {
     eventId?: unknown;
     promoted?: unknown;
     promo?: unknown;
+    promoUrl?: unknown;
   };
   if (typeof body.eventId !== "string" || typeof body.promoted !== "boolean") {
     return NextResponse.json({ error: "Invalid request" }, { status: 400 });
@@ -88,11 +91,17 @@ export async function PATCH(request: Request) {
     );
   }
 
+  const promoUrlResult = promoUrlSchema.safeParse(body.promoUrl);
+  if (!promoUrlResult.success) {
+    return NextResponse.json({ error: "Promo link must be a valid HTTP or HTTPS URL (up to 2048 characters)." }, { status: 400 });
+  }
+
   try {
     assertTextContentAllowed([
       {
         field: "promo",
-        value: typeof body.promo === "string" ? body.promo : null,
+        value: body.promoted && typeof body.promo === "string" ? body.promo : null,
+        rejectProfanity: true,
       },
     ]);
   } catch (error) {
@@ -145,11 +154,13 @@ export async function PATCH(request: Request) {
     .values({
       userId,
       eventId: body.eventId,
+      promoUrl: promoUrlResult.data ?? null,
       promo: typeof body.promo === "string" ? body.promo.trim() || null : null,
     })
     .onConflictDoUpdate({
       target: [userPromotedEvents.userId, userPromotedEvents.eventId],
       set: {
+        ...(promoUrlResult.data !== undefined ? { promoUrl: promoUrlResult.data } : {}),
         promo:
           typeof body.promo === "string" ? body.promo.trim() || null : null,
       },

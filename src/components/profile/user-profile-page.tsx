@@ -296,7 +296,7 @@ export function UserProfilePage({
           ) : null}
         </section>
 
-        {data.promotingEvents.length > 0 ? (
+        {eventMode === "upcoming" && data.promotingEvents.length > 0 ? (
           <ProfilePromotingSection events={data.promotingEvents} />
         ) : null}
 

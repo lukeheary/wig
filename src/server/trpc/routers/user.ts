@@ -1,3 +1,4 @@
+import { promoUrlSchema } from "@/server/utils/promo-validation";
 import { z } from "zod";
 import { TRPCError } from "@trpc/server";
 import {
@@ -104,7 +105,7 @@ export const userRouter = router({
       }),
       ctx.db.query.userPromotedEvents.findMany({
         where: eq(userPromotedEvents.userId, ctx.auth.userId),
-        columns: { eventId: true, promo: true },
+        columns: { eventId: true, promo: true, promoUrl: true },
       }),
     ]);
     const selectedIds = new Set(
@@ -118,6 +119,7 @@ export const userRouter = router({
       coverImageUrl: event.coverImageUrl,
       placeName: event.venue?.name ?? event.organizer?.name ?? null,
       isPromoted: selectedIds.has(event.id),
+      promoUrl: selections.find((selection) => selection.eventId === event.id)?.promoUrl ?? null,
       promo:
         selections.find((selection) => selection.eventId === event.id)?.promo ??
         null,
@@ -130,11 +132,12 @@ export const userRouter = router({
         eventId: z.string().uuid(),
         promoted: z.boolean(),
         promo: z.string().trim().max(255).nullable().optional(),
+        promoUrl: promoUrlSchema,
       })
     )
     .mutation(async ({ ctx, input }) => {
-      if (input.promo) {
-        assertTRPCTextContentAllowed([{ field: "promo", value: input.promo }]);
+      if (input.promoted && input.promo) {
+        assertTRPCTextContentAllowed([{ field: "promo", value: input.promo, rejectProfanity: true }]);
       }
       if (!input.promoted) {
         await ctx.db
@@ -188,10 +191,11 @@ export const userRouter = router({
           userId: ctx.auth.userId,
           eventId: input.eventId,
           promo: input.promo || null,
+          promoUrl: input.promoUrl ?? null,
         })
         .onConflictDoUpdate({
           target: [userPromotedEvents.userId, userPromotedEvents.eventId],
-          set: { promo: input.promo || null },
+          set: { promo: input.promo || null, ...(input.promoUrl !== undefined ? { promoUrl: input.promoUrl } : {}) },
         });
       return { promoted: true };
     }),
@@ -561,6 +565,7 @@ export const userRouter = router({
       ) => ({
         ...mapEventCategoryData(promotingEvent.event),
         promo: promotingEvent.promo,
+        promoUrl: promotingEvent.promoUrl,
         userRsvp: null,
         friendsGoing: [],
         friendsInterested: [],

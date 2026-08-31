@@ -957,6 +957,7 @@ export const userPromotedEvents = pgTable(
       .notNull()
       .references(() => events.id, { onDelete: "cascade" }),
     promo: varchar("promo", { length: 255 }),
+    promoUrl: varchar("promo_url", { length: 2048 }),
     createdAt: timestamp("created_at").defaultNow().notNull(),
   },
   (table) => ({

@@ -440,21 +440,30 @@ private struct EventCardContent: View {
                 cardHeight: cardHeight
             )
 
+            let promo = event.promo?.trimmingCharacters(in: .whitespacesAndNewlines) ?? ""
+            if !promo.isEmpty || event.promoLinkURL != nil {
+                HStack(spacing: 5) {
+                    if event.promoLinkURL != nil {
+                        Image(systemName: "link")
+                            .font(.system(size: 12, weight: .semibold))
+                            .foregroundStyle(AppTheme.accentBlue)
+                            .accessibilityHidden(true)
+                    }
+                    Text(promo.isEmpty ? "View Promo" : promo)
+                        .font(.system(size: 11, weight: .medium))
+                        .foregroundStyle(.black)
+                        .lineLimit(1)
+                        .padding(.horizontal, 8)
+                        .frame(height: 22)
+                        .background(AppTheme.accentBlue, in: Capsule())
+                }
+                .padding(12)
+            }
+
             VStack(alignment: .leading, spacing: 0) {
                 Spacer(minLength: 0)
 
                 VStack(alignment: .leading, spacing: 3) {
-                    if let promo = event.promo, !promo.isEmpty {
-                        Text(promo)
-                            .font(.system(size: 11, weight: .bold))
-                            .foregroundStyle(.black)
-                            .lineLimit(1)
-                            .padding(.horizontal, 8)
-                            .frame(height: 22)
-                            .background(AppTheme.accentBlue, in: Capsule())
-                            .padding(.bottom, 2)
-                    }
-
                     if isAuthenticated {
                         EventSocialOverlayView(attendees: goingAttendees, size: .card)
                             .padding(.bottom, 4)

@@ -9,15 +9,17 @@ import {
 
 export function useEventCardLink(
   eventPublicId: string,
-  profilePromo?: string | null
+  profilePromo?: string | null,
+  profilePromoUrl?: string | null
 ) {
   const pathname = usePathname();
   const searchParams = useSearchParams();
   const returnTo = buildReturnTo(pathname, searchParams);
   const promo = profilePromo?.trim();
-  const eventPath = promo
-    ? `/event/${eventPublicId}?profilePromo=${encodeURIComponent(promo)}`
-    : `/event/${eventPublicId}`;
+  const params = new URLSearchParams();
+  if (promo) params.set("profilePromo", promo);
+  if (profilePromoUrl) params.set("profilePromoUrl", profilePromoUrl);
+  const eventPath = `/event/${eventPublicId}${params.size ? `?${params}` : ""}`;
   const eventHref = withReturnTo(eventPath, returnTo);
 
   const handleClick = () => {
