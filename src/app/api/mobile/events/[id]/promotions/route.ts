@@ -34,20 +34,19 @@ export async function GET(
     ),
     columns: { userId: true, friendUserId: true },
   });
-  const friendIds = friendships.map((friendship) =>
-    friendship.userId === userId
-      ? friendship.friendUserId
-      : friendship.userId
-  );
-
-  if (friendIds.length === 0) {
-    return NextResponse.json({ promotions: [] });
-  }
+  const visiblePromoterIds = [
+    userId,
+    ...friendships.map((friendship) =>
+      friendship.userId === userId
+        ? friendship.friendUserId
+        : friendship.userId
+    ),
+  ];
 
   const promotions = await db.query.userPromotedEvents.findMany({
     where: and(
       eq(userPromotedEvents.eventId, eventId),
-      inArray(userPromotedEvents.userId, friendIds)
+      inArray(userPromotedEvents.userId, visiblePromoterIds)
     ),
     with: { user: true },
     orderBy: [asc(userPromotedEvents.createdAt)],
