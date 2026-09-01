@@ -61,7 +61,11 @@ struct EventDetailView: View {
     @State private var presentedRoute: EventDetailRoute?
     @State private var eventPageBackgroundColor = Color(red: 0.11, green: 0.10, blue: 0.10)
 
-    init(event: EventFeedItem, preloadedRSVPState: EventRSVPState? = nil) {
+    init(
+        event: EventFeedItem,
+        preloadedRSVPState: EventRSVPState? = nil,
+        preloadedPromotions: [EventFriendPromotion] = []
+    ) {
         self.event = event
 
         let cachedReview = EventReviewCache.review(for: event.id)
@@ -78,6 +82,7 @@ struct EventDetailView: View {
         _hasLoadedCurrentUserReview = State(
             initialValue: !event.hasEnded || cachedReview != nil || event.hasLoadedCurrentUserReview
         )
+        _friendPromotions = State(initialValue: preloadedPromotions)
     }
 
     var body: some View {
@@ -123,17 +128,7 @@ struct EventDetailView: View {
                                 }
                             }
                         },
-                        trailingAccessory: {
-                            if let promoURL = currentEvent.promoLinkURL {
-                                Button {
-                                    presentedPromoLink = EventPromoLinkDestination(url: promoURL)
-                                } label: { promoBadge }
-                                .buttonStyle(EventPromoButtonStyle())
-                            } else if currentEvent.promo?.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty == false {
-                                promoBadge
-                                    .background(EventPromoBackground(isPressed: false))
-                            }
-                        }
+                        trailingAccessory: { EmptyView() }
                     )
 
                     VStack(alignment: .leading, spacing: 20) {
@@ -164,7 +159,7 @@ struct EventDetailView: View {
                 ZStack {
                     ZStack(alignment: .bottom) {
                         if isRSVPMenuExpanded {
-                            Color.clear
+                            Color.black.opacity(0.22)
                                 .contentShape(Rectangle())
                                 .ignoresSafeArea()
                                 .onTapGesture {
@@ -346,29 +341,6 @@ struct EventDetailView: View {
         }
     }
 
-    private var promoBadge: some View {
-        let text = currentEvent.promo?.trimmingCharacters(in: .whitespacesAndNewlines) ?? ""
-        return HStack(spacing: 6) {
-            Image(systemName: "megaphone")
-                .font(.system(size: 12, weight: .semibold))
-                .fixedSize()
-                .accessibilityLabel("Promotion")
-            Text(text.isEmpty ? "View Promo" : text)
-                .font(.system(size: 12, weight: .medium))
-                .lineLimit(2)
-                .multilineTextAlignment(.leading)
-            if currentEvent.promoLinkURL != nil {
-                Image(systemName: "arrow.up.right")
-                    .font(.system(size: 13, weight: .semibold))
-                    .fixedSize()
-                    .accessibilityHidden(true)
-            }
-        }
-        .foregroundStyle(.black)
-        .padding(.horizontal, 10)
-        .padding(.vertical, 6)
-    }
-
     private func closeEventDetail() {
         guard presentationLifecycle.beginClosing() else {
             return
@@ -511,6 +483,13 @@ struct EventDetailView: View {
             )
             guard !Task.isCancelled, !presentationLifecycle.isClosing else { return }
             friendPromotions = response.promotions
+            if let userID = clerk.user?.id {
+                EventPromotionPrefetchCache.store(
+                    response.promotions,
+                    eventID: currentEvent.id,
+                    userID: userID
+                )
+            }
         } catch {
             guard !Task.isCancelled, !presentationLifecycle.isClosing else { return }
             friendPromotions = []
@@ -1058,34 +1037,74 @@ struct EventDetailView: View {
     }
 
     private var primaryRSVPMenuContent: some View {
-        VStack(alignment: .leading, spacing: 0) {
-            VStack(spacing: 2) {
-                ForEach(RSVPMenuOption.allCases.filter { option in
-                    option != .notGoing || shouldShowNotGoingOption
-                }) { option in
-                    RSVPMenuOptionButton(
+        VStack(spacing: 22) {
+            VStack(spacing: 5) {
+                Text("See you there?")
+                    .font(.system(size: 25, weight: .bold))
+                    .foregroundStyle(.white)
+
+                Text("RSVP and let your friends know")
+                    .font(.system(size: 14, weight: .medium))
+                    .foregroundStyle(.white.opacity(0.56))
+            }
+            .frame(maxWidth: .infinity)
+            .padding(.top, 4)
+
+            HStack(alignment: .top, spacing: shouldShowNotGoingOption ? 10 : 18) {
+                ForEach(visibleRSVPMenuOptions) { option in
+                    RSVPCircleOptionButton(
                         option: option,
                         isSelected: rsvpViewModel.status == option.status,
-                        hasSelection: rsvpViewModel.status != nil,
-                        isLoading: rsvpViewModel.isSaving
+                        isDimmed: rsvpViewModel.status != nil && rsvpViewModel.status != option.status,
+                        isLoading: rsvpViewModel.isSaving,
+                        diameter: shouldShowNotGoingOption ? 88 : 96
                     ) {
                         selectRSVP(option.status)
                     }
+                    .frame(maxWidth: .infinity)
                 }
             }
 
-            Divider()
-                .overlay(.white.opacity(0.08))
-                .padding(.horizontal, 14)
-                .padding(.vertical, 6)
+            if hasFriendRSVPs {
+                Button {
+                    closeRSVPMenu()
+                    presentRSVPList()
+                } label: {
+                    HStack(spacing: 12) {
+                        RSVPSheetAvatarStack(attendees: friendRSVPPreviewAttendees)
 
-            RSVPMenuNavigationButton(
-                title: "More",
-                direction: .forward,
-                isLoading: rsvpViewModel.isSaving
-            ) {
-                withAnimation(.spring(response: 0.28, dampingFraction: 0.86)) {
-                    rsvpMenuMode = .more
+                        Text(rsvpSheetFriendSummaryText)
+                            .font(.system(size: 14, weight: .semibold))
+                            .foregroundStyle(.white)
+                            .lineLimit(1)
+
+                        Spacer(minLength: 8)
+
+                        Image(systemName: "chevron.right")
+                            .font(.system(size: 13, weight: .bold))
+                            .foregroundStyle(.white.opacity(0.54))
+                    }
+                    .padding(.horizontal, 14)
+                    .frame(height: 58)
+                    .background(.white.opacity(0.07), in: RoundedRectangle(cornerRadius: 18, style: .continuous))
+                    .contentShape(RoundedRectangle(cornerRadius: 18, style: .continuous))
+                }
+                .buttonStyle(.plain)
+            }
+
+            VStack(spacing: 8) {
+                Divider()
+                    .overlay(.white.opacity(0.10))
+                    .padding(.horizontal, 14)
+
+                RSVPMenuNavigationButton(
+                    title: "RSVP settings",
+                    direction: .forward,
+                    isLoading: rsvpViewModel.isSaving
+                ) {
+                    withAnimation(.spring(response: 0.28, dampingFraction: 0.86)) {
+                        rsvpMenuMode = .more
+                    }
                 }
             }
         }
@@ -1166,6 +1185,9 @@ struct EventDetailView: View {
                     get: { rsvpViewModel.notifyFriends },
                     set: { nextValue in
                         rsvpViewModel.setNotifyFriends(nextValue)
+                        if !nextValue {
+                            cancelPendingRSVPNotification()
+                        }
                     }
                 ),
                 isLoading: rsvpViewModel.isSaving
@@ -1362,7 +1384,7 @@ struct EventDetailView: View {
 
         closeRSVPMenu()
 
-        let shouldDelayFriendNotification = rsvpViewModel.notifyFriends
+        let shouldNotifyFriends = rsvpViewModel.notifyFriends
 
         Task {
             if await rsvpViewModel.toggle(
@@ -1370,11 +1392,14 @@ struct EventDetailView: View {
                 eventID: currentEvent.id,
                 using: apiClient,
                 includePartner: partnerRelationship?.isAccepted == true && rsvpViewModel.includePartner,
-                notifyFriends: rsvpViewModel.notifyFriends,
-                sendFriendNotifications: !shouldDelayFriendNotification
+                notifyFriends: shouldNotifyFriends,
+                // Going/interested notifications use the undo window below.
+                // The initial RSVP save must never notify immediately, including
+                // when the user has explicitly disabled notifications.
+                sendFriendNotifications: false
             ) {
-                handleSuccessfulRSVPChange(showConfirmation: true, allowsUndo: shouldDelayFriendNotification)
-                if shouldDelayFriendNotification {
+                handleSuccessfulRSVPChange(showConfirmation: true, allowsUndo: shouldNotifyFriends)
+                if shouldNotifyFriends {
                     scheduleFriendNotification(for: status)
                 }
             }
@@ -1570,14 +1595,16 @@ struct EventDetailView: View {
         Task { @MainActor in
             try? await Task.sleep(for: .seconds(4))
             guard pendingRSVPNotificationToken == token,
-                  rsvpViewModel.status == status else {
+                  rsvpViewModel.status == status,
+                  rsvpViewModel.notifyFriends else {
                 return
             }
 
             _ = try? await apiClient.send(
                 APIClient.sendMobileEventRSVPNotification(
                     eventID: currentEvent.id,
-                    status: status
+                    status: status,
+                    notifyFriends: true
                 )
             )
         }
@@ -1782,14 +1809,20 @@ struct EventDetailView: View {
         displayedEvent.friendsNotGoing.filter { !$0.user.isCurrentUser }
     }
 
+    private var hasFriendRSVPs: Bool {
+        !friendGoingAttendees.isEmpty || !friendInterestedAttendees.isEmpty || !friendNotGoingAttendees.isEmpty
+    }
+
     private var shouldShowNotGoingOption: Bool {
         rsvpViewModel.status == .going || rsvpViewModel.status == .interested ||
             !friendGoingAttendees.isEmpty ||
             !friendInterestedAttendees.isEmpty
     }
 
-    private var hasFriendRSVPs: Bool {
-        !friendGoingAttendees.isEmpty || !friendInterestedAttendees.isEmpty || !friendNotGoingAttendees.isEmpty
+    private var visibleRSVPMenuOptions: [RSVPMenuOption] {
+        RSVPMenuOption.allCases.filter { option in
+            option != .notGoing || shouldShowNotGoingOption
+        }
     }
 
     private var friendRSVPPreviewAttendees: [EventSocialAttendee] {
@@ -1816,6 +1849,23 @@ struct EventDetailView: View {
         ].compactMap { $0 }
 
         return parts.joined(separator: " • ")
+    }
+
+    private var rsvpSheetFriendSummaryText: String {
+        let goingCount = friendGoingAttendees.count
+        let interestedCount = friendInterestedAttendees.count
+
+        if goingCount > 0, interestedCount > 0 {
+            return "\(goingCount) going • \(interestedCount) interested"
+        }
+
+        if goingCount > 0 {
+            return goingCount == 1 ? "1 friend is going" : "\(goingCount) friends are going"
+        }
+
+        return interestedCount == 1
+            ? "1 friend is interested"
+            : "\(interestedCount) friends are interested"
     }
 
     private var goingRSVPLabel: String {
@@ -2101,6 +2151,15 @@ private struct EventPlaceDetailRouteView: View {
 private struct NestedEventDetailPresentationView: View {
     let presentation: EventDetailPresentation
     let transitionNamespace: Namespace.ID?
+    @Environment(Clerk.self) private var clerk
+
+    private var preloadedPromotions: [EventFriendPromotion] {
+        guard let userID = clerk.user?.id else { return [] }
+        return EventPromotionPrefetchCache.promotions(
+            eventID: presentation.event.id,
+            userID: userID
+        )
+    }
 
     var body: some View {
         Group {
@@ -2108,12 +2167,18 @@ private struct NestedEventDetailPresentationView: View {
                let transitionNamespace,
                let sourceID = presentation.transitionSourceID
             {
-                EventDetailView(event: presentation.event)
+                EventDetailView(
+                    event: presentation.event,
+                    preloadedPromotions: preloadedPromotions
+                )
                     .navigationTransition(
                         .zoom(sourceID: sourceID, in: transitionNamespace)
                     )
             } else {
-                EventDetailView(event: presentation.event)
+                EventDetailView(
+                    event: presentation.event,
+                    preloadedPromotions: preloadedPromotions
+                )
             }
         }
         .presentationBackground(.clear)
@@ -2577,57 +2642,173 @@ private struct RSVPNotifyFriendsRow: View {
     }
 }
 
-private struct RSVPMenuOptionButton: View {
+private struct RSVPCircleOptionButton: View {
     let option: RSVPMenuOption
     let isSelected: Bool
-    let hasSelection: Bool
+    let isDimmed: Bool
     let isLoading: Bool
+    let diameter: CGFloat
     let action: () -> Void
 
     var body: some View {
         Button(action: action) {
-            HStack(spacing: 12) {
-                Image(systemName: option.systemImage)
-                    .font(.system(size: 15, weight: .bold))
-                    .frame(width: 22)
-                    .foregroundStyle(iconColor)
+            VStack(spacing: 10) {
+                ZStack {
+                    Circle()
+                        .fill(
+                            LinearGradient(
+                                colors: [
+                                    option.status.rsvpTintColor.opacity(isSelected ? 0.94 : 0.38),
+                                    option.status.rsvpTintColor.opacity(isSelected ? 0.62 : 0.12),
+                                ],
+                                startPoint: .topLeading,
+                                endPoint: .bottomTrailing
+                            )
+                        )
+                        .overlay {
+                            Circle()
+                                .strokeBorder(
+                                    LinearGradient(
+                                        colors: [
+                                            .white.opacity(isSelected ? 0.46 : 0.28),
+                                            option.status.rsvpTintColor.opacity(isSelected ? 0.90 : 0.48),
+                                            .black.opacity(0.26),
+                                        ],
+                                        startPoint: .topLeading,
+                                        endPoint: .bottomTrailing
+                                    ),
+                                    lineWidth: isSelected ? 2 : 1.5
+                                )
+                        }
+                        .shadow(
+                            color: option.status.rsvpTintColor.opacity(isSelected ? 0.40 : 0.18),
+                            radius: isSelected ? 16 : 10,
+                            x: 0,
+                            y: 8
+                        )
+                        .shadow(
+                            color: .black.opacity(0.42),
+                            radius: 10,
+                            x: 0,
+                            y: 8
+                        )
+
+                    Circle()
+                        .fill(
+                            RadialGradient(
+                                colors: [
+                                    .white.opacity(isSelected ? 0.28 : 0.18),
+                                    .clear,
+                                ],
+                                center: UnitPoint(x: 0.27, y: 0.20),
+                                startRadius: 0,
+                                endRadius: diameter * 0.70
+                            )
+                        )
+                        .padding(2)
+
+                    if isLoading && isSelected {
+                        ProgressView().tint(iconColor)
+                    } else {
+                        Image(systemName: option.systemImage)
+                            .font(.system(size: 28, weight: .bold))
+                            .foregroundStyle(iconColor)
+                            .symbolEffect(.bounce, value: isSelected)
+                            .shadow(
+                                color: isSelected ? .black.opacity(0.24) : option.status.rsvpTintColor.opacity(0.22),
+                                radius: 3,
+                                x: 0,
+                                y: 2
+                            )
+                    }
+                }
+                .frame(width: diameter, height: diameter)
 
                 Text(option.title)
                     .font(.system(size: 15, weight: .bold))
                     .lineLimit(1)
-                    .foregroundStyle(isSelected ? option.status.rsvpTintColor : .white)
-
-                Spacer(minLength: 8)
-
-                HStack(spacing: 8) {
-                    Image(systemName: "checkmark.circle.fill")
-                        .font(.system(size: 16, weight: .semibold))
-                        .opacity(isSelected ? 1 : 0)
-                        .foregroundStyle(option.status.rsvpTintColor)
-
-                    if option.status == .notGoing {
-                        Image(systemName: "chevron.right")
-                            .font(.system(size: 14, weight: .bold))
-                            .foregroundStyle(.white.opacity(0.72))
-                    }
-                }
+                    .foregroundStyle(.white)
             }
-            .padding(.horizontal, 14)
-            .frame(height: 58)
-            .background(isSelected ? Color.white.opacity(0.10) : Color.clear, in: RoundedRectangle(cornerRadius: 18, style: .continuous))
-            .contentShape(RoundedRectangle(cornerRadius: 18, style: .continuous))
+            .frame(maxWidth: .infinity)
+            .contentShape(Rectangle())
         }
-        .buttonStyle(.plain)
+        .buttonStyle(
+            RSVPCircleOptionButtonStyle(
+                isSelected: isSelected,
+                isDimmed: isDimmed
+            )
+        )
         .disabled(isLoading)
-        .animation(.snappy(duration: 0.18), value: isSelected)
     }
 
     private var iconColor: Color {
-        if isSelected || !hasSelection {
-            return option.status.rsvpTintColor
+        if isSelected {
+            return option.status == .interested ? .black.opacity(0.78) : .white
         }
+        return option.status.rsvpTintColor
+    }
 
-        return .white.opacity(0.34)
+}
+
+private struct RSVPCircleOptionButtonStyle: ButtonStyle {
+    let isSelected: Bool
+    let isDimmed: Bool
+
+    func makeBody(configuration: Configuration) -> some View {
+        configuration.label
+            .scaleEffect(configuration.isPressed ? 0.93 : (isSelected ? 1.02 : (isDimmed ? 0.96 : 1)))
+            .saturation(isDimmed ? 0.28 : 1)
+            .opacity(isDimmed ? 0.52 : 1)
+            .brightness(configuration.isPressed ? -0.06 : 0)
+            .animation(
+                .spring(response: 0.26, dampingFraction: 0.64),
+                value: configuration.isPressed
+            )
+            .animation(
+                .spring(response: 0.30, dampingFraction: 0.72),
+                value: isSelected
+            )
+            .animation(
+                .easeOut(duration: 0.20),
+                value: isDimmed
+            )
+    }
+}
+
+private struct RSVPSheetAvatarStack: View {
+    let attendees: [EventSocialAttendee]
+
+    private var visibleAttendees: [EventSocialAttendee] {
+        Array(attendees.prefix(3))
+    }
+
+    var body: some View {
+        ZStack(alignment: .leading) {
+            ForEach(Array(visibleAttendees.enumerated()), id: \.element.id) { index, attendee in
+                UserAvatarView(
+                    imageURL: attendee.avatarImageURL,
+                    name: displayName(for: attendee),
+                    size: 32,
+                    identityKey: attendee.id
+                )
+                .overlay(Circle().strokeBorder(Color.black.opacity(0.72), lineWidth: 2))
+                .offset(x: CGFloat(index) * 22)
+                .zIndex(Double(visibleAttendees.count - index))
+            }
+        }
+        .frame(
+            width: 32 + CGFloat(max(visibleAttendees.count - 1, 0)) * 22,
+            height: 32,
+            alignment: .leading
+        )
+    }
+
+    private func displayName(for attendee: EventSocialAttendee) -> String {
+        let name = [attendee.firstName, attendee.lastName]
+            .compactMap { $0?.trimmingCharacters(in: .whitespacesAndNewlines) }
+            .filter { !$0.isEmpty }
+            .joined(separator: " ")
+        return name.isEmpty ? "Friend" : name
     }
 }
 
@@ -2707,9 +2888,6 @@ private struct RSVPMenuNavigationButton: View {
                         .font(.system(size: 14, weight: .bold))
                         .foregroundStyle(.white.opacity(0.72))
                         .frame(width: 22)
-                } else {
-                    Color.clear
-                        .frame(width: 22, height: 14)
                 }
 
                 Text(title)
@@ -2775,6 +2953,53 @@ enum EventRSVPPrefetchCache {
             states[key] = state
         }
 
+        inFlightLoads[key] = nil
+    }
+}
+
+@MainActor
+enum EventPromotionPrefetchCache {
+    private struct Key: Hashable {
+        let eventID: UUID
+        let userID: String
+    }
+
+    private static var values = [Key: [EventFriendPromotion]]()
+    private static var inFlightLoads = [Key: Task<[EventFriendPromotion], Error>]()
+
+    static func promotions(eventID: UUID, userID: String) -> [EventFriendPromotion] {
+        values[Key(eventID: eventID, userID: userID)] ?? []
+    }
+
+    static func store(
+        _ promotions: [EventFriendPromotion],
+        eventID: UUID,
+        userID: String
+    ) {
+        values[Key(eventID: eventID, userID: userID)] = promotions
+    }
+
+    static func preload(eventID: UUID, userID: String, using apiClient: APIClient) async {
+        let key = Key(eventID: eventID, userID: userID)
+        if values[key] != nil { return }
+
+        if let inFlightLoad = inFlightLoads[key] {
+            if let promotions = try? await inFlightLoad.value {
+                values[key] = promotions
+            }
+            return
+        }
+
+        let loadTask = Task {
+            try await apiClient
+                .send(APIClient.mobileEventFriendPromotions(eventID: eventID))
+                .promotions
+        }
+        inFlightLoads[key] = loadTask
+
+        if let promotions = try? await loadTask.value {
+            values[key] = promotions
+        }
         inFlightLoads[key] = nil
     }
 }
@@ -3234,26 +3459,6 @@ private struct EventPromoBrowser: UIViewControllerRepresentable {
     }
 
     func updateUIViewController(_ controller: SFSafariViewController, context: Context) {}
-}
-
-private struct EventPromoBackground: View {
-    let isPressed: Bool
-
-    var body: some View {
-        RoundedRectangle(cornerRadius: 8, style: .continuous)
-            .fill(AppTheme.accentBlue)
-            .brightness(isPressed ? -0.08 : 0)
-            .shadow(color: .black.opacity(0.7), radius: 3, x: 0, y: 1)
-    }
-}
-
-private struct EventPromoButtonStyle: ButtonStyle {
-    func makeBody(configuration: Configuration) -> some View {
-        configuration.label
-            .background(EventPromoBackground(isPressed: configuration.isPressed))
-            .contentShape(RoundedRectangle(cornerRadius: 8, style: .continuous))
-            .animation(.easeOut(duration: 0.1), value: configuration.isPressed)
-    }
 }
 
 private struct EventFriendPromotionRow: View {

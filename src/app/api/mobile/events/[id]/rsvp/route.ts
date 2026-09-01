@@ -164,6 +164,7 @@ export async function POST(request: Request, context: RouteContext) {
   // RSVP here so an undone or changed response never notifies friends.
   if (body.notificationOnly) {
     if (
+      body.notifyFriends !== true ||
       eventHasEnded ||
       (body.status !== "going" && body.status !== "interested") ||
       existingUserRsvp?.status !== body.status

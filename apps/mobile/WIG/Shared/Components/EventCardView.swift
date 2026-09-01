@@ -54,13 +54,19 @@ struct EventDetailNavigationLink<Label: View>: View {
 
     var body: some View {
         Button {
-            if preloadsRSVP, let userID = clerk.user?.id {
+            if let userID = clerk.user?.id {
                 Task {
-                    await EventRSVPPrefetchCache.preload(
-                        eventID: event.id,
-                        userID: userID,
-                        using: apiClient
+                    async let promotions: Void = EventPromotionPrefetchCache.preload(
+                        eventID: event.id, userID: userID, using: apiClient
                     )
+                    if preloadsRSVP {
+                        await EventRSVPPrefetchCache.preload(
+                            eventID: event.id,
+                            userID: userID,
+                            using: apiClient
+                        )
+                    }
+                    await promotions
                     openEvent()
                 }
             } else {

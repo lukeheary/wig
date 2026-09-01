@@ -77,18 +77,32 @@ struct MainTabView: View {
         let preloadedRSVPState = clerk.user.flatMap { user in
             EventRSVPPrefetchCache.state(eventID: presentation.event.id, userID: user.id)
         }
+        let preloadedPromotions = clerk.user.map { user in
+            EventPromotionPrefetchCache.promotions(
+                eventID: presentation.event.id,
+                userID: user.id
+            )
+        } ?? []
 
         Group {
             if #available(iOS 18.0, *), let sourceID = presentation.transitionSourceID {
                 NavigationStack {
-                    EventDetailView(event: presentation.event, preloadedRSVPState: preloadedRSVPState)
+                    EventDetailView(
+                        event: presentation.event,
+                        preloadedRSVPState: preloadedRSVPState,
+                        preloadedPromotions: preloadedPromotions
+                    )
                 }
                 .navigationTransition(
                     .zoom(sourceID: sourceID, in: eventDetailTransitionNamespace)
                 )
             } else {
                 NavigationStack {
-                    EventDetailView(event: presentation.event, preloadedRSVPState: preloadedRSVPState)
+                    EventDetailView(
+                        event: presentation.event,
+                        preloadedRSVPState: preloadedRSVPState,
+                        preloadedPromotions: preloadedPromotions
+                    )
                 }
             }
         }

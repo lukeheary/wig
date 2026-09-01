@@ -1134,13 +1134,17 @@ struct APIClient: Sendable {
 
     static func sendMobileEventRSVPNotification(
         eventID: UUID,
-        status: EventRSVPStatus
+        status: EventRSVPStatus,
+        notifyFriends: Bool
     ) throws -> Endpoint<EmptyResponse> {
         Endpoint(
             path: "/api/mobile/events/\(eventID.uuidString)/rsvp",
             method: .post,
             body: try JSONEncoder().encode(
-                EventRSVPNotificationRequest(status: status)
+                EventRSVPNotificationRequest(
+                    status: status,
+                    notifyFriends: notifyFriends
+                )
             ),
             requiresAuthentication: false,
             includesAuthenticationIfAvailable: true
@@ -2003,6 +2007,7 @@ private struct MobileEventReviewRequest: Encodable {
 
 private struct EventRSVPNotificationRequest: Encodable {
     let status: EventRSVPStatus
+    let notifyFriends: Bool
     let notificationOnly = true
 }
 
