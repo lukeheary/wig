@@ -560,6 +560,45 @@ struct EventSocialRSVP: Codable, Hashable, Sendable {
     let user: EventSocialUser
 }
 
+struct EventFriendPromotionsResponse: Decodable, Sendable {
+    let promotions: [EventFriendPromotion]
+}
+
+struct EventFriendPromotion: Decodable, Identifiable, Hashable, Sendable {
+    let userID: String
+    let firstName: String?
+    let lastName: String?
+    let username: String?
+    let avatarImageURL: URL?
+    let promo: String?
+    let promoUrl: String?
+
+    var id: String { userID }
+
+    var displayName: String {
+        let fullName = [firstName, lastName]
+            .compactMap { $0?.trimmingCharacters(in: .whitespacesAndNewlines) }
+            .filter { !$0.isEmpty }
+            .joined(separator: " ")
+        return fullName.isEmpty ? (username ?? "Friend") : fullName
+    }
+
+    var linkURL: URL? {
+        guard let promoUrl,
+              let url = URL(string: promoUrl),
+              ["http", "https"].contains(url.scheme?.lowercased() ?? ""),
+              url.host != nil, url.user == nil, url.password == nil
+        else { return nil }
+        return url
+    }
+
+    enum CodingKeys: String, CodingKey {
+        case userID = "userId"
+        case firstName, lastName, username, promo, promoUrl
+        case avatarImageURL = "avatarImageUrl"
+    }
+}
+
 struct EventSocialUser: Codable, Identifiable, Hashable, Sendable {
     let id: String
     let firstName: String?

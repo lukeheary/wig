@@ -632,8 +632,7 @@ export async function GET(request: Request) {
       createdAt: mapped.createdAt,
       updatedAt: mapped.updatedAt,
       canEdit: canEditMobileEvent(editPermissions, {
-        venueId: mapped.venueId,
-        organizerId: mapped.organizerId,
+        createdByUserId: mapped.createdByUserId,
       }),
       isFollowed:
         (mapped.venueId ? followedPlaceIds.has(mapped.venueId) : false) ||

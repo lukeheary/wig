@@ -253,8 +253,7 @@ export async function GET(
     createdAt: mapped.createdAt,
     updatedAt: mapped.updatedAt,
     canEdit: canEditMobileEvent(permissions, {
-      venueId: mapped.venueId,
-      organizerId: mapped.organizerId,
+      createdByUserId: mapped.createdByUserId,
     }),
     isFollowed:
       (mapped.venueId ? followedPlaceIDs.has(mapped.venueId) : false) ||
@@ -525,11 +524,8 @@ export async function PATCH(
       createdAt: mapped.createdAt,
       updatedAt: mapped.updatedAt,
       canEdit:
-        permissions.isAdmin ||
-        isCreator ||
         canEditMobileEvent(permissions, {
-          venueId: mapped.venueId,
-          organizerId: mapped.organizerId,
+          createdByUserId: mapped.createdByUserId,
         }),
       isCreatedByCurrentUser: isCreator,
     });

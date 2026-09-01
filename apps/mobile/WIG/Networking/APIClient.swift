@@ -389,8 +389,22 @@ struct APIClient: Sendable {
         weekOffset: Int = 0,
         eventID: UUID? = nil
     ) -> Endpoint<PromotableEventsResponse> {
-        let query = eventID.map { "eventId=\($0.uuidString)" } ?? "weekOffset=\(weekOffset)"
-        return Endpoint(path: "/api/mobile/profile/promoting?\(query)")
+        let queryItems = if let eventID {
+            [URLQueryItem(name: "eventId", value: eventID.uuidString)]
+        } else {
+            [URLQueryItem(name: "weekOffset", value: String(weekOffset))]
+        }
+
+        return Endpoint(
+            path: "/api/mobile/profile/promoting",
+            queryItems: queryItems
+        )
+    }
+
+    static func mobileEventFriendPromotions(
+        eventID: UUID
+    ) -> Endpoint<EventFriendPromotionsResponse> {
+        Endpoint(path: "/api/mobile/events/\(eventID.uuidString)/promotions")
     }
 
     static func setMobileEventPromoted(

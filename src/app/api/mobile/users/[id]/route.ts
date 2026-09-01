@@ -642,8 +642,7 @@ export async function GET(_request: Request, context: RouteContext) {
       createdAt: mapped.createdAt,
       updatedAt: mapped.updatedAt,
       canEdit: canEditMobileEvent(editPermissions, {
-        venueId: mapped.venueId,
-        organizerId: mapped.organizerId,
+        createdByUserId: mapped.createdByUserId,
       }),
       isFollowed:
         (mapped.venueId ? followedPlaceIdSet.has(mapped.venueId) : false) ||

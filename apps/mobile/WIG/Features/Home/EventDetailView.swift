@@ -35,6 +35,7 @@ struct EventDetailView: View {
     @State private var isShareSheetPresented = false
     @State private var presentedPromoLink: EventPromoLinkDestination?
     @State private var eventPromotionOption: PromotableEvent?
+    @State private var friendPromotions: [EventFriendPromotion] = []
     @State private var isEventPromotionEditorPresented = false
     @State private var isImageViewerPresented = false
     @State private var isEditEventPresented = false
@@ -138,6 +139,7 @@ struct EventDetailView: View {
                     VStack(alignment: .leading, spacing: 20) {
                         eventReviewSection
                         rsvpdSection
+                        promotionsSection
                         about
                     }
                     .padding(.horizontal, 16)
@@ -228,7 +230,8 @@ struct EventDetailView: View {
             async let reviewLoad: Void = loadCurrentUserReview(using: apiClient)
             async let attendeeReviewLoad: Void = loadAttendeeReviewRatings(using: apiClient)
             async let promotionLoad: Void = loadEventPromotionOption(using: apiClient)
-            _ = await (rsvpLoad, partnerLoad, currentUserLoad, reviewLoad, attendeeReviewLoad, promotionLoad)
+            async let friendPromotionsLoad: Void = loadFriendPromotions(using: apiClient)
+            _ = await (rsvpLoad, partnerLoad, currentUserLoad, reviewLoad, attendeeReviewLoad, promotionLoad, friendPromotionsLoad)
 
             if !Task.isCancelled,
                !presentationLifecycle.isClosing,
@@ -494,6 +497,24 @@ struct EventDetailView: View {
         )
         guard !Task.isCancelled, !presentationLifecycle.isClosing else { return }
         eventPromotionOption = response?.events.first
+    }
+
+    private func loadFriendPromotions(using apiClient: APIClient) async {
+        guard isAuthenticated else {
+            friendPromotions = []
+            return
+        }
+
+        do {
+            let response = try await apiClient.send(
+                APIClient.mobileEventFriendPromotions(eventID: currentEvent.id)
+            )
+            guard !Task.isCancelled, !presentationLifecycle.isClosing else { return }
+            friendPromotions = response.promotions
+        } catch {
+            guard !Task.isCancelled, !presentationLifecycle.isClosing else { return }
+            friendPromotions = []
+        }
     }
 
     private func loadAttendeeReviewRatings(using apiClient: APIClient) async {
@@ -1193,6 +1214,35 @@ struct EventDetailView: View {
             .overlay {
                 RoundedRectangle(cornerRadius: 18, style: .continuous)
                     .strokeBorder(.white.opacity(0.10), lineWidth: 1)
+            }
+        }
+    }
+
+    @ViewBuilder
+    private var promotionsSection: some View {
+        if !friendPromotions.isEmpty {
+            VStack(alignment: .leading, spacing: 14) {
+                Text("Promotions")
+                    .font(.system(size: 20, weight: .bold))
+                    .foregroundStyle(.white)
+
+                VStack(spacing: 0) {
+                    ForEach(Array(friendPromotions.enumerated()), id: \.element.id) { index, promotion in
+                        EventFriendPromotionRow(promotion: promotion) { url in
+                            presentedPromoLink = EventPromoLinkDestination(url: url)
+                        }
+
+                        if index < friendPromotions.count - 1 {
+                            Divider().overlay(.white.opacity(0.08))
+                        }
+                    }
+                }
+                .padding(.horizontal, 14)
+                .background(.white.opacity(0.055), in: RoundedRectangle(cornerRadius: 18, style: .continuous))
+                .overlay {
+                    RoundedRectangle(cornerRadius: 18, style: .continuous)
+                        .strokeBorder(.white.opacity(0.10), lineWidth: 1)
+                }
             }
         }
     }
@@ -3203,6 +3253,83 @@ private struct EventPromoButtonStyle: ButtonStyle {
             .background(EventPromoBackground(isPressed: configuration.isPressed))
             .contentShape(RoundedRectangle(cornerRadius: 8, style: .continuous))
             .animation(.easeOut(duration: 0.1), value: configuration.isPressed)
+    }
+}
+
+private struct EventFriendPromotionRow: View {
+    let promotion: EventFriendPromotion
+    let onOpenLink: (URL) -> Void
+
+    var body: some View {
+        HStack(alignment: .top, spacing: 12) {
+            avatar
+
+            VStack(alignment: .leading, spacing: 6) {
+                Text(promotion.displayName)
+                    .font(.system(size: 15, weight: .semibold))
+                    .foregroundStyle(.white)
+
+                if let promo = trimmedPromo {
+                    Text(promo)
+                        .font(.system(size: 14, weight: .regular))
+                        .foregroundStyle(.white.opacity(0.82))
+                        .multilineTextAlignment(.leading)
+                        .fixedSize(horizontal: false, vertical: true)
+                }
+
+                if let url = promotion.linkURL {
+                    Button {
+                        onOpenLink(url)
+                    } label: {
+                        HStack(spacing: 5) {
+                            Text(promotion.promoUrl ?? url.absoluteString)
+                                .lineLimit(1)
+                                .truncationMode(.middle)
+                            Image(systemName: "arrow.up.right")
+                                .font(.system(size: 11, weight: .semibold))
+                        }
+                        .font(.system(size: 13, weight: .medium))
+                        .foregroundStyle(AppTheme.accentBlue)
+                    }
+                    .buttonStyle(.plain)
+                }
+            }
+            .frame(maxWidth: .infinity, alignment: .leading)
+        }
+        .padding(.vertical, 14)
+    }
+
+    @ViewBuilder
+    private var avatar: some View {
+        if let avatarImageURL = promotion.avatarImageURL {
+            RemoteImageView(url: avatarImageURL) { image in
+                image.resizable().scaledToFill()
+            } placeholder: {
+                avatarPlaceholder
+            }
+            .frame(width: 42, height: 42)
+            .clipShape(Circle())
+        } else {
+            avatarPlaceholder
+                .frame(width: 42, height: 42)
+        }
+    }
+
+    private var avatarPlaceholder: some View {
+        Circle()
+            .fill(.white.opacity(0.10))
+            .overlay {
+                Text(String(promotion.displayName.prefix(1)).uppercased())
+                    .font(.system(size: 16, weight: .semibold))
+                    .foregroundStyle(.white.opacity(0.78))
+            }
+    }
+
+    private var trimmedPromo: String? {
+        guard let promo = promotion.promo?.trimmingCharacters(in: .whitespacesAndNewlines),
+              !promo.isEmpty
+        else { return nil }
+        return promo
     }
 }
 

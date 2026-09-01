@@ -713,10 +713,8 @@ export async function GET(request: Request) {
           updatedAt: mapped.updatedAt,
           status: mapped.status,
           canEdit:
-            (Boolean(userId) && mapped.createdByUserId === userId) ||
             canEditMobileEvent(editPermissions, {
-              venueId: mapped.venueId,
-              organizerId: mapped.organizerId,
+              createdByUserId: mapped.createdByUserId,
             }),
           isFollowed:
             (mapped.venueId ? followedPlaceIdSet.has(mapped.venueId) : false) ||
@@ -772,10 +770,8 @@ export async function GET(request: Request) {
           updatedAt: mapped.updatedAt,
           status: mapped.status,
           canEdit:
-            (Boolean(userId) && mapped.createdByUserId === userId) ||
             canEditMobileEvent(editPermissions, {
-              venueId: mapped.venueId,
-              organizerId: mapped.organizerId,
+              createdByUserId: mapped.createdByUserId,
             }),
           isFollowed:
             (mapped.venueId ? followedPlaceIdSet.has(mapped.venueId) : false) ||

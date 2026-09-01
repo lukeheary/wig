@@ -3127,12 +3127,16 @@ private struct RelationshipSummaryRow: View {
             }
             .buttonStyle(.plain)
 
+            Spacer(minLength: 0)
+
             NavigationLink {
                 FollowingPlacesView(places: response.followedPlaces)
             } label: {
                 RelationshipSummaryLink(count: response.followingCount, label: "Following")
             }
             .buttonStyle(.plain)
+
+            Spacer(minLength: 0)
 
             if let memberPlaces = response.memberPlaces, !memberPlaces.isEmpty {
                 NavigationLink {
@@ -3144,6 +3148,8 @@ private struct RelationshipSummaryRow: View {
                     )
                 }
                 .buttonStyle(.plain)
+
+                Spacer(minLength: 0)
             }
 
             NavigationLink {
@@ -3625,12 +3631,16 @@ private struct UserRelationshipSummaryRow: View {
             }
             .buttonStyle(.plain)
 
+            Spacer(minLength: 0)
+
             NavigationLink {
                 FollowingPlacesView(places: response.followedPlaces ?? [])
             } label: {
                 RelationshipSummaryLink(count: response.followingCount ?? 0, label: "Following")
             }
             .buttonStyle(.plain)
+
+            Spacer(minLength: 0)
 
             if let memberPlaces = response.memberPlaces, !memberPlaces.isEmpty {
                 NavigationLink {
@@ -3649,6 +3659,7 @@ private struct UserRelationshipSummaryRow: View {
             }
         }
         .frame(maxWidth: .infinity)
+        .padding(.trailing, 44)
     }
 }
 
@@ -3687,7 +3698,7 @@ private struct RelationshipSummaryLink: View {
                 .lineLimit(1)
                 .minimumScaleFactor(0.78)
         }
-        .frame(maxWidth: .infinity, alignment: .leading)
+        .fixedSize(horizontal: true, vertical: false)
     }
 }
 

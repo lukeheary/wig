@@ -3,6 +3,7 @@ import { db } from "@/server/db";
 import { placeMembers, users } from "@/server/db/schema";
 
 export interface MobileEventEditPermissions {
+  userId: string | null;
   isAdmin: boolean;
   manageablePlaceIds: Set<string>;
   placeRoleById: Map<string, "owner" | "manager" | "promoter" | "staff">;
@@ -13,6 +14,7 @@ export async function resolveMobileEventEditPermissions(
 ): Promise<MobileEventEditPermissions> {
   if (!userId) {
     return {
+      userId: null,
       isAdmin: false,
       manageablePlaceIds: new Set<string>(),
       placeRoleById: new Map(),
@@ -36,6 +38,7 @@ export async function resolveMobileEventEditPermissions(
   ]);
 
   return {
+    userId,
     isAdmin: user?.role === "admin",
     manageablePlaceIds: new Set(memberships.map((membership) => membership.placeId)),
     placeRoleById: new Map(
@@ -49,16 +52,11 @@ export async function resolveMobileEventEditPermissions(
 export function canEditMobileEvent(
   permissions: MobileEventEditPermissions,
   event: {
-    venueId: string | null;
-    organizerId: string | null;
+    createdByUserId: string | null;
   }
 ) {
-  if (permissions.isAdmin) {
-    return true;
-  }
-
   return (
-    (event.venueId ? permissions.manageablePlaceIds.has(event.venueId) : false) ||
-    (event.organizerId ? permissions.manageablePlaceIds.has(event.organizerId) : false)
+    permissions.isAdmin ||
+    (Boolean(permissions.userId) && event.createdByUserId === permissions.userId)
   );
 }
