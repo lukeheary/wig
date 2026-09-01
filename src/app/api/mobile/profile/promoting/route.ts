@@ -1,7 +1,7 @@
 import { promoUrlSchema } from "@/server/utils/promo-validation";
 import { auth } from "@clerk/nextjs/server";
 import { NextResponse } from "next/server";
-import { and, asc, eq, gte, inArray, or } from "drizzle-orm";
+import { and, asc, eq, gte, inArray, lt, or } from "drizzle-orm";
 import { db } from "@/server/db";
 import { events, placeMembers, userPromotedEvents } from "@/server/db/schema";
 import {
@@ -21,25 +21,56 @@ async function promoterPlaceIds(userId: string) {
   return memberships.map((membership) => membership.placeId);
 }
 
-export async function GET() {
+function promotionWeekRange(offset: number) {
+  const start = new Date();
+  start.setUTCHours(0, 0, 0, 0);
+  start.setUTCDate(
+    start.getUTCDate() - ((start.getUTCDay() + 6) % 7) + offset * 7
+  );
+  const end = new Date(start);
+  end.setUTCDate(start.getUTCDate() + 7);
+  return { start, end };
+}
+
+export async function GET(request: Request) {
   const { userId } = await auth();
   if (!userId)
     return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
 
   const placeIds = await promoterPlaceIds(userId);
-  if (placeIds.length === 0) return NextResponse.json({ events: [] });
+  if (placeIds.length === 0)
+    return NextResponse.json({ events: [], hasMore: false });
+  const params = new URL(request.url).searchParams;
+  const eventId = params.get("eventId");
+  if (
+    eventId &&
+    !/^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i.test(
+      eventId
+    )
+  ) {
+    return NextResponse.json({ error: "Invalid event ID" }, { status: 400 });
+  }
+  const weekOffset = Math.max(
+    0,
+    Math.min(52, Number(params.get("weekOffset") ?? 0) || 0)
+  );
+  const { start, end } = promotionWeekRange(weekOffset);
+  const eventConditions = [
+    or(
+      inArray(events.venueId, placeIds),
+      inArray(events.organizerId, placeIds)
+    ),
+    gte(events.startAt, new Date()),
+    eq(events.visibility, "public"),
+    eq(events.status, "active"),
+    ...(eventId
+      ? [eq(events.id, eventId)]
+      : [gte(events.startAt, start), lt(events.startAt, end)]),
+  ];
 
-  const [eligibleEvents, selections] = await Promise.all([
+  const [eligibleEvents, selections, laterEvent] = await Promise.all([
     db.query.events.findMany({
-      where: and(
-        or(
-          inArray(events.venueId, placeIds),
-          inArray(events.organizerId, placeIds)
-        ),
-        gte(events.startAt, new Date()),
-        eq(events.visibility, "public"),
-        eq(events.status, "active")
-      ),
+      where: and(...eventConditions),
       with: { venue: true, organizer: true },
       orderBy: [asc(events.startAt)],
     }),
@@ -47,10 +78,25 @@ export async function GET() {
       where: eq(userPromotedEvents.userId, userId),
       columns: { eventId: true, promo: true, promoUrl: true },
     }),
+    eventId
+      ? null
+      : db.query.events.findFirst({
+          where: and(
+            or(
+              inArray(events.venueId, placeIds),
+              inArray(events.organizerId, placeIds)
+            ),
+            gte(events.startAt, end),
+            eq(events.visibility, "public"),
+            eq(events.status, "active")
+          ),
+          columns: { id: true },
+        }),
   ]);
   const selectedIds = new Set(selections.map((selection) => selection.eventId));
 
   return NextResponse.json({
+    hasMore: Boolean(laterEvent),
     events: eligibleEvents.map((event) => ({
       id: event.id,
       title: event.title,
@@ -58,7 +104,9 @@ export async function GET() {
       startAt: event.startAt,
       placeName: event.venue?.name ?? event.organizer?.name ?? null,
       isPromoted: selectedIds.has(event.id),
-      promoUrl: selections.find((selection) => selection.eventId === event.id)?.promoUrl ?? null,
+      promoUrl:
+        selections.find((selection) => selection.eventId === event.id)
+          ?.promoUrl ?? null,
       promo:
         selections.find((selection) => selection.eventId === event.id)?.promo ??
         null,
@@ -83,24 +131,31 @@ export async function PATCH(request: Request) {
   if (
     body.promo !== undefined &&
     body.promo !== null &&
-    (typeof body.promo !== "string" || body.promo.length > 255)
+    (typeof body.promo !== "string" || body.promo.length > 70)
   ) {
     return NextResponse.json(
-      { error: "Promo must be 255 characters or fewer." },
+      { error: "Promo must be 70 characters or fewer." },
       { status: 400 }
     );
   }
 
   const promoUrlResult = promoUrlSchema.safeParse(body.promoUrl);
   if (!promoUrlResult.success) {
-    return NextResponse.json({ error: "Promo link must be a valid HTTP or HTTPS URL (up to 2048 characters)." }, { status: 400 });
+    return NextResponse.json(
+      {
+        error:
+          "Promo link must be a valid HTTP or HTTPS URL (up to 2048 characters).",
+      },
+      { status: 400 }
+    );
   }
 
   try {
     assertTextContentAllowed([
       {
         field: "promo",
-        value: body.promoted && typeof body.promo === "string" ? body.promo : null,
+        value:
+          body.promoted && typeof body.promo === "string" ? body.promo : null,
         rejectProfanity: true,
       },
     ]);
@@ -123,7 +178,7 @@ export async function PATCH(request: Request) {
           eq(userPromotedEvents.eventId, body.eventId)
         )
       );
-    return NextResponse.json({ promoted: false });
+    return NextResponse.json({ promoted: false, promo: null, promoUrl: null });
   }
 
   const event = await db.query.events.findFirst({
@@ -160,10 +215,16 @@ export async function PATCH(request: Request) {
     .onConflictDoUpdate({
       target: [userPromotedEvents.userId, userPromotedEvents.eventId],
       set: {
-        ...(promoUrlResult.data !== undefined ? { promoUrl: promoUrlResult.data } : {}),
+        ...(promoUrlResult.data !== undefined
+          ? { promoUrl: promoUrlResult.data }
+          : {}),
         promo:
           typeof body.promo === "string" ? body.promo.trim() || null : null,
       },
     });
-  return NextResponse.json({ promoted: true });
+  return NextResponse.json({
+    promoted: true,
+    promo: typeof body.promo === "string" ? body.promo.trim() || null : null,
+    promoUrl: promoUrlResult.data ?? null,
+  });
 }

@@ -3892,7 +3892,7 @@
         },
         "promo": {
           "name": "promo",
-          "type": "varchar(255)",
+          "type": "varchar(70)",
           "primaryKey": false,
           "notNull": false
         },

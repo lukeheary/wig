@@ -430,7 +430,7 @@ function HomeMiniEventCard({ event }: { event: EventCardItem }) {
 
           {event.promo || event.promoUrl ? (
             <div className="absolute left-3 top-3 z-10 flex max-w-[calc(100%-1.5rem)] items-center gap-1.5">
-              <span className="flex min-w-0 items-center gap-1.5 rounded-full bg-neon-teal shadow-[0_1px_6px_rgba(0,0,0,0.7)] px-2 py-1 text-[10px] font-medium leading-none text-black">
+              <span className="flex min-w-0 items-center gap-1.5 rounded-md bg-neon-teal shadow-[0_1px_6px_rgba(0,0,0,0.7)] px-2 py-1 text-[10px] font-medium leading-none text-black">
                 <Megaphone aria-label="Promotion" className="h-3.5 w-3.5 shrink-0 text-black" />
                 <span className="truncate">{event.promo || "View Promo"}</span>
               </span>

@@ -455,8 +455,11 @@ private struct EventCardContent: View {
                 .foregroundStyle(.black)
                 .padding(.horizontal, 8)
                 .frame(height: 22)
-                .background(AppTheme.accentBlue, in: Capsule())
-                .shadow(color: .black.opacity(0.7), radius: 3, x: 0, y: 1)
+                .background {
+                    RoundedRectangle(cornerRadius: 6, style: .continuous)
+                        .fill(AppTheme.accentBlue)
+                        .shadow(color: .black.opacity(0.7), radius: 3, x: 0, y: 1)
+                }
                 .padding(12)
             }
 

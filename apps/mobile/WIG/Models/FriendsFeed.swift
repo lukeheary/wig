@@ -92,6 +92,7 @@ struct UserPlaceMembership: Decodable, Identifiable, Sendable {
 
 struct PromotableEventsResponse: Decodable, Sendable {
     let events: [PromotableEvent]
+    let hasMore: Bool
 }
 
 struct PromotableEvent: Decodable, Identifiable, Hashable, Sendable {
@@ -119,6 +120,8 @@ struct PromotedEventUpdateRequest: Encodable, Sendable {
 
 struct PromotedEventUpdateResponse: Decodable, Sendable {
     let promoted: Bool
+    let promo: String?
+    let promoUrl: String?
 }
 
 struct FriendUserSummary: Codable, Identifiable, Hashable, Sendable {

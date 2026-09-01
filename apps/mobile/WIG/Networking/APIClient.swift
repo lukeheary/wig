@@ -385,8 +385,12 @@ struct APIClient: Sendable {
         )
     }
 
-    static func mobilePromotableEvents() -> Endpoint<PromotableEventsResponse> {
-        Endpoint(path: "/api/mobile/profile/promoting")
+    static func mobilePromotableEvents(
+        weekOffset: Int = 0,
+        eventID: UUID? = nil
+    ) -> Endpoint<PromotableEventsResponse> {
+        let query = eventID.map { "eventId=\($0.uuidString)" } ?? "weekOffset=\(weekOffset)"
+        return Endpoint(path: "/api/mobile/profile/promoting?\(query)")
     }
 
     static func setMobileEventPromoted(

@@ -2,7 +2,7 @@
 
 import { differenceInCalendarWeeks, format, startOfWeek } from "date-fns";
 import Image from "next/image";
-import { CalendarDays, Loader2 } from "lucide-react";
+import { CalendarDays, Loader2, X } from "lucide-react";
 import { useRouter } from "next/navigation";
 import { useEffect, useMemo, useState } from "react";
 import { BackButtonHeader } from "@/components/shared/back-button-header";
@@ -12,21 +12,41 @@ import { trpc } from "@/lib/trpc";
 export default function ProfilePromotingPage() {
   const router = useRouter();
   const utils = trpc.useUtils();
+  const [weekOffset, setWeekOffset] = useState(0);
   const {
-    data: events,
+    data: promotionPage,
     isLoading,
+    isFetching,
     isError,
-  } = trpc.user.getPromotionOptions.useQuery();
+  } = trpc.user.getPromotionOptions.useQuery({ weekOffset });
   const setPromoted = trpc.user.setEventPromoted.useMutation();
   const [drafts, setDrafts] = useState<PromotionDraft[]>([]);
   const [savedDrafts, setSavedDrafts] = useState<PromotionDraft[]>([]);
   const [saveError, setSaveError] = useState<string | null>(null);
 
   useEffect(() => {
-    if (!events) return;
-    setDrafts(events);
-    setSavedDrafts(events);
-  }, [events]);
+    if (!promotionPage) return;
+    setDrafts((current) =>
+      weekOffset === 0
+        ? promotionPage.events
+        : [
+            ...current,
+            ...promotionPage.events.filter(
+              (event) => !current.some((saved) => saved.id === event.id)
+            ),
+          ]
+    );
+    setSavedDrafts((current) =>
+      weekOffset === 0
+        ? promotionPage.events
+        : [
+            ...current,
+            ...promotionPage.events.filter(
+              (event) => !current.some((saved) => saved.id === event.id)
+            ),
+          ]
+    );
+  }, [promotionPage, weekOffset]);
 
   const changedDrafts = useMemo(
     () =>
@@ -103,7 +123,7 @@ export default function ProfilePromotingPage() {
           <p className="py-12 text-center text-white/55">
             Unable to load eligible events.
           </p>
-        ) : drafts.length ? (
+        ) : drafts.length || promotionPage?.hasMore ? (
           <div className="space-y-5">
             {weekGroups.map((group) => (
               <section key={group.label}>
@@ -130,6 +150,16 @@ export default function ProfilePromotingPage() {
                 </div>
               </section>
             ))}
+            {promotionPage?.hasMore ? (
+              <button
+                type="button"
+                onClick={() => setWeekOffset((value) => value + 1)}
+                disabled={isFetching}
+                className="min-h-11 w-full rounded-xl bg-white/[0.07] px-4 text-sm font-semibold text-white disabled:opacity-50"
+              >
+                {weekOffset === 0 ? "Show Next Week" : "Show Following Week"}
+              </button>
+            ) : null}
           </div>
         ) : (
           <div className="rounded-2xl border border-dashed border-white/10 px-5 py-14 text-center text-sm text-white/45">
@@ -196,31 +226,90 @@ function PromotionOptionRow({
       </div>
       {event.isPromoted ? (
         <div className="mt-2 space-y-2">
-          {showPromo && <input
-            aria-label={`Promo for ${event.title}`}
-            value={event.promo ?? ""}
-            maxLength={255}
-            disabled={disabled}
-            onChange={(e) => onChange({ promo: e.target.value })}
-            placeholder="Promo, e.g. Free with RSVP"
-            className="h-10 w-full rounded-xl border border-white/10 bg-black/35 px-3 text-sm text-white"
-          />}
-          {showPromoLink && <input
-            aria-label={`Promo link for ${event.title}`}
-            type="url"
-            autoCapitalize="none"
-            spellCheck={false}
-            value={event.promoUrl ?? ""}
-            maxLength={2048}
-            disabled={disabled}
-            onChange={(e) => onChange({ promoUrl: e.target.value })}
-            placeholder="https://example.com/promo"
-            className="h-10 w-full rounded-xl border border-white/10 bg-black/35 px-3 text-sm text-white"
-          />}
+          {showPromo && (
+            <div className="relative">
+              <textarea
+                aria-label={`Promo for ${event.title}`}
+                value={event.promo ?? ""}
+                maxLength={70}
+                disabled={disabled}
+                onChange={(e) => onChange({ promo: e.target.value })}
+                placeholder="Promo, e.g. Free with RSVP"
+                rows={1}
+                className="min-h-16 w-full resize-none overflow-hidden rounded-xl border border-white/10 bg-black/35 pb-6 pl-3 pr-10 pt-2.5 text-sm text-white [field-sizing:content]"
+              />
+              <span
+                aria-live="polite"
+                className="pointer-events-none absolute bottom-2 right-3 text-[10px] font-medium tabular-nums text-white/40"
+              >
+                {(event.promo ?? "").length}/70
+              </span>
+              {event.promo && (
+                <button
+                  type="button"
+                  disabled={disabled}
+                  aria-label="Clear promo"
+                  onMouseDown={(e) => e.preventDefault()}
+                  onPointerDown={(e) => e.preventDefault()}
+                  onClick={() => onChange({ promo: "" })}
+                  className="absolute right-0 top-0 flex h-10 w-10 items-center justify-center text-white/40 hover:text-white/70 disabled:opacity-50"
+                >
+                  <X className="h-4 w-4" />
+                </button>
+              )}
+            </div>
+          )}
+          {showPromoLink && (
+            <div className="relative">
+              <input
+                aria-label={`Promo link for ${event.title}`}
+                type="url"
+                autoCapitalize="none"
+                spellCheck={false}
+                value={event.promoUrl ?? ""}
+                maxLength={2048}
+                disabled={disabled}
+                onChange={(e) => onChange({ promoUrl: e.target.value })}
+                placeholder="https://example.com/promo"
+                className="h-10 w-full rounded-xl border border-white/10 bg-black/35 pl-3 pr-10 text-sm text-white"
+              />
+              {event.promoUrl && (
+                <button
+                  type="button"
+                  disabled={disabled}
+                  aria-label="Clear promo link"
+                  onMouseDown={(e) => e.preventDefault()}
+                  onPointerDown={(e) => e.preventDefault()}
+                  onClick={() => onChange({ promoUrl: "" })}
+                  className="absolute inset-y-0 right-0 flex w-10 items-center justify-center text-white/40 hover:text-white/70 disabled:opacity-50"
+                >
+                  <X className="h-4 w-4" />
+                </button>
+              )}
+            </div>
+          )}
           {(!showPromo || !showPromoLink) && (
             <div className="flex gap-2.5 text-sm font-semibold text-sky-300">
-              {!showPromo && <button type="button" disabled={disabled} onClick={() => setShowPromo(true)} className="min-h-11 min-w-0 flex-1 rounded-xl bg-white/[0.07] px-2 disabled:opacity-50">Add Promo</button>}
-              {!showPromoLink && <button type="button" disabled={disabled} onClick={() => setShowPromoLink(true)} className="min-h-11 min-w-0 flex-1 rounded-xl bg-white/[0.07] px-2 disabled:opacity-50">Add Promo Link</button>}
+              {!showPromo && (
+                <button
+                  type="button"
+                  disabled={disabled}
+                  onClick={() => setShowPromo(true)}
+                  className="min-h-11 min-w-0 flex-1 rounded-xl bg-white/[0.07] px-2 disabled:opacity-50"
+                >
+                  Add Promo
+                </button>
+              )}
+              {!showPromoLink && (
+                <button
+                  type="button"
+                  disabled={disabled}
+                  onClick={() => setShowPromoLink(true)}
+                  className="min-h-11 min-w-0 flex-1 rounded-xl bg-white/[0.07] px-2 disabled:opacity-50"
+                >
+                  Add Promo Link
+                </button>
+              )}
             </div>
           )}
         </div>

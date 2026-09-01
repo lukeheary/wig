@@ -34,6 +34,8 @@ struct EventDetailView: View {
     @StateObject private var rsvpViewModel = EventRSVPViewModel()
     @State private var isShareSheetPresented = false
     @State private var presentedPromoLink: EventPromoLinkDestination?
+    @State private var eventPromotionOption: PromotableEvent?
+    @State private var isEventPromotionEditorPresented = false
     @State private var isImageViewerPresented = false
     @State private var isEditEventPresented = false
     @State private var reportContext: MobileSupportReportContext?
@@ -125,9 +127,10 @@ struct EventDetailView: View {
                                 Button {
                                     presentedPromoLink = EventPromoLinkDestination(url: promoURL)
                                 } label: { promoBadge }
-                                .buttonStyle(.plain)
+                                .buttonStyle(EventPromoButtonStyle())
                             } else if currentEvent.promo?.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty == false {
                                 promoBadge
+                                    .background(EventPromoBackground(isPressed: false))
                             }
                         }
                     )
@@ -224,7 +227,8 @@ struct EventDetailView: View {
             async let currentUserLoad: Void = loadCurrentUserSocialUser()
             async let reviewLoad: Void = loadCurrentUserReview(using: apiClient)
             async let attendeeReviewLoad: Void = loadAttendeeReviewRatings(using: apiClient)
-            _ = await (rsvpLoad, partnerLoad, currentUserLoad, reviewLoad, attendeeReviewLoad)
+            async let promotionLoad: Void = loadEventPromotionOption(using: apiClient)
+            _ = await (rsvpLoad, partnerLoad, currentUserLoad, reviewLoad, attendeeReviewLoad, promotionLoad)
 
             if !Task.isCancelled,
                !presentationLifecycle.isClosing,
@@ -278,6 +282,17 @@ struct EventDetailView: View {
         .sheet(item: $presentedPromoLink) { destination in
             EventPromoBrowser(url: destination.url)
                 .ignoresSafeArea()
+        }
+        .sheet(isPresented: $isEventPromotionEditorPresented) {
+            if let eventPromotionOption {
+                EventPromotionEditorSheet(event: eventPromotionOption) { updated in
+                    self.eventPromotionOption = updated
+                    var updatedEvent = currentEvent
+                    updatedEvent.promo = updated.isPromoted ? updated.promo : nil
+                    updatedEvent.promoUrl = updated.isPromoted ? updated.promoUrl : nil
+                    editedEvent = updatedEvent
+                }
+            }
         }
         .sheet(isPresented: $isShareSheetPresented) {
             ShareSheet(activityItems: [shareURL])
@@ -349,8 +364,6 @@ struct EventDetailView: View {
         .foregroundStyle(.black)
         .padding(.horizontal, 10)
         .padding(.vertical, 6)
-        .background(AppTheme.accentBlue, in: Capsule())
-        .shadow(color: .black.opacity(0.7), radius: 3, x: 0, y: 1)
     }
 
     private func closeEventDetail() {
@@ -471,6 +484,18 @@ struct EventDetailView: View {
         }
     }
 
+    private func loadEventPromotionOption(using apiClient: APIClient) async {
+        guard isAuthenticated else {
+            eventPromotionOption = nil
+            return
+        }
+        let response = try? await apiClient.send(
+            APIClient.mobilePromotableEvents(eventID: currentEvent.id)
+        )
+        guard !Task.isCancelled, !presentationLifecycle.isClosing else { return }
+        eventPromotionOption = response?.events.first
+    }
+
     private func loadAttendeeReviewRatings(using apiClient: APIClient) async {
         guard currentEvent.hasEnded else {
             attendeeReviewRatings = [:]
@@ -515,6 +540,14 @@ struct EventDetailView: View {
             .accessibilityLabel("Share event")
 
             Menu {
+            if let eventPromotionOption {
+                Button {
+                    isEventPromotionEditorPresented = true
+                } label: {
+                    Label("Manage Promoting", systemImage: "megaphone")
+                }
+            }
+
             if currentEvent.canEdit || appSession.isAdmin {
                 Button {
                     closeRSVPMenu()
@@ -3151,4 +3184,116 @@ private struct EventPromoBrowser: UIViewControllerRepresentable {
     }
 
     func updateUIViewController(_ controller: SFSafariViewController, context: Context) {}
+}
+
+private struct EventPromoBackground: View {
+    let isPressed: Bool
+
+    var body: some View {
+        RoundedRectangle(cornerRadius: 8, style: .continuous)
+            .fill(AppTheme.accentBlue)
+            .brightness(isPressed ? -0.08 : 0)
+            .shadow(color: .black.opacity(0.7), radius: 3, x: 0, y: 1)
+    }
+}
+
+private struct EventPromoButtonStyle: ButtonStyle {
+    func makeBody(configuration: Configuration) -> some View {
+        configuration.label
+            .background(EventPromoBackground(isPressed: configuration.isPressed))
+            .contentShape(RoundedRectangle(cornerRadius: 8, style: .continuous))
+            .animation(.easeOut(duration: 0.1), value: configuration.isPressed)
+    }
+}
+
+private struct EventPromotionEditorSheet: View {
+    let event: PromotableEvent
+    let onSaved: (PromotableEvent) -> Void
+    @Environment(\.apiClient) private var apiClient
+    @Environment(\.dismiss) private var dismiss
+    @State private var promo: String
+    @State private var promoUrl: String
+    @State private var isSaving = false
+    @State private var errorMessage: String?
+
+    init(event: PromotableEvent, onSaved: @escaping (PromotableEvent) -> Void) {
+        self.event = event
+        self.onSaved = onSaved
+        _promo = State(initialValue: event.promo ?? "")
+        _promoUrl = State(initialValue: event.promoUrl ?? "")
+    }
+
+    var body: some View {
+        NavigationStack {
+            VStack(alignment: .leading, spacing: 18) {
+                Text(event.title).font(.headline).foregroundStyle(.white)
+                clearableField(title: "Promo", text: $promo, limit: 70, isMultiline: true)
+                clearableField(title: "Promo Link", text: $promoUrl, limit: 2048, isMultiline: false)
+                Spacer()
+                if event.isPromoted {
+                    Button("Stop Promoting", role: .destructive) { Task { await stopPromoting() } }
+                        .frame(maxWidth: .infinity, minHeight: 46)
+                }
+            }
+            .padding(20)
+            .background(AppTheme.background.ignoresSafeArea())
+            .navigationTitle("Manage Promoting")
+            .navigationBarTitleDisplayMode(.inline)
+            .toolbar {
+                ToolbarItem(placement: .cancellationAction) { Button("Cancel") { dismiss() } }
+                ToolbarItem(placement: .confirmationAction) {
+                    Button(isSaving ? "Saving…" : "Save") { Task { await save() } }.disabled(isSaving)
+                }
+            }
+        }
+        .alert("Unable to Update", isPresented: Binding(get: { errorMessage != nil }, set: { if !$0 { errorMessage = nil } })) {
+            Button("OK", role: .cancel) {}
+        } message: { Text(errorMessage ?? "Please try again.") }
+    }
+
+    private func clearableField(title: String, text: Binding<String>, limit: Int, isMultiline: Bool) -> some View {
+        VStack(alignment: .trailing, spacing: 4) {
+            HStack(alignment: .top, spacing: 8) {
+                TextField(title, text: text, axis: isMultiline ? .vertical : .horizontal)
+                    .lineLimit(isMultiline ? 1 ... 6 : 1 ... 1)
+                    .textInputAutocapitalization(isMultiline ? .sentences : .never)
+                    .autocorrectionDisabled(!isMultiline)
+                    .onChange(of: text.wrappedValue) { _, value in
+                        if value.count > limit { text.wrappedValue = String(value.prefix(limit)) }
+                    }
+                if !text.wrappedValue.isEmpty {
+                    Button { text.wrappedValue = "" } label: {
+                        Image(systemName: "xmark.circle.fill").foregroundStyle(.tertiary)
+                    }.buttonStyle(.plain).accessibilityLabel("Clear \(title.lowercased())")
+                }
+            }
+            if isMultiline { Text("\(text.wrappedValue.count)/\(limit)").font(.caption2).foregroundStyle(.secondary).monospacedDigit() }
+        }
+        .padding(12)
+        .background(Color.white.opacity(0.07), in: RoundedRectangle(cornerRadius: 12))
+    }
+
+    private func save() async { await update(promoted: true) }
+    private func stopPromoting() async { await update(promoted: false) }
+
+    private func update(promoted: Bool) async {
+        isSaving = true
+        defer { isSaving = false }
+        do {
+            let response = try await apiClient.send(try APIClient.setMobileEventPromoted(
+                eventID: event.id, promoted: promoted,
+                promo: promo.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty ? nil : promo,
+                promoUrl: promoUrl
+            ))
+            var updated = event
+            updated.isPromoted = response.promoted
+            updated.promo = response.promo
+            updated.promoUrl = response.promoUrl
+            onSaved(updated)
+            ProfileViewModel.invalidateCache()
+            UserProfileViewModel.invalidateAllCaches()
+            NotificationCenter.default.post(name: .appDataDidChange, object: nil)
+            dismiss()
+        } catch { errorMessage = error.localizedDescription }
+    }
 }

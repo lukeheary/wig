@@ -78,66 +78,97 @@ export const userRouter = router({
     return memberships.length > 0;
   }),
 
-  getPromotionOptions: protectedProcedure.query(async ({ ctx }) => {
-    const memberships = await ctx.db.query.placeMembers.findMany({
-      where: and(
-        eq(placeMembers.userId, ctx.auth.userId),
-        eq(placeMembers.role, "promoter")
-      ),
-      columns: { placeId: true },
-    });
-    const placeIds = memberships.map((membership) => membership.placeId);
-    if (placeIds.length === 0) return [];
+  getPromotionOptions: protectedProcedure
+    .input(z.object({ weekOffset: z.number().int().min(0).max(52).default(0) }))
+    .query(async ({ ctx, input }) => {
+      const start = new Date();
+      start.setUTCHours(0, 0, 0, 0);
+      start.setUTCDate(
+        start.getUTCDate() -
+          ((start.getUTCDay() + 6) % 7) +
+          input.weekOffset * 7
+      );
+      const end = new Date(start);
+      end.setUTCDate(start.getUTCDate() + 7);
+      const memberships = await ctx.db.query.placeMembers.findMany({
+        where: and(
+          eq(placeMembers.userId, ctx.auth.userId),
+          eq(placeMembers.role, "promoter")
+        ),
+        columns: { placeId: true },
+      });
+      const placeIds = memberships.map((membership) => membership.placeId);
+      if (placeIds.length === 0) return { events: [], hasMore: false };
 
-    const [eligibleEvents, selections] = await Promise.all([
-      ctx.db.query.events.findMany({
+      const [eligibleEvents, selections] = await Promise.all([
+        ctx.db.query.events.findMany({
+          where: and(
+            or(
+              inArray(events.venueId, placeIds),
+              inArray(events.organizerId, placeIds)
+            ),
+            gte(events.startAt, start),
+            lt(events.startAt, end),
+            eq(events.visibility, "public"),
+            eq(events.status, "active")
+          ),
+          with: { venue: true, organizer: true },
+          orderBy: [asc(events.startAt)],
+        }),
+        ctx.db.query.userPromotedEvents.findMany({
+          where: eq(userPromotedEvents.userId, ctx.auth.userId),
+          columns: { eventId: true, promo: true, promoUrl: true },
+        }),
+      ]);
+      const selectedIds = new Set(
+        selections.map((selection) => selection.eventId)
+      );
+
+      const laterEvent = await ctx.db.query.events.findFirst({
         where: and(
           or(
             inArray(events.venueId, placeIds),
             inArray(events.organizerId, placeIds)
           ),
-          gte(events.startAt, new Date()),
+          gte(events.startAt, end),
           eq(events.visibility, "public"),
           eq(events.status, "active")
         ),
-        with: { venue: true, organizer: true },
-        orderBy: [asc(events.startAt)],
-      }),
-      ctx.db.query.userPromotedEvents.findMany({
-        where: eq(userPromotedEvents.userId, ctx.auth.userId),
-        columns: { eventId: true, promo: true, promoUrl: true },
-      }),
-    ]);
-    const selectedIds = new Set(
-      selections.map((selection) => selection.eventId)
-    );
-
-    return eligibleEvents.map((event) => ({
-      id: event.id,
-      title: event.title,
-      startAt: event.startAt,
-      coverImageUrl: event.coverImageUrl,
-      placeName: event.venue?.name ?? event.organizer?.name ?? null,
-      isPromoted: selectedIds.has(event.id),
-      promoUrl: selections.find((selection) => selection.eventId === event.id)?.promoUrl ?? null,
-      promo:
-        selections.find((selection) => selection.eventId === event.id)?.promo ??
-        null,
-    }));
-  }),
+        columns: { id: true },
+      });
+      return {
+        hasMore: Boolean(laterEvent),
+        events: eligibleEvents.map((event) => ({
+          id: event.id,
+          title: event.title,
+          startAt: event.startAt,
+          coverImageUrl: event.coverImageUrl,
+          placeName: event.venue?.name ?? event.organizer?.name ?? null,
+          isPromoted: selectedIds.has(event.id),
+          promoUrl:
+            selections.find((selection) => selection.eventId === event.id)
+              ?.promoUrl ?? null,
+          promo:
+            selections.find((selection) => selection.eventId === event.id)
+              ?.promo ?? null,
+        })),
+      };
+    }),
 
   setEventPromoted: contentMutationProcedure
     .input(
       z.object({
         eventId: z.string().uuid(),
         promoted: z.boolean(),
-        promo: z.string().trim().max(255).nullable().optional(),
+        promo: z.string().trim().max(70).nullable().optional(),
         promoUrl: promoUrlSchema,
       })
     )
     .mutation(async ({ ctx, input }) => {
       if (input.promoted && input.promo) {
-        assertTRPCTextContentAllowed([{ field: "promo", value: input.promo, rejectProfanity: true }]);
+        assertTRPCTextContentAllowed([
+          { field: "promo", value: input.promo, rejectProfanity: true },
+        ]);
       }
       if (!input.promoted) {
         await ctx.db
@@ -195,7 +226,12 @@ export const userRouter = router({
         })
         .onConflictDoUpdate({
           target: [userPromotedEvents.userId, userPromotedEvents.eventId],
-          set: { promo: input.promo || null, ...(input.promoUrl !== undefined ? { promoUrl: input.promoUrl } : {}) },
+          set: {
+            promo: input.promo || null,
+            ...(input.promoUrl !== undefined
+              ? { promoUrl: input.promoUrl }
+              : {}),
+          },
         });
       return { promoted: true };
     }),

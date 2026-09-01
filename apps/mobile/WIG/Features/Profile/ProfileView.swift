@@ -882,6 +882,9 @@ private struct ManagePromotingView: View {
     @State private var expandedPromoLinks = Set<UUID>()
     @State private var isLoading = true
     @State private var isSaving = false
+    @State private var isLoadingMore = false
+    @State private var nextWeekOffset = 1
+    @State private var hasMoreWeeks = false
     @State private var errorMessage: String?
 
     var body: some View {
@@ -939,7 +942,7 @@ private struct ManagePromotingView: View {
                     Spacer()
                     ProgressView().tint(.white)
                     Spacer()
-                } else if events.isEmpty {
+                } else if events.isEmpty && !hasMoreWeeks {
                     Spacer()
                     ContentUnavailableView(
                         "No Eligible Events",
@@ -1012,15 +1015,20 @@ private struct ManagePromotingView: View {
                                         VStack(alignment: .leading, spacing: 10) {
 
                                             if expandedPromos.contains(event.id) {
-                                                TextField("Promo, e.g. Free with RSVP", text: promoBinding(for: event.id))
-                                                    .promoEditorField()
+                                                TextField("Promo, e.g. Free with RSVP", text: promoBinding(for: event.id), axis: .vertical)
+                                                    .lineLimit(1 ... 8)
+                                                    .promoEditorField(
+                                                        text: promoBinding(for: event.id),
+                                                        title: "promo",
+                                                        characterLimit: 70
+                                                    )
                                             }
                                             if expandedPromoLinks.contains(event.id) {
                                                 TextField("https://example.com/promo", text: promoLinkBinding(for: event.id))
                                                     .keyboardType(.URL)
                                                     .textInputAutocapitalization(.never)
                                                     .autocorrectionDisabled()
-                                                    .promoEditorField()
+                                                    .promoEditorField(text: promoLinkBinding(for: event.id), title: "promo link")
                                             }
                                             if !expandedPromos.contains(event.id) || !expandedPromoLinks.contains(event.id) {
                                                 HStack(spacing: 10) {
@@ -1056,6 +1064,23 @@ private struct ManagePromotingView: View {
                                         }
                                     }
                                 }
+                            }
+
+                            if hasMoreWeeks {
+                                Button {
+                                    Task { await loadNextWeek() }
+                                } label: {
+                                    if isLoadingMore {
+                                        ProgressView().tint(.white)
+                                    } else {
+                                        Text(nextWeekOffset == 1 ? "Show Next Week" : "Show Following Week")
+                                            .font(.system(size: 14, weight: .semibold))
+                                    }
+                                }
+                                .frame(maxWidth: .infinity, minHeight: 46)
+                                .background(Color.white.opacity(0.07), in: RoundedRectangle(cornerRadius: 12))
+                                .padding(.horizontal, 20)
+                                .disabled(isLoadingMore)
                             }
                         }
                         .padding(.bottom, 32)
@@ -1114,7 +1139,9 @@ private struct ManagePromotingView: View {
 
     private func load() async {
         do {
-            events = try await apiClient.send(APIClient.mobilePromotableEvents()).events
+            let page = try await apiClient.send(APIClient.mobilePromotableEvents())
+            events = page.events
+            hasMoreWeeks = page.hasMore
             expandedPromos = Set(events.filter { normalizedPromo($0.promo) != nil }.map(\.id))
             expandedPromoLinks = Set(events.filter { normalizedPromo($0.promoUrl) != nil }.map(\.id))
             await hydrateMissingEventImages()
@@ -1123,6 +1150,24 @@ private struct ManagePromotingView: View {
             errorMessage = error.localizedDescription
         }
         isLoading = false
+    }
+
+    private func loadNextWeek() async {
+        guard !isLoadingMore, hasMoreWeeks else { return }
+        isLoadingMore = true
+        defer { isLoadingMore = false }
+        do {
+            let page = try await apiClient.send(APIClient.mobilePromotableEvents(weekOffset: nextWeekOffset))
+            let existingIDs = Set(events.map(\.id))
+            let newEvents = page.events.filter { !existingIDs.contains($0.id) }
+            events.append(contentsOf: newEvents)
+            savedEvents.append(contentsOf: newEvents)
+            nextWeekOffset += 1
+            hasMoreWeeks = page.hasMore
+            await hydrateMissingEventImages()
+        } catch {
+            errorMessage = error.localizedDescription
+        }
     }
 
     private func hydrateMissingEventImages() async {
@@ -1163,7 +1208,7 @@ private struct ManagePromotingView: View {
             get: { events.first(where: { $0.id == eventID })?.promo ?? "" },
             set: { value in
                 if let index = events.firstIndex(where: { $0.id == eventID }) {
-                    events[index].promo = String(value.prefix(255))
+                    events[index].promo = String(value.prefix(70))
                 }
             }
         )
@@ -1226,12 +1271,43 @@ private struct ManagePromotingView: View {
 }
 
 private extension View {
-    func promoEditorField() -> some View {
-        self.font(.system(size: 14, weight: .medium))
-            .foregroundStyle(.white)
-            .padding(.horizontal, 12)
-            .frame(height: 40)
-            .background(Color.white.opacity(0.07), in: RoundedRectangle(cornerRadius: 12))
+    func promoEditorField(
+        text: Binding<String>,
+        title: String,
+        characterLimit: Int? = nil
+    ) -> some View {
+        VStack(alignment: .trailing, spacing: 2) {
+            HStack(alignment: .top, spacing: 8) {
+                self
+                    .padding(.vertical, 10)
+                if !text.wrappedValue.isEmpty {
+                    Button {
+                        text.wrappedValue = ""
+                    } label: {
+                        Image(systemName: "xmark.circle.fill")
+                            .font(.system(size: 15, weight: .semibold))
+                            .foregroundStyle(.tertiary)
+                            .frame(minWidth: 28, minHeight: 40)
+                            .contentShape(Rectangle())
+                    }
+                    .buttonStyle(.plain)
+                    .accessibilityLabel("Clear \(title)")
+                }
+            }
+            if let characterLimit {
+                Text("\(text.wrappedValue.count)/\(characterLimit)")
+                    .font(.system(size: 10, weight: .medium))
+                    .foregroundStyle(.white.opacity(0.42))
+                    .monospacedDigit()
+                    .accessibilityLabel("\(text.wrappedValue.count) of \(characterLimit) characters")
+                    .padding(.bottom, 7)
+            }
+        }
+        .font(.system(size: 14, weight: .medium))
+        .foregroundStyle(.white)
+        .padding(.horizontal, 12)
+        .frame(minHeight: 40)
+        .background(Color.white.opacity(0.07), in: RoundedRectangle(cornerRadius: 12))
     }
 }
 
