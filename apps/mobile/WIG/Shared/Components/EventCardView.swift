@@ -313,6 +313,7 @@ struct EventCardView: View {
     let event: EventFeedItem
     var obscuresDetails = false
     var cardHeight: CGFloat = 284
+    var showsPromotionIcon = true
     @Environment(Clerk.self) private var clerk
     @EnvironmentObject private var appSession: AppSession
     private let cardCornerRadius: CGFloat = 18
@@ -335,7 +336,8 @@ struct EventCardView: View {
                         palette: artworkPalette,
                         cardWidth: cardWidth,
                         cardHeight: cardHeight,
-                        isAuthenticated: isAuthenticated
+                        isAuthenticated: isAuthenticated,
+                        showsPromotionIcon: showsPromotionIcon
                     )
                 }
             }
@@ -435,6 +437,7 @@ private struct EventCardContent: View {
     let cardWidth: CGFloat
     let cardHeight: CGFloat
     let isAuthenticated: Bool
+    let showsPromotionIcon: Bool
 
     var body: some View {
         ZStack(alignment: .topLeading) {
@@ -449,10 +452,12 @@ private struct EventCardContent: View {
             let promo = event.promo?.trimmingCharacters(in: .whitespacesAndNewlines) ?? ""
             if !promo.isEmpty || event.promoLinkURL != nil {
                 HStack(spacing: 5) {
-                    Image(systemName: "megaphone")
-                        .font(.system(size: 11, weight: .semibold))
-                        .fixedSize()
-                        .accessibilityLabel("Promotion")
+                    if showsPromotionIcon {
+                        Image(systemName: "megaphone")
+                            .font(.system(size: 11, weight: .semibold))
+                            .fixedSize()
+                            .accessibilityLabel("Promotion")
+                    }
                     Text(promo.isEmpty ? "View Promo" : promo)
                         .font(.system(size: 11, weight: .medium))
                         .lineLimit(1)

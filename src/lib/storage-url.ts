@@ -1,4 +1,4 @@
-import { getEnvironmentPrefix } from "./env";
+import { getEnvironmentPrefix, isDevelopment } from "./env";
 
 function trimTrailingSlashes(value: string): string {
   return value.replace(/\/+$/, "");
@@ -107,8 +107,25 @@ export function resolveStoredImageValue(value: string): string {
 
   if (!publicBaseUrl) return trimmed;
   // Database values may still contain an environment-qualified legacy key or
-  // full R2 URL. Always remove that qualifier before applying the environment
-  // of the currently running app so local development never reads production.
+  // full R2 URL. Remove that qualifier before applying the current environment
+  // or the development-first fallback below.
   const key = stripEnvironmentPrefix(knownStorageKey || trimmed);
+
+  // Development databases are commonly reset from production while object
+  // storage remains environment-separated. Resolve reads through an endpoint
+  // that checks development first and falls back to the matching production
+  // object only when the development object is missing. Uploads still use
+  // getStoragePath(), so they continue writing to development/.
+  if (isDevelopment()) {
+    const appBaseUrl =
+      process.env.NEXT_PUBLIC_APP_URL ||
+      (process.env.VERCEL_URL
+        ? `https://${process.env.VERCEL_URL}`
+        : "http://localhost:3000");
+    const fallbackUrl = new URL("/api/storage-image", appBaseUrl);
+    fallbackUrl.searchParams.set("key", key);
+    return fallbackUrl.toString();
+  }
+
   return `${trimTrailingSlashes(publicBaseUrl)}/${addCurrentEnvironmentPrefix(key)}`;
 }

@@ -290,7 +290,13 @@ export function UserProfilePage({
                 onClick={() => sendRequest.mutate({ friendUserId: profile.id })}
                 className={`mt-6 h-12 w-full rounded-xl text-base font-semibold ${profile.friendStatus === "none" ? "bg-sky-300 text-black hover:bg-sky-300/90" : "border border-white/15 bg-white/[0.07] text-white opacity-100"}`}
               >
-                {profile.friendStatus === "accepted" ? "Friends" : "Requested"}
+                {profile.friendStatus === "accepted"
+                  ? "Friends"
+                  : profile.friendStatus === "pending_sent"
+                    ? "Requested"
+                    : sendRequest.isPending
+                      ? "Requesting..."
+                      : "Add Friend"}
               </Button>
             )
           ) : null}

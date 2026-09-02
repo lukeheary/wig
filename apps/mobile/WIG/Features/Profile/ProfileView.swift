@@ -411,7 +411,10 @@ struct ProfileView: View {
             if selectedEventsTab == .upcoming,
                let promotingEvents = response.promotingEvents,
                !promotingEvents.isEmpty {
-                ProfilePromotingEventsSection(events: promotingEvents)
+                ProfilePromotingEventsSection(
+                    events: promotingEvents,
+                    showsPromotionIcon: false
+                )
             }
 
             if groups.isEmpty {
@@ -2752,6 +2755,7 @@ private enum ProfileEventsRSVPFilter: String, CaseIterable, Identifiable {
 
 private struct ProfilePromotingEventsSection: View {
     let events: [EventFeedItem]
+    var showsPromotionIcon = true
 
     var body: some View {
         EventCardCarousel(
@@ -2764,7 +2768,7 @@ private struct ProfilePromotingEventsSection: View {
                 .foregroundStyle(.white)
         } card: { event in
             EventDetailNavigationLink(event: event) {
-                EventCardView(event: event)
+                EventCardView(event: event, showsPromotionIcon: showsPromotionIcon)
             }
         }
         .padding(.horizontal, -16)

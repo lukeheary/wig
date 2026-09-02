@@ -60,8 +60,25 @@ const nextConfig = {
     ];
   },
   images: {
+    // The development-only storage fallback is served by this same Next app.
+    // Keep private-IP fetching disabled in production.
+    dangerouslyAllowLocalIP: process.env.NODE_ENV === "development",
     remotePatterns: [
       ...(storageImagePattern ? [storageImagePattern] : []),
+      // Development image values use the local read-through endpoint so it can
+      // check development storage before falling back to production.
+      {
+        protocol: "http",
+        hostname: "localhost",
+        port: "3000",
+        pathname: "/api/storage-image",
+      },
+      {
+        protocol: "http",
+        hostname: "127.0.0.1",
+        port: "3000",
+        pathname: "/api/storage-image",
+      },
       // Keep any legacy fully-qualified S3 image values renderable.
       {
         protocol: "https",

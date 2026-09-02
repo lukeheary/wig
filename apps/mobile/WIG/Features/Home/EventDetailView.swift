@@ -170,6 +170,10 @@ struct EventDetailView: View {
 
                         expandedRSVPMenu
                             .frame(maxWidth: .infinity)
+                            .background(
+                                .black.opacity(0.30),
+                                in: RoundedRectangle(cornerRadius: 30, style: .continuous)
+                            )
                             .eventDetailLiquidGlass(in: RoundedRectangle(cornerRadius: 30, style: .continuous))
                             .padding(.horizontal, 16)
                             .padding(.bottom, 12)
@@ -943,11 +947,13 @@ struct EventDetailView: View {
             HStack(spacing: 10) {
                 if rsvpViewModel.isSaving {
                     ProgressView()
-                        .tint(.white)
+                        .tint(rsvpTriggerForegroundColor)
                         .frame(width: 18, height: 18)
                 } else if let rsvpButtonSystemImage {
                     Image(systemName: rsvpButtonSystemImage)
-                        .font(.system(size: 14, weight: .bold))
+                        .font(.system(size: 16, weight: .bold))
+                        .symbolEffect(.bounce, value: rsvpViewModel.status)
+                        .shadow(color: .black.opacity(0.20), radius: 2, x: 0, y: 1)
                 }
 
                 Text(rsvpButtonTitle)
@@ -960,14 +966,18 @@ struct EventDetailView: View {
                         .opacity(0.72)
                 }
             }
-            .foregroundStyle(rsvpButtonColor)
+            .foregroundStyle(rsvpTriggerForegroundColor)
             .padding(.horizontal, 22)
             .frame(maxWidth: .infinity)
             .frame(height: 56)
             .contentShape(Capsule())
-            .eventDetailLiquidGlass(in: Capsule())
+            .modifier(
+                RSVPTriggerSurfaceModifier(
+                    status: hasSelectedRSVPStatus ? rsvpViewModel.status : nil
+                )
+            )
         }
-        .buttonStyle(.plain)
+        .buttonStyle(RSVPTriggerButtonStyle(hasSelectedStatus: hasSelectedRSVPStatus))
         .disabled(isRSVPInteractionDisabled)
         .opacity(isRSVPInteractionDisabled ? 0.62 : 1)
     }
@@ -1694,6 +1704,18 @@ struct EventDetailView: View {
         return rsvpViewModel.status?.rsvpTintColor ?? .white
     }
 
+    private var hasSelectedRSVPStatus: Bool {
+        rsvpViewModel.status != nil && !shouldOfferReview && !shouldOfferRetroactiveWent
+    }
+
+    private var rsvpTriggerForegroundColor: Color {
+        guard hasSelectedRSVPStatus else {
+            return rsvpButtonColor
+        }
+
+        return rsvpViewModel.status == .interested ? .black.opacity(0.78) : .white
+    }
+
     private var isRSVPInteractionDisabled: Bool {
         rsvpViewModel.isSaving || (currentEvent.hasEnded && !shouldOfferReview && !shouldOfferRetroactiveWent)
     }
@@ -1814,7 +1836,7 @@ struct EventDetailView: View {
     }
 
     private var shouldShowNotGoingOption: Bool {
-        rsvpViewModel.status == .going || rsvpViewModel.status == .interested ||
+        rsvpViewModel.status != nil ||
             !friendGoingAttendees.isEmpty ||
             !friendInterestedAttendees.isEmpty
     }
@@ -2658,8 +2680,8 @@ private struct RSVPCircleOptionButton: View {
                         .fill(
                             LinearGradient(
                                 colors: [
-                                    option.status.rsvpTintColor.opacity(isSelected ? 0.94 : 0.38),
-                                    option.status.rsvpTintColor.opacity(isSelected ? 0.62 : 0.12),
+                                    option.status.rsvpTintColor.opacity(isSelected ? 0.94 : 0),
+                                    option.status.rsvpTintColor.opacity(isSelected ? 0.62 : 0),
                                 ],
                                 startPoint: .topLeading,
                                 endPoint: .bottomTrailing
@@ -2670,18 +2692,18 @@ private struct RSVPCircleOptionButton: View {
                                 .strokeBorder(
                                     LinearGradient(
                                         colors: [
-                                            .white.opacity(isSelected ? 0.46 : 0.28),
-                                            option.status.rsvpTintColor.opacity(isSelected ? 0.90 : 0.48),
-                                            .black.opacity(0.26),
+                                            isSelected ? .white.opacity(0.46) : option.status.rsvpTintColor,
+                                            option.status.rsvpTintColor.opacity(isSelected ? 0.90 : 0.78),
+                                            isSelected ? .black.opacity(0.26) : option.status.rsvpTintColor,
                                         ],
                                         startPoint: .topLeading,
                                         endPoint: .bottomTrailing
                                     ),
-                                    lineWidth: isSelected ? 2 : 1.5
+                                    lineWidth: 2
                                 )
                         }
                         .shadow(
-                            color: option.status.rsvpTintColor.opacity(isSelected ? 0.40 : 0.18),
+                            color: option.status.rsvpTintColor.opacity(isSelected ? 0.40 : 0),
                             radius: isSelected ? 16 : 10,
                             x: 0,
                             y: 8
@@ -2706,6 +2728,7 @@ private struct RSVPCircleOptionButton: View {
                             )
                         )
                         .padding(2)
+                        .opacity(isSelected ? 1 : 0)
 
                     if isLoading && isSelected {
                         ProgressView().tint(iconColor)
@@ -2775,6 +2798,74 @@ private struct RSVPCircleOptionButtonStyle: ButtonStyle {
     }
 }
 
+private struct RSVPTriggerButtonStyle: ButtonStyle {
+    let hasSelectedStatus: Bool
+
+    func makeBody(configuration: Configuration) -> some View {
+        configuration.label
+            .scaleEffect(configuration.isPressed ? 0.975 : 1)
+            .brightness(configuration.isPressed && hasSelectedStatus ? -0.07 : 0)
+            .animation(
+                .spring(response: 0.26, dampingFraction: 0.68),
+                value: configuration.isPressed
+            )
+    }
+}
+
+private struct RSVPTriggerSurfaceModifier: ViewModifier {
+    let status: EventRSVPStatus?
+
+    @ViewBuilder
+    func body(content: Content) -> some View {
+        if let status {
+            content.background {
+                let tint = status.rsvpTintColor
+
+                Capsule()
+                    .fill(
+                        LinearGradient(
+                            colors: [
+                                tint.opacity(0.96),
+                                tint.opacity(0.88),
+                            ],
+                            startPoint: .topLeading,
+                            endPoint: .bottomTrailing
+                        )
+                    )
+                    .overlay {
+                        Capsule()
+                            .fill(
+                                LinearGradient(
+                                    colors: [.white.opacity(0.16), .clear],
+                                    startPoint: .topLeading,
+                                    endPoint: .center
+                                )
+                            )
+                    }
+                    .overlay {
+                        Capsule()
+                            .strokeBorder(
+                                LinearGradient(
+                                    colors: [
+                                        .white.opacity(0.44),
+                                        tint.opacity(0.94),
+                                        .black.opacity(0.10),
+                                    ],
+                                    startPoint: .topLeading,
+                                    endPoint: .bottomTrailing
+                                ),
+                                lineWidth: 1.5
+                            )
+                    }
+                    .shadow(color: tint.opacity(0.16), radius: 8, x: 0, y: 4)
+                    .shadow(color: .black.opacity(0.26), radius: 7, x: 0, y: 5)
+            }
+        } else {
+            content.eventDetailLiquidGlass(in: Capsule())
+        }
+    }
+}
+
 private struct RSVPSheetAvatarStack: View {
     let attendees: [EventSocialAttendee]
 
@@ -2791,7 +2882,7 @@ private struct RSVPSheetAvatarStack: View {
                     size: 32,
                     identityKey: attendee.id
                 )
-                .overlay(Circle().strokeBorder(Color.black.opacity(0.72), lineWidth: 2))
+                .shadow(color: .black.opacity(0.7), radius: 3, x: 0, y: 1)
                 .offset(x: CGFloat(index) * 22)
                 .zIndex(Double(visibleAttendees.count - index))
             }
