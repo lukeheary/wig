@@ -14,7 +14,7 @@ export function StickySearchBar({
   return (
     <div
       className={cn(
-        "z-[45] -mx-4 -mt-4 bg-transparent px-4 pb-4 transition-shadow md:z-30 md:-mx-8 md:bg-background/95 md:px-8 md:backdrop-blur md:supports-[backdrop-filter]:bg-background",
+        "z-[45] -mx-4 -mt-4 bg-transparent px-4 pb-4 transition-shadow md:z-30 md:-mx-8 md:bg-black/95 md:px-8 md:backdrop-blur md:supports-[backdrop-filter]:bg-black/95",
         className
       )}
     >

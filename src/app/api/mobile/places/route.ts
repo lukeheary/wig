@@ -135,16 +135,20 @@ export async function GET(request: Request) {
             columns: {
               city: true,
               state: true,
+              metroAreaId: true,
+              role: true,
             },
           })
         : null,
       db
         .select({
+          id: metroAreas.id,
           name: metroAreas.name,
           state: metroAreas.state,
           latitude: metroAreas.latitude,
           longitude: metroAreas.longitude,
           radiusMiles: metroAreas.radiusMiles,
+          isEnabled: metroAreas.isEnabled,
         })
         .from(metroAreas)
         .orderBy(asc(metroAreas.name), asc(metroAreas.state)),
@@ -170,15 +174,20 @@ export async function GET(request: Request) {
       }),
     ]);
 
+  const visibleMetroAreas = currentUser?.role === "admin"
+    ? availableMetroAreas
+    : availableMetroAreas.filter((metro) => metro.isEnabled);
   const resolveMetroArea = createMobileMetroResolver(
-    availableMetroAreas,
+    visibleMetroAreas,
     cityCoordinates
   );
-  const availableCities = mobileMetroAreas(availableMetroAreas);
-  const currentUserMetroArea =
-    currentUser?.city && currentUser?.state
-      ? resolveMetroArea({ city: currentUser.city, state: currentUser.state })
-      : null;
+  const availableCities = mobileMetroAreas(visibleMetroAreas);
+  const selectedUserMetro = visibleMetroAreas.find(
+    (metro) => metro.id === currentUser?.metroAreaId
+  );
+  const currentUserMetroArea = selectedUserMetro
+    ? { city: selectedUserMetro.name, state: selectedUserMetro.state }
+    : null;
 
   if (placesList.length === 0) {
     return NextResponse.json({

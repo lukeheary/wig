@@ -2,7 +2,7 @@ import { auth, clerkClient } from "@clerk/nextjs/server";
 import { and, eq, ne } from "drizzle-orm";
 import { NextRequest, NextResponse } from "next/server";
 import { db } from "@/server/db";
-import { users } from "@/server/db/schema";
+import { metroAreas, users } from "@/server/db/schema";
 import { isReservedUsername } from "@/lib/reserved-usernames";
 import { isAtLeastMinimumAge, isValidIsoDate } from "@/lib/age-requirement";
 import {
@@ -165,6 +165,7 @@ export async function POST(request: NextRequest) {
       state?: string;
       gender?: "male" | "female" | "other";
       dateOfBirth?: string;
+      metroAreaId?: string;
     };
 
     const firstName = body.firstName?.trim() ?? "";
@@ -174,6 +175,7 @@ export async function POST(request: NextRequest) {
     const state = body.state?.trim().toUpperCase() ?? "";
     const gender = body.gender;
     const dateOfBirth = body.dateOfBirth?.trim() ?? "";
+    const metroAreaId = body.metroAreaId?.trim() ?? "";
 
     await enforceMobileContentCreation(userId, [
       { field: "firstName", value: firstName },
@@ -213,6 +215,22 @@ export async function POST(request: NextRequest) {
     if (!city || city.length > 100 || state.length !== 2) {
       return NextResponse.json(
         { error: "Please select your city" },
+        { status: 400 }
+      );
+    }
+
+    const selectedMetroArea = metroAreaId
+      ? await db.query.metroAreas.findFirst({
+          where: and(
+            eq(metroAreas.id, metroAreaId),
+            eq(metroAreas.isEnabled, true)
+          ),
+        })
+      : null;
+
+    if (!selectedMetroArea) {
+      return NextResponse.json(
+        { error: "Please choose an available location" },
         { status: 400 }
       );
     }
@@ -272,6 +290,7 @@ export async function POST(request: NextRequest) {
             lastName,
             city,
             state,
+            metroAreaId: selectedMetroArea.id,
             gender,
             avatarImageUrl: clerkUser.hasImage ? clerkUser.imageUrl : null,
             dateOfBirth,
@@ -286,6 +305,7 @@ export async function POST(request: NextRequest) {
             username: normalizedUsername,
             city,
             state,
+            metroAreaId: selectedMetroArea.id,
             gender,
             dateOfBirth,
             updatedAt: new Date(),

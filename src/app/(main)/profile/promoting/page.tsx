@@ -89,7 +89,7 @@ export default function ProfilePromotingPage() {
   }
 
   return (
-    <PageContainer className="min-h-screen bg-black !px-2 !pt-0 text-white md:!px-4 md:!pt-4">
+    <PageContainer className="min-h-screen max-w-5xl bg-black !px-2 !pt-0 text-white md:!px-6 md:!pt-8">
       <div className="relative">
         <BackButtonHeader
           backHref="/profile"

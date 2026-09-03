@@ -853,6 +853,31 @@ struct APIClient: Sendable {
         )
     }
 
+    static func mobileSetMetroAreaEnabled(
+        id: UUID,
+        isEnabled: Bool
+    ) throws -> Endpoint<MobileAdminMetroArea> {
+        Endpoint(
+            path: "/api/mobile/admin/metro-areas/\(id.uuidString)",
+            method: .patch,
+            body: try JSONEncoder().encode(["isEnabled": isEnabled]),
+            requiresAuthentication: false,
+            includesAuthenticationIfAvailable: true
+        )
+    }
+
+    static func mobileSelectMetroAreaForAdminTesting(
+        id: UUID
+    ) throws -> Endpoint<MobileAdminMetroArea> {
+        Endpoint(
+            path: "/api/mobile/admin/metro-areas/\(id.uuidString)",
+            method: .patch,
+            body: try JSONEncoder().encode(["selectForCurrentUser": true]),
+            requiresAuthentication: false,
+            includesAuthenticationIfAvailable: true
+        )
+    }
+
     static func mobileUpdatePlace(
         slug: String,
         updatedSlug: String,
@@ -1038,12 +1063,32 @@ struct APIClient: Sendable {
         )
     }
 
+    static func mobileMetroAreas(
+        latitude: Double? = nil,
+        longitude: Double? = nil
+    ) -> Endpoint<MobileMetroAreasResponse> {
+        var queryItems: [URLQueryItem] = []
+        if let latitude, let longitude {
+            queryItems = [
+                URLQueryItem(name: "latitude", value: String(latitude)),
+                URLQueryItem(name: "longitude", value: String(longitude)),
+            ]
+        }
+        return Endpoint(
+            path: "/api/mobile/metro-areas",
+            queryItems: queryItems,
+            requiresAuthentication: false,
+            includesAuthenticationIfAvailable: true
+        )
+    }
+
     static func completeMobileOnboarding(
         firstName: String,
         lastName: String,
         username: String,
         city: String,
         state: String,
+        metroAreaID: UUID,
         gender: UserGender,
         dateOfBirth: String
     ) throws -> Endpoint<MobileOnboardingState> {
@@ -1057,6 +1102,7 @@ struct APIClient: Sendable {
                     username: username,
                     city: city,
                     state: state,
+                    metroAreaID: metroAreaID,
                     gender: gender,
                     dateOfBirth: dateOfBirth
                 )
@@ -2048,8 +2094,25 @@ private struct MobileOnboardingUpdateRequest: Encodable {
     let username: String
     let city: String
     let state: String
+    var metroAreaID: UUID? = nil
     let gender: UserGender
     let dateOfBirth: String
+
+    enum CodingKeys: String, CodingKey {
+        case firstName, lastName, username, city, state, gender, dateOfBirth
+        case metroAreaID = "metroAreaId"
+    }
+}
+
+struct MobileMetroAreaOption: Decodable, Hashable, Identifiable, Sendable {
+    let id: UUID
+    let name: String
+    let state: String
+}
+
+struct MobileMetroAreasResponse: Decodable, Hashable, Sendable {
+    let metroAreas: [MobileMetroAreaOption]
+    let matchedMetroArea: MobileMetroAreaOption?
 }
 
 private struct MobileFriendRequestRequest: Encodable {
@@ -2296,6 +2359,7 @@ struct MobileMetroAreaCreateResponse: Decodable, Hashable, Sendable {
     let latitude: Double
     let longitude: Double
     let radiusMiles: Double
+    let isEnabled: Bool
 }
 
 struct MobileAdminMetroAreasResponse: Decodable, Hashable, Sendable {
@@ -2309,6 +2373,7 @@ struct MobileAdminMetroArea: Decodable, Hashable, Identifiable, Sendable {
     let latitude: Double
     let longitude: Double
     let radiusMiles: Double
+    let isEnabled: Bool
     let placeCount: Int
     let createdAt: Date
     let updatedAt: Date

@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useCallback, useEffect } from "react";
+import { useState, useCallback, useEffect, useRef } from "react";
 import { useRouter } from "next/navigation";
 import { useUser } from "@clerk/nextjs";
 import { trpc } from "@/lib/trpc";
@@ -21,7 +21,7 @@ import {
   SelectTrigger,
   SelectValue,
 } from "@/components/ui/select";
-import { Loader2 } from "lucide-react";
+import { CheckCircle2, Circle, Loader2 } from "lucide-react";
 import { useToast } from "@/hooks/use-toast";
 import { GooglePlacesAutocomplete } from "@/components/google-places-autocomplete";
 import { S3Uploader } from "@/components/ui/s3-uploader";
@@ -29,6 +29,17 @@ import { UserAvatar } from "@/components/ui/user-avatar";
 import { DateOfBirthInput } from "@/components/ui/date-of-birth-input";
 import { isReservedUsername as isReservedUsernameValue } from "@/lib/reserved-usernames";
 import { isAtLeastMinimumAge } from "@/lib/age-requirement";
+
+type MetroAreaOption = {
+  id: string;
+  name: string;
+  state: string;
+};
+
+type MetroAreasResponse = {
+  metroAreas: MetroAreaOption[];
+  matchedMetroArea: MetroAreaOption | null;
+};
 
 export default function OnboardingPage() {
   const router = useRouter();
@@ -46,6 +57,12 @@ export default function OnboardingPage() {
   });
   const [searchCity, setSearchCity] = useState("");
   const [isRedirecting, setIsRedirecting] = useState(false);
+  const [metroAreas, setMetroAreas] = useState<MetroAreaOption[]>([]);
+  const [matchedMetroAreaId, setMatchedMetroAreaId] = useState<string | null>(null);
+  const [selectedMetroAreaId, setSelectedMetroAreaId] = useState<string | null>(null);
+  const [isLoadingMetroAreas, setIsLoadingMetroAreas] = useState(false);
+  const [didCheckMetroArea, setDidCheckMetroArea] = useState(false);
+  const metroRequestId = useRef(0);
 
   // Check if user has already completed onboarding
   const { data: user } = trpc.user.getCurrentUser.useQuery(undefined, {
@@ -108,7 +125,8 @@ export default function OnboardingPage() {
     formData.city &&
     formData.state &&
     formData.gender &&
-    isDobValid;
+    isDobValid &&
+    selectedMetroAreaId;
 
   const handleSubmit = (e: React.FormEvent) => {
     e.preventDefault();
@@ -153,6 +171,15 @@ export default function OnboardingPage() {
       return;
     }
 
+    if (!selectedMetroAreaId) {
+      toast({
+        title: "Validation Error",
+        description: "Please choose a location",
+        variant: "destructive",
+      });
+      return;
+    }
+
     // Validate gender
     if (!formData.gender) {
       toast({
@@ -183,8 +210,47 @@ export default function OnboardingPage() {
       gender: formData.gender as "male" | "female" | "other",
       dateOfBirth,
       avatarImageUrl: formData.avatarImageUrl || undefined,
+      metroAreaId: selectedMetroAreaId,
     });
   };
+
+  const loadMetroAreas = useCallback(
+    async (latitude?: number, longitude?: number) => {
+      const requestId = ++metroRequestId.current;
+      setIsLoadingMetroAreas(true);
+      setDidCheckMetroArea(false);
+      try {
+        const params = new URLSearchParams();
+        if (latitude !== undefined && longitude !== undefined) {
+          params.set("latitude", String(latitude));
+          params.set("longitude", String(longitude));
+        }
+        const response = await fetch(
+          `/api/mobile/metro-areas${params.size ? `?${params}` : ""}`
+        );
+        if (!response.ok) throw new Error("Unable to load available locations");
+        const data = (await response.json()) as MetroAreasResponse;
+        if (requestId !== metroRequestId.current) return;
+        setMetroAreas(data.metroAreas);
+        setMatchedMetroAreaId(data.matchedMetroArea?.id ?? null);
+        setSelectedMetroAreaId(data.matchedMetroArea?.id ?? null);
+      } catch (error) {
+        if (requestId !== metroRequestId.current) return;
+        toast({
+          title: "Couldn’t check location",
+          description:
+            error instanceof Error ? error.message : "Please try again",
+          variant: "destructive",
+        });
+      } finally {
+        if (requestId === metroRequestId.current) {
+          setIsLoadingMetroAreas(false);
+          setDidCheckMetroArea(true);
+        }
+      }
+    },
+    [toast]
+  );
 
   const handleCitySelect = useCallback(
     (place: {
@@ -193,6 +259,8 @@ export default function OnboardingPage() {
       city: string;
       state: string;
       formattedAddress: string;
+      latitude?: number;
+      longitude?: number;
     }) => {
       setFormData((prev) => ({
         ...prev,
@@ -200,8 +268,11 @@ export default function OnboardingPage() {
         state: place.state,
       }));
       setSearchCity(`${place.city}, ${place.state}`);
+      setSelectedMetroAreaId(null);
+      setMatchedMetroAreaId(null);
+      void loadMetroAreas(place.latitude, place.longitude);
     },
-    []
+    [loadMetroAreas]
   );
   const avatarUploadUserId = clerkUser?.id ?? user?.id;
 
@@ -301,12 +372,75 @@ export default function OnboardingPage() {
               </Label>
               <GooglePlacesAutocomplete
                 value={searchCity}
-                onChange={setSearchCity}
+                onChange={(value) => {
+                  setSearchCity(value);
+                  if (value !== `${formData.city}, ${formData.state}`) {
+                    setFormData((current) => ({
+                      ...current,
+                      city: "",
+                      state: "",
+                    }));
+                    setSelectedMetroAreaId(null);
+                    setMatchedMetroAreaId(null);
+                    setDidCheckMetroArea(false);
+                  }
+                }}
                 onPlaceSelect={handleCitySelect}
                 placeholder="Search for your city..."
                 searchType="cities"
               />
             </div>
+
+            {formData.city && (
+              <div className="space-y-3">
+                <Label>
+                  Choose a location <span className="text-destructive">*</span>
+                </Label>
+
+                {isLoadingMetroAreas ? (
+                  <div className="flex h-12 items-center gap-2 text-sm text-muted-foreground">
+                    <Loader2 className="h-4 w-4 animate-spin" />
+                    Checking availability near you…
+                  </div>
+                ) : (
+                  <>
+                    {didCheckMetroArea && (
+                      <p className="text-sm text-muted-foreground">
+                        {matchedMetroAreaId
+                          ? `You’re in the ${metroAreas.find((metro) => metro.id === matchedMetroAreaId)?.name ?? "selected"} area.`
+                          : `WIG isn’t available near ${formData.city} yet. We’ll let you know when WIG comes to your area. Choose a location to explore for now.`}
+                      </p>
+                    )}
+
+                    <div className="space-y-2">
+                      {metroAreas.map((metroArea) => {
+                        const isSelected = selectedMetroAreaId === metroArea.id;
+                        return (
+                          <button
+                            key={metroArea.id}
+                            type="button"
+                            aria-pressed={isSelected}
+                            onClick={() => setSelectedMetroAreaId(metroArea.id)}
+                            className={`flex h-12 w-full items-center gap-3 rounded-xl border px-4 text-left text-sm font-medium transition-colors ${
+                              isSelected
+                                ? "border-primary bg-primary/10"
+                                : "border-border bg-muted hover:bg-muted/80"
+                            }`}
+                          >
+                            {isSelected ? (
+                              <CheckCircle2 className="h-5 w-5 text-primary" />
+                            ) : (
+                              <Circle className="h-5 w-5 text-muted-foreground" />
+                            )}
+                            {metroArea.name}, {metroArea.state}
+                          </button>
+                        );
+                      })}
+                    </div>
+                  </>
+                )}
+              </div>
+            )}
 
             {/* Gender */}
             <div className="space-y-2">

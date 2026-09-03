@@ -194,9 +194,9 @@ function SearchPageContent() {
     eventsLoading;
 
   return (
-    <PageContainer className="min-h-screen bg-black !px-2 !pt-0 md:bg-background md:!px-4 md:!pt-4">
+    <PageContainer className="min-h-screen max-w-5xl bg-black !px-2 !pt-0 md:!px-6 md:!pt-6">
       <div>
-        <div className="sticky top-0 z-40 bg-black px-1 pb-3 pt-3">
+        <div className="sticky top-0 z-40 bg-black px-1 pb-3 pt-3 md:top-20 md:px-0 md:pb-5">
           <SearchInput
             placeholder="Search..."
             value={searchQuery}
@@ -204,7 +204,7 @@ function SearchPageContent() {
               void setSearchQuery(value);
               setCursor(0);
             }}
-            className="h-12 [&_input]:h-12 [&_input]:rounded-full [&_input]:border-white/15 [&_input]:bg-[#242426]/85 [&_input]:text-base [&_input]:backdrop-blur-2xl"
+            className="h-12 md:h-14 [&_input]:h-12 [&_input]:rounded-full [&_input]:border-white/15 [&_input]:bg-[#242426]/85 [&_input]:text-base [&_input]:backdrop-blur-2xl md:[&_input]:h-14 md:[&_input]:px-6 md:[&_input]:pl-12"
           />
           <MobileFilterPills
             options={SEARCH_FILTERS}

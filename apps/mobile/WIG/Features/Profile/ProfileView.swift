@@ -3173,6 +3173,7 @@ private struct RelationshipSummaryRow: View {
             .buttonStyle(.plain)
         }
         .frame(maxWidth: .infinity)
+        .padding(.trailing, response.memberPlaces?.isEmpty == false ? 0 : 44)
     }
 }
 
@@ -6360,6 +6361,15 @@ private final class AdminMetroAreasViewModel: ObservableObject {
         _ = try await apiClient.send(APIClient.mobileDeleteMetroArea(id: id))
         metroAreas.removeAll { $0.id == id }
     }
+
+    func setEnabled(id: UUID, isEnabled: Bool, using apiClient: APIClient) async throws {
+        let updated = try await apiClient.send(
+            APIClient.mobileSetMetroAreaEnabled(id: id, isEnabled: isEnabled)
+        )
+        if let index = metroAreas.firstIndex(where: { $0.id == id }) {
+            metroAreas[index] = updated
+        }
+    }
 }
 
 private struct AdminMetroAreasView: View {
@@ -6383,6 +6393,9 @@ private struct AdminMetroAreasView: View {
                                 metroArea: metroArea,
                                 onDelete: { id in
                                     try await viewModel.delete(id: id, using: apiClient)
+                                },
+                                onEnabledChange: { id, isEnabled in
+                                    try await viewModel.setEnabled(id: id, isEnabled: isEnabled, using: apiClient)
                                 }
                             )
                         } label: {
@@ -6482,7 +6495,7 @@ private struct AdminMetroAreasView: View {
                     .foregroundStyle(.white)
                     .lineLimit(1)
 
-                Text("\(metroArea.placeCount) place\(metroArea.placeCount == 1 ? "" : "s") · \(metroArea.radiusMiles.formatted(.number.precision(.fractionLength(0 ... 1)))) mi radius")
+                Text("\(metroArea.isEnabled ? "Available" : "Testing") · \(metroArea.placeCount) place\(metroArea.placeCount == 1 ? "" : "s") · \(metroArea.radiusMiles.formatted(.number.precision(.fractionLength(0 ... 1)))) mi radius")
                     .font(.system(size: 13, weight: .medium))
                     .foregroundStyle(.white.opacity(0.5))
                     .lineLimit(1)
@@ -6508,18 +6521,53 @@ private struct AdminMetroAreasView: View {
 }
 
 private struct AdminMetroAreaDetailView: View {
+    @Environment(\.apiClient) private var apiClient
     @Environment(\.dismiss) private var dismiss
     let metroArea: MobileAdminMetroArea
     let onDelete: (UUID) async throws -> Void
+    let onEnabledChange: (UUID, Bool) async throws -> Void
 
     @State private var isDeleteConfirmationPresented = false
     @State private var isDeleting = false
     @State private var errorMessage: String?
+    @State private var isEnabled: Bool
+    @State private var isUpdatingAvailability = false
+    @State private var isSelectingForTesting = false
+
+    init(
+        metroArea: MobileAdminMetroArea,
+        onDelete: @escaping (UUID) async throws -> Void,
+        onEnabledChange: @escaping (UUID, Bool) async throws -> Void
+    ) {
+        self.metroArea = metroArea
+        self.onDelete = onDelete
+        self.onEnabledChange = onEnabledChange
+        _isEnabled = State(initialValue: metroArea.isEnabled)
+    }
 
     var body: some View {
         ScrollView {
             VStack(spacing: 16) {
                 detailCard
+
+                Button {
+                    Task { await selectForTesting() }
+                } label: {
+                    HStack(spacing: 8) {
+                        if isSelectingForTesting { ProgressView().tint(.white) }
+                        Text(isSelectingForTesting ? "Selecting…" : "Use for testing")
+                            .font(.system(size: 15, weight: .semibold))
+                    }
+                    .foregroundStyle(.white)
+                    .frame(maxWidth: .infinity)
+                    .frame(height: 48)
+                    .background(
+                        RoundedRectangle(cornerRadius: 16, style: .continuous)
+                            .fill(Color.white.opacity(0.1))
+                    )
+                }
+                .buttonStyle(.plain)
+                .disabled(isSelectingForTesting)
 
                 Button(role: .destructive) {
                     isDeleteConfirmationPresented = true
@@ -6588,6 +6636,24 @@ private struct AdminMetroAreaDetailView: View {
             Divider().overlay(.white.opacity(0.08))
             detailRow(title: "State", value: metroArea.state)
             Divider().overlay(.white.opacity(0.08))
+            Toggle(isOn: $isEnabled) {
+                VStack(alignment: .leading, spacing: 3) {
+                    Text("Available to users")
+                        .font(.system(size: 14, weight: .semibold))
+                        .foregroundStyle(.white)
+                    Text(isEnabled ? "Shown in location choices" : "Hidden for testing")
+                        .font(.system(size: 12, weight: .medium))
+                        .foregroundStyle(.white.opacity(0.48))
+                }
+            }
+            .tint(AppTheme.accentBlue)
+            .disabled(isUpdatingAvailability)
+            .padding(.vertical, 12)
+            .onChange(of: isEnabled) { oldValue, newValue in
+                guard oldValue != newValue else { return }
+                Task { await updateAvailability(from: oldValue, to: newValue) }
+            }
+            Divider().overlay(.white.opacity(0.08))
             detailRow(title: "Places", value: metroArea.placeCount.formatted())
             Divider().overlay(.white.opacity(0.08))
             detailRow(title: "Radius", value: "\(metroArea.radiusMiles.formatted(.number.precision(.fractionLength(0 ... 1)))) miles")
@@ -6636,6 +6702,33 @@ private struct AdminMetroAreaDetailView: View {
             errorMessage = error.localizedDescription
             isDeleting = false
         }
+    }
+
+    private func updateAvailability(from oldValue: Bool, to newValue: Bool) async {
+        guard !isUpdatingAvailability else { return }
+        isUpdatingAvailability = true
+        errorMessage = nil
+        do {
+            try await onEnabledChange(metroArea.id, newValue)
+        } catch {
+            isEnabled = oldValue
+            errorMessage = error.localizedDescription
+        }
+        isUpdatingAvailability = false
+    }
+
+    private func selectForTesting() async {
+        guard !isSelectingForTesting else { return }
+        isSelectingForTesting = true
+        errorMessage = nil
+        do {
+            _ = try await apiClient.send(
+                APIClient.mobileSelectMetroAreaForAdminTesting(id: metroArea.id)
+            )
+        } catch {
+            errorMessage = error.localizedDescription
+        }
+        isSelectingForTesting = false
     }
 }
 

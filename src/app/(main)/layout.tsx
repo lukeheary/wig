@@ -98,9 +98,6 @@ function MainLayoutContent({ children }: { children: React.ReactNode }) {
     pathname?.startsWith("/venues-and-organizers/") ||
     pathname?.startsWith("/venue/") ||
     pathname?.startsWith("/organizer/");
-  const isPlaceDetail =
-    (pathname?.startsWith("/venue/") || pathname?.startsWith("/organizer/")) &&
-    !pathname?.includes("/edit");
   const isFriends =
     pathname === "/activity" ||
     pathname?.startsWith("/activity/") ||
@@ -114,6 +111,7 @@ function MainLayoutContent({ children }: { children: React.ReactNode }) {
   const isEventDetail =
     pathname?.startsWith("/event/") && !pathname?.includes("/edit");
   const isSearchPage = pathname === "/activity/search";
+  const isActivityPage = isFriends && !isSearchPage;
   const shouldShowSignUp = !isSignedIn && isEventDetail;
 
   const handleSignOut = async () => {
@@ -147,16 +145,11 @@ function MainLayoutContent({ children }: { children: React.ReactNode }) {
       {/* Navigation Bar */}
       <header
         className={cn(
-          "sticky top-0 z-40 border-transparent bg-background transition-colors duration-150",
-          hasMounted && isSignedIn && "hidden md:block",
-          isEventDetail
-            ? "border-transparent bg-background md:border-transparent md:bg-transparent"
-            : (isHome || isPlaceDetail) && showNavbarSearch
-              ? "border-transparent bg-background"
-              : "border-border bg-background"
+          "sticky top-0 z-40 bg-transparent",
+          hasMounted && isSignedIn && "hidden md:block"
         )}
       >
-        <div className="container mx-auto flex h-14 items-center md:h-16">
+        <div className="mx-auto flex h-14 w-full max-w-[1800px] items-center px-4 md:h-20 md:px-6">
           {/* Left Side - Logo */}
           <div className="flex items-center">
             <WigLogo
@@ -165,77 +158,88 @@ function MainLayoutContent({ children }: { children: React.ReactNode }) {
             />
           </div>
 
-          {/* Center - Desktop Navigation */}
-          {isSignedIn ? (
-            <nav className="absolute left-1/2 hidden -translate-x-1/2 items-center gap-2 md:flex">
-              <Link
-                href="/home"
-                onClick={() => trackNavigationClick("/home", "desktop_nav")}
-              >
-                <Button
-                  variant="ghost"
-                  size="sm"
-                  className={isHome ? "text-primary" : "text-muted-foreground"}
-                >
-                  Home
-                </Button>
-              </Link>
-              <Link
-                href="/places"
-                onClick={() => trackNavigationClick("/places", "desktop_nav")}
-              >
-                <Button
-                  variant="ghost"
-                  size="sm"
-                  className={
-                    isPlaces ? "text-primary" : "text-muted-foreground"
-                  }
-                >
-                  Places
-                </Button>
-              </Link>
-              <Link
-                href="/activity"
-                onClick={() => trackNavigationClick("/activity", "desktop_nav")}
-              >
-                <Button
-                  variant="ghost"
-                  size="sm"
-                  className={
-                    isFriends
-                      ? "gap-1 text-primary"
-                      : "gap-1 text-muted-foreground"
-                  }
-                >
-                  Activity
-                </Button>
-              </Link>
-            </nav>
-          ) : null}
+          {/* Center the complete set of visible pills as one content-sized group. */}
+          <div className="absolute left-1/2 hidden -translate-x-1/2 items-center gap-3 md:flex">
+            <div
+              id="desktop-page-controls-leading"
+              className={cn(
+                "shrink-0 items-center",
+                isSignedIn ? "flex" : "hidden"
+              )}
+            />
 
-          {/* Right Side - Spacer for mobile */}
+            {isSignedIn ? (
+              <nav
+                aria-label="Primary navigation"
+                className="flex h-12 shrink-0 items-stretch rounded-3xl border border-white/15 bg-[#242426]/55 p-1 shadow-[0_16px_45px_rgba(0,0,0,0.4)] backdrop-blur-2xl"
+              >
+                <DesktopTabLink
+                  href="/home"
+                  label="Home"
+                  active={isHome}
+                  onClick={() => trackNavigationClick("/home", "desktop_nav")}
+                >
+                  <PhosphorHouse weight={isHome ? "fill" : "regular"} />
+                </DesktopTabLink>
+                <DesktopTabLink
+                  href="/places"
+                  label="Places"
+                  active={isPlaces}
+                  onClick={() => trackNavigationClick("/places", "desktop_nav")}
+                >
+                  <PhosphorBuildings weight={isPlaces ? "fill" : "regular"} />
+                </DesktopTabLink>
+                <DesktopTabLink
+                  href="/activity"
+                  label="Activity"
+                  active={isActivityPage}
+                  onClick={() =>
+                    trackNavigationClick("/activity", "desktop_nav")
+                  }
+                >
+                  <PhosphorLightning
+                    weight={isActivityPage ? "fill" : "regular"}
+                  />
+                </DesktopTabLink>
+                <DesktopTabLink
+                  href="/activity/search"
+                  label="Search"
+                  active={isSearchPage}
+                  onClick={() =>
+                    trackNavigationClick("/activity/search", "desktop_nav")
+                  }
+                >
+                  <PhosphorMagnifyingGlass
+                    weight={isSearchPage ? "bold" : "regular"}
+                  />
+                </DesktopTabLink>
+                <DesktopTabLink
+                  href="/profile"
+                  label="Profile"
+                  active={isProfile}
+                  onClick={() =>
+                    trackNavigationClick("/profile", "desktop_nav")
+                  }
+                >
+                  <PhosphorUserCircle weight={isProfile ? "fill" : "regular"} />
+                </DesktopTabLink>
+              </nav>
+            ) : null}
+
+            <div
+              id="desktop-page-controls-trailing"
+              className={cn(
+                "shrink-0 items-center",
+                isSignedIn ? "flex" : "hidden"
+              )}
+            />
+          </div>
+
+          {/* Keep the primary controls centered between the logo and account menu. */}
           <div className="flex-1" />
 
           {/* Desktop Right Menu */}
           <div className="hidden items-center gap-2 md:flex md:gap-4">
-            {/* Search button - only visible when scrolled on home/places/friends page */}
-            <div
-              className={cn(
-                "overflow-hidden transition-all duration-200",
-                (isHome || isPlaces || isFriends) && showNavbarSearch
-                  ? "w-10 opacity-100"
-                  : "w-0 opacity-0"
-              )}
-            >
-              <Button
-                variant="ghost"
-                size="icon"
-                onClick={scrollToSearchAndFocus}
-                className="h-10 w-10"
-              >
-                <Search className="h-6 w-6" />
-              </Button>
-            </div>
             {hasMounted && isSignedIn ? (
               <>
                 <NotificationsBell />
@@ -560,8 +564,8 @@ function MainLayoutContent({ children }: { children: React.ReactNode }) {
           hasMounted &&
             isSignedIn &&
             (isEventDetail
-              ? "bg-black md:bg-background"
-              : "mobile-bottom-nav-safe-space bg-black md:bg-background md:pb-0")
+              ? "bg-black"
+              : "mobile-bottom-nav-safe-space bg-black md:pb-0")
         )}
       >
         {children}
@@ -605,6 +609,36 @@ function MainLayoutContent({ children }: { children: React.ReactNode }) {
         </>
       ) : null}
     </div>
+  );
+}
+
+function DesktopTabLink({
+  href,
+  label,
+  active,
+  onClick,
+  children,
+}: {
+  href: string;
+  label: string;
+  active: boolean;
+  onClick: () => void;
+  children: React.ReactElement<{ className?: string }>;
+}) {
+  return (
+    <Link
+      href={href}
+      onClick={onClick}
+      aria-current={active ? "page" : undefined}
+      className={cn(
+        "flex min-w-12 items-center justify-center rounded-full text-white/55 transition-colors hover:bg-black/35 hover:text-white xl:min-w-14",
+        active &&
+          "bg-black/80 text-sky-300 hover:bg-black/80 hover:text-sky-300"
+      )}
+    >
+      <span className="[&>svg]:h-[1.4rem] [&>svg]:w-[1.4rem]">{children}</span>
+      <span className="sr-only">{label}</span>
+    </Link>
   );
 }
 

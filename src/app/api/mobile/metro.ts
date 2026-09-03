@@ -1,9 +1,11 @@
 type MetroAreaRow = {
+  id?: string;
   name: string;
   state: string;
   latitude: number;
   longitude: number;
   radiusMiles: number;
+  isEnabled?: boolean;
 };
 
 type CityRow = {
@@ -19,6 +21,7 @@ type LocationRow = {
 };
 
 export type MobileMetroArea = {
+  id?: string;
   city: string;
   state: string;
 };
@@ -47,6 +50,7 @@ function distanceMiles(
 
 export function mobileMetroAreas(metroAreas: MetroAreaRow[]): MobileMetroArea[] {
   return metroAreas.map((metro) => ({
+    id: metro.id,
     city: metro.name,
     state: metro.state,
   }));
@@ -92,10 +96,24 @@ export function createMobileMetroResolver(
       }
     }
 
-    const stateFallback = metroAreas.find((metro) => metro.state === location.state);
-
-    return stateFallback
-      ? { city: stateFallback.name, state: stateFallback.state }
-      : null;
+    return null;
   };
+}
+
+export function closestMetroForCoordinates(
+  latitude: number,
+  longitude: number,
+  metroAreas: MetroAreaRow[]
+): MobileMetroArea | null {
+  const match = metroAreas
+    .map((metro) => ({
+      metro,
+      distance: distanceMiles({ latitude, longitude }, metro),
+    }))
+    .filter(({ metro, distance }) => distance <= metro.radiusMiles)
+    .sort((lhs, rhs) => lhs.distance - rhs.distance)[0]?.metro;
+
+  return match
+    ? { id: match.id, city: match.name, state: match.state }
+    : null;
 }

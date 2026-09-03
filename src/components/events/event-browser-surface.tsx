@@ -7,6 +7,7 @@ import {
   useEffect,
   useState,
 } from "react";
+import { createPortal } from "react-dom";
 import Link from "next/link";
 import {
   differenceInCalendarWeeks,
@@ -16,23 +17,15 @@ import {
   startOfWeek,
   subDays,
 } from "date-fns";
-import {
-  CalendarIcon,
-  ChevronLeft,
-  ChevronRight,
-  Loader2,
-  X,
-} from "lucide-react";
+import { CalendarIcon, ChevronLeft, ChevronRight, Loader2 } from "lucide-react";
 import { FunnelSimple, MagnifyingGlass } from "@phosphor-icons/react";
 import {
   HOME_MOBILE_EVENT_CARD_WIDTH,
   HomeMobileEventRail,
 } from "@/components/events/home-mobile-event-rail";
-import { EventFilterSelect } from "@/components/events/event-filter-select";
 import { EmptyStateCard } from "@/components/shared/empty-state-card";
 import { Button } from "@/components/ui/button";
 import { SearchInput } from "@/components/ui/search-input";
-import { ResponsiveSelect } from "@/components/ui/responsive-select";
 import { StickySearchBar } from "@/components/ui/sticky-search-bar";
 import { StickySectionHeader } from "@/components/ui/sticky-section-header";
 import { cn } from "@/lib/utils";
@@ -316,6 +309,190 @@ function MobileEventBrowserControls({
   );
 }
 
+function DesktopEventBrowserControls({
+  part,
+  searchHref,
+  onSearchFocus,
+  filterValue,
+  onFilterChange,
+  allowPersonalFilters,
+  visibleCategories,
+  selectedCategories,
+  onToggleCategory,
+  cityValue,
+  onCityChange,
+  cityOptions,
+  daysToDisplay,
+  isCurrentWeek,
+  onToday,
+  onPrevious,
+  onNext,
+}: Pick<
+  EventBrowserSurfaceProps,
+  | "searchHref"
+  | "onSearchFocus"
+  | "filterValue"
+  | "onFilterChange"
+  | "allowPersonalFilters"
+  | "visibleCategories"
+  | "selectedCategories"
+  | "onToggleCategory"
+  | "cityValue"
+  | "onCityChange"
+  | "cityOptions"
+  | "daysToDisplay"
+  | "isCurrentWeek"
+  | "onToday"
+  | "onPrevious"
+  | "onNext"
+> & {
+  part: "filter" | "date" | "arrows";
+}) {
+  const firstDay = daysToDisplay[0];
+  const lastDay = daysToDisplay[daysToDisplay.length - 1];
+  const filterOptions = allowPersonalFilters
+    ? MOBILE_EVENT_FILTERS
+    : MOBILE_EVENT_FILTERS.slice(0, 1);
+  const weeksAway = firstDay
+    ? Math.max(
+        0,
+        differenceInCalendarWeeks(
+          startOfWeek(firstDay, { weekStartsOn: 1 }),
+          startOfWeek(new Date(), { weekStartsOn: 1 })
+        )
+      )
+    : 0;
+  const weekLabel =
+    weeksAway === 0
+      ? "This Week"
+      : weeksAway === 1
+        ? "Next Week"
+        : `In ${weeksAway} Weeks`;
+  const glassControl =
+    "h-12 overflow-hidden rounded-3xl border border-white/15 bg-[#242426]/55 shadow-[0_16px_45px_rgba(0,0,0,0.4)] backdrop-blur-2xl";
+
+  if (part === "filter") {
+    return (
+      <div className={cn("flex w-28", glassControl)}>
+        <label className="relative flex flex-1 cursor-pointer items-center justify-center text-white/80 transition-colors hover:bg-black/25 hover:text-white">
+          <FunnelSimple className="h-5 w-5" aria-hidden="true" />
+          <span className="sr-only">Filter events</span>
+          <select
+            aria-label="Filter events"
+            value={`filter:${filterValue}`}
+            onChange={(event) => {
+              const selection = event.target.value;
+              if (selection.startsWith("filter:")) {
+                onFilterChange(
+                  selection.slice("filter:".length) as EventFilterTab
+                );
+              } else if (selection.startsWith("category:")) {
+                onToggleCategory(selection.slice("category:".length));
+              } else if (selection.startsWith("city:")) {
+                void onCityChange(selection.slice("city:".length));
+              }
+            }}
+            className="absolute inset-0 h-full w-full cursor-pointer opacity-0"
+          >
+            <optgroup label="Events">
+              {filterOptions.map((option) => (
+                <option key={option.value} value={`filter:${option.value}`}>
+                  {option.label}
+                </option>
+              ))}
+            </optgroup>
+            {visibleCategories.length > 0 ? (
+              <optgroup label="Categories">
+                {visibleCategories.map((category) => (
+                  <option key={category.id} value={`category:${category.key}`}>
+                    {selectedCategories.includes(category.key) ? "✓ " : ""}
+                    {category.label}
+                  </option>
+                ))}
+              </optgroup>
+            ) : null}
+            {cityOptions.length > 0 ? (
+              <optgroup label="Location">
+                {cityOptions.map((city) => (
+                  <option key={city.value} value={`city:${city.value}`}>
+                    {city.value === cityValue ? "✓ " : ""}
+                    {city.label}
+                  </option>
+                ))}
+              </optgroup>
+            ) : null}
+          </select>
+        </label>
+
+        <span className="my-3 w-px bg-white/10" aria-hidden="true" />
+
+        {searchHref ? (
+          <Link
+            href={searchHref}
+            className="flex flex-1 items-center justify-center text-white/80 transition-colors hover:bg-black/25 hover:text-white"
+            aria-label="Search events"
+          >
+            <MagnifyingGlass className="h-5 w-5" />
+          </Link>
+        ) : (
+          <button
+            type="button"
+            onClick={onSearchFocus}
+            className="flex flex-1 items-center justify-center text-white/80 transition-colors hover:bg-black/25 hover:text-white"
+            aria-label="Search events"
+          >
+            <MagnifyingGlass className="h-5 w-5" />
+          </button>
+        )}
+      </div>
+    );
+  }
+
+  if (part === "date") {
+    return (
+      <button
+        type="button"
+        onClick={() => !isCurrentWeek && void onToday()}
+        className={cn(
+          "flex w-28 min-w-0 flex-col items-center justify-center px-3 transition-colors hover:bg-[#2c2c2f] xl:w-44",
+          glassControl
+        )}
+      >
+        <span className="text-[11px] font-semibold leading-none text-white/50">
+          {weekLabel}
+        </span>
+        <span className="mt-1 truncate text-xs font-semibold leading-none text-white">
+          {firstDay && lastDay
+            ? `${format(firstDay, "MMM d")} – ${format(lastDay, "MMM d")}`
+            : ""}
+        </span>
+      </button>
+    );
+  }
+
+  return (
+    <div className={cn("flex w-20 xl:w-28", glassControl)}>
+      <button
+        type="button"
+        onClick={() => void onPrevious()}
+        disabled={isCurrentWeek}
+        className="flex flex-1 items-center justify-center border-r border-white/10 text-white transition-colors hover:bg-black/25 disabled:text-white/25 disabled:hover:bg-transparent"
+        aria-label="Previous week"
+      >
+        <ChevronLeft className="h-5 w-5" />
+      </button>
+      <button
+        type="button"
+        onClick={() => void onNext()}
+        className="flex flex-1 items-center justify-center text-white transition-colors hover:bg-black/25"
+        aria-label="Next week"
+      >
+        <ChevronRight className="h-5 w-5" />
+      </button>
+    </div>
+  );
+}
+
 function getWeekSectionMeta(date: Date, isCurrentWeek: boolean) {
   const now = new Date();
   const isEarlyMorning = now.getHours() < 6;
@@ -571,13 +748,10 @@ export function EventBrowserSurface({
   onSearchFocus,
   searchHref,
   isSearchView,
-  showSearchBack = isSearchView,
   onSearchBack,
-  shouldShowReturnToCurrentWeekButton,
   onToday,
   onPrevious,
   onNext,
-  hideNavigationControls = false,
   cityValue,
   onCityChange,
   cityOptions,
@@ -605,9 +779,22 @@ export function EventBrowserSurface({
 }: EventBrowserSurfaceProps) {
   const isSearching = Boolean(searchQuery.trim());
   const [hasScrolled, setHasScrolled] = useState(!hideUntilScroll);
+  const [desktopLeadingTarget, setDesktopLeadingTarget] =
+    useState<HTMLElement | null>(null);
+  const [desktopTrailingTarget, setDesktopTrailingTarget] =
+    useState<HTMLElement | null>(null);
   const firstEventDayKey = daysToDisplay
     .map((date) => format(date, "yyyy-MM-dd"))
     .find((dateKey) => (eventsByDay[dateKey] || []).length > 0);
+
+  useEffect(() => {
+    setDesktopLeadingTarget(
+      document.getElementById("desktop-page-controls-leading")
+    );
+    setDesktopTrailingTarget(
+      document.getElementById("desktop-page-controls-trailing")
+    );
+  }, []);
 
   useEffect(() => {
     if (!hideUntilScroll) {
@@ -628,365 +815,295 @@ export function EventBrowserSurface({
   }, [hideUntilScroll]);
 
   return (
-    <div className={cn("relative pb-6", rootClassName)}>
-      <div
-        className={cn(
-          "transition-all duration-700 ease-out",
-          hasScrolled
-            ? "opacity-100"
-            : cn(
-                "pointer-events-none opacity-0",
-                revealFrom === "bottom" ? "translate-y-8" : "-translate-y-8"
-              )
-        )}
-      >
-        <div className="container relative mx-auto pt-4">
-          {topSlot}
-
-          <StickySearchBar innerClassName="w-full flex-col items-stretch sm:flex-col sm:items-stretch">
-            <MobileEventBrowserControls
-              searchInputRef={searchInputRef}
-              searchQuery={searchQuery}
-              onSearchQueryChange={onSearchQueryChange}
-              onSearchFocus={onSearchFocus}
+    <>
+      {desktopLeadingTarget
+        ? createPortal(
+            <div className="flex items-center gap-3">
+              <div className="hidden lg:block">
+                <DesktopEventBrowserControls
+                  part="filter"
+                  searchHref={searchHref}
+                  onSearchFocus={onSearchFocus}
+                  filterValue={filterValue}
+                  onFilterChange={onFilterChange}
+                  allowPersonalFilters={allowPersonalFilters}
+                  visibleCategories={visibleCategories}
+                  selectedCategories={selectedCategories}
+                  onToggleCategory={onToggleCategory}
+                  cityValue={cityValue}
+                  onCityChange={onCityChange}
+                  cityOptions={cityOptions}
+                  daysToDisplay={daysToDisplay}
+                  isCurrentWeek={isCurrentWeek}
+                  onToday={onToday}
+                  onPrevious={onPrevious}
+                  onNext={onNext}
+                />
+              </div>
+              <DesktopEventBrowserControls
+                part="date"
+                searchHref={searchHref}
+                onSearchFocus={onSearchFocus}
+                filterValue={filterValue}
+                onFilterChange={onFilterChange}
+                allowPersonalFilters={allowPersonalFilters}
+                visibleCategories={visibleCategories}
+                selectedCategories={selectedCategories}
+                onToggleCategory={onToggleCategory}
+                cityValue={cityValue}
+                onCityChange={onCityChange}
+                cityOptions={cityOptions}
+                daysToDisplay={daysToDisplay}
+                isCurrentWeek={isCurrentWeek}
+                onToday={onToday}
+                onPrevious={onPrevious}
+                onNext={onNext}
+              />
+            </div>,
+            desktopLeadingTarget
+          )
+        : null}
+      {desktopTrailingTarget
+        ? createPortal(
+            <DesktopEventBrowserControls
+              part="arrows"
               searchHref={searchHref}
-              isSearchView={isSearchView}
-              onSearchBack={onSearchBack}
+              onSearchFocus={onSearchFocus}
               filterValue={filterValue}
               onFilterChange={onFilterChange}
               allowPersonalFilters={allowPersonalFilters}
               visibleCategories={visibleCategories}
               selectedCategories={selectedCategories}
               onToggleCategory={onToggleCategory}
+              cityValue={cityValue}
+              onCityChange={onCityChange}
+              cityOptions={cityOptions}
               daysToDisplay={daysToDisplay}
               isCurrentWeek={isCurrentWeek}
               onToday={onToday}
               onPrevious={onPrevious}
               onNext={onNext}
-            />
+            />,
+            desktopTrailingTarget
+          )
+        : null}
 
-            <div className="hidden w-full flex-col gap-2 md:flex md:flex-row md:items-center">
-              <div className="flex w-full flex-row items-center">
-                <div
-                  className={cn(
-                    "overflow-hidden transition-all duration-200 ease-out",
-                    shouldShowReturnToCurrentWeekButton
-                      ? "mr-2 w-12 opacity-100"
-                      : "mr-0 w-0 opacity-0"
-                  )}
-                >
-                  <button
-                    type="button"
-                    onMouseDown={(e) => e.preventDefault()}
-                    onPointerDown={(e) => e.preventDefault()}
-                    onClick={(e) => {
-                      e.preventDefault();
-                      e.stopPropagation();
-                      void onToday();
-                    }}
-                    className="flex h-10 w-10 shrink-0 items-center justify-center rounded-full text-muted-foreground outline-none transition-colors hover:bg-muted hover:text-foreground focus:outline-none focus-visible:outline-none"
-                    tabIndex={shouldShowReturnToCurrentWeekButton ? 0 : -1}
-                    aria-label="Back to current week"
-                  >
-                    <ChevronLeft className="h-5 w-5" />
-                  </button>
-                </div>
+      <div className={cn("relative pb-6", rootClassName)}>
+        <div
+          className={cn(
+            "transition-all duration-700 ease-out",
+            hasScrolled
+              ? "opacity-100"
+              : cn(
+                  "pointer-events-none opacity-0",
+                  revealFrom === "bottom" ? "translate-y-8" : "-translate-y-8"
+                )
+          )}
+        >
+          <div className="container relative mx-auto pt-4">
+            {topSlot}
 
-                {searchHref ? (
-                  <Link
-                    href={searchHref}
-                    className="flex h-10 min-w-0 flex-1 items-center gap-2 rounded-md border border-input bg-background px-3 text-sm text-muted-foreground shadow-sm"
-                  >
-                    <MagnifyingGlass className="h-4 w-4" />
-                    Search events...
-                  </Link>
-                ) : (
-                  <Suspense fallback={null}>
-                    <SearchInput
-                      ref={searchInputRef}
-                      placeholder="Search events..."
-                      value={searchQuery}
-                      onChange={onSearchQueryChange}
-                      onFocus={onSearchFocus}
-                      showBack={showSearchBack}
-                      onBack={onSearchBack}
-                      className="min-w-0 flex-1"
-                    />
-                  </Suspense>
-                )}
-
-                <div
-                  className={cn(
-                    "shrink-0 overflow-hidden transition-all duration-200 ease-out md:hidden",
-                    showSearchBack || hideNavigationControls
-                      ? "ml-0 w-0 opacity-0"
-                      : "ml-2 opacity-100"
-                  )}
-                >
-                  <div className="flex h-12 items-center overflow-hidden rounded-full border border-input bg-background shadow-sm">
-                    <Button
-                      variant="ghost"
-                      size="icon"
-                      className={cn(
-                        "h-full w-10 rounded-none border-r bg-muted px-0 active:bg-muted/80",
-                        isCurrentWeek &&
-                          "cursor-not-allowed opacity-50 hover:bg-muted"
-                      )}
-                      onClick={() => void onPrevious()}
-                      aria-disabled={isCurrentWeek}
-                    >
-                      <ChevronLeft className="h-4 w-4" />
-                    </Button>
-                    <Button
-                      variant="ghost"
-                      size="icon"
-                      className="h-full w-10 rounded-none bg-muted px-0 focus:bg-muted/80 active:bg-muted/80"
-                      onClick={() => void onNext()}
-                    >
-                      <ChevronRight className="h-4 w-4" />
-                    </Button>
-                  </div>
-                </div>
-              </div>
-
-              <div className="flex w-full gap-2 sm:w-fit">
-                <ResponsiveSelect
-                  value={cityValue}
-                  onValueChange={onCityChange}
-                  options={cityOptions}
-                  placeholder="Select city"
-                  title="Select City"
-                  className="min-w-0 flex-1 sm:w-[180px] sm:flex-none"
-                />
-
-                <EventFilterSelect
-                  value={filterValue}
-                  onValueChange={onFilterChange}
-                  allowPersonalFilters={allowPersonalFilters}
-                  className="min-w-0 flex-1 sm:w-[180px] sm:flex-none"
-                />
-
-                <div
-                  className={cn(
-                    "hidden shrink-0 overflow-hidden transition-all duration-200 ease-out md:block",
-                    showSearchBack || hideNavigationControls
-                      ? "w-0 opacity-0"
-                      : "w-[82px] opacity-100"
-                  )}
-                >
-                  <div className="flex h-12 items-center overflow-hidden rounded-full border border-input bg-background shadow-sm">
-                    <Button
-                      variant="ghost"
-                      size="icon"
-                      className={cn(
-                        "h-full w-10 shrink-0 rounded-none border-r bg-muted px-0 hover:bg-muted/60",
-                        isCurrentWeek &&
-                          "cursor-not-allowed opacity-50 hover:bg-muted"
-                      )}
-                      onClick={() => void onPrevious()}
-                      aria-disabled={isCurrentWeek}
-                    >
-                      <ChevronLeft className="h-4 w-4" />
-                    </Button>
-                    <Button
-                      variant="ghost"
-                      size="icon"
-                      className="h-full w-10 shrink-0 rounded-none bg-muted px-0 hover:bg-muted/80"
-                      onClick={() => void onNext()}
-                    >
-                      <ChevronRight className="h-4 w-4" />
-                    </Button>
-                  </div>
-                </div>
-              </div>
+            <div className="hidden md:flex lg:hidden">
+              <DesktopEventBrowserControls
+                part="filter"
+                searchHref={searchHref}
+                onSearchFocus={onSearchFocus}
+                filterValue={filterValue}
+                onFilterChange={onFilterChange}
+                allowPersonalFilters={allowPersonalFilters}
+                visibleCategories={visibleCategories}
+                selectedCategories={selectedCategories}
+                onToggleCategory={onToggleCategory}
+                cityValue={cityValue}
+                onCityChange={onCityChange}
+                cityOptions={cityOptions}
+                daysToDisplay={daysToDisplay}
+                isCurrentWeek={isCurrentWeek}
+                onToday={onToday}
+                onPrevious={onPrevious}
+                onNext={onNext}
+              />
             </div>
 
-            {(showSkeletons || visibleCategories.length > 0) && (
-              <div className="-mx-4 hidden overflow-x-auto pt-1 [scrollbar-width:none] md:-mx-8 md:block [&::-webkit-scrollbar]:hidden">
-                <div className="flex gap-1.5 px-4 md:px-8">
-                  {showSkeletons
-                    ? [64, 80, 56, 72].map((width, index) => (
-                        <div
-                          key={`pill-skeleton-${index}`}
-                          className="h-7 animate-pulse rounded-full bg-muted/50"
-                          style={{ width: `${width}px` }}
-                        />
-                      ))
-                    : visibleCategories.map((category) => {
-                        const isSelected = selectedCategories.includes(
-                          category.key
-                        );
-
-                        return (
-                          <button
-                            key={category.id}
-                            type="button"
-                            aria-pressed={isSelected}
-                            onClick={() => onToggleCategory(category.key)}
-                            className={cn(
-                              "inline-flex shrink-0 items-center gap-1 rounded-full px-3.5 py-1.5 text-xs font-medium transition-colors",
-                              isSelected
-                                ? "bg-neon-teal text-background"
-                                : "bg-muted/50 text-muted-foreground md:hover:text-foreground"
-                            )}
-                          >
-                            {category.label}
-                            {isSelected && <X className="h-3 w-3" />}
-                          </button>
-                        );
-                      })}
-                </div>
-              </div>
-            )}
-          </StickySearchBar>
-        </div>
-      </div>
-
-      {topBanner ? (
-        <div className="container relative mx-auto">{topBanner}</div>
-      ) : null}
-
-      {recentActivity?.content ? (
-        <div className="mb-4">
-          <StickySectionHeader stickyOnMobile={false}>
-            {recentActivity.title}
-          </StickySectionHeader>
-          <div className="container mx-auto px-4">{recentActivity.content}</div>
-        </div>
-      ) : null}
-
-      {isSearchView && !isSearching ? (
-        <div className="container mx-auto px-4">
-          <div className="space-y-4">
-            {upcomingEventsLoading ? (
-              <div className="flex justify-center py-12">
-                <Loader2 className="h-8 w-8 animate-spin text-muted-foreground" />
-              </div>
-            ) : upcomingEvents.length === 0 ? (
-              (emptyStates?.upcoming ?? (
-                <EmptyStateCard
-                  icon={CalendarIcon}
-                  title="No upcoming events to show"
-                />
-              ))
-            ) : (
-              <HomeMobileEventRail
-                events={upcomingEvents}
-                mobileLayout="grid"
+            <StickySearchBar
+              className="md:hidden"
+              innerClassName="w-full flex-col items-stretch sm:flex-col sm:items-stretch"
+            >
+              <MobileEventBrowserControls
+                searchInputRef={searchInputRef}
+                searchQuery={searchQuery}
+                onSearchQueryChange={onSearchQueryChange}
+                onSearchFocus={onSearchFocus}
+                searchHref={searchHref}
+                isSearchView={isSearchView}
+                onSearchBack={onSearchBack}
+                filterValue={filterValue}
+                onFilterChange={onFilterChange}
+                allowPersonalFilters={allowPersonalFilters}
+                visibleCategories={visibleCategories}
+                selectedCategories={selectedCategories}
+                onToggleCategory={onToggleCategory}
+                daysToDisplay={daysToDisplay}
+                isCurrentWeek={isCurrentWeek}
+                onToday={onToday}
+                onPrevious={onPrevious}
+                onNext={onNext}
               />
-            )}
+            </StickySearchBar>
           </div>
         </div>
-      ) : null}
 
-      {isSearching ? (
-        <div className="container mx-auto px-4">
-          <div className="space-y-4">
-            {filteredEvents.length === 0 ? (
-              (emptyStates?.search ?? (
-                <EmptyStateCard
-                  icon={CalendarIcon}
-                  title="No events found"
-                  description="Try adjusting your search or filters"
-                />
-              ))
-            ) : (
-              <HomeMobileEventRail
-                events={filteredEvents}
-                mobileLayout="grid"
-              />
-            )}
-          </div>
-        </div>
-      ) : null}
+        {topBanner ? (
+          <div className="container relative mx-auto">{topBanner}</div>
+        ) : null}
 
-      {showSkeletons ? (
-        showWeekSkeletons ? (
-          <div className="space-y-4">
-            {daysToDisplay.map((date, index) => {
-              const { dateHeader, isToday } = getWeekSectionMeta(
-                date,
-                isCurrentWeek
-              );
-
-              return (
-                <div key={`skeleton-${format(date, "yyyy-MM-dd")}`}>
-                  <StickyDateHeader dateHeader={dateHeader} isToday={isToday} />
-                  <div className="container mx-auto px-4">
-                    <EventSkeletonGrid
-                      count={Math.min(4 + (index % 2), 5)}
-                      mobileCount={3 + (index % 2)}
-                      desktopLayout="rail"
-                      desktopBleed
-                    />
-                  </div>
-                </div>
-              );
-            })}
-          </div>
-        ) : (
-          <div>
-            {skeletonDateHeader ? (
-              <StickyDateHeader
-                dateHeader={skeletonDateHeader}
-                isToday={isCurrentWeek}
-              />
-            ) : null}
+        {recentActivity?.content ? (
+          <div className="mb-4">
+            <StickySectionHeader stickyOnMobile={false}>
+              {recentActivity.title}
+            </StickySectionHeader>
             <div className="container mx-auto px-4">
-              <EventSkeletonGrid count={8} />
+              {recentActivity.content}
             </div>
           </div>
-        )
-      ) : null}
+        ) : null}
 
-      {!showSkeletons && !isSearchView && flatListTitle ? (
-        <div>
-          <StickyDateHeader dateHeader={flatListTitle} isToday={false} />
+        {isSearchView && !isSearching ? (
           <div className="container mx-auto px-4">
-            {filteredEvents.length === 0 ? (
-              (emptyStates?.flatList ?? (
-                <EmptyStateCard icon={CalendarIcon} title="No events found" />
-              ))
-            ) : (
-              <HomeMobileEventRail
-                events={filteredEvents}
-                mobileLayout="grid"
-              />
-            )}
+            <div className="space-y-4">
+              {upcomingEventsLoading ? (
+                <div className="flex justify-center py-12">
+                  <Loader2 className="h-8 w-8 animate-spin text-muted-foreground" />
+                </div>
+              ) : upcomingEvents.length === 0 ? (
+                (emptyStates?.upcoming ?? (
+                  <EmptyStateCard
+                    icon={CalendarIcon}
+                    title="No upcoming events to show"
+                  />
+                ))
+              ) : (
+                <HomeMobileEventRail
+                  events={upcomingEvents}
+                  mobileLayout="grid"
+                />
+              )}
+            </div>
           </div>
-        </div>
-      ) : null}
+        ) : null}
 
-      {!showSkeletons && !isSearchView && !flatListTitle
-        ? (defaultContent ?? (
-            <div className="space-y-5 md:space-y-4">
-              {daysToDisplay.map((date) => {
-                const dateKey = format(date, "yyyy-MM-dd");
-                const dayEvents = eventsByDay[dateKey] || [];
-                const { dateHeader, isToday, isLastNightSection } =
-                  getWeekSectionMeta(date, isCurrentWeek);
+        {isSearching ? (
+          <div className="container mx-auto px-4">
+            <div className="space-y-4">
+              {filteredEvents.length === 0 ? (
+                (emptyStates?.search ?? (
+                  <EmptyStateCard
+                    icon={CalendarIcon}
+                    title="No events found"
+                    description="Try adjusting your search or filters"
+                  />
+                ))
+              ) : (
+                <HomeMobileEventRail
+                  events={filteredEvents}
+                  mobileLayout="grid"
+                />
+              )}
+            </div>
+          </div>
+        ) : null}
 
-                if (isLastNightSection && dayEvents.length === 0) {
-                  return null;
-                }
+        {showSkeletons ? (
+          showWeekSkeletons ? (
+            <div className="space-y-4">
+              {daysToDisplay.map((date, index) => {
+                const { dateHeader, isToday } = getWeekSectionMeta(
+                  date,
+                  isCurrentWeek
+                );
 
                 return (
-                  <div key={dateKey}>
-                    <DayEventSection
+                  <div key={`skeleton-${format(date, "yyyy-MM-dd")}`}>
+                    <StickyDateHeader
                       dateHeader={dateHeader}
                       isToday={isToday}
-                      dayEvents={dayEvents}
-                      emptyDayState={emptyStates?.day}
                     />
-                    {afterFirstEventDay && dateKey === firstEventDayKey
-                      ? afterFirstEventDay
-                      : null}
+                    <div className="container mx-auto px-4">
+                      <EventSkeletonGrid
+                        count={Math.min(4 + (index % 2), 5)}
+                        mobileCount={3 + (index % 2)}
+                        desktopLayout="rail"
+                        desktopBleed
+                      />
+                    </div>
                   </div>
                 );
               })}
             </div>
-          ))
-        : null}
-    </div>
+          ) : (
+            <div>
+              {skeletonDateHeader ? (
+                <StickyDateHeader
+                  dateHeader={skeletonDateHeader}
+                  isToday={isCurrentWeek}
+                />
+              ) : null}
+              <div className="container mx-auto px-4">
+                <EventSkeletonGrid count={8} />
+              </div>
+            </div>
+          )
+        ) : null}
+
+        {!showSkeletons && !isSearchView && flatListTitle ? (
+          <div>
+            <StickyDateHeader dateHeader={flatListTitle} isToday={false} />
+            <div className="container mx-auto px-4">
+              {filteredEvents.length === 0 ? (
+                (emptyStates?.flatList ?? (
+                  <EmptyStateCard icon={CalendarIcon} title="No events found" />
+                ))
+              ) : (
+                <HomeMobileEventRail
+                  events={filteredEvents}
+                  mobileLayout="grid"
+                />
+              )}
+            </div>
+          </div>
+        ) : null}
+
+        {!showSkeletons && !isSearchView && !flatListTitle
+          ? (defaultContent ?? (
+              <div className="space-y-5 md:space-y-4">
+                {daysToDisplay.map((date) => {
+                  const dateKey = format(date, "yyyy-MM-dd");
+                  const dayEvents = eventsByDay[dateKey] || [];
+                  const { dateHeader, isToday, isLastNightSection } =
+                    getWeekSectionMeta(date, isCurrentWeek);
+
+                  if (isLastNightSection && dayEvents.length === 0) {
+                    return null;
+                  }
+
+                  return (
+                    <div key={dateKey}>
+                      <DayEventSection
+                        dateHeader={dateHeader}
+                        isToday={isToday}
+                        dayEvents={dayEvents}
+                        emptyDayState={emptyStates?.day}
+                      />
+                      {afterFirstEventDay && dateKey === firstEventDayKey
+                        ? afterFirstEventDay
+                        : null}
+                    </div>
+                  );
+                })}
+              </div>
+            ))
+          : null}
+      </div>
+    </>
   );
 }

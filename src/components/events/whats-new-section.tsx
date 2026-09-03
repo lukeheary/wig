@@ -1,5 +1,6 @@
 "use client";
 
+import type { CSSProperties } from "react";
 import Image from "next/image";
 import Link from "next/link";
 import { ChevronDown, Star } from "lucide-react";
@@ -45,6 +46,8 @@ const FILTER_LABELS: Record<WhatsNewFilter, string> = {
   allPlaces: "All Places",
 };
 
+const DESKTOP_RAIL_SIDE_INSET = "max(2rem, calc((100vw - 1200px) / 2 + 2rem))";
+
 export function WhatsNewSection({
   updates,
   hasFollowedPlaces,
@@ -84,8 +87,15 @@ export function WhatsNewSection({
 
       {updates.length > 0 ? (
         <div className="container mx-auto px-4">
-          <div className="-mx-4 overflow-x-auto [scrollbar-width:none] [&::-webkit-scrollbar]:hidden">
-            <div className="flex w-max items-start gap-3 px-4 pb-1 md:gap-4">
+          <div
+            className="-mx-4 overflow-x-auto [scrollbar-width:none] md:w-screen md:max-w-none md:[margin-left:calc(-1*var(--whats-new-side-inset))] [&::-webkit-scrollbar]:hidden"
+            style={
+              {
+                "--whats-new-side-inset": DESKTOP_RAIL_SIDE_INSET,
+              } as CSSProperties
+            }
+          >
+            <div className="flex w-max items-start gap-3 px-4 pb-1 md:gap-4 md:pr-10 md:[padding-left:var(--whats-new-side-inset)]">
               {updates.map((update) => (
                 <WhatsNewCard key={update.event.id} update={update} />
               ))}

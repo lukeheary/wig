@@ -7,11 +7,7 @@ interface EventSocialOverlayProps {
   size: "md" | "lg";
   maxDisplay?: number;
   placement?:
-    | "bottom-left"
-    | "bottom-right"
-    | "top-center"
-    | "top-right"
-    | "inline";
+    "bottom-left" | "bottom-right" | "top-center" | "top-right" | "inline";
   reverse?: boolean;
   stackClassName?: string;
 }
@@ -62,10 +58,10 @@ export function EventSocialOverlay({
             : isTopRight
               ? "absolute right-2 top-2 z-20 drop-shadow-[0_8px_22px_rgba(0,0,0,0.45)]"
               : isBottomLeft
-                ? "absolute bottom-2 left-2 z-20 drop-shadow-[0_6px_18px_rgba(0,0,0,0.45)]"
+                ? "absolute bottom-3 left-2 z-20 drop-shadow-[0_6px_18px_rgba(0,0,0,0.45)]"
                 : isInline
                   ? "relative z-20 w-fit"
-                  : "absolute bottom-2 right-2 drop-shadow-[0_6px_18px_rgba(0,0,0,0.45)]",
+                  : "absolute bottom-3 right-2 drop-shadow-[0_6px_18px_rgba(0,0,0,0.45)]",
           stackClassName
         )}
       >

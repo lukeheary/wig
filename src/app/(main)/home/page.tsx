@@ -781,14 +781,14 @@ function HomePageContent() {
       onToggleCategory={browser.handleToggleCategory}
       topBanner={
         shouldShowAddFriendsBanner ? (
-          <Card className="mb-4 bg-primary/5">
+          <Card className="mb-4 rounded-[1.75rem] border-white/15 bg-white/[0.035]">
             <Link
               href="/activity"
               aria-label="Go to friends page"
               onClick={handleAddFriendsBannerClick}
               className="block"
             >
-              <CardContent className="flex items-center justify-between gap-4 p-4">
+              <CardContent className="flex items-center justify-between gap-4 p-4 md:px-6 md:py-5">
                 <div className="space-y-1">
                   <p className="text-xl font-semibold text-foreground">
                     WIG is better with friends.

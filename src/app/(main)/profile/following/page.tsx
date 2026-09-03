@@ -34,7 +34,7 @@ export default function ProfileFollowingPage() {
   }
 
   return (
-    <PageContainer className="min-h-screen bg-black !px-2 !pt-0 md:bg-background md:!px-4 md:!pt-4">
+    <PageContainer className="min-h-screen max-w-5xl bg-black !px-2 !pt-0 md:!px-6 md:!pt-8">
       <div className="md:hidden">
         <MobileProfileListHeader title="Following" />
         <div className="mt-4">

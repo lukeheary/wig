@@ -133,12 +133,12 @@ export function UserProfilePage({
   return (
     <main className="min-h-screen bg-black">
       <div className="mx-auto w-full pb-12">
-        <section className="relative mx-auto max-w-3xl px-4 pb-8 pt-5 md:px-8 md:pb-10 md:pt-8">
+        <section className="relative mx-auto max-w-5xl px-4 pb-8 pt-5 md:mt-8 md:rounded-[2rem] md:border md:border-white/10 md:bg-white/[0.035] md:px-10 md:pb-10 md:pt-10">
           <div
             className={
               showSettings
-                ? "h-7"
-                : "flex h-7 items-center justify-center px-14 md:px-16"
+                ? "h-7 md:hidden"
+                : "flex h-7 items-center justify-center px-14 md:hidden"
             }
           >
             {!showSettings ? (
@@ -163,7 +163,7 @@ export function UserProfilePage({
               {profile.username}
             </p>
           </div>
-          <label className="absolute right-3 top-3 flex h-[46px] w-[46px] cursor-pointer items-center justify-center rounded-full border border-white/15 bg-[#242426]/85 text-white shadow-[0_18px_50px_rgba(0,0,0,0.55)] backdrop-blur-2xl md:right-8 md:top-6 md:h-12 md:w-12">
+          <label className="absolute right-3 top-3 flex h-[46px] w-[46px] cursor-pointer items-center justify-center rounded-full border border-white/15 bg-[#242426]/85 text-white shadow-[0_18px_50px_rgba(0,0,0,0.55)] backdrop-blur-2xl md:right-8 md:top-8 md:h-12 md:w-12">
             <MoreHorizontal className="h-5 w-5" aria-hidden="true" />
             <select
               ref={(select) => {
@@ -196,13 +196,13 @@ export function UserProfilePage({
             </select>
           </label>
 
-          <div className="mt-12 flex items-end gap-5 md:mt-14 md:gap-8">
+          <div className="mt-12 flex items-end gap-5 md:mt-0 md:items-center md:gap-10 md:pr-16">
             <div className="relative shrink-0">
               <UserAvatar
                 src={profile.avatarImageUrl}
                 name={name}
                 identityKey={profile.id}
-                className="h-[104px] w-[104px] text-3xl md:h-36 md:w-36"
+                className="h-[104px] w-[104px] text-3xl md:h-40 md:w-40"
               />
               {showSettings ? (
                 <Link
@@ -217,7 +217,10 @@ export function UserProfilePage({
 
             <div className="min-w-0 flex-1 pb-1">
               <div className="translate-y-1.5 md:translate-y-0">
-                <h1 className="truncate text-[17px] font-bold tracking-tight md:text-3xl">
+                <p className="mb-1 hidden text-sm font-semibold text-white/45 md:block">
+                  @{profile.username}
+                </p>
+                <h1 className="truncate text-[17px] font-bold tracking-tight md:text-4xl">
                   {name}
                 </h1>
                 {profile.city && profile.state ? (
@@ -228,7 +231,7 @@ export function UserProfilePage({
               </div>
 
               <div
-                className={`mt-3.5 grid ${profile.isCurrentUser ? "grid-cols-3" : "grid-cols-2"}`}
+                className={`mt-3.5 grid gap-4 md:mt-7 md:max-w-xl md:gap-8 ${profile.isCurrentUser ? "grid-cols-3" : "grid-cols-2"}`}
               >
                 <Link
                   href={friendsHref}
@@ -277,7 +280,7 @@ export function UserProfilePage({
             profile.friendStatus === "pending_received" ? (
               <Button
                 asChild
-                className="mt-6 h-12 w-full rounded-xl text-base font-semibold"
+                className="mt-6 h-12 w-full rounded-xl text-base font-semibold md:ml-[12.5rem] md:w-[calc(100%-12.5rem)]"
               >
                 <Link href="/profile/requests">Respond to Request</Link>
               </Button>
@@ -288,7 +291,7 @@ export function UserProfilePage({
                   profile.friendStatus !== "none" || sendRequest.isPending
                 }
                 onClick={() => sendRequest.mutate({ friendUserId: profile.id })}
-                className={`mt-6 h-12 w-full rounded-xl text-base font-semibold ${profile.friendStatus === "none" ? "bg-sky-300 text-black hover:bg-sky-300/90" : "border border-white/15 bg-white/[0.07] text-white opacity-100"}`}
+                className={`mt-6 h-12 w-full rounded-xl text-base font-semibold md:ml-[12.5rem] md:w-[calc(100%-12.5rem)] ${profile.friendStatus === "none" ? "bg-sky-300 text-black hover:bg-sky-300/90" : "border border-white/15 bg-white/[0.07] text-white opacity-100"}`}
               >
                 {profile.friendStatus === "accepted"
                   ? "Friends"
@@ -342,7 +345,7 @@ function ProfileEventSections({
 }) {
   if (sections.length === 0) {
     return (
-      <div className="mx-auto max-w-7xl px-5 md:px-8">
+      <div className="container mx-auto px-5 md:px-8">
         <ProfileSectionHeading
           title={mode === "upcoming" ? "Upcoming" : "Past"}
           mode={mode}

@@ -16,6 +16,7 @@ import {
   userFriends,
   users,
   userSurfaceState,
+  metroAreas,
 } from "@/server/db/schema";
 import { eq, and, ne, or, inArray, asc, gte, lt } from "drizzle-orm";
 import { clerkClient } from "@clerk/nextjs/server";
@@ -252,11 +253,25 @@ export const userRouter = router({
         gender: z.enum(["male", "female", "other"]).optional(),
         dateOfBirth: minimumAgeDateSchema.optional(),
         avatarImageUrl: z.string().optional(),
+        metroAreaId: z.string().uuid("Please choose an available location"),
       })
     )
     .mutation(async ({ ctx, input }) => {
       const userId = ctx.auth.userId;
       const normalizedUsername = input.username.toLowerCase();
+
+      const selectedMetroArea = await ctx.db.query.metroAreas.findFirst({
+        where: and(
+          eq(metroAreas.id, input.metroAreaId),
+          eq(metroAreas.isEnabled, true)
+        ),
+      });
+      if (!selectedMetroArea) {
+        throw new TRPCError({
+          code: "BAD_REQUEST",
+          message: "Please choose an available location",
+        });
+      }
 
       assertTRPCTextContentAllowed([
         { field: "username", value: normalizedUsername },
@@ -327,6 +342,7 @@ export const userRouter = router({
             avatarImageUrl: input.avatarImageUrl ?? null,
             city: input.city,
             state: input.state,
+            metroAreaId: selectedMetroArea.id,
             gender: input.gender,
             dateOfBirth: input.dateOfBirth,
             isOnboarding: false,
@@ -339,6 +355,7 @@ export const userRouter = router({
         username: normalizedUsername,
         updatedAt: new Date(),
         isOnboarding: false, // Mark onboarding as complete
+        metroAreaId: selectedMetroArea.id,
       };
 
       if (input.city) {

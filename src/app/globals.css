@@ -67,12 +67,6 @@
       "Helvetica Neue", Arial, sans-serif;
   }
 
-  @media (min-width: 768px) {
-    html,
-    body {
-      background-color: hsl(var(--background));
-    }
-  }
   /* Remove all focus rings globally */
   *:focus,
   *:focus-visible,

@@ -46,13 +46,16 @@ final class EventFeedViewModel: ObservableObject {
             using: apiClient,
             cacheIdentity: cacheIdentity
         )
+    }
 
-        // Current-week artwork is naturally warmed by the regular Home rows, but
-        // future events can appear only in What's New. Warm the initially visible
-        // carousel artwork before the launch screen is dismissed so those cards do
-        // not reveal their images later than the rest of Home. Keep this bounded so
-        // a large update feed cannot materially extend launch time.
-        if let response = viewModel.response(for: weekStart),
+    static func prefetchInitialArtwork(cacheIdentity: String) async {
+        let weekStart = Self.startOfWeek(for: .now)
+        let loadKey = LoadKey(weekStart: Self.cacheKey(for: weekStart), cacheIdentity: cacheIdentity)
+
+        // Future events can appear only in What's New, so warm its initially visible
+        // artwork after Home is on screen. Keeping image download and decode outside
+        // the launch gate makes cold starts faster without removing the warm cache.
+        if let response = Self.preloadedResponses[loadKey],
            let updates = response.latestFromPlaces ?? response.latestFromFollows
         {
             await EventArtworkPrefetcher.prefetch(events: Array(updates.prefix(4)))

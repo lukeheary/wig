@@ -62,15 +62,23 @@ struct AuthGate: View {
                 using: apiClient,
                 cacheIdentity: eventFeedCacheIdentity
             )
-            async let recentActivityPreload: Void = preloadRecentActivity()
 
             if requiresOnboardingGate {
                 await viewModel.load(using: apiClient)
             }
 
-            _ = await (homePreload, recentActivityPreload)
+            await homePreload
             await Task.yield()
             onReady()
+
+            // These improve the first Home interactions but are not required to
+            // render it. Start them only after the splash has been released.
+            await Task.yield()
+            async let artworkPreload: Void = EventFeedViewModel.prefetchInitialArtwork(
+                cacheIdentity: eventFeedCacheIdentity
+            )
+            async let recentActivityPreload: Void = preloadRecentActivity()
+            _ = await (artworkPreload, recentActivityPreload)
         }
         .onChange(of: requiresOnboardingGate) { _, requiresOnboardingGate in
             if !requiresOnboardingGate {
@@ -347,6 +355,8 @@ struct MobileOnboardingView: View {
     @State private var username: String
     @State private var city: String
     @State private var state: String
+    @State private var selectedMetroArea: MobileMetroAreaOption?
+    @State private var didCheckMetroArea = false
     @State private var gender: UserGender?
     @State private var dateOfBirth: Date?
     @State private var birthdayPickerDate: Date
@@ -373,7 +383,8 @@ struct MobileOnboardingView: View {
             state.count == 2 &&
             gender != nil &&
             dateOfBirth != nil &&
-            !viewModel.isSubmitting
+            !viewModel.isSubmitting &&
+            (mode == .editing || selectedMetroArea != nil)
     }
 
     init(
@@ -392,6 +403,7 @@ struct MobileOnboardingView: View {
         _username = State(initialValue: initialState.username)
         _city = State(initialValue: initialState.city)
         _state = State(initialValue: initialState.state)
+        _selectedMetroArea = State(initialValue: nil)
         _gender = State(initialValue: initialState.gender)
         _dateOfBirth = State(initialValue: initialDate)
         _birthdayPickerDate = State(initialValue: initialDate ?? Self.defaultDateOfBirth)
@@ -410,6 +422,9 @@ struct MobileOnboardingView: View {
                 }
                 usernameSection
                 citySection
+                if mode == .onboarding, !city.isEmpty {
+                    locationSection
+                }
                 genderSection
                 birthdaySection
 
@@ -459,6 +474,15 @@ struct MobileOnboardingView: View {
                 let resolvedCity = detail.city.trimmingCharacters(in: .whitespacesAndNewlines)
                 city = resolvedCity.isEmpty ? detail.name : resolvedCity
                 state = detail.state.trimmingCharacters(in: .whitespacesAndNewlines).uppercased()
+                selectedMetroArea = nil
+                didCheckMetroArea = false
+                if let latitude = detail.latitude, let longitude = detail.longitude {
+                    Task {
+                        await loadMetroAreas(latitude: latitude, longitude: longitude)
+                    }
+                } else {
+                    Task { await loadMetroAreas() }
+                }
             }
         }
         .sheet(isPresented: $isBirthdayPickerPresented) {
@@ -738,6 +762,77 @@ struct MobileOnboardingView: View {
         }
     }
 
+    private var locationSection: some View {
+        VStack(alignment: .leading, spacing: 10) {
+            Text("Choose a location")
+                .font(.system(size: 14, weight: .semibold))
+                .foregroundStyle(.white.opacity(0.78))
+
+            if viewModel.isLoadingMetroAreas {
+                HStack(spacing: 10) {
+                    ProgressView().tint(.white)
+                    Text("Checking availability near you…")
+                }
+                .font(.system(size: 13, weight: .medium))
+                .foregroundStyle(.white.opacity(0.58))
+                .frame(height: 44)
+            } else {
+                if didCheckMetroArea {
+                    Text(locationAvailabilityMessage)
+                        .font(.system(size: 13, weight: .medium))
+                        .foregroundStyle(.white.opacity(0.58))
+                        .fixedSize(horizontal: false, vertical: true)
+                }
+
+                ForEach(viewModel.metroAreas) { metroArea in
+                    Button {
+                        selectedMetroArea = metroArea
+                    } label: {
+                        HStack(spacing: 12) {
+                            Image(systemName: selectedMetroArea?.id == metroArea.id ? "checkmark.circle.fill" : "circle")
+                                .font(.system(size: 19, weight: .semibold))
+                                .foregroundStyle(selectedMetroArea?.id == metroArea.id ? AppTheme.accentBlue : .white.opacity(0.34))
+
+                            Text("\(metroArea.name), \(metroArea.state)")
+                                .font(.system(size: 15, weight: .semibold))
+                                .foregroundStyle(.white)
+
+                            Spacer()
+                        }
+                        .padding(.horizontal, 16)
+                        .frame(height: 48)
+                        .background(fieldBackground)
+                        .contentShape(Rectangle())
+                    }
+                    .buttonStyle(.plain)
+                }
+            }
+        }
+    }
+
+    private var locationAvailabilityMessage: String {
+        if let selectedMetroArea,
+           viewModel.matchedMetroArea?.id == selectedMetroArea.id {
+            return "You're in the \(selectedMetroArea.name) area."
+        }
+        return "WIG isn't available near \(city) yet. We'll let you know when WIG comes to your area. Choose a location to explore for now."
+    }
+
+    private func loadMetroAreas(latitude: Double? = nil, longitude: Double? = nil) async {
+        do {
+            let response = try await viewModel.loadMetroAreas(
+                latitude: latitude,
+                longitude: longitude,
+                using: apiClient
+            )
+            selectedMetroArea = response.matchedMetroArea
+            didCheckMetroArea = true
+        } catch {
+            errorMessage = error.localizedDescription
+            didCheckMetroArea = true
+        }
+    }
+
     private var birthdaySection: some View {
         VStack(alignment: .leading, spacing: 8) {
             Text("Birthday")
@@ -960,6 +1055,10 @@ struct MobileOnboardingView: View {
 
         Task {
             do {
+                guard mode == .editing || selectedMetroArea != nil else {
+                    errorMessage = "Please choose a location."
+                    return
+                }
                 _ = try await viewModel.save(
                     mode: mode,
                     firstName: normalizedFirstName,
@@ -967,6 +1066,7 @@ struct MobileOnboardingView: View {
                     username: normalizedUsername,
                     city: normalizedCity,
                     state: normalizedState,
+                    metroAreaID: selectedMetroArea?.id,
                     gender: gender,
                     dateOfBirth: formattedDateOfBirth,
                     using: apiClient
@@ -1046,6 +1146,24 @@ struct MobileOnboardingView: View {
 @MainActor
 private final class MobileOnboardingViewModel: ObservableObject {
     @Published private(set) var isSubmitting = false
+    @Published private(set) var isLoadingMetroAreas = false
+    @Published private(set) var metroAreas: [MobileMetroAreaOption] = []
+    @Published private(set) var matchedMetroArea: MobileMetroAreaOption?
+
+    func loadMetroAreas(
+        latitude: Double? = nil,
+        longitude: Double? = nil,
+        using apiClient: APIClient
+    ) async throws -> MobileMetroAreasResponse {
+        isLoadingMetroAreas = true
+        defer { isLoadingMetroAreas = false }
+        let response = try await apiClient.send(
+            APIClient.mobileMetroAreas(latitude: latitude, longitude: longitude)
+        )
+        metroAreas = response.metroAreas
+        matchedMetroArea = response.matchedMetroArea
+        return response
+    }
 
     func save(
         mode: MobileProfileFormMode,
@@ -1054,6 +1172,7 @@ private final class MobileOnboardingViewModel: ObservableObject {
         username: String,
         city: String,
         state: String,
+        metroAreaID: UUID?,
         gender: UserGender,
         dateOfBirth: String,
         using apiClient: APIClient
@@ -1065,19 +1184,24 @@ private final class MobileOnboardingViewModel: ObservableObject {
         isSubmitting = true
         defer { isSubmitting = false }
 
-        let endpoint = switch mode {
+        let endpoint: APIClient.Endpoint<MobileOnboardingState>
+        switch mode {
         case .onboarding:
-            try APIClient.completeMobileOnboarding(
+            guard let metroAreaID else {
+                throw APIClient.APIError.invalidResponse
+            }
+            endpoint = try APIClient.completeMobileOnboarding(
                 firstName: firstName,
                 lastName: lastName,
                 username: username,
                 city: city,
                 state: state,
+                metroAreaID: metroAreaID,
                 gender: gender,
                 dateOfBirth: dateOfBirth
             )
         case .editing:
-            try APIClient.updateMobileProfile(
+            endpoint = try APIClient.updateMobileProfile(
                 firstName: firstName,
                 lastName: lastName,
                 username: username,

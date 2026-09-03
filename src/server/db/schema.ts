@@ -202,6 +202,9 @@ export const users = pgTable(
     avatarImageUrl: storedImage("avatar_image"),
     city: varchar("city", { length: 100 }),
     state: varchar("state", { length: 2 }),
+    // The migration adds the FK to metro_areas. This table is declared before
+    // metroAreas in this schema file, so the Drizzle field remains a typed UUID.
+    metroAreaId: uuid("metro_area_id"),
     gender: genderEnum("gender"),
     dateOfBirth: date("date_of_birth"),
     role: userRoleEnum("role").notNull().default("user"),
@@ -219,6 +222,7 @@ export const users = pgTable(
     moderationStatusIdx: index("users_moderation_status_idx").on(
       table.moderationStatus
     ),
+    metroAreaIdx: index("users_metro_area_idx").on(table.metroAreaId),
   })
 );
 
@@ -483,6 +487,7 @@ export const metroAreas = pgTable(
     latitude: doublePrecision("latitude").notNull(),
     longitude: doublePrecision("longitude").notNull(),
     radiusMiles: doublePrecision("radius_miles").notNull().default(20),
+    isEnabled: boolean("is_enabled").notNull().default(false),
     createdAt: timestamp("created_at").defaultNow().notNull(),
     updatedAt: timestamp("updated_at").defaultNow().notNull(),
   },
