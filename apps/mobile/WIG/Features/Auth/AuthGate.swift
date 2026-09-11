@@ -67,9 +67,14 @@ struct AuthGate: View {
                 await viewModel.load(using: apiClient)
             }
 
-            await homePreload
+            guard !Task.isCancelled else { return }
             await Task.yield()
             onReady()
+
+            // Home renders its own loading/error state. A network request must
+            // not keep the entire app behind the launch logo.
+            await homePreload
+            guard !Task.isCancelled else { return }
 
             // These improve the first Home interactions but are not required to
             // render it. Start them only after the splash has been released.

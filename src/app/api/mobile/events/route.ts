@@ -254,9 +254,10 @@ export async function GET(request: Request) {
           })
         : [],
     ]);
-  const visibleMetroAreas = currentUser?.role === "admin"
-    ? availableMetroAreas
-    : availableMetroAreas.filter((metro) => metro.isEnabled);
+  const visibleMetroAreas =
+    currentUser?.role === "admin"
+      ? availableMetroAreas
+      : availableMetroAreas.filter((metro) => metro.isEnabled);
   const resolveMetroArea = createMobileMetroResolver(
     visibleMetroAreas,
     cityCoordinates
@@ -304,76 +305,77 @@ export async function GET(request: Request) {
         )
       : undefined;
 
-  const eventList = await db.query.events.findMany({
-    where: and(
-      eq(events.visibility, "public"),
-      eq(events.status, "active"),
-      gte(events.startAt, startDate),
-      lt(events.startAt, endDate),
-      visiblePlaceCondition
-    ),
-    orderBy: [asc(events.startAt)],
-    limit,
-    with: {
-      series: true,
-      venue: true,
-      organizer: true,
-      categoryLinks: {
-        with: {
-          category: true,
-        },
-      },
-    },
-  });
-
-  const followedPlaceIdList = userId
-    ? (
-        await db.query.placeFollows.findMany({
-          where: eq(placeFollows.userId, userId),
-          columns: {
-            placeId: true,
-          },
-        })
-      ).map((follow) => follow.placeId)
-    : [];
-  const followedPlaceIds = new Set(followedPlaceIdList);
   const latestFromPlacesCutoff = new Date(
     now.getTime() - 14 * 24 * 60 * 60 * 1000
   );
-  const latestFromPlacesCandidates = await db.query.events.findMany({
-    where: and(
-      eq(events.visibility, "public"),
-      eq(events.status, "active"),
-      gte(events.startAt, feedStartFloor),
-      or(isNotNull(events.venueId), isNotNull(events.organizerId)),
-      or(
-        and(
-          isNull(events.seriesId),
-          or(
-            gte(events.createdAt, latestFromPlacesCutoff),
-            gte(events.updatedAt, latestFromPlacesCutoff)
-          )
+  // These reads share only the resolved visibility context; none depends on
+  // another result. Avoid three sequential database round trips on launch.
+  const [eventList, followedPlaces, latestFromPlacesCandidates] =
+    await Promise.all([
+      db.query.events.findMany({
+        where: and(
+          eq(events.visibility, "public"),
+          eq(events.status, "active"),
+          gte(events.startAt, startDate),
+          lt(events.startAt, endDate),
+          visiblePlaceCondition
         ),
-        and(
-          isNotNull(events.seriesId),
-          gte(events.updatedAt, latestFromPlacesCutoff),
-          gt(events.updatedAt, events.createdAt)
-        )
-      ),
-      visiblePlaceCondition
-    ),
-    orderBy: [desc(events.updatedAt), desc(events.createdAt)],
-    with: {
-      series: true,
-      venue: true,
-      organizer: true,
-      categoryLinks: {
+        orderBy: [asc(events.startAt)],
+        limit,
         with: {
-          category: true,
+          series: true,
+          venue: true,
+          organizer: true,
+          categoryLinks: {
+            with: {
+              category: true,
+            },
+          },
         },
-      },
-    },
-  });
+      }),
+      userId
+        ? db.query.placeFollows.findMany({
+            where: eq(placeFollows.userId, userId),
+            columns: { placeId: true },
+          })
+        : Promise.resolve([]),
+      db.query.events.findMany({
+        where: and(
+          eq(events.visibility, "public"),
+          eq(events.status, "active"),
+          gte(events.startAt, feedStartFloor),
+          or(isNotNull(events.venueId), isNotNull(events.organizerId)),
+          or(
+            and(
+              isNull(events.seriesId),
+              or(
+                gte(events.createdAt, latestFromPlacesCutoff),
+                gte(events.updatedAt, latestFromPlacesCutoff)
+              )
+            ),
+            and(
+              isNotNull(events.seriesId),
+              gte(events.updatedAt, latestFromPlacesCutoff),
+              gt(events.updatedAt, events.createdAt)
+            )
+          ),
+          visiblePlaceCondition
+        ),
+        orderBy: [desc(events.updatedAt), desc(events.createdAt)],
+        with: {
+          series: true,
+          venue: true,
+          organizer: true,
+          categoryLinks: {
+            with: {
+              category: true,
+            },
+          },
+        },
+      }),
+    ]);
+  const followedPlaceIdList = followedPlaces.map((follow) => follow.placeId);
+  const followedPlaceIds = new Set(followedPlaceIdList);
   const latestFromFollowsCandidates = latestFromPlacesCandidates.filter(
     (event) =>
       (event.venueId ? followedPlaceIds.has(event.venueId) : false) ||

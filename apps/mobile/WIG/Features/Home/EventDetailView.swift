@@ -576,7 +576,7 @@ struct EventDetailView: View {
                     isAuthSheetPresented = true
                 }
             } label: {
-                Label("Report a Concern", systemImage: "exclamationmark.bubble")
+                Label("Get Help", systemImage: "exclamationmark.bubble")
                     .foregroundStyle(.white)
             }
             .tint(.white)

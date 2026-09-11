@@ -28,13 +28,6 @@ import { Switch } from "@/components/ui/switch";
 import { Label } from "@/components/ui/label";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import {
-  Select,
-  SelectContent,
-  SelectItem,
-  SelectTrigger,
-  SelectValue,
-} from "@/components/ui/select";
-import {
   Popover,
   PopoverContent,
   PopoverTrigger,
@@ -142,6 +135,13 @@ const SCRAPER_LABELS: Record<ScraperType, string> = {
   ticketmaster: "Ticketmaster",
   eventbrite: "Eventbrite",
 };
+
+const SCRAPER_TYPES: ScraperType[] = [
+  "dice",
+  "posh",
+  "ticketmaster",
+  "eventbrite",
+];
 
 const SCRAPER_WEBSITES: Record<ScraperType, string> = {
   dice: "https://dice.fm",
@@ -1004,52 +1004,8 @@ export default function AdminScrapersPage() {
             </div>
           ) : (
             <>
-              <div className="space-y-2">
-                <p className="text-sm font-medium">Select scraper row</p>
-                <Select
-                  value={selectedScraperId}
-                  onValueChange={(value) => {
-                    setSelectedScraperId(value);
-                    resetScrapeSession();
-                  }}
-                >
-                  <SelectTrigger>
-                    <SelectValue placeholder="Choose a scraper row" />
-                  </SelectTrigger>
-                  <SelectContent>
-                    {scraperRows.map((row) => (
-                      <SelectItem key={row.id} value={row.id}>
-                        {row.place.name} - {SCRAPER_LABELS[row.scraper]}
-                      </SelectItem>
-                    ))}
-                  </SelectContent>
-                </Select>
-              </div>
-
-              {allScraperRows.some((row) => row.scraper === "posh") && (
-                <div className="flex flex-wrap items-center gap-3 rounded-md border border-dashed p-3">
-                  <Button
-                    variant="outline"
-                    onClick={runAllPoshScrapers}
-                    disabled={isScraping || isRunningAllPosh}
-                  >
-                    {isRunningAllPosh ? (
-                      <Loader2 className="mr-2 h-4 w-4 animate-spin" />
-                    ) : (
-                      <RefreshCw className="mr-2 h-4 w-4" />
-                    )}
-                    {isRunningAllPosh && batchPoshProgress
-                      ? `Running Posh ${batchPoshProgress.current} of ${batchPoshProgress.total}`
-                      : `Run & Import All Posh (${allScraperRows.filter((row) => row.scraper === "posh").length})`}
-                  </Button>
-                  <p className="text-xs text-muted-foreground">
-                    Fetches through this browser and imports new events only.
-                  </p>
-                </div>
-              )}
-
               {selectedRow && (
-                <div className="space-y-3 rounded-md border p-3 text-sm">
+                <div className="space-y-3 rounded-xl border bg-muted/20 p-4 text-sm">
                   <div className="flex flex-wrap items-center gap-2">
                     <Building className="h-4 w-4 text-muted-foreground" />
                     <span className="font-medium">
@@ -1078,6 +1034,90 @@ export default function AdminScrapersPage() {
                   </Button>
                 </div>
               )}
+
+              {allScraperRows.some((row) => row.scraper === "posh") && (
+                <div className="flex flex-wrap items-center gap-3 rounded-md border border-dashed p-3">
+                  <Button
+                    variant="outline"
+                    onClick={runAllPoshScrapers}
+                    disabled={isScraping || isRunningAllPosh}
+                  >
+                    {isRunningAllPosh ? (
+                      <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+                    ) : (
+                      <RefreshCw className="mr-2 h-4 w-4" />
+                    )}
+                    {isRunningAllPosh && batchPoshProgress
+                      ? `Running Posh ${batchPoshProgress.current} of ${batchPoshProgress.total}`
+                      : `Run & Import All Posh (${allScraperRows.filter((row) => row.scraper === "posh").length})`}
+                  </Button>
+                  <p className="text-xs text-muted-foreground">
+                    Fetches through this browser and imports new events only.
+                  </p>
+                </div>
+              )}
+
+              <div className="space-y-5 pt-1">
+                {SCRAPER_TYPES.map((scraperType) => {
+                  const rows = scraperRows.filter(
+                    (row) => row.scraper === scraperType
+                  ) as ScraperRow[];
+                  if (rows.length === 0) return null;
+
+                  return (
+                    <section
+                      key={scraperType}
+                      aria-labelledby={`${scraperType}-heading`}
+                    >
+                      <h2
+                        id={`${scraperType}-heading`}
+                        className="mb-1 px-1 text-base font-semibold"
+                      >
+                        {SCRAPER_LABELS[scraperType]}
+                      </h2>
+                      <div className="divide-y overflow-hidden rounded-lg border">
+                        {rows.map((row) => {
+                          const isSelected = row.id === selectedScraperId;
+
+                          return (
+                            <button
+                              key={row.id}
+                              type="button"
+                              aria-pressed={isSelected}
+                              onClick={() => {
+                                setSelectedScraperId(row.id);
+                                resetScrapeSession();
+                              }}
+                              className={`flex min-h-16 w-full items-center gap-3 px-3 py-2.5 text-left transition-colors hover:bg-muted/60 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-ring ${
+                                isSelected ? "bg-muted/50" : "bg-background"
+                              }`}
+                            >
+                              <span className="flex h-10 w-10 shrink-0 items-center justify-center rounded-full bg-muted">
+                                <Building className="h-5 w-5 text-muted-foreground" />
+                              </span>
+                              <span className="min-w-0 flex-1">
+                                <span className="block truncate text-sm font-medium">
+                                  {row.place.name}
+                                </span>
+                                <span className="block truncate text-xs text-muted-foreground">
+                                  {row.place.type === "venue"
+                                    ? "Venue"
+                                    : "Organizer"}
+                                  {" · "}
+                                  {row.searchString}
+                                </span>
+                              </span>
+                              {isSelected && (
+                                <CheckCircle2 className="h-5 w-5 shrink-0 text-primary" />
+                              )}
+                            </button>
+                          );
+                        })}
+                      </div>
+                    </section>
+                  );
+                })}
+              </div>
             </>
           )}
         </CardContent>
