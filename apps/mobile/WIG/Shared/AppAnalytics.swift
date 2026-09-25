@@ -1,5 +1,3 @@
-import FirebaseAnalytics
-import FirebaseCore
 import Foundation
 
 /// The single analytics boundary for the app. Keep event names and parameter
@@ -29,48 +27,18 @@ enum AppAnalytics {
     typealias Parameters = [String: Any]
 
     private(set) static var isConfigured = false
-    private static var isExcludedUser = false
-    private static let excludedUserIDs: Set<String> = [
-        "user_3A5qsDzSX1NPRfpcqfOTLEb2aOG",
-    ]
 
-    /// Configures Firebase when GoogleService-Info.plist has been added to the
-    /// target. Local builds remain usable before that one-time setup step.
+    /// Analytics is temporarily disabled. This boundary remains in place so
+    /// tracking can be restored without changing every call site.
     static func configure() {
-        guard !isConfigured, FirebaseApp.app() == nil else {
-            isConfigured = FirebaseApp.app() != nil
-            return
-        }
-
-        guard let path = Bundle.main.path(forResource: "GoogleService-Info", ofType: "plist"),
-              let options = FirebaseOptions(contentsOfFile: path)
-        else {
-            #if DEBUG
-            print("Analytics disabled: GoogleService-Info.plist is not configured.")
-            #endif
-            return
-        }
-
-        FirebaseApp.configure(options: options)
-        isConfigured = true
+        isConfigured = false
     }
 
-    static func log(_ event: Event, _ parameters: Parameters = [:]) {
-        guard isConfigured, !isExcludedUser else { return }
-        Analytics.logEvent(event.rawValue, parameters: sanitized(parameters))
-    }
+    static func log(_ event: Event, _ parameters: Parameters = [:]) {}
 
-    static func setUserID(_ userID: String?) {
-        guard isConfigured else { return }
-        isExcludedUser = userID.map(excludedUserIDs.contains) ?? false
-        Analytics.setAnalyticsCollectionEnabled(!isExcludedUser)
-        Analytics.setUserID(isExcludedUser ? nil : userID)
-    }
+    static func setUserID(_ userID: String?) {}
 
-    static func setUserProperty(_ value: String?, name: String) {
-        guard isConfigured, !isExcludedUser else { return }
-        Analytics.setUserProperty(value, forName: name)
-    }
+    static func setUserProperty(_ value: String?, name: String) {}
 
     static func resultCountBucket(_ count: Int) -> String {
         switch count {
@@ -95,24 +63,6 @@ enum AppAnalytics {
         case 2...7: "2_7_days"
         case 8...30: "8_30_days"
         default: "31_plus_days"
-        }
-    }
-
-    private static func sanitized(_ parameters: Parameters) -> Parameters {
-        parameters.reduce(into: Parameters()) { result, entry in
-            let key = String(entry.key.prefix(40))
-            switch entry.value {
-            case let value as String:
-                result[key] = String(value.prefix(100))
-            case let value as Bool:
-                result[key] = value ? 1 : 0
-            case let value as Int:
-                result[key] = value
-            case let value as Double:
-                result[key] = value
-            default:
-                assertionFailure("Unsupported analytics parameter: \(entry.key)")
-            }
         }
     }
 }

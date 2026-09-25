@@ -14,9 +14,6 @@ packages:
   Clerk:
     url: https://github.com/clerk/clerk-ios
     from: 1.0.0
-  Firebase:
-    url: https://github.com/firebase/firebase-ios-sdk
-    from: 12.17.0
 schemes:
   WIG:
     build:
@@ -75,6 +72,8 @@ targets:
     deploymentTarget: "17.0"
     sources:
       - path: WIG
+        excludes:
+          - Support/GoogleService-Info.plist
     configFiles:
       Debug: Config/Debug.xcconfig
       ProdLocal: Config/ProdLocal.xcconfig
@@ -88,8 +87,9 @@ targets:
         CODE_SIGN_ENTITLEMENTS: WIG/Support/WIG.entitlements
         ASSETCATALOG_COMPILER_APPICON_NAME: AppIcon
         ASSETCATALOG_COMPILER_GLOBAL_ACCENT_COLOR_NAME: AccentColor
-        CURRENT_PROJECT_VERSION: 22
+        CURRENT_PROJECT_VERSION: 24
         MARKETING_VERSION: 1.0.6
+        DEVELOPMENT_TEAM: V347D294CZ
         SUPPORTED_PLATFORMS: "iphoneos iphonesimulator"
         SUPPORTS_MACCATALYST: NO
       configs:
@@ -110,5 +110,3 @@ targets:
         product: ClerkKit
       - package: Clerk
         product: ClerkKitUI
-      - package: Firebase
-        product: FirebaseAnalytics
