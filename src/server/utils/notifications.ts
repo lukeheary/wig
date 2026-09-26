@@ -10,6 +10,7 @@ import {
   users,
 } from "../db/schema";
 import { sendPushNotificationToUsers } from "./push-notifications";
+import { formatFriendRsvpBody } from "./notification-content";
 
 type NotificationType = (typeof notificationTypeEnum.enumValues)[number];
 type NotificationEntityType =
@@ -28,36 +29,6 @@ export interface NotificationInsert {
 }
 
 type DatabaseClient = typeof db;
-
-const friendRsvpDateFormatter = new Intl.DateTimeFormat("en-US", {
-  month: "short",
-  day: "numeric",
-});
-
-function formatFriendRsvpBody({
-  eventTitle,
-  eventStartAt,
-  status,
-  includesPartner,
-}: {
-  eventTitle: string;
-  eventStartAt: Date | null;
-  status: "going" | "interested";
-  includesPartner: boolean;
-}) {
-  const verb = includesPartner
-    ? status === "going"
-      ? "Are going to"
-      : "Are interested in"
-    : status === "going"
-      ? "Is going to"
-      : "Is interested in";
-  const dateSuffix = eventStartAt
-    ? ` on ${friendRsvpDateFormatter.format(eventStartAt)}`
-    : "";
-
-  return `${verb} ${eventTitle}${dateSuffix}`;
-}
 
 export async function createNotification(
   notification: NotificationInsert,
@@ -178,6 +149,8 @@ export async function notifyFriendsOfRsvp(
         publicId: true,
         title: true,
         startAt: true,
+        timeZone: true,
+        state: true,
       },
     }),
     database.query.userFriends.findMany({
@@ -243,6 +216,8 @@ export async function notifyFriendsOfRsvp(
   const body = formatFriendRsvpBody({
     eventTitle: event.title,
     eventStartAt: event.startAt,
+    eventTimeZone: event.timeZone,
+    eventState: event.state,
     status,
     includesPartner,
   });

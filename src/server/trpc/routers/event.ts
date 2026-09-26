@@ -77,6 +77,7 @@ import {
 } from "@/server/utils/scraped-event-images";
 import { claimManualSeriesOccurrence } from "@/server/utils/scraper-event-reconciliation";
 import { withStoredImageReplacements } from "@/server/utils/stored-image-lifecycle";
+import { formatNotificationEventDate } from "@/server/utils/notification-content";
 
 function resolveEventUpdateActivityType(
   previousStatus: EventStatus,
@@ -127,6 +128,8 @@ async function notifyPartnerOfMirroredRsvp({
         publicId: true,
         title: true,
         startAt: true,
+        timeZone: true,
+        state: true,
       },
     }),
   ]);
@@ -134,10 +137,7 @@ async function notifyPartnerOfMirroredRsvp({
   if (!event) return;
 
   const partnerRsvpDate = event.startAt
-    ? new Intl.DateTimeFormat("en-US", {
-        month: "short",
-        day: "numeric",
-      }).format(event.startAt)
+    ? formatNotificationEventDate(event.startAt, event.timeZone, event.state)
     : null;
   const actorName =
     [actor?.firstName, actor?.lastName].filter(Boolean).join(" ").trim() ||
