@@ -1,3 +1,4 @@
+import { withVisibleProfiles } from "@/server/utils/profile-visibility";
 import { auth } from "@clerk/nextjs/server";
 import { and, eq } from "drizzle-orm";
 import { NextResponse } from "next/server";
@@ -24,7 +25,7 @@ export async function GET(
     }
 
     const rows = await db.query.placeMembers.findMany({
-      where: eq(placeMembers.placeId, place.id),
+      where: await withVisibleProfiles(eq(placeMembers.placeId, place.id), placeMembers.userId),
       with: {
         user: {
           columns: {

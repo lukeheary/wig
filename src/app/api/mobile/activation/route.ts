@@ -1,3 +1,4 @@
+import { withVisibleProfiles } from "@/server/utils/profile-visibility";
 import { auth } from "@clerk/nextjs/server";
 import { NextResponse } from "next/server";
 import { and, eq, or } from "drizzle-orm";
@@ -19,13 +20,13 @@ export async function GET() {
     // milestones remain complete even if a relationship is later removed.
     const [friendships, follows, user] = await Promise.all([
       db.query.userFriends.findMany({
-        where: or(
+        where: await withVisibleProfiles(or(
           eq(userFriends.userId, userId),
           and(
             eq(userFriends.friendUserId, userId),
             eq(userFriends.status, "accepted")
           )
-        ),
+        ), userFriends.userId, userFriends.friendUserId),
         columns: {
           userId: true,
           friendUserId: true,
@@ -33,7 +34,7 @@ export async function GET() {
         limit: 3,
       }),
       db.query.placeFollows.findMany({
-        where: eq(placeFollows.userId, userId),
+        where: await withVisibleProfiles(eq(placeFollows.userId, userId), placeFollows.userId),
         columns: {
           placeId: true,
         },

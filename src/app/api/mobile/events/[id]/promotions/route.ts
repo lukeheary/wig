@@ -1,3 +1,4 @@
+import { withVisibleProfiles } from "@/server/utils/profile-visibility";
 import { auth } from "@clerk/nextjs/server";
 import { and, asc, eq, inArray, or } from "drizzle-orm";
 import { NextResponse } from "next/server";
@@ -28,10 +29,10 @@ export async function GET(
   if (!userId) return NextResponse.json({ promotions: [] });
 
   const friendships = await db.query.userFriends.findMany({
-    where: and(
+    where: await withVisibleProfiles(and(
       or(eq(userFriends.userId, userId), eq(userFriends.friendUserId, userId)),
       eq(userFriends.status, "accepted")
-    ),
+    ), userFriends.userId, userFriends.friendUserId),
     columns: { userId: true, friendUserId: true },
   });
   const visiblePromoterIds = [
@@ -44,10 +45,10 @@ export async function GET(
   ];
 
   const promotions = await db.query.userPromotedEvents.findMany({
-    where: and(
+    where: await withVisibleProfiles(and(
       eq(userPromotedEvents.eventId, eventId),
       inArray(userPromotedEvents.userId, visiblePromoterIds)
-    ),
+    ), userPromotedEvents.userId),
     with: { user: true },
     orderBy: [asc(userPromotedEvents.createdAt)],
   });

@@ -1,3 +1,4 @@
+import { isProfileHidden } from "./profile-visibility";
 import { db } from "../db";
 import { userActivity, activityEntityTypeEnum, activityTypeEnum } from "../db/schema";
 import { and, desc, eq, inArray } from "drizzle-orm";
@@ -25,6 +26,7 @@ export async function logActivity({
     entityId,
     metadata,
 }: LogActivityParams) {
+    if (await isProfileHidden(actorUserId)) return;
     try {
         await db.insert(userActivity).values({
             actorUserId,
@@ -101,6 +103,7 @@ export async function upsertRsvpActivity({
     type,
     metadata,
 }: UpsertRsvpActivityParams) {
+    if (await isProfileHidden(actorUserId)) return;
     try {
         const existingActivities = await db.query.userActivity.findMany({
             where: and(

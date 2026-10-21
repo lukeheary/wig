@@ -1,3 +1,4 @@
+import { withVisibleProfiles } from "@/server/utils/profile-visibility";
 import { auth } from "@clerk/nextjs/server";
 import { and, asc, eq, isNotNull } from "drizzle-orm";
 import { NextResponse } from "next/server";
@@ -26,10 +27,10 @@ export async function GET(
   }
 
   const reviews = await db.query.eventReviews.findMany({
-    where: and(
+    where: await withVisibleProfiles(and(
       eq(eventReviews.eventId, eventId),
       isNotNull(eventReviews.rating)
-    ),
+    ), eventReviews.userId),
     columns: {
       userId: true,
       rating: true,

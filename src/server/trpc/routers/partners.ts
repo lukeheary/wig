@@ -1,3 +1,5 @@
+import { withPublicProfiles } from "@/server/utils/profile-visibility";
+import { withVisibleProfiles } from "@/server/utils/profile-visibility";
 import { TRPCError } from "@trpc/server";
 import { and, desc, eq, or } from "drizzle-orm";
 import { z } from "zod";
@@ -200,6 +202,10 @@ export const partnersRouter = router({
         return partnerRequest;
       }
 
+      if (await usersAreBlocked(ctx.auth.userId, partnerRequest.requesterId)) {
+        throw new TRPCError({ code: "NOT_FOUND", message: "Partner request not found" });
+      }
+
       const [updatedRelationship] = await ctx.db
         .update(userPartners)
         .set({
@@ -363,10 +369,10 @@ export const partnersRouter = router({
 
   getMyPartner: protectedProcedure.query(async ({ ctx }) => {
     const relationship = await ctx.db.query.userPartners.findFirst({
-      where: or(
+      where: withPublicProfiles(or(
         eq(userPartners.requesterId, ctx.auth.userId),
         eq(userPartners.recipientId, ctx.auth.userId)
-      ),
+      ), userPartners.requesterId, userPartners.recipientId),
       with: {
         requester: true,
         recipient: true,
@@ -396,7 +402,7 @@ export const partnersRouter = router({
     .input(z.object({ userId: z.string() }))
     .query(async ({ ctx, input }) => {
       const relationship = await ctx.db.query.userPartners.findFirst({
-        where: or(
+        where: withPublicProfiles(or(
           and(
             eq(userPartners.requesterId, ctx.auth.userId),
             eq(userPartners.recipientId, input.userId)
@@ -405,7 +411,7 @@ export const partnersRouter = router({
             eq(userPartners.requesterId, input.userId),
             eq(userPartners.recipientId, ctx.auth.userId)
           )
-        ),
+        ), userPartners.requesterId, userPartners.recipientId),
       });
 
       if (!relationship) {
@@ -425,10 +431,10 @@ export const partnersRouter = router({
 
   getPendingPartnerRequests: protectedProcedure.query(async ({ ctx }) => {
     const pendingRequests = await ctx.db.query.userPartners.findMany({
-      where: and(
+      where: await withVisibleProfiles(and(
         eq(userPartners.recipientId, ctx.auth.userId),
         eq(userPartners.status, "pending")
-      ),
+      ), userPartners.requesterId, userPartners.recipientId),
       orderBy: [desc(userPartners.createdAt)],
       with: {
         requester: true,

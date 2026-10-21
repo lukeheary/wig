@@ -1079,6 +1079,17 @@ export const adminRouter = router({
   // USER SEARCH
   // ============================================================================
 
+  setProfileVisibility: adminProcedure
+    .input(z.object({ userId: z.string().min(1), hidden: z.boolean() }))
+    .mutation(async ({ ctx, input }) => {
+      const [updated] = await ctx.db.update(users)
+        .set({ isProfileHidden: input.hidden, updatedAt: new Date() })
+        .where(eq(users.id, input.userId))
+        .returning({ id: users.id, isProfileHidden: users.isProfileHidden });
+      if (!updated) throw new TRPCError({ code: "NOT_FOUND", message: "User not found" });
+      return updated;
+    }),
+
   searchUsers: adminProcedure
     .input(
       z.object({

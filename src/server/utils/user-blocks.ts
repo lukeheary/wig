@@ -1,9 +1,13 @@
 import { and, eq, or } from "drizzle-orm";
 import { db } from "@/server/db";
+import { isProfileHidden } from "./profile-visibility";
 import { userBlocks } from "@/server/db/schema";
 
 export async function usersAreBlocked(userA: string, userB: string) {
   if (userA === userB) return false;
+
+  // Hidden review/test accounts cannot create outward social connections.
+  if ((await isProfileHidden(userA)) || (await isProfileHidden(userB))) return true;
 
   const block = await db.query.userBlocks.findFirst({
     where: or(

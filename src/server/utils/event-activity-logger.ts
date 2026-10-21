@@ -1,3 +1,4 @@
+import { isProfileHidden } from "./profile-visibility";
 import { db } from "../db";
 import {
   eventActivity,
@@ -24,6 +25,7 @@ export async function logEventActivity({
   type,
   metadata,
 }: LogEventActivityParams) {
+  if (await isProfileHidden(actorUserId)) return;
   try {
     const [activity] = await db
       .insert(eventActivity)

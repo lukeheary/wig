@@ -29,6 +29,7 @@ export default function AdminPage() {
   const { data: tickets } = trpc.admin.listSupportTickets.useQuery();
 
   const stats = [
+    { label: "Profile visibility", value: "Manage users", icon: FileText, href: "/admin/users" },
     {
       label: "Venues",
       value: venues?.length ?? 0,

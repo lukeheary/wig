@@ -220,7 +220,7 @@ struct HomeView: View {
     @State private var pendingPostEventDetail: EventFeedItem?
     @State private var completedPostEventFeedbackIDs = Set<String>()
     @State private var selectedSearchFilter: GlobalSearchFilter
-    @AppStorage("globalSearchRecentDestinations") private var recentSearchDestinationsData = "[]"
+    @AppStorage("accountSearchRecentDestinations.v1") private var accountSearchHistoriesData = "{}"
 
     private static let sectionTitleFormatter: DateFormatter = {
         let formatter = DateFormatter()
@@ -1648,6 +1648,22 @@ struct HomeView: View {
 
     private var normalizedSearchQuery: String {
         searchText.trimmingCharacters(in: .whitespacesAndNewlines)
+    }
+
+    private var recentSearchDestinationsData: String {
+        get {
+            AccountSearchHistory.history(
+                accountID: clerk.user?.id,
+                storedHistories: accountSearchHistoriesData
+            )
+        }
+        nonmutating set {
+            accountSearchHistoriesData = AccountSearchHistory.updating(
+                accountID: clerk.user?.id,
+                history: newValue,
+                storedHistories: accountSearchHistoriesData
+            )
+        }
     }
 
     private var recentSearchDestinations: [RecentSearchDestination] {

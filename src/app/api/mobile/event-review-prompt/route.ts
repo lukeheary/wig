@@ -1,3 +1,4 @@
+import { withVisibleProfiles } from "@/server/utils/profile-visibility";
 import { visibleEventIdCondition } from "@/server/utils/event-source-visibility";
 import { auth } from "@clerk/nextjs/server";
 import { and, eq, inArray } from "drizzle-orm";
@@ -65,7 +66,7 @@ export async function GET() {
   const now = new Date();
 
   const rsvps = await db.query.eventRsvps.findMany({
-    where: and(visibleEventIdCondition(eventRsvps.eventId), eq(eventRsvps.userId, userId), eq(eventRsvps.status, "going")),
+    where: await withVisibleProfiles(and(visibleEventIdCondition(eventRsvps.eventId), eq(eventRsvps.userId, userId), eq(eventRsvps.status, "going")), eventRsvps.userId),
     with: { event: { with: { venue: true } } },
   });
 
@@ -83,10 +84,10 @@ export async function GET() {
   const reviewStates =
     eligibleEventIDs.length > 0
       ? await db.query.eventReviews.findMany({
-          where: and(
+          where: await withVisibleProfiles(and(
             eq(eventReviews.userId, userId),
             inArray(eventReviews.eventId, eligibleEventIDs)
-          ),
+          ), eventReviews.userId),
           columns: { eventId: true },
         })
       : [];

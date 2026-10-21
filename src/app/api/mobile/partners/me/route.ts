@@ -1,3 +1,4 @@
+import { withPublicProfiles } from "@/server/utils/profile-visibility";
 import { auth } from "@clerk/nextjs/server";
 import { and, asc, eq, or } from "drizzle-orm";
 import { NextResponse } from "next/server";
@@ -30,10 +31,10 @@ export async function GET() {
   }
 
   const relationship = await db.query.userPartners.findFirst({
-    where: or(
+    where: withPublicProfiles(or(
       eq(userPartners.requesterId, userId),
       eq(userPartners.recipientId, userId)
-    ),
+    ), userPartners.requesterId, userPartners.recipientId),
     with: {
       requester: true,
       recipient: true,
@@ -73,10 +74,10 @@ export async function DELETE() {
   }
 
   const existingRelationship = await db.query.userPartners.findFirst({
-    where: and(
+    where: withPublicProfiles(and(
       or(eq(userPartners.requesterId, userId), eq(userPartners.recipientId, userId)),
       eq(userPartners.status, "accepted")
-    ),
+    ), userPartners.requesterId, userPartners.recipientId),
   });
 
   if (!existingRelationship) {

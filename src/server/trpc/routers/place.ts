@@ -1,3 +1,4 @@
+import { withVisibleProfiles } from "@/server/utils/profile-visibility";
 import { visibleEventSourceCondition } from "@/server/utils/event-source-visibility";
 import { z } from "zod";
 import {
@@ -329,7 +330,7 @@ export const placeRouter = router({
         const followedPlaceIds = await ctx.db
           .select({ placeId: placeFollows.placeId })
           .from(placeFollows)
-          .where(eq(placeFollows.userId, ctx.auth.userId));
+          .where(await withVisibleProfiles(eq(placeFollows.userId, ctx.auth.userId), placeFollows.userId));
 
         if (followedPlaceIds.length === 0) {
           return [];
@@ -349,8 +350,8 @@ export const placeRouter = router({
         offset: input.offset,
         orderBy: [desc(places.createdAt)],
         with: {
-          follows: true,
-          members: true,
+          follows: { where: await withVisibleProfiles(undefined, placeFollows.userId) },
+          members: { where: await withVisibleProfiles(undefined, placeMembers.userId) },
           categoryLinks: {
             with: {
               category: true,
@@ -419,8 +420,9 @@ export const placeRouter = router({
           ? and(eq(places.slug, input.slug), eq(places.type, input.type))
           : eq(places.slug, input.slug),
         with: {
-          follows: true,
+          follows: { where: await withVisibleProfiles(undefined, placeFollows.userId) },
           members: {
+            where: await withVisibleProfiles(undefined, placeMembers.userId),
             with: {
               user: true,
             },
@@ -501,10 +503,10 @@ export const placeRouter = router({
             where: eq(users.id, ctx.auth.userId),
           }),
           ctx.db.query.eventRsvps.findMany({
-            where: and(
+            where: await withVisibleProfiles(and(
               inArray(eventRsvps.eventId, allEventIds),
               eq(eventRsvps.userId, ctx.auth.userId)
-            ),
+            ), eventRsvps.userId),
           }),
         ]);
 
@@ -513,11 +515,11 @@ export const placeRouter = router({
         }
 
         const mirroredPartnerRsvps = await ctx.db.query.eventRsvps.findMany({
-          where: and(
+          where: await withVisibleProfiles(and(
             inArray(eventRsvps.eventId, allEventIds),
             eq(eventRsvps.partnerRsvpByUserId, ctx.auth.userId),
             eq(eventRsvps.status, "going")
-          ),
+          ), eventRsvps.userId),
           with: {
             user: true,
           },
@@ -555,13 +557,13 @@ export const placeRouter = router({
         }
 
         const friendConnections = await ctx.db.query.userFriends.findMany({
-          where: and(
+          where: await withVisibleProfiles(and(
             or(
               eq(userFriends.userId, ctx.auth.userId),
               eq(userFriends.friendUserId, ctx.auth.userId)
             ),
             eq(userFriends.status, "accepted")
-          ),
+          ), userFriends.userId, userFriends.friendUserId),
         });
 
         const friendIds = friendConnections.map((f) =>
@@ -570,11 +572,11 @@ export const placeRouter = router({
 
         if (friendIds.length > 0) {
           const friendsRsvps = await ctx.db.query.eventRsvps.findMany({
-            where: and(
+            where: await withVisibleProfiles(and(
               inArray(eventRsvps.eventId, allEventIds),
               inArray(eventRsvps.userId, friendIds),
               eq(eventRsvps.status, "going")
-            ),
+            ), eventRsvps.userId),
             with: {
               user: true,
             },
@@ -775,12 +777,12 @@ export const placeRouter = router({
     .input(z.object({ type: placeTypeSchema.optional() }).optional())
     .query(async ({ ctx, input }) => {
       const followedPlaces = await ctx.db.query.placeFollows.findMany({
-        where: eq(placeFollows.userId, ctx.auth.userId),
+        where: await withVisibleProfiles(eq(placeFollows.userId, ctx.auth.userId), placeFollows.userId),
         with: {
           place: {
             with: {
-              follows: true,
-              members: true,
+              follows: { where: await withVisibleProfiles(undefined, placeFollows.userId) },
+              members: { where: await withVisibleProfiles(undefined, placeMembers.userId) },
               categoryLinks: {
                 with: {
                   category: true,
@@ -805,12 +807,12 @@ export const placeRouter = router({
     .input(z.object({ type: placeTypeSchema.optional() }).optional())
     .query(async ({ ctx, input }) => {
       const myPlaces = await ctx.db.query.placeMembers.findMany({
-        where: eq(placeMembers.userId, ctx.auth.userId),
+        where: await withVisibleProfiles(eq(placeMembers.userId, ctx.auth.userId), placeMembers.userId),
         with: {
           place: {
             with: {
-              follows: true,
-              members: true,
+              follows: { where: await withVisibleProfiles(undefined, placeFollows.userId) },
+              members: { where: await withVisibleProfiles(undefined, placeMembers.userId) },
               categoryLinks: {
                 with: {
                   category: true,
@@ -1069,7 +1071,7 @@ export const placeRouter = router({
       }
 
       const members = await ctx.db.query.placeMembers.findMany({
-        where: eq(placeMembers.placeId, input.placeId),
+        where: await withVisibleProfiles(eq(placeMembers.placeId, input.placeId), placeMembers.userId),
         with: {
           user: true,
         },

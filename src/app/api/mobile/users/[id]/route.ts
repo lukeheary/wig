@@ -1,3 +1,4 @@
+import { withVisibleProfiles } from "@/server/utils/profile-visibility";
 import { screenshotFriendProfile } from "@/server/dev/screenshot-friends";
 import { visibleEventIdCondition } from "@/server/utils/event-source-visibility";
 import { auth } from "@clerk/nextjs/server";
@@ -222,7 +223,7 @@ export async function GET(_request: Request, context: RouteContext) {
 
   const [targetUser, availableMetroAreas, cityCoordinates] = await Promise.all([
     db.query.users.findFirst({
-      where: eq(users.id, id),
+      where: await withVisibleProfiles(eq(users.id, id), users.id),
     }),
     db
       .select({
@@ -276,10 +277,10 @@ export async function GET(_request: Request, context: RouteContext) {
   const today = startOfDayInTimeZone(now, feedTimeZone);
 
   const friendships = await db.query.userFriends.findMany({
-    where: and(
+    where: await withVisibleProfiles(and(
       or(eq(userFriends.userId, id), eq(userFriends.friendUserId, id)),
       eq(userFriends.status, "accepted")
-    ),
+    ), userFriends.userId, userFriends.friendUserId),
     orderBy: [asc(userFriends.createdAt)],
     with: {
       user: true,
@@ -307,11 +308,11 @@ export async function GET(_request: Request, context: RouteContext) {
     viewerNotificationMute,
   ] = await Promise.all([
     db.query.eventRsvps.findMany({
-      where: and(
+      where: await withVisibleProfiles(and(
         visibleEventIdCondition(eventRsvps.eventId),
         eq(eventRsvps.userId, id),
         inArray(eventRsvps.status, ["going", "interested"])
-      ),
+      ), eventRsvps.userId),
       with: {
         event: {
           with: {
@@ -328,11 +329,11 @@ export async function GET(_request: Request, context: RouteContext) {
       orderBy: [asc(eventRsvps.updatedAt)],
     }),
     db.query.eventRsvps.findMany({
-      where: and(
+      where: await withVisibleProfiles(and(
         visibleEventIdCondition(eventRsvps.eventId),
         eq(eventRsvps.userId, id),
         inArray(eventRsvps.status, ["going", "interested"])
-      ),
+      ), eventRsvps.userId),
       with: {
         event: {
           with: {
@@ -349,7 +350,7 @@ export async function GET(_request: Request, context: RouteContext) {
       orderBy: [desc(eventRsvps.updatedAt)],
     }),
     db.query.placeFollows.findMany({
-      where: eq(placeFollows.userId, id),
+      where: await withVisibleProfiles(eq(placeFollows.userId, id), placeFollows.userId),
       with: {
         place: {
           with: {
@@ -364,7 +365,7 @@ export async function GET(_request: Request, context: RouteContext) {
       orderBy: [desc(placeFollows.createdAt)],
     }),
     db.query.placeMembers.findMany({
-      where: eq(placeMembers.userId, id),
+      where: await withVisibleProfiles(eq(placeMembers.userId, id), placeMembers.userId),
       with: {
         place: {
           with: {
@@ -380,7 +381,7 @@ export async function GET(_request: Request, context: RouteContext) {
     }),
     viewerUserId
       ? db.query.placeFollows.findMany({
-          where: eq(placeFollows.userId, viewerUserId),
+          where: await withVisibleProfiles(eq(placeFollows.userId, viewerUserId), placeFollows.userId),
           columns: {
             placeId: true,
           },
@@ -389,13 +390,13 @@ export async function GET(_request: Request, context: RouteContext) {
     resolveMobileEventEditPermissions(viewerUserId),
     viewerUserId
       ? db.query.userFriends.findMany({
-          where: and(
+          where: await withVisibleProfiles(and(
             or(
               eq(userFriends.userId, viewerUserId),
               eq(userFriends.friendUserId, viewerUserId)
             ),
             eq(userFriends.status, "accepted")
-          ),
+          ), userFriends.userId, userFriends.friendUserId),
         })
       : Promise.resolve([]),
     viewerUserId
@@ -442,7 +443,7 @@ export async function GET(_request: Request, context: RouteContext) {
     promoterPlaceIds.length > 0
       ? await db.query.userPromotedEvents
           .findMany({
-            where: eq(userPromotedEvents.userId, id),
+            where: await withVisibleProfiles(eq(userPromotedEvents.userId, id), userPromotedEvents.userId),
             with: {
               event: {
                 with: {
@@ -494,11 +495,11 @@ export async function GET(_request: Request, context: RouteContext) {
   const viewerReviews =
     viewerUserId && allEventIds.length > 0
       ? await db.query.eventReviews.findMany({
-          where: and(
+          where: await withVisibleProfiles(and(
             inArray(eventReviews.eventId, allEventIds),
             eq(eventReviews.userId, viewerUserId),
             isNotNull(eventReviews.rating)
-          ),
+          ), eventReviews.userId),
         })
       : [];
   const viewerReviewMap = new Map(
@@ -509,34 +510,34 @@ export async function GET(_request: Request, context: RouteContext) {
     viewerUserId && allEventIds.length > 0
       ? await Promise.all([
           db.query.eventRsvps.findMany({
-            where: and(
+            where: await withVisibleProfiles(and(
               visibleEventIdCondition(eventRsvps.eventId),
               inArray(eventRsvps.eventId, allEventIds),
               eq(eventRsvps.userId, viewerUserId)
-            ),
+            ), eventRsvps.userId),
             with: {
               user: true,
             },
           }),
           db.query.eventRsvps.findMany({
-            where: and(
+            where: await withVisibleProfiles(and(
               visibleEventIdCondition(eventRsvps.eventId),
               inArray(eventRsvps.eventId, allEventIds),
               eq(eventRsvps.partnerRsvpByUserId, viewerUserId),
               inArray(eventRsvps.status, ["going", "interested"])
-            ),
+            ), eventRsvps.userId),
             with: {
               user: true,
             },
           }),
           viewerFriendIds.size > 0
             ? db.query.eventRsvps.findMany({
-                where: and(
+                where: await withVisibleProfiles(and(
                   visibleEventIdCondition(eventRsvps.eventId),
                   inArray(eventRsvps.eventId, allEventIds),
                   inArray(eventRsvps.userId, [...viewerFriendIds]),
                   inArray(eventRsvps.status, ["going", "interested"])
-                ),
+                ), eventRsvps.userId),
                 with: {
                   user: true,
                 },

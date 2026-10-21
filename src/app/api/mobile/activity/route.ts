@@ -1,3 +1,4 @@
+import { withVisibleProfiles } from "@/server/utils/profile-visibility";
 import { withScreenshotFriends } from "@/server/dev/screenshot-friends";
 import { visibleEventIdCondition } from "@/server/utils/event-source-visibility";
 import { auth } from "@clerk/nextjs/server";
@@ -63,14 +64,12 @@ export async function GET(request: Request) {
   const [requestCountRow] = await db
     .select({ count: sql<number>`count(*)::int` })
     .from(userFriends)
-    .where(
-      userId
+    .where(await withVisibleProfiles(userId
         ? and(
             eq(userFriends.status, "pending"),
             eq(userFriends.friendUserId, userId)
           )
-        : sql`false`
-    );
+        : sql`false`, userFriends.userId, userFriends.friendUserId));
 
   const [
     currentUser,
@@ -115,18 +114,18 @@ export async function GET(request: Request) {
       .from(cities),
     userId
       ? db.query.userFriends.findMany({
-          where: and(
+          where: await withVisibleProfiles(and(
             or(eq(userFriends.userId, userId), eq(userFriends.friendUserId, userId)),
             eq(userFriends.status, "accepted")
-          ),
+          ), userFriends.userId, userFriends.friendUserId),
         })
       : Promise.resolve([]),
     userId
       ? db.query.userFriends.findMany({
-          where: and(
+          where: await withVisibleProfiles(and(
             eq(userFriends.friendUserId, userId),
             eq(userFriends.status, "pending")
-          ),
+          ), userFriends.userId, userFriends.friendUserId),
           orderBy: [desc(userFriends.createdAt)],
           with: {
             user: true,
@@ -135,10 +134,10 @@ export async function GET(request: Request) {
       : Promise.resolve([]),
     userId
       ? db.query.userPartners.findMany({
-          where: and(
+          where: await withVisibleProfiles(and(
             eq(userPartners.recipientId, userId),
             eq(userPartners.status, "pending")
-          ),
+          ), userPartners.requesterId, userPartners.recipientId),
           orderBy: [desc(userPartners.createdAt)],
           with: {
             requester: true,
@@ -147,10 +146,10 @@ export async function GET(request: Request) {
       : Promise.resolve([]),
     userId
       ? db.query.userFriends.findMany({
-          where: and(
+          where: await withVisibleProfiles(and(
             eq(userFriends.friendUserId, userId),
             eq(userFriends.status, "accepted")
-          ),
+          ), userFriends.userId, userFriends.friendUserId),
           orderBy: [desc(userFriends.updatedAt)],
           with: {
             user: true,
@@ -159,10 +158,10 @@ export async function GET(request: Request) {
       : Promise.resolve([]),
     userId
       ? db.query.userPartners.findMany({
-          where: and(
+          where: await withVisibleProfiles(and(
             eq(userPartners.recipientId, userId),
             eq(userPartners.status, "accepted")
-          ),
+          ), userPartners.requesterId, userPartners.recipientId),
           orderBy: [desc(userPartners.updatedAt)],
           with: {
             requester: true,
@@ -191,12 +190,12 @@ export async function GET(request: Request) {
   const activityList =
     friendIds.length > 0
       ? await db.query.userActivity.findMany({
-          where: and(
+          where: await withVisibleProfiles(and(
             eq(userActivity.entityType, "event"),
             visibleEventIdCondition(userActivity.entityId),
             inArray(userActivity.actorUserId, friendIds),
             sql`${userActivity.type} in ('rsvp_going', 'rsvp_interested', 'rsvp_not_going')`
-          ),
+          ), userActivity.actorUserId),
           orderBy: [desc(userActivity.updatedAt), desc(userActivity.createdAt)],
           limit: Math.min(limit * 4, 400),
           with: {
@@ -226,7 +225,7 @@ export async function GET(request: Request) {
 
   const supportNotifications = userId
     ? await db.query.notifications.findMany({
-        where: and(
+        where: await withVisibleProfiles(and(
           eq(notifications.userId, userId),
           eq(notifications.entityType, "support_ticket"),
           or(
@@ -238,7 +237,7 @@ export async function GET(request: Request) {
               sql`${notifications.metadata} ->> 'notificationKind' = 'support_ticket_created'`
             )
           )
-        ),
+        ), notifications.actorUserId),
         orderBy: [desc(notifications.createdAt)],
         limit: 50,
         with: { actor: true },
@@ -330,54 +329,54 @@ export async function GET(request: Request) {
     userId && eventIds.length > 0
       ? await Promise.all([
           db.query.eventRsvps.findMany({
-            where: and(
+            where: await withVisibleProfiles(and(
               visibleEventIdCondition(eventRsvps.eventId),
               inArray(eventRsvps.eventId, eventIds),
               eq(eventRsvps.userId, userId)
-            ),
+            ), eventRsvps.userId),
             with: {
               user: true,
             },
           }),
           db.query.eventRsvps.findMany({
-            where: and(
+            where: await withVisibleProfiles(and(
               visibleEventIdCondition(eventRsvps.eventId),
               inArray(eventRsvps.eventId, eventIds),
               eq(eventRsvps.partnerRsvpByUserId, userId),
               inArray(eventRsvps.status, ["going", "interested", "not_going"])
-            ),
+            ), eventRsvps.userId),
             with: {
               user: true,
             },
           }),
           friendIds.length > 0
             ? db.query.eventRsvps.findMany({
-                where: and(
+                where: await withVisibleProfiles(and(
                   visibleEventIdCondition(eventRsvps.eventId),
                   inArray(eventRsvps.eventId, eventIds),
                   inArray(eventRsvps.userId, friendIds),
                 inArray(eventRsvps.status, ["going", "interested", "not_going"])
-                ),
+                ), eventRsvps.userId),
                 with: {
                   user: true,
                 },
               })
             : Promise.resolve([]),
           db.query.placeFollows.findMany({
-            where: eq(placeFollows.userId, userId),
+            where: await withVisibleProfiles(eq(placeFollows.userId, userId), placeFollows.userId),
             columns: {
               placeId: true,
             },
           }),
           actorIdsWithPartnerIncluded.length > 0
             ? db.query.userPartners.findMany({
-                where: and(
+                where: await withVisibleProfiles(and(
                   eq(userPartners.status, "accepted"),
                   or(
                     inArray(userPartners.requesterId, actorIdsWithPartnerIncluded),
                     inArray(userPartners.recipientId, actorIdsWithPartnerIncluded)
                   )
-                ),
+                ), userPartners.requesterId, userPartners.recipientId),
                 with: {
                   requester: true,
                   recipient: true,

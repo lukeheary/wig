@@ -1,3 +1,5 @@
+import { withPublicProfiles } from "@/server/utils/profile-visibility";
+import { withVisibleProfiles } from "@/server/utils/profile-visibility";
 import { visibleEventIdCondition } from "@/server/utils/event-source-visibility";
 import { z } from "zod";
 import { router, protectedProcedure } from "../init";
@@ -24,7 +26,7 @@ import { blockedUserIdsFor, usersAreBlocked } from "@/server/utils/user-blocks";
 export const friendsRouter = router({
   listBlockedUsers: protectedProcedure.query(async ({ ctx }) => {
     const blocks = await ctx.db.query.userBlocks.findMany({
-      where: eq(userBlocks.blockerUserId, ctx.auth.userId),
+      where: await withVisibleProfiles(eq(userBlocks.blockerUserId, ctx.auth.userId), userBlocks.blockerUserId, userBlocks.blockedUserId),
       with: { blocked: true },
       orderBy: [desc(userBlocks.createdAt)],
     });
@@ -89,10 +91,10 @@ export const friendsRouter = router({
     .query(async ({ ctx, input }) => {
       // Get existing friend connections (accepted or pending) in both directions
       const existingFriendships = await ctx.db.query.userFriends.findMany({
-        where: or(
+        where: await withVisibleProfiles(or(
           eq(userFriends.userId, ctx.auth.userId),
           eq(userFriends.friendUserId, ctx.auth.userId)
-        ),
+        ), userFriends.userId, userFriends.friendUserId),
       });
       const blockedUserIds = [...(await blockedUserIdsFor(ctx.auth.userId))];
 
@@ -108,7 +110,7 @@ export const friendsRouter = router({
 
       // Search by username, email, firstName, or lastName (case insensitive)
       const results = await ctx.db.query.users.findMany({
-        where: and(
+        where: await withVisibleProfiles(and(
           or(
             accentInsensitiveLike(users.username, input.query),
             accentInsensitiveLike(users.email, input.query),
@@ -127,7 +129,7 @@ export const friendsRouter = router({
             excludedUserIds.map((id) => sql`${id}`),
             sql`, `
           )})`
-        ),
+        ), users.id),
         limit: input.limit,
       });
 
@@ -268,6 +270,10 @@ export const friendsRouter = router({
           code: "FORBIDDEN",
           message: "You can only accept requests sent to you",
         });
+      }
+
+      if (await usersAreBlocked(ctx.auth.userId, friendRequest.userId)) {
+        throw new TRPCError({ code: "NOT_FOUND", message: "Friend request not found" });
       }
 
       if (friendRequest.status === "accepted") {
@@ -453,7 +459,7 @@ export const friendsRouter = router({
       }
 
       const friendships = await ctx.db.query.userFriends.findMany({
-        where: and(...conditions),
+        where: await withVisibleProfiles(and(...conditions), userFriends.userId, userFriends.friendUserId),
         orderBy: [userFriends.createdAt],
       });
 
@@ -515,10 +521,10 @@ export const friendsRouter = router({
   getPendingRequests: protectedProcedure.query(async ({ ctx }) => {
     // Get pending friend requests sent TO the current user
     const pendingRequests = await ctx.db.query.userFriends.findMany({
-      where: and(
+      where: await withVisibleProfiles(and(
         eq(userFriends.friendUserId, ctx.auth.userId),
         eq(userFriends.status, "pending")
-      ),
+      ), userFriends.userId, userFriends.friendUserId),
       orderBy: [userFriends.createdAt],
       with: {
         user: true, // The user who sent the request
@@ -538,10 +544,10 @@ export const friendsRouter = router({
     .query(async ({ ctx, input }) => {
       // Get existing friend connections (accepted or pending) in both directions
       const existingFriendships = await ctx.db.query.userFriends.findMany({
-        where: or(
+        where: await withVisibleProfiles(or(
           eq(userFriends.userId, ctx.auth.userId),
           eq(userFriends.friendUserId, ctx.auth.userId)
-        ),
+        ), userFriends.userId, userFriends.friendUserId),
       });
 
       const excludedUserIds = [
@@ -553,13 +559,13 @@ export const friendsRouter = router({
 
       // Get recent users, excluding self and existing friends
       const recentUsers = await ctx.db.query.users.findMany({
-        where: and(
+        where: await withVisibleProfiles(and(
           eq(users.isOnboarding, false),
           sql`${users.id} NOT IN (${sql.join(
             excludedUserIds.map((id) => sql`${id}`),
             sql`, `
           )})`
-        ),
+        ), users.id),
         orderBy: [desc(users.createdAt)],
         limit: input.limit + 1, // Fetch one extra to check if there are more
         offset: input.cursor,
@@ -587,13 +593,13 @@ export const friendsRouter = router({
 
       // 1. Get all accepted friends
       const userFriendships = await ctx.db.query.userFriends.findMany({
-        where: and(
+        where: await withVisibleProfiles(and(
           or(
             eq(userFriends.userId, ctx.auth.userId),
             eq(userFriends.friendUserId, ctx.auth.userId)
           ),
           eq(userFriends.status, "accepted")
-        ),
+        ), userFriends.userId, userFriends.friendUserId),
       });
 
       const friendIds = userFriendships.map((f) =>
@@ -601,13 +607,13 @@ export const friendsRouter = router({
       );
       const currentPartnerRelationship =
         await ctx.db.query.userPartners.findFirst({
-          where: and(
+          where: withPublicProfiles(and(
             eq(userPartners.status, "accepted"),
             or(
               eq(userPartners.requesterId, ctx.auth.userId),
               eq(userPartners.recipientId, ctx.auth.userId)
             )
-          ),
+          ), userPartners.requesterId, userPartners.recipientId),
         });
       const currentPartnerUserId = currentPartnerRelationship
         ? currentPartnerRelationship.requesterId === ctx.auth.userId
@@ -619,7 +625,7 @@ export const friendsRouter = router({
       const activities =
         friendIds.length > 0
           ? await ctx.db.query.userActivity.findMany({
-              where: and(inArray(userActivity.actorUserId, friendIds), or(ne(userActivity.entityType, "event"), visibleEventIdCondition(userActivity.entityId))),
+              where: await withVisibleProfiles(and(inArray(userActivity.actorUserId, friendIds), or(ne(userActivity.entityType, "event"), visibleEventIdCondition(userActivity.entityId))), userActivity.actorUserId),
               orderBy: [
                 desc(userActivity.updatedAt),
                 desc(userActivity.createdAt),
@@ -682,13 +688,13 @@ export const friendsRouter = router({
         const actorIdSet = new Set(actorIdsWithPartnerIncluded);
         const friendIdSet = new Set(friendIds);
         const partnerRelationships = await ctx.db.query.userPartners.findMany({
-          where: and(
+          where: await withVisibleProfiles(and(
             eq(userPartners.status, "accepted"),
             or(
               inArray(userPartners.requesterId, actorIdsWithPartnerIncluded),
               inArray(userPartners.recipientId, actorIdsWithPartnerIncluded)
             )
-          ),
+          ), userPartners.requesterId, userPartners.recipientId),
           with: {
             requester: true,
             recipient: true,
@@ -747,10 +753,10 @@ export const friendsRouter = router({
       const normalizedEventUpdates = input.includeEventUpdates
         ? await (async () => {
             const subscribedRsvps = await ctx.db.query.eventRsvps.findMany({
-              where: and(
+              where: await withVisibleProfiles(and(
                 eq(eventRsvps.userId, ctx.auth.userId),
                 inArray(eventRsvps.status, ["going", "interested"])
-              ),
+              ), eventRsvps.userId),
               columns: {
                 eventId: true,
               },
@@ -765,7 +771,7 @@ export const friendsRouter = router({
             }
 
             const eventUpdates = await ctx.db.query.eventActivity.findMany({
-              where: and(inArray(eventActivity.eventId, subscribedEventIds), visibleEventIdCondition(eventActivity.eventId)),
+              where: await withVisibleProfiles(and(inArray(eventActivity.eventId, subscribedEventIds), visibleEventIdCondition(eventActivity.eventId)), eventActivity.actorUserId),
               orderBy: [desc(eventActivity.createdAt)],
               limit: feedWindow,
               with: {

@@ -7,6 +7,7 @@
 	objects = {
 
 /* Begin PBXBuildFile section */
+		F8209A00AC124B03A6D9618E /* AccountSearchHistory.swift in Sources */ = {isa = PBXBuildFile; fileRef = C15D7C85207F4609AB772D32 /* AccountSearchHistory.swift */; };
 		0225D821CFF385E0C146E58A /* RemoteImageView.swift in Sources */ = {isa = PBXBuildFile; fileRef = C4B12A3FE36D056CEF6A6FBD /* RemoteImageView.swift */; };
 		02A19F1536EC643E3CD2B226 /* AppConfig.swift in Sources */ = {isa = PBXBuildFile; fileRef = C47EB2040C338297AF811986 /* AppConfig.swift */; };
 		03091A08CECDB18FE3FED12A /* FloatingGlassIconButton.swift in Sources */ = {isa = PBXBuildFile; fileRef = 3A87D39D7D4AE13FC019729E /* FloatingGlassIconButton.swift */; };
@@ -61,6 +62,7 @@
 /* End PBXBuildFile section */
 
 /* Begin PBXFileReference section */
+		C15D7C85207F4609AB772D32 /* AccountSearchHistory.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AccountSearchHistory.swift; sourceTree = "<group>"; };
 		042BFE9D9AEF36729D6E23BB /* MobileEventCreationView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = MobileEventCreationView.swift; sourceTree = "<group>"; };
 		06DBD4E356DEF2762352E743 /* PlaceDetail.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = PlaceDetail.swift; sourceTree = "<group>"; };
 		0B7253E663E8722D44179A1A /* VenuesViewModel.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = VenuesViewModel.swift; sourceTree = "<group>"; };
@@ -250,6 +252,7 @@
 			children = (
 				4CD4F47B80B86DB3A576F455 /* AppAnalytics.swift */,
 				24E46A92A7781B1F29B6519D /* AppDataRefresh.swift */,
+				C15D7C85207F4609AB772D32 /* AccountSearchHistory.swift */,
 				E9F25C520369E8D97B2E2329 /* AppSession.swift */,
 				1EFBA2EF2E31AA35C105FDAB /* MobileCategoryStore.swift */,
 				2E3FAB7835F02E2A61D359A6 /* PushNotificationManager.swift */,
@@ -415,6 +418,7 @@
 				02A19F1536EC643E3CD2B226 /* AppConfig.swift in Sources */,
 				7E5BB50679155C83895774D8 /* AppDataRefresh.swift in Sources */,
 				E8A57DFEEA588E89C6DA6366 /* AppRootView.swift in Sources */,
+				F8209A00AC124B03A6D9618E /* AccountSearchHistory.swift in Sources */,
 				FE7A9BA137F5A6BA54F396A9 /* AppSession.swift in Sources */,
 				78874F058F64EDC1351DAE0C /* AuthGate.swift in Sources */,
 				209ADA49B59EADEA2A0F420A /* EventCardView.swift in Sources */,

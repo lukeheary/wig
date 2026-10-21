@@ -1,3 +1,4 @@
+import { withVisibleProfiles } from "@/server/utils/profile-visibility";
 import { visibleEventSourceCondition } from "@/server/utils/event-source-visibility";
 import { auth } from "@clerk/nextjs/server";
 import { NextResponse } from "next/server";
@@ -203,10 +204,10 @@ export async function GET(request: Request) {
     ? await Promise.all([
         db.query.placeFollows
           .findMany({
-            where: and(
+            where: await withVisibleProfiles(and(
               eq(placeFollows.userId, authenticatedUserId),
               inArray(placeFollows.placeId, placeIds)
-            ),
+            ), placeFollows.userId),
             columns: {
               placeId: true,
             },
@@ -238,7 +239,7 @@ export async function GET(request: Request) {
         count: sql<number>`count(*)::int`,
       })
       .from(placeFollows)
-      .where(inArray(placeFollows.placeId, placeIds))
+      .where(await withVisibleProfiles(inArray(placeFollows.placeId, placeIds), placeFollows.userId))
       .groupBy(placeFollows.placeId),
     db
       .select({
@@ -246,7 +247,7 @@ export async function GET(request: Request) {
         count: sql<number>`count(*)::int`,
       })
       .from(placeMembers)
-      .where(inArray(placeMembers.placeId, placeIds))
+      .where(await withVisibleProfiles(inArray(placeMembers.placeId, placeIds), placeMembers.userId))
       .groupBy(placeMembers.placeId),
   ]);
 

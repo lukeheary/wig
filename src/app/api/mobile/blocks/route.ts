@@ -1,3 +1,4 @@
+import { withVisibleProfiles } from "@/server/utils/profile-visibility";
 import { auth } from "@clerk/nextjs/server";
 import { desc, eq } from "drizzle-orm";
 import { NextResponse } from "next/server";
@@ -23,7 +24,7 @@ export async function GET() {
     })
     .from(userBlocks)
     .innerJoin(users, eq(userBlocks.blockedUserId, users.id))
-    .where(eq(userBlocks.blockerUserId, userId))
+    .where(await withVisibleProfiles(eq(userBlocks.blockerUserId, userId), users.id))
     .orderBy(desc(userBlocks.createdAt));
 
   return NextResponse.json({

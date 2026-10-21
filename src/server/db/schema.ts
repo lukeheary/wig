@@ -213,6 +213,7 @@ export const users = pgTable(
       .default("active"),
     moderationReason: text("moderation_reason"),
     isOnboarding: boolean("is_onboarding").notNull().default(true),
+    isProfileHidden: boolean("is_profile_hidden").notNull().default(false),
     createdAt: timestamp("created_at").defaultNow().notNull(),
     updatedAt: timestamp("updated_at").defaultNow().notNull(),
   },

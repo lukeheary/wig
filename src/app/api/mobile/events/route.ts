@@ -1,3 +1,4 @@
+import { withVisibleProfiles } from "@/server/utils/profile-visibility";
 import { withScreenshotFriends } from "@/server/dev/screenshot-friends";
 import { visibleEventSourceCondition } from "@/server/utils/event-source-visibility";
 import { auth } from "@clerk/nextjs/server";
@@ -338,7 +339,7 @@ export async function GET(request: Request) {
       }),
       userId
         ? db.query.placeFollows.findMany({
-            where: eq(placeFollows.userId, userId),
+            where: await withVisibleProfiles(eq(placeFollows.userId, userId), placeFollows.userId),
             columns: { placeId: true },
           })
         : Promise.resolve([]),
@@ -419,7 +420,7 @@ export async function GET(request: Request) {
               count: sql<number>`count(*)::int`,
             })
             .from(placeFollows)
-            .where(inArray(placeFollows.placeId, relatedPlaceIds))
+            .where(await withVisibleProfiles(inArray(placeFollows.placeId, relatedPlaceIds), placeFollows.userId))
             .groupBy(placeFollows.placeId),
           db
             .select({
@@ -427,7 +428,7 @@ export async function GET(request: Request) {
               count: sql<number>`count(*)::int`,
             })
             .from(placeMembers)
-            .where(inArray(placeMembers.placeId, relatedPlaceIds))
+            .where(await withVisibleProfiles(inArray(placeMembers.placeId, relatedPlaceIds), placeMembers.userId))
             .groupBy(placeMembers.placeId),
         ])
       : [[], []];
@@ -514,39 +515,39 @@ export async function GET(request: Request) {
       friendConnections,
     ] = await Promise.all([
       db.query.eventRsvps.findMany({
-        where: and(
+        where: await withVisibleProfiles(and(
           inArray(eventRsvps.eventId, eventIds),
           eq(eventRsvps.userId, userId)
-        ),
+        ), eventRsvps.userId),
         with: {
           user: true,
         },
       }),
       db.query.eventReviews.findMany({
-        where: and(
+        where: await withVisibleProfiles(and(
           inArray(eventReviews.eventId, eventIds),
           eq(eventReviews.userId, userId),
           isNotNull(eventReviews.rating)
-        ),
+        ), eventReviews.userId),
       }),
       db.query.eventRsvps.findMany({
-        where: and(
+        where: await withVisibleProfiles(and(
           inArray(eventRsvps.eventId, eventIds),
           eq(eventRsvps.partnerRsvpByUserId, userId),
           inArray(eventRsvps.status, ["going", "interested", "not_going"])
-        ),
+        ), eventRsvps.userId),
         with: {
           user: true,
         },
       }),
       db.query.userFriends.findMany({
-        where: and(
+        where: await withVisibleProfiles(and(
           or(
             eq(userFriends.userId, userId),
             eq(userFriends.friendUserId, userId)
           ),
           eq(userFriends.status, "accepted")
-        ),
+        ), userFriends.userId, userFriends.friendUserId),
       }),
     ]);
 
@@ -558,11 +559,11 @@ export async function GET(request: Request) {
     const friendRsvps =
       friendIds.length > 0
         ? await db.query.eventRsvps.findMany({
-            where: and(
+            where: await withVisibleProfiles(and(
               inArray(eventRsvps.eventId, eventIds),
               inArray(eventRsvps.userId, friendIds),
               inArray(eventRsvps.status, ["going", "interested", "not_going"])
-            ),
+            ), eventRsvps.userId),
             with: {
               user: true,
             },

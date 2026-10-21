@@ -1,3 +1,4 @@
+import { isProfileHidden } from "./profile-visibility";
 import { and, eq, inArray, or } from "drizzle-orm";
 import { db } from "../db";
 import {
@@ -34,6 +35,8 @@ export async function createNotification(
   notification: NotificationInsert,
   database: DatabaseClient = db
 ) {
+  if (notification.actorUserId && notification.actorUserId !== notification.userId &&
+      await isProfileHidden(notification.actorUserId)) return undefined;
   const [created] = await database
     .insert(notifications)
     .values({
@@ -56,6 +59,10 @@ export async function createNotifications(
   notificationRows: NotificationInsert[],
   database: DatabaseClient = db
 ) {
+  const actorIds = [...new Set(notificationRows.flatMap((row) => row.actorUserId ? [row.actorUserId] : []))];
+  const hiddenIds = new Set((await Promise.all(actorIds.map(async (id) =>
+    await isProfileHidden(id) ? id : null))).filter((id): id is string => id !== null));
+  notificationRows = notificationRows.filter((row) => !row.actorUserId || row.actorUserId === row.userId || !hiddenIds.has(row.actorUserId));
   if (notificationRows.length === 0) {
     return [];
   }
@@ -123,6 +130,8 @@ export async function notifyFriendsOfRsvp(
   },
   database: DatabaseClient = db
 ) {
+  if (await isProfileHidden(actorUserId)) return [];
+  if (partnerUserId && await isProfileHidden(partnerUserId)) partnerUserId = null;
   const [actor, partner, event, friendConnections] = await Promise.all([
     database.query.users.findFirst({
       where: eq(users.id, actorUserId),

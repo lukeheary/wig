@@ -1,3 +1,4 @@
+import { withVisibleProfiles } from "@/server/utils/profile-visibility";
 import { and, desc, eq, isNull, sql } from "drizzle-orm";
 import { protectedProcedure, router } from "../init";
 import { notifications } from "@/server/db/schema";
@@ -5,7 +6,7 @@ import { notifications } from "@/server/db/schema";
 export const notificationsRouter = router({
   listRecent: protectedProcedure.query(async ({ ctx }) => {
     return ctx.db.query.notifications.findMany({
-      where: eq(notifications.userId, ctx.auth.userId),
+      where: await withVisibleProfiles(eq(notifications.userId, ctx.auth.userId), notifications.actorUserId),
       orderBy: [desc(notifications.createdAt)],
       limit: 50,
       with: {
@@ -16,10 +17,10 @@ export const notificationsRouter = router({
 
   listUnread: protectedProcedure.query(async ({ ctx }) => {
     return ctx.db.query.notifications.findMany({
-      where: and(
+      where: await withVisibleProfiles(and(
         eq(notifications.userId, ctx.auth.userId),
         isNull(notifications.readAt)
-      ),
+      ), notifications.actorUserId),
       orderBy: [desc(notifications.createdAt)],
       limit: 20,
     });
@@ -31,12 +32,10 @@ export const notificationsRouter = router({
         unreadCount: sql<number>`count(*)::int`,
       })
       .from(notifications)
-      .where(
-        and(
+      .where(await withVisibleProfiles(and(
           eq(notifications.userId, ctx.auth.userId),
           isNull(notifications.readAt)
-        )
-      );
+        ), notifications.actorUserId));
 
     return { unreadCount: result?.unreadCount ?? 0 };
   }),

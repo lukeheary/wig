@@ -1,3 +1,4 @@
+import { withVisibleProfiles } from "@/server/utils/profile-visibility";
 import { and, eq, inArray, sql } from "drizzle-orm";
 import { db } from "@/server/db";
 import { eventRsvps } from "@/server/db/schema";
@@ -14,12 +15,10 @@ export async function goingRsvpCountsForEventIds(eventIds: string[]) {
       count: sql<number>`count(*)::int`,
     })
     .from(eventRsvps)
-    .where(
-      and(
+    .where(await withVisibleProfiles(and(
         inArray(eventRsvps.eventId, eventIds),
         eq(eventRsvps.status, "going")
-      )
-    )
+      ), eventRsvps.userId))
     .groupBy(eventRsvps.eventId);
 
   return new Map(rows.map((row) => [row.eventId, row.count]));

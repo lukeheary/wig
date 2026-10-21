@@ -6,6 +6,8 @@ const isPublicRoute = createRouteMatcher([
   PUBLIC_EVENT_PATH_PATTERN,
   "/",
   "/support",
+  "/privacy",
+  "/community-guidelines",
   "/sign-in(.*)",
   "/sign-up(.*)",
   "/sso-callback(.*)",

@@ -1,3 +1,4 @@
+import { withVisibleProfiles } from "@/server/utils/profile-visibility";
 import { withScreenshotFriends } from "@/server/dev/screenshot-friends";
 import { visibleEventSourceCondition } from "@/server/utils/event-source-visibility";
 import { auth } from "@clerk/nextjs/server";
@@ -147,18 +148,18 @@ export async function GET(
         : null,
       userId
         ? db.query.userFriends.findMany({
-            where: and(
+            where: await withVisibleProfiles(and(
               or(
                 eq(userFriends.userId, userId),
                 eq(userFriends.friendUserId, userId)
               ),
               eq(userFriends.status, "accepted")
-            ),
+            ), userFriends.userId, userFriends.friendUserId),
           })
         : [],
       userId
         ? db.query.placeFollows.findMany({
-            where: eq(placeFollows.userId, userId),
+            where: await withVisibleProfiles(eq(placeFollows.userId, userId), placeFollows.userId),
             columns: { placeId: true },
           })
         : [],
@@ -169,7 +170,7 @@ export async function GET(
     friendship.userId === userId ? friendship.friendUserId : friendship.userId
   );
   const visibleRSVPs = await db.query.eventRsvps.findMany({
-    where: and(
+    where: await withVisibleProfiles(and(
       eq(eventRsvps.eventId, event.id),
       userId
         ? or(
@@ -177,7 +178,7 @@ export async function GET(
             inArray(eventRsvps.userId, friendIDs)
           )
         : undefined
-    ),
+    ), eventRsvps.userId),
     with: { user: true },
   });
   const friendIDSet = new Set(friendIDs);
@@ -210,7 +211,7 @@ export async function GET(
               count: sql<number>`count(*)::int`,
             })
             .from(placeFollows)
-            .where(inArray(placeFollows.placeId, relatedPlaceIDs))
+            .where(await withVisibleProfiles(inArray(placeFollows.placeId, relatedPlaceIDs), placeFollows.userId))
             .groupBy(placeFollows.placeId),
           db
             .select({
@@ -218,7 +219,7 @@ export async function GET(
               count: sql<number>`count(*)::int`,
             })
             .from(placeMembers)
-            .where(inArray(placeMembers.placeId, relatedPlaceIDs))
+            .where(await withVisibleProfiles(inArray(placeMembers.placeId, relatedPlaceIDs), placeMembers.userId))
             .groupBy(placeMembers.placeId),
         ])
       : [[], []];

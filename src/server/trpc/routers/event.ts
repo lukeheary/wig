@@ -1,3 +1,5 @@
+import { withPublicProfiles } from "@/server/utils/profile-visibility";
+import { withVisibleProfiles } from "@/server/utils/profile-visibility";
 import { visibleEventSourceCondition } from "@/server/utils/event-source-visibility";
 import { z } from "zod";
 import {
@@ -1547,7 +1549,7 @@ export const eventRouter = router({
         where: eq(users.id, ctx.auth.userId),
       });
       const userPlaceFollows = await ctx.db.query.placeFollows.findMany({
-        where: eq(placeFollows.userId, ctx.auth.userId),
+        where: await withVisibleProfiles(eq(placeFollows.userId, ctx.auth.userId), placeFollows.userId),
         columns: { placeId: true },
       });
       const followedPlaceIdSet = new Set(
@@ -1738,22 +1740,22 @@ export const eventRouter = router({
       // Filter by events friends have RSVP'd to
       if (input.friendsGoingOnly || input.friendsRsvpOnly) {
         const friendConnections = await ctx.db.query.userFriends.findMany({
-          where: and(
+          where: await withVisibleProfiles(and(
             eq(userFriends.userId, ctx.auth.userId),
             eq(userFriends.status, "accepted")
-          ),
+          ), userFriends.userId, userFriends.friendUserId),
         });
 
         const friendIds = friendConnections.map((f) => f.friendUserId);
 
         if (friendIds.length > 0) {
           const friendRsvps = await ctx.db.query.eventRsvps.findMany({
-            where: and(
+            where: await withVisibleProfiles(and(
               inArray(eventRsvps.userId, friendIds),
               input.friendsRsvpOnly
                 ? inArray(eventRsvps.status, ["going", "interested"])
                 : eq(eventRsvps.status, "going")
-            ),
+            ), eventRsvps.userId),
           });
 
           const eventIdsWithFriends = friendRsvps.map((r) => r.eventId);
@@ -1772,10 +1774,10 @@ export const eventRouter = router({
 
       if (input.rsvpStatusFilter) {
         const userRsvps = await ctx.db.query.eventRsvps.findMany({
-          where: and(
+          where: await withVisibleProfiles(and(
             eq(eventRsvps.userId, ctx.auth.userId),
             eq(eventRsvps.status, input.rsvpStatusFilter)
-          ),
+          ), eventRsvps.userId),
           columns: {
             eventId: true,
           },
@@ -1792,10 +1794,10 @@ export const eventRouter = router({
 
       if (input.myRsvpOnly) {
         const userRsvps = await ctx.db.query.eventRsvps.findMany({
-          where: and(
+          where: await withVisibleProfiles(and(
             eq(eventRsvps.userId, ctx.auth.userId),
             inArray(eventRsvps.status, ["going", "interested"])
-          ),
+          ), eventRsvps.userId),
           columns: {
             eventId: true,
           },
@@ -1833,10 +1835,10 @@ export const eventRouter = router({
       const userRsvps =
         eventIds.length > 0
           ? await ctx.db.query.eventRsvps.findMany({
-              where: and(
+              where: await withVisibleProfiles(and(
                 eq(eventRsvps.userId, ctx.auth.userId),
                 inArray(eventRsvps.eventId, eventIds)
-              ),
+              ), eventRsvps.userId),
             })
           : [];
 
@@ -1846,11 +1848,11 @@ export const eventRouter = router({
       const mirroredPartnerRsvps =
         eventIds.length > 0
           ? await ctx.db.query.eventRsvps.findMany({
-              where: and(
+              where: await withVisibleProfiles(and(
                 inArray(eventRsvps.eventId, eventIds),
                 eq(eventRsvps.partnerRsvpByUserId, ctx.auth.userId),
                 inArray(eventRsvps.status, ["going", "interested"])
-              ),
+              ), eventRsvps.userId),
               with: {
                 user: true,
               },
@@ -1859,13 +1861,13 @@ export const eventRouter = router({
 
       // Fetch user's friends (bidirectional - where user is either sender or receiver)
       const friendConnections = await ctx.db.query.userFriends.findMany({
-        where: and(
+        where: await withVisibleProfiles(and(
           or(
             eq(userFriends.userId, ctx.auth.userId),
             eq(userFriends.friendUserId, ctx.auth.userId)
           ),
           eq(userFriends.status, "accepted")
-        ),
+        ), userFriends.userId, userFriends.friendUserId),
       });
 
       const friendIds = friendConnections.map((f) =>
@@ -1876,11 +1878,11 @@ export const eventRouter = router({
       const friendsRsvps =
         eventIds.length > 0 && friendIds.length > 0
           ? await ctx.db.query.eventRsvps.findMany({
-              where: and(
+              where: await withVisibleProfiles(and(
                 inArray(eventRsvps.eventId, eventIds),
                 inArray(eventRsvps.userId, friendIds),
                 inArray(eventRsvps.status, ["going", "interested"])
-              ),
+              ), eventRsvps.userId),
               with: {
                 user: true,
               },
@@ -2050,13 +2052,13 @@ export const eventRouter = router({
       });
 
       const partnerRelationship = await ctx.db.query.userPartners.findFirst({
-        where: and(
+        where: withPublicProfiles(and(
           eq(userPartners.status, "accepted"),
           or(
             eq(userPartners.requesterId, ctx.auth.userId),
             eq(userPartners.recipientId, ctx.auth.userId)
           )
-        ),
+        ), userPartners.requesterId, userPartners.recipientId),
       });
 
       const partnerUserId = partnerRelationship
@@ -2217,13 +2219,13 @@ export const eventRouter = router({
       });
 
       const partnerRelationship = await ctx.db.query.userPartners.findFirst({
-        where: and(
+        where: withPublicProfiles(and(
           eq(userPartners.status, "accepted"),
           or(
             eq(userPartners.requesterId, ctx.auth.userId),
             eq(userPartners.recipientId, ctx.auth.userId)
           )
-        ),
+        ), userPartners.requesterId, userPartners.recipientId),
       });
 
       const partnerUserId = partnerRelationship
@@ -2298,7 +2300,7 @@ export const eventRouter = router({
       }
 
       return await ctx.db.query.eventRsvps.findMany({
-        where: and(...conditions),
+        where: await withVisibleProfiles(and(...conditions), eventRsvps.userId),
         with: {
           user: true,
         },
@@ -2972,10 +2974,10 @@ export const eventRouter = router({
       const userRsvps =
         eventIds.length > 0
           ? await ctx.db.query.eventRsvps.findMany({
-              where: and(
+              where: await withVisibleProfiles(and(
                 eq(eventRsvps.userId, ctx.auth.userId),
                 inArray(eventRsvps.eventId, eventIds)
-              ),
+              ), eventRsvps.userId),
             })
           : [];
 
@@ -2985,11 +2987,11 @@ export const eventRouter = router({
       const mirroredPartnerRsvps =
         eventIds.length > 0
           ? await ctx.db.query.eventRsvps.findMany({
-              where: and(
+              where: await withVisibleProfiles(and(
                 inArray(eventRsvps.eventId, eventIds),
                 eq(eventRsvps.partnerRsvpByUserId, ctx.auth.userId),
                 eq(eventRsvps.status, "going")
-              ),
+              ), eventRsvps.userId),
               with: {
                 user: true,
               },
@@ -3000,13 +3002,13 @@ export const eventRouter = router({
 
       // Fetch user's friends
       const friendConnections = await ctx.db.query.userFriends.findMany({
-        where: and(
+        where: await withVisibleProfiles(and(
           or(
             eq(userFriends.userId, ctx.auth.userId),
             eq(userFriends.friendUserId, ctx.auth.userId)
           ),
           eq(userFriends.status, "accepted")
-        ),
+        ), userFriends.userId, userFriends.friendUserId),
       });
 
       const friendIds = friendConnections.map((f) =>
@@ -3017,11 +3019,11 @@ export const eventRouter = router({
       const friendsRsvps =
         eventIds.length > 0 && friendIds.length > 0
           ? await ctx.db.query.eventRsvps.findMany({
-              where: and(
+              where: await withVisibleProfiles(and(
                 inArray(eventRsvps.eventId, eventIds),
                 inArray(eventRsvps.userId, friendIds),
                 eq(eventRsvps.status, "going")
-              ),
+              ), eventRsvps.userId),
               with: {
                 user: true,
               },

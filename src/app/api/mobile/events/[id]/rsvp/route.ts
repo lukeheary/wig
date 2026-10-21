@@ -1,3 +1,4 @@
+import { withPublicProfiles } from "@/server/utils/profile-visibility";
 import { auth } from "@clerk/nextjs/server";
 import { and, asc, eq, or } from "drizzle-orm";
 import { NextResponse } from "next/server";
@@ -77,10 +78,10 @@ export async function GET(_request: Request, context: RouteContext) {
   });
 
   const partnerRelationship = await db.query.userPartners.findFirst({
-    where: and(
+    where: withPublicProfiles(and(
       eq(userPartners.status, "accepted"),
       or(eq(userPartners.requesterId, userId), eq(userPartners.recipientId, userId))
-    ),
+    ), userPartners.requesterId, userPartners.recipientId),
   });
 
   const partnerUserId = partnerRelationship
@@ -147,10 +148,10 @@ export async function POST(request: Request, context: RouteContext) {
   });
 
   const partnerRelationship = await db.query.userPartners.findFirst({
-    where: and(
+    where: withPublicProfiles(and(
       eq(userPartners.status, "accepted"),
       or(eq(userPartners.requesterId, userId), eq(userPartners.recipientId, userId))
-    ),
+    ), userPartners.requesterId, userPartners.recipientId),
   });
 
   const partnerUserId = partnerRelationship
@@ -357,10 +358,10 @@ export async function DELETE(_request: Request, context: RouteContext) {
     .where(and(eq(eventRsvps.userId, userId), eq(eventRsvps.eventId, eventId)));
 
   const partnerRelationship = await db.query.userPartners.findFirst({
-    where: and(
+    where: withPublicProfiles(and(
       eq(userPartners.status, "accepted"),
       or(eq(userPartners.requesterId, userId), eq(userPartners.recipientId, userId))
-    ),
+    ), userPartners.requesterId, userPartners.recipientId),
   });
 
   const partnerUserId = partnerRelationship

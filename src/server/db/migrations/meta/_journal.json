@@ -462,6 +462,13 @@
       "when": 1792457050257,
       "tag": "0074_event_source_visibility",
       "breakpoints": true
+    },
+    {
+      "idx": 75,
+      "version": "7",
+      "when": 1792542375280,
+      "tag": "0075_hidden_profiles",
+      "breakpoints": true
     }
   ]
 }

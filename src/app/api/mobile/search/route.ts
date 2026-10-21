@@ -1,3 +1,4 @@
+import { withVisibleProfiles } from "@/server/utils/profile-visibility";
 import { visibleEventSourceCondition } from "@/server/utils/event-source-visibility";
 import { auth } from "@clerk/nextjs/server";
 import {
@@ -147,10 +148,10 @@ export async function GET(request: Request) {
     };
     const matchedUsers = userId
       ? await db.query.userFriends.findMany({
-          where: or(
+          where: await withVisibleProfiles(or(
             eq(userFriends.userId, userId),
             eq(userFriends.friendUserId, userId)
-          ),
+          ), userFriends.userId, userFriends.friendUserId),
           columns: {
             id: true,
             userId: true,
@@ -170,7 +171,7 @@ export async function GET(request: Request) {
 
     const matchingUsers = query
       ? await db.query.users.findMany({
-          where: and(
+          where: await withVisibleProfiles(and(
             ...userBaseConditions,
             or(
               ...userQueryVariants.flatMap((variant) => [
@@ -183,7 +184,7 @@ export async function GET(request: Request) {
                 }),
               ])
             )
-          ),
+          ), users.id),
           columns: {
             id: true,
             username: true,
@@ -240,10 +241,10 @@ export async function GET(request: Request) {
 
             if (friendOfFriendIds.length > 0) {
               return db.query.users.findMany({
-                where: and(
+                where: await withVisibleProfiles(and(
                   ...userBaseConditions,
                   inArray(users.id, friendOfFriendIds)
-                ),
+                ), users.id),
                 columns: {
                   id: true,
                   username: true,
@@ -262,12 +263,12 @@ export async function GET(request: Request) {
           }
 
           return db.query.users.findMany({
-            where: and(
+            where: await withVisibleProfiles(and(
               ...userBaseConditions,
               ...(directConnectionIds.size > 0
                 ? [notInArray(users.id, [...directConnectionIds])]
                 : [])
-            ),
+            ), users.id),
             columns: {
               id: true,
               username: true,
@@ -331,10 +332,10 @@ export async function GET(request: Request) {
       remainingPendingUserSlots > 0 &&
       pendingRequestUserIds.length > 0
         ? await db.query.users.findMany({
-            where: and(
+            where: await withVisibleProfiles(and(
               ...userBaseConditions,
               inArray(users.id, pendingRequestUserIds)
-            ),
+            ), users.id),
             columns: {
               id: true,
               username: true,
@@ -353,10 +354,10 @@ export async function GET(request: Request) {
     const recentFriendUsers =
       !query && remainingRecentUserSlots > 0 && acceptedFriendUserIds.length > 0
         ? await db.query.users.findMany({
-            where: and(
+            where: await withVisibleProfiles(and(
               ...userBaseConditions,
               inArray(users.id, acceptedFriendUserIds)
-            ),
+            ), users.id),
             columns: {
               id: true,
               username: true,
@@ -482,10 +483,10 @@ export async function GET(request: Request) {
       await Promise.all([
         userId && placeIds.length > 0
           ? db.query.placeFollows.findMany({
-              where: and(
+              where: await withVisibleProfiles(and(
                 eq(placeFollows.userId, userId),
                 inArray(placeFollows.placeId, placeIds)
-              ),
+              ), placeFollows.userId),
               columns: {
                 placeId: true,
               },
@@ -576,13 +577,13 @@ export async function GET(request: Request) {
 
     if (userId && eventIds.length > 0) {
       const friendConnections = await db.query.userFriends.findMany({
-        where: and(
+        where: await withVisibleProfiles(and(
           or(
             eq(userFriends.userId, userId),
             eq(userFriends.friendUserId, userId)
           ),
           eq(userFriends.status, "accepted")
-        ),
+        ), userFriends.userId, userFriends.friendUserId),
       });
       const friendIds = friendConnections.map((friendship) =>
         friendship.userId === userId
@@ -594,27 +595,27 @@ export async function GET(request: Request) {
       const [currentUserRsvps, mirroredPartnerRsvps, friendRsvps] =
         await Promise.all([
           db.query.eventRsvps.findMany({
-            where: and(
+            where: await withVisibleProfiles(and(
               inArray(eventRsvps.eventId, eventIds),
               eq(eventRsvps.userId, userId)
-            ),
+            ), eventRsvps.userId),
             with: {
               user: true,
             },
           }),
           db.query.eventRsvps.findMany({
-            where: and(
+            where: await withVisibleProfiles(and(
               inArray(eventRsvps.eventId, eventIds),
               eq(eventRsvps.partnerRsvpByUserId, userId),
               inArray(eventRsvps.status, ["going", "interested", "not_going"])
-            ),
+            ), eventRsvps.userId),
             with: {
               user: true,
             },
           }),
           friendIds.length > 0
             ? db.query.eventRsvps.findMany({
-                where: and(
+                where: await withVisibleProfiles(and(
                   inArray(eventRsvps.eventId, eventIds),
                   inArray(eventRsvps.userId, friendIds),
                   inArray(eventRsvps.status, [
@@ -622,7 +623,7 @@ export async function GET(request: Request) {
                     "interested",
                     "not_going",
                   ])
-                ),
+                ), eventRsvps.userId),
                 with: {
                   user: true,
                 },

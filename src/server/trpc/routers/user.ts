@@ -1,3 +1,4 @@
+import { withVisibleProfiles } from "@/server/utils/profile-visibility";
 import { visibleEventIdCondition } from "@/server/utils/event-source-visibility";
 import { visibleEventSourceCondition } from "@/server/utils/event-source-visibility";
 import { promoUrlSchema } from "@/server/utils/promo-validation";
@@ -49,7 +50,7 @@ export const userRouter = router({
   hasVenues: protectedProcedure.query(async ({ ctx }) => {
     // Get places where user is a member and type is venue
     const memberships = await ctx.db.query.placeMembers.findMany({
-      where: eq(placeMembers.userId, ctx.auth.userId),
+      where: await withVisibleProfiles(eq(placeMembers.userId, ctx.auth.userId), placeMembers.userId),
       with: {
         place: true,
       },
@@ -62,7 +63,7 @@ export const userRouter = router({
   hasOrganizers: protectedProcedure.query(async ({ ctx }) => {
     // Get places where user is a member and type is organizer
     const memberships = await ctx.db.query.placeMembers.findMany({
-      where: eq(placeMembers.userId, ctx.auth.userId),
+      where: await withVisibleProfiles(eq(placeMembers.userId, ctx.auth.userId), placeMembers.userId),
       with: {
         place: true,
       },
@@ -74,7 +75,7 @@ export const userRouter = router({
 
   hasPlaces: protectedProcedure.query(async ({ ctx }) => {
     const memberships = await ctx.db.query.placeMembers.findMany({
-      where: eq(placeMembers.userId, ctx.auth.userId),
+      where: await withVisibleProfiles(eq(placeMembers.userId, ctx.auth.userId), placeMembers.userId),
       limit: 1,
     });
 
@@ -94,10 +95,10 @@ export const userRouter = router({
       const end = new Date(start);
       end.setUTCDate(start.getUTCDate() + 7);
       const memberships = await ctx.db.query.placeMembers.findMany({
-        where: and(
+        where: await withVisibleProfiles(and(
           eq(placeMembers.userId, ctx.auth.userId),
           eq(placeMembers.role, "promoter")
-        ),
+        ), placeMembers.userId),
         columns: { placeId: true },
       });
       const placeIds = memberships.map((membership) => membership.placeId);
@@ -120,7 +121,7 @@ export const userRouter = router({
           orderBy: [asc(events.startAt)],
         }),
         ctx.db.query.userPromotedEvents.findMany({
-          where: eq(userPromotedEvents.userId, ctx.auth.userId),
+          where: await withVisibleProfiles(eq(userPromotedEvents.userId, ctx.auth.userId), userPromotedEvents.userId),
           columns: { eventId: true, promo: true, promoUrl: true },
         }),
       ]);
@@ -434,7 +435,8 @@ export const userRouter = router({
         where: eq(users.username, normalizedUsername),
       });
 
-      if (!targetUser || isReservedUsername(normalizedUsername)) {
+      if (!targetUser || isReservedUsername(normalizedUsername) ||
+          (targetUser.isProfileHidden && targetUser.id !== ctx.auth.userId)) {
         throw new TRPCError({
           code: "NOT_FOUND",
           message: "Profile not found",
@@ -453,23 +455,23 @@ export const userRouter = router({
         targetPlaceMemberships,
       ] = await Promise.all([
         ctx.db.query.userFriends.findMany({
-          where: and(
+          where: await withVisibleProfiles(and(
             or(
               eq(userFriends.userId, targetUser.id),
               eq(userFriends.friendUserId, targetUser.id)
             ),
             eq(userFriends.status, "accepted")
-          ),
+          ), userFriends.userId, userFriends.friendUserId),
           with: {
             user: true,
             friend: true,
           },
         }),
         ctx.db.query.userFriends.findMany({
-          where: and(
+          where: await withVisibleProfiles(and(
             eq(userFriends.friendUserId, targetUser.id),
             eq(userFriends.status, "pending")
-          ),
+          ), userFriends.userId, userFriends.friendUserId),
         }),
         viewerUserId
           ? ctx.db.query.userFriends.findFirst({
@@ -486,11 +488,11 @@ export const userRouter = router({
             })
           : Promise.resolve(null),
         ctx.db.query.eventRsvps.findMany({
-          where: and(
+          where: await withVisibleProfiles(and(
             visibleEventIdCondition(eventRsvps.eventId),
             eq(eventRsvps.userId, targetUser.id),
             inArray(eventRsvps.status, ["going", "interested"])
-          ),
+          ), eventRsvps.userId),
           with: {
             event: {
               with: {
@@ -507,14 +509,14 @@ export const userRouter = router({
           orderBy: [asc(eventRsvps.updatedAt)],
         }),
         ctx.db.query.placeFollows.findMany({
-          where: eq(placeFollows.userId, targetUser.id),
+          where: await withVisibleProfiles(eq(placeFollows.userId, targetUser.id), placeFollows.userId),
           columns: { id: true },
         }),
         ctx.db.query.placeMembers.findMany({
-          where: and(
+          where: await withVisibleProfiles(and(
             eq(placeMembers.userId, targetUser.id),
             eq(placeMembers.role, "promoter")
-          ),
+          ), placeMembers.userId),
           columns: { placeId: true },
         }),
       ]);
@@ -528,7 +530,7 @@ export const userRouter = router({
         promoterPlaceIds.length > 0
           ? await ctx.db.query.userPromotedEvents
               .findMany({
-                where: eq(userPromotedEvents.userId, targetUser.id),
+                where: await withVisibleProfiles(eq(userPromotedEvents.userId, targetUser.id), userPromotedEvents.userId),
                 with: {
                   event: {
                     with: {
