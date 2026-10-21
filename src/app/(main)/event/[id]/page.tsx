@@ -1,6 +1,7 @@
+import { visibleEventSourceCondition } from "@/server/utils/event-source-visibility";
 import type { Metadata } from "next";
 import { auth } from "@clerk/nextjs/server";
-import { eq } from "drizzle-orm";
+import { and, eq } from "drizzle-orm";
 import EventPageClient from "./event-page-client";
 import { db } from "@/server/db";
 import { events } from "@/server/db/schema";
@@ -44,7 +45,7 @@ export async function generateMetadata({
   const { userId } = await auth();
 
   const event = await db.query.events.findFirst({
-    where: eq(events.publicId, id),
+    where: and(eq(events.publicId, id), visibleEventSourceCondition()),
     with: {
       venue: true,
       organizer: true,

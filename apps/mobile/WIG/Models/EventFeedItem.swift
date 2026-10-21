@@ -62,6 +62,7 @@ struct EventFeedItem: Codable, Identifiable, Hashable, Sendable {
     var publicID: String = ""
     let title: String
     let description: String?
+    var source: String? = nil
     let coverImageURL: URL?
     let eventURL: URL?
     let seriesID: UUID?
@@ -121,6 +122,7 @@ struct EventFeedItem: Codable, Identifiable, Hashable, Sendable {
         case publicID = "publicId"
         case title
         case description
+        case source
         case coverImageURL = "coverImageUrl"
         case eventURL = "eventUrl"
         case seriesID = "seriesId"
@@ -442,6 +444,7 @@ extension EventFeedItem {
         publicID = try container.decode(String.self, forKey: .publicID)
         title = try container.decode(String.self, forKey: .title)
         description = try container.decodeIfPresent(String.self, forKey: .description)
+        source = try container.decodeIfPresent(String.self, forKey: .source)
         coverImageURL = try container.decodeOptionalURL(forKey: .coverImageURL)
         eventURL = try container.decodeOptionalURL(forKey: .eventURL)
         seriesID = try container.decodeIfPresent(UUID.self, forKey: .seriesID)

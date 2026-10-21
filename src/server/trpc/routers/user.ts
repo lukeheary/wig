@@ -1,3 +1,5 @@
+import { visibleEventIdCondition } from "@/server/utils/event-source-visibility";
+import { visibleEventSourceCondition } from "@/server/utils/event-source-visibility";
 import { promoUrlSchema } from "@/server/utils/promo-validation";
 import { z } from "zod";
 import { TRPCError } from "@trpc/server";
@@ -111,6 +113,7 @@ export const userRouter = router({
             gte(events.startAt, start),
             lt(events.startAt, end),
             eq(events.visibility, "public"),
+            visibleEventSourceCondition(),
             eq(events.status, "active")
           ),
           with: { venue: true, organizer: true },
@@ -133,6 +136,7 @@ export const userRouter = router({
           ),
           gte(events.startAt, end),
           eq(events.visibility, "public"),
+          visibleEventSourceCondition(),
           eq(events.status, "active")
         ),
         columns: { id: true },
@@ -187,6 +191,7 @@ export const userRouter = router({
         where: and(
           eq(events.id, input.eventId),
           eq(events.visibility, "public"),
+          visibleEventSourceCondition(),
           eq(events.status, "active"),
           gte(events.startAt, new Date())
         ),
@@ -482,6 +487,7 @@ export const userRouter = router({
           : Promise.resolve(null),
         ctx.db.query.eventRsvps.findMany({
           where: and(
+            visibleEventIdCondition(eventRsvps.eventId),
             eq(eventRsvps.userId, targetUser.id),
             inArray(eventRsvps.status, ["going", "interested"])
           ),

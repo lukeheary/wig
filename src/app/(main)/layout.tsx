@@ -105,7 +105,7 @@ function MainLayoutContent({ children }: { children: React.ReactNode }) {
     pathname?.startsWith("/friends/");
   const isProfile =
     pathname === "/profile" || pathname?.startsWith("/profile/");
-  const isSupport = pathname === "/support";
+  const isSupport = pathname.startsWith("/support");
   const isMyPlaces = pathname === "/my-places";
   const isAdminPage = pathname?.startsWith("/admin");
   const isEventDetail =

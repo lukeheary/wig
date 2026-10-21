@@ -1,3 +1,4 @@
+import { visibleEventIdCondition } from "@/server/utils/event-source-visibility";
 import { z } from "zod";
 import { router, protectedProcedure } from "../init";
 import {
@@ -618,7 +619,7 @@ export const friendsRouter = router({
       const activities =
         friendIds.length > 0
           ? await ctx.db.query.userActivity.findMany({
-              where: inArray(userActivity.actorUserId, friendIds),
+              where: and(inArray(userActivity.actorUserId, friendIds), or(ne(userActivity.entityType, "event"), visibleEventIdCondition(userActivity.entityId))),
               orderBy: [
                 desc(userActivity.updatedAt),
                 desc(userActivity.createdAt),
@@ -764,7 +765,7 @@ export const friendsRouter = router({
             }
 
             const eventUpdates = await ctx.db.query.eventActivity.findMany({
-              where: inArray(eventActivity.eventId, subscribedEventIds),
+              where: and(inArray(eventActivity.eventId, subscribedEventIds), visibleEventIdCondition(eventActivity.eventId)),
               orderBy: [desc(eventActivity.createdAt)],
               limit: feedWindow,
               with: {

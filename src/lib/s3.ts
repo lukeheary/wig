@@ -209,6 +209,24 @@ function getStorageKey(url: string): string | null {
  * Check whether a URL points at the configured R2 public origin.
  */
 export function isStorageUrl(url: string): boolean {
+  try {
+    // Development reads resolve our objects through the local fallback route.
+    // Recognize those URLs so scraper imports do not re-upload stored artwork.
+    if (process.env.NODE_ENV === "development") {
+      const parsed = new URL(url);
+      const appOrigin = new URL(
+        process.env.NEXT_PUBLIC_APP_URL || "http://localhost:3000"
+      ).origin;
+      if (parsed.origin === appOrigin && parsed.pathname === "/api/storage-image") {
+        const key = parsed.searchParams.get("key");
+        if (key && !key.includes("\0") && !key.split("/").includes("..")) {
+          return true;
+        }
+      }
+    }
+  } catch {
+    return false;
+  }
   return getStorageKey(url) !== null;
 }
 

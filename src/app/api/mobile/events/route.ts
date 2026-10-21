@@ -1,3 +1,5 @@
+import { withScreenshotFriends } from "@/server/dev/screenshot-friends";
+import { visibleEventSourceCondition } from "@/server/utils/event-source-visibility";
 import { auth } from "@clerk/nextjs/server";
 import { NextResponse } from "next/server";
 import {
@@ -315,6 +317,7 @@ export async function GET(request: Request) {
       db.query.events.findMany({
         where: and(
           eq(events.visibility, "public"),
+          visibleEventSourceCondition(),
           eq(events.status, "active"),
           gte(events.startAt, startDate),
           lt(events.startAt, endDate),
@@ -342,9 +345,17 @@ export async function GET(request: Request) {
       db.query.events.findMany({
         where: and(
           eq(events.visibility, "public"),
+          visibleEventSourceCondition(),
           eq(events.status, "active"),
           gte(events.startAt, feedStartFloor),
           or(isNotNull(events.venueId), isNotNull(events.organizerId)),
+          // Disabled venues and organizers must not contribute What's New cards.
+          sql`not exists (
+            select 1 from places disabled_place
+            where disabled_place.is_enabled = false
+              and (disabled_place.id = ${events.venueId}
+                or disabled_place.id = ${events.organizerId})
+          )`,
           or(
             and(
               isNull(events.seriesId),
@@ -617,6 +628,7 @@ export async function GET(request: Request) {
       publicId: mapped.publicId,
       title: mapped.title,
       description: mapped.description,
+      source: mapped.source,
       coverImageUrl: mapped.coverImageUrl,
       eventUrl: mapped.eventUrl,
       seriesId: mapped.seriesId,
@@ -696,7 +708,7 @@ export async function GET(request: Request) {
     return mapped ? [mapped] : [];
   });
 
-  return NextResponse.json({
+  return NextResponse.json(await withScreenshotFriends({
     events: payload,
     latestFromFollows,
     latestFromPlaces,
@@ -704,7 +716,7 @@ export async function GET(request: Request) {
     availableCities,
     currentUserLocation: currentUserMetroArea,
     feedTimeZone,
-  });
+  }, "feed"));
 }
 
 export async function POST(request: Request) {

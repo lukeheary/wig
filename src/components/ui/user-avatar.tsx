@@ -9,6 +9,7 @@ const MOBILE_AVATAR_COLORS = [
   "#9159b3",
   "#6eb39e",
   "#26a194",
+  "#7398bd",
 ] as const;
 
 function getMobileAvatarColor(

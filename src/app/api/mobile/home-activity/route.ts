@@ -1,3 +1,5 @@
+import { withScreenshotFriends } from "@/server/dev/screenshot-friends";
+import { visibleEventIdCondition } from "@/server/utils/event-source-visibility";
 import { auth } from "@clerk/nextjs/server";
 import { addDays, subDays } from "date-fns";
 import { and, asc, desc, eq, inArray, or, sql } from "drizzle-orm";
@@ -224,6 +226,7 @@ export async function GET(request: Request) {
       ? await db.query.userActivity.findMany({
           where: and(
             eq(userActivity.entityType, "event"),
+            visibleEventIdCondition(userActivity.entityId),
             inArray(userActivity.actorUserId, friendIds),
             sql`${userActivity.type} in ('rsvp_going', 'rsvp_interested', 'rsvp_not_going')`
           ),
@@ -434,6 +437,7 @@ export async function GET(request: Request) {
     eventIds.length > 0
       ? db.query.eventRsvps.findMany({
           where: and(
+            visibleEventIdCondition(eventRsvps.eventId),
             inArray(eventRsvps.eventId, eventIds),
             eq(eventRsvps.userId, userId)
           ),
@@ -445,6 +449,7 @@ export async function GET(request: Request) {
     eventIds.length > 0
       ? db.query.eventRsvps.findMany({
           where: and(
+            visibleEventIdCondition(eventRsvps.eventId),
             inArray(eventRsvps.eventId, eventIds),
             eq(eventRsvps.partnerRsvpByUserId, userId),
             inArray(eventRsvps.status, ["going", "interested", "not_going"])
@@ -457,6 +462,7 @@ export async function GET(request: Request) {
     eventIds.length > 0 && friendIds.length > 0
       ? db.query.eventRsvps.findMany({
           where: and(
+            visibleEventIdCondition(eventRsvps.eventId),
             inArray(eventRsvps.eventId, eventIds),
             inArray(eventRsvps.userId, friendIds),
             inArray(eventRsvps.status, ["going", "interested", "not_going"])
@@ -582,6 +588,7 @@ export async function GET(request: Request) {
         publicId: event.publicId,
         title: event.title,
         description: event.description,
+        source: event.source,
         coverImageUrl: event.coverImageUrl,
         seriesId: event.seriesId,
         eventUrl: event.eventUrl,
@@ -699,10 +706,10 @@ export async function GET(request: Request) {
     )
     .slice(0, limit);
 
-  return NextResponse.json({
+  return NextResponse.json(await withScreenshotFriends({
     friendCount: friendIds.length,
     requestCount: requestCountRow?.count ?? 0,
     currentUserLocation,
     activities: allActivities,
-  });
+  }, "home-activity"));
 }

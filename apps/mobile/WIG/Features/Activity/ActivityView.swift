@@ -1190,7 +1190,7 @@ struct ActivityAvatarView: View {
             )
 
             statusBadge
-                .offset(x: 3, y: 3)
+                .offset(x: 5, y: 5)
         }
     }
 

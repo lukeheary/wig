@@ -450,6 +450,24 @@ struct APIClient: Sendable {
         )
     }
 
+    static func mobileAdminEventSources() -> Endpoint<MobileEventSourcesResponse> {
+        Endpoint(
+            path: "/api/mobile/admin/event-sources",
+            requiresAuthentication: false,
+            includesAuthenticationIfAvailable: true
+        )
+    }
+
+    static func updateMobileAdminEventSource(source: String, hidden: Bool) throws -> Endpoint<MobileEventSourcesResponse> {
+        Endpoint(
+            path: "/api/mobile/admin/event-sources",
+            method: .patch,
+            body: try JSONEncoder().encode(MobileEventSourceUpdate(source: source, hidden: hidden)),
+            requiresAuthentication: false,
+            includesAuthenticationIfAvailable: true
+        )
+    }
+
     static func mobileAdminScrapers(search: String? = nil) -> Endpoint<MobileAdminScrapersResponse> {
         var queryItems: [URLQueryItem] = []
         if let search, !search.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty {
@@ -2590,4 +2608,28 @@ private struct NoopTokenProvider: AuthTokenProviding {
     func authToken() async throws -> String? {
         nil
     }
+}
+
+struct MobileEventSourceSetting: Decodable, Identifiable, Sendable {
+    let source: String
+    let hidden: Bool
+    var id: String { source }
+    var title: String {
+        switch source {
+        case "ticketmaster": "Ticketmaster"
+        case "eventbrite": "Eventbrite"
+        case "posh": "Posh"
+        case "dice": "Dice"
+        default: source.capitalized
+        }
+    }
+}
+
+struct MobileEventSourcesResponse: Decodable, Sendable {
+    let sources: [MobileEventSourceSetting]
+}
+
+private struct MobileEventSourceUpdate: Encodable {
+    let source: String
+    let hidden: Bool
 }

@@ -1,3 +1,4 @@
+import { visibleEventSourceCondition } from "@/server/utils/event-source-visibility";
 import { auth } from "@clerk/nextjs/server";
 import { NextResponse } from "next/server";
 import {
@@ -156,6 +157,7 @@ function mapMobileEvent(
     publicId: mapped.publicId,
     title: mapped.title,
     description: mapped.description,
+    source: mapped.source,
     coverImageUrl: mapped.coverImageUrl,
     eventUrl: mapped.eventUrl,
     seriesId: mapped.seriesId,
@@ -234,6 +236,7 @@ export async function GET(
     where: and(
       eventCondition,
       eq(events.visibility, "public"),
+      visibleEventSourceCondition(),
       eq(events.status, "active"),
       gte(events.startAt, now)
     ),
@@ -253,6 +256,7 @@ export async function GET(
     where: and(
       eventCondition,
       eq(events.visibility, "public"),
+      visibleEventSourceCondition(),
       eq(events.status, "active"),
       lt(events.startAt, now),
       pastCursorCondition

@@ -1,3 +1,4 @@
+import { visibleEventSourceCondition } from "@/server/utils/event-source-visibility";
 import { z } from "zod";
 import {
   contentMutationProcedure,
@@ -448,7 +449,11 @@ export const placeRouter = router({
           : eq(events.organizerId, place.id);
 
       const upcomingEvents = await ctx.db.query.events.findMany({
-        where: and(eventCondition, gte(events.startAt, now)),
+        where: and(
+          visibleEventSourceCondition(),
+          eventCondition,
+          gte(events.startAt, now)
+        ),
         orderBy: [asc(events.startAt)],
         with: {
           series: true,
@@ -464,7 +469,11 @@ export const placeRouter = router({
       });
 
       const pastEvents = await ctx.db.query.events.findMany({
-        where: and(eventCondition, lt(events.startAt, now)),
+        where: and(
+          visibleEventSourceCondition(),
+          eventCondition,
+          lt(events.startAt, now)
+        ),
         orderBy: [desc(events.startAt)],
         limit: 24,
         with: {
@@ -632,6 +641,7 @@ export const placeRouter = router({
         : undefined;
       const rows = await ctx.db.query.events.findMany({
         where: and(
+          visibleEventSourceCondition(),
           eventCondition,
           lt(events.startAt, new Date()),
           cursorCondition
@@ -826,6 +836,7 @@ export const placeRouter = router({
         // Get events where any of these places are venues
         const venueEvents = await ctx.db.query.events.findMany({
           where: and(
+            visibleEventSourceCondition(),
             inArray(events.venueId, placeIds),
             gte(events.startAt, new Date())
           ),
@@ -843,6 +854,7 @@ export const placeRouter = router({
         // Get events where any of these places are organizers
         const organizerEvents = await ctx.db.query.events.findMany({
           where: and(
+            visibleEventSourceCondition(),
             inArray(events.organizerId, placeIds),
             gte(events.startAt, new Date())
           ),

@@ -1,3 +1,4 @@
+import { visibleEventIdCondition } from "@/server/utils/event-source-visibility";
 import { auth } from "@clerk/nextjs/server";
 import { and, eq, inArray } from "drizzle-orm";
 import { NextResponse } from "next/server";
@@ -64,7 +65,7 @@ export async function GET() {
   const now = new Date();
 
   const rsvps = await db.query.eventRsvps.findMany({
-    where: and(eq(eventRsvps.userId, userId), eq(eventRsvps.status, "going")),
+    where: and(visibleEventIdCondition(eventRsvps.eventId), eq(eventRsvps.userId, userId), eq(eventRsvps.status, "going")),
     with: { event: { with: { venue: true } } },
   });
 

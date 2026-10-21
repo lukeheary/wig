@@ -1481,3 +1481,10 @@ export const userPartnersRelations = relations(userPartners, ({ one }) => ({
     relationName: "partnerReceipts",
   }),
 }));
+
+// Global source visibility affects discovery without changing imported events.
+export const eventSourceVisibility = pgTable("event_source_visibility", {
+  source: varchar("source", { length: 50 }).primaryKey(),
+  hidden: boolean("hidden").notNull().default(false),
+  updatedAt: timestamp("updated_at").notNull().defaultNow(),
+});

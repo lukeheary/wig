@@ -1,3 +1,5 @@
+import { screenshotFriendProfile } from "@/server/dev/screenshot-friends";
+import { visibleEventIdCondition } from "@/server/utils/event-source-visibility";
 import { auth } from "@clerk/nextjs/server";
 import { NextResponse } from "next/server";
 import {
@@ -202,6 +204,9 @@ type RouteContext = {
 
 export async function GET(_request: Request, context: RouteContext) {
   const { id } = await context.params;
+  const screenshotProfile = await screenshotFriendProfile(id);
+  if (screenshotProfile) return NextResponse.json(screenshotProfile);
+
   const { userId: authenticatedViewerId } = await auth();
 
   if (
@@ -303,6 +308,7 @@ export async function GET(_request: Request, context: RouteContext) {
   ] = await Promise.all([
     db.query.eventRsvps.findMany({
       where: and(
+        visibleEventIdCondition(eventRsvps.eventId),
         eq(eventRsvps.userId, id),
         inArray(eventRsvps.status, ["going", "interested"])
       ),
@@ -323,6 +329,7 @@ export async function GET(_request: Request, context: RouteContext) {
     }),
     db.query.eventRsvps.findMany({
       where: and(
+        visibleEventIdCondition(eventRsvps.eventId),
         eq(eventRsvps.userId, id),
         inArray(eventRsvps.status, ["going", "interested"])
       ),
@@ -503,6 +510,7 @@ export async function GET(_request: Request, context: RouteContext) {
       ? await Promise.all([
           db.query.eventRsvps.findMany({
             where: and(
+              visibleEventIdCondition(eventRsvps.eventId),
               inArray(eventRsvps.eventId, allEventIds),
               eq(eventRsvps.userId, viewerUserId)
             ),
@@ -512,6 +520,7 @@ export async function GET(_request: Request, context: RouteContext) {
           }),
           db.query.eventRsvps.findMany({
             where: and(
+              visibleEventIdCondition(eventRsvps.eventId),
               inArray(eventRsvps.eventId, allEventIds),
               eq(eventRsvps.partnerRsvpByUserId, viewerUserId),
               inArray(eventRsvps.status, ["going", "interested"])
@@ -523,6 +532,7 @@ export async function GET(_request: Request, context: RouteContext) {
           viewerFriendIds.size > 0
             ? db.query.eventRsvps.findMany({
                 where: and(
+                  visibleEventIdCondition(eventRsvps.eventId),
                   inArray(eventRsvps.eventId, allEventIds),
                   inArray(eventRsvps.userId, [...viewerFriendIds]),
                   inArray(eventRsvps.status, ["going", "interested"])
@@ -618,6 +628,7 @@ export async function GET(_request: Request, context: RouteContext) {
       publicId: mapped.publicId,
       title: mapped.title,
       description: mapped.description,
+      source: mapped.source,
       coverImageUrl: mapped.coverImageUrl,
       eventUrl: mapped.eventUrl,
       seriesId: mapped.seriesId,

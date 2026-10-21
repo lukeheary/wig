@@ -38,7 +38,7 @@ schemes:
       environmentVariables:
         CLERK_PUBLISHABLE_KEY: pk_test_cG9saXNoZWQtYmF0LTQuY2xlcmsuYWNjb3VudHMuZGV2JA
         CLERK_FRONTEND_API: polished-bat-4.clerk.accounts.dev
-        API_BASE_URL: https://doe-striking-duckling.ngrok-free.app
+        API_BASE_URL: http://localhost:3001
     test:
       config: Debug
     profile:

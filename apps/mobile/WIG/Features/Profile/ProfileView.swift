@@ -5812,6 +5812,8 @@ private struct AdminScrapersView: View {
     var body: some View {
         ScrollView {
             VStack(alignment: .leading, spacing: 22) {
+                AdminEventSourceVisibilityView()
+
                 searchBar
 
                 if let selectedRow {
@@ -7238,4 +7240,67 @@ private struct CameraImagePicker: UIViewControllerRepresentable {
 #Preview {
     ProfileView()
         .environment(Clerk.preview())
+}
+
+private struct AdminEventSourceVisibilityView: View {
+    @Environment(\.apiClient) private var apiClient
+    @State private var sources: [MobileEventSourceSetting] = []
+    @State private var isSaving = false
+    @State private var errorMessage: String?
+
+    var body: some View {
+        VStack(alignment: .leading, spacing: 14) {
+            Text("Event Visibility")
+                .font(.headline)
+            Text("Show events from these sources to everyone. Hidden events stay saved and scrapers keep running.")
+                .font(.subheadline)
+                .foregroundStyle(.secondary)
+            if sources.isEmpty && errorMessage == nil {
+                ProgressView()
+            }
+            ForEach(sources) { setting in
+                Toggle(setting.title, isOn: Binding(
+                    get: { !setting.hidden },
+                    set: { shown in
+                        Task { await save(source: setting.source, hidden: !shown) }
+                    }
+                ))
+                .disabled(isSaving)
+            }
+            if let errorMessage {
+                Text(errorMessage)
+                    .font(.footnote)
+                    .foregroundStyle(.red)
+                Button("Retry") { Task { await load() } }
+            }
+        }
+        .padding(16)
+        .background(ProfileTheme.cardBackground, in: RoundedRectangle(cornerRadius: 18))
+        .task { await load() }
+    }
+
+    private func load() async {
+        errorMessage = nil
+        do {
+            sources = try await apiClient.send(APIClient.mobileAdminEventSources()).sources
+        } catch {
+            errorMessage = error.localizedDescription
+        }
+    }
+
+    private func save(source: String, hidden: Bool) async {
+        guard !isSaving else { return }
+        isSaving = true
+        errorMessage = nil
+        defer { isSaving = false }
+        do {
+            sources = try await apiClient.send(
+                APIClient.updateMobileAdminEventSource(source: source, hidden: hidden)
+            ).sources
+            EventFeedViewModel.invalidateSharedCache()
+            NotificationCenter.default.post(name: .homeFeedVisibilityDidChange, object: nil)
+        } catch {
+            errorMessage = error.localizedDescription
+        }
+    }
 }

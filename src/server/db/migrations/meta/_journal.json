@@ -455,6 +455,13 @@
       "when": 1788408000000,
       "tag": "0073_add_user_metro_selection",
       "breakpoints": true
+    },
+    {
+      "idx": 74,
+      "version": "7",
+      "when": 1792457050257,
+      "tag": "0074_event_source_visibility",
+      "breakpoints": true
     }
   ]
 }

@@ -135,7 +135,10 @@ struct EventDetailView: View {
                         eventReviewSection
                         rsvpdSection
                         promotionsSection
-                        about
+                        // Temporarily hide imported descriptions; keep About for Wig-created events.
+                        if currentEvent.source == nil {
+                            about
+                        }
                     }
                     .padding(.horizontal, 16)
                     .padding(.top, 10)
@@ -1360,14 +1363,6 @@ struct EventDetailView: View {
                     )
                 }
                 .buttonStyle(.plain)
-
-                if aboutDescription != nil {
-                    Rectangle()
-                        .fill(Color.white.opacity(0.08))
-                        .frame(maxWidth: .infinity)
-                        .frame(height: 1)
-                        .padding(.top, 6)
-                }
             }
         }
     }
@@ -1941,6 +1936,7 @@ struct EventDetailView: View {
             publicID: updatedEvent.publicID,
             title: updatedEvent.title,
             description: updatedEvent.description,
+            source: updatedEvent.source ?? currentEvent.source,
             coverImageURL: updatedEvent.coverImageURL,
             eventURL: updatedEvent.eventURL,
             seriesID: updatedEvent.seriesID ?? currentEvent.seriesID,
@@ -2267,7 +2263,28 @@ private struct EventRSVPListView: View {
     let attendeeReviewRatings: [String: EventReviewRating]
     @Environment(\.apiClient) private var apiClient
     @State private var loadedAttendeeReviewRatings = [String: EventReviewRating]()
-    @State private var selectedSection: EventRSVPListSection = .going
+    @State private var selectedSection: EventRSVPListSection
+
+    init(
+        goingAttendees: [EventSocialRSVP],
+        interestedAttendees: [EventSocialRSVP],
+        notGoingAttendees: [EventSocialRSVP],
+        isPastEvent: Bool,
+        eventID: UUID,
+        attendeeReviewRatings: [String: EventReviewRating]
+    ) {
+        self.goingAttendees = goingAttendees
+        self.interestedAttendees = interestedAttendees
+        self.notGoingAttendees = notGoingAttendees
+        self.isPastEvent = isPastEvent
+        self.eventID = eventID
+        self.attendeeReviewRatings = attendeeReviewRatings
+        _selectedSection = State(
+            initialValue: goingAttendees.isEmpty && !interestedAttendees.isEmpty
+                ? .interested
+                : .going
+        )
+    }
 
     private var reviewRatings: [String: EventReviewRating] {
         attendeeReviewRatings.merging(loadedAttendeeReviewRatings) { _, loaded in loaded }

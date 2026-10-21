@@ -1,3 +1,5 @@
+import { withScreenshotFriends } from "@/server/dev/screenshot-friends";
+import { visibleEventIdCondition } from "@/server/utils/event-source-visibility";
 import { auth } from "@clerk/nextjs/server";
 import { NextResponse } from "next/server";
 import {
@@ -343,6 +345,7 @@ export async function GET() {
   ] = await Promise.all([
     db.query.eventRsvps.findMany({
       where: and(
+        visibleEventIdCondition(eventRsvps.eventId),
         eq(eventRsvps.userId, userId),
         inArray(eventRsvps.status, ["going", "interested"])
       ),
@@ -363,6 +366,7 @@ export async function GET() {
     }),
     db.query.eventRsvps.findMany({
       where: and(
+        visibleEventIdCondition(eventRsvps.eventId),
         eq(eventRsvps.userId, userId),
         inArray(eventRsvps.status, ["going", "interested"])
       ),
@@ -431,7 +435,10 @@ export async function GET() {
     promoterPlaceIds.length > 0
       ? await db.query.userPromotedEvents
           .findMany({
-            where: eq(userPromotedEvents.userId, userId),
+            where: and(
+              eq(userPromotedEvents.userId, userId),
+              visibleEventIdCondition(userPromotedEvents.eventId)
+            ),
             with: {
               event: {
                 with: {
@@ -493,6 +500,7 @@ export async function GET() {
       ? await Promise.all([
           db.query.eventRsvps.findMany({
             where: and(
+              visibleEventIdCondition(eventRsvps.eventId),
               inArray(eventRsvps.eventId, allEventIds),
               eq(eventRsvps.userId, userId)
             ),
@@ -502,6 +510,7 @@ export async function GET() {
           }),
           db.query.eventRsvps.findMany({
             where: and(
+              visibleEventIdCondition(eventRsvps.eventId),
               inArray(eventRsvps.eventId, allEventIds),
               eq(eventRsvps.partnerRsvpByUserId, userId),
               inArray(eventRsvps.status, ["going", "interested"])
@@ -513,6 +522,7 @@ export async function GET() {
           acceptedFriendIds.length > 0
             ? db.query.eventRsvps.findMany({
                 where: and(
+                  visibleEventIdCondition(eventRsvps.eventId),
                   inArray(eventRsvps.eventId, allEventIds),
                   inArray(eventRsvps.userId, acceptedFriendIds),
                   inArray(eventRsvps.status, ["going", "interested"])
@@ -608,6 +618,7 @@ export async function GET() {
       publicId: mapped.publicId,
       title: mapped.title,
       description: mapped.description,
+      source: mapped.source,
       coverImageUrl: mapped.coverImageUrl,
       eventUrl: mapped.eventUrl,
       seriesId: mapped.seriesId,
@@ -654,7 +665,7 @@ export async function GET() {
     };
   };
 
-  return NextResponse.json({
+  return NextResponse.json(await withScreenshotFriends({
     profile,
     friendCount: acceptedByUserId.size,
     requestCount: receivedRequests.length,
@@ -728,5 +739,5 @@ export async function GET() {
     })),
     upcomingEvents: upcomingEventsRaw.map(mapMobileEvent),
     pastEvents: pastEventsRaw.map(mapMobileEvent),
-  });
+  }, "friends"));
 }

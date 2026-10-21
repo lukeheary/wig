@@ -140,6 +140,7 @@ enum UserAvatarFallbackPalette {
         Color(red: 0.57, green: 0.35, blue: 0.70),
         Color(red: 0.43, green: 0.70, blue: 0.62),
         Color(red: 0.15, green: 0.63, blue: 0.58),
+        Color(red: 115.0 / 255.0, green: 152.0 / 255.0, blue: 189.0 / 255.0),
     ]
 
     static func color(identityKey: String?, name: String) -> Color {

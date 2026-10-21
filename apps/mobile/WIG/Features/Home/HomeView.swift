@@ -1572,8 +1572,15 @@ struct HomeView: View {
     }
 
     private var latestFromPlacesSourceEvents: [EventFeedItem] {
-        latestFromFollowsViewModel.events +
-            (currentResponse?.latestFromPlaces ?? currentResponse?.latestFromFollows ?? []) +
+        // The server's collection applies global place and source visibility.
+        // Merging weekly events back in would reintroduce excluded places.
+        if let latestFromPlaces = currentResponse?.latestFromPlaces {
+            return latestFromPlaces
+        }
+
+        // Compatibility with older servers that omit the dedicated collection.
+        return latestFromFollowsViewModel.events +
+            (currentResponse?.latestFromFollows ?? []) +
             currentEvents
     }
 

@@ -1,3 +1,5 @@
+import { withScreenshotFriends } from "@/server/dev/screenshot-friends";
+import { visibleEventSourceCondition } from "@/server/utils/event-source-visibility";
 import { auth } from "@clerk/nextjs/server";
 import { NextResponse } from "next/server";
 import { and, asc, eq, inArray, isNotNull, or, sql } from "drizzle-orm";
@@ -107,9 +109,12 @@ export async function GET(
   const { userId } = await currentMobileUserContext();
 
   const event = await db.query.events.findFirst({
-    where: isPublicId(eventIdentifier)
-      ? eq(events.publicId, eventIdentifier)
-      : eq(events.id, eventIdentifier),
+    where: and(
+      visibleEventSourceCondition(),
+      isPublicId(eventIdentifier)
+        ? eq(events.publicId, eventIdentifier)
+        : eq(events.id, eventIdentifier)
+    ),
     with: {
       series: true,
       venue: true,
@@ -224,11 +229,12 @@ export async function GET(
     memberCounts.map((row) => [row.placeId, row.count])
   );
 
-  return NextResponse.json({
+  return NextResponse.json(await withScreenshotFriends({
     id: mapped.id,
     publicId: mapped.publicId,
     title: mapped.title,
     description: mapped.description,
+    source: mapped.source,
     coverImageUrl: mapped.coverImageUrl,
     eventUrl: mapped.eventUrl,
     seriesId: mapped.seriesId,
@@ -286,7 +292,7 @@ export async function GET(
       (rsvp) => rsvp.status === "interested"
     ),
     friendsNotGoing: socialRSVPs.filter((rsvp) => rsvp.status === "not_going"),
-  });
+  }, "detail"));
 }
 
 export async function PATCH(
@@ -501,6 +507,7 @@ export async function PATCH(
       publicId: mapped.publicId,
       title: mapped.title,
       description: mapped.description,
+      source: mapped.source,
       coverImageUrl: mapped.coverImageUrl,
       eventUrl: mapped.eventUrl,
       seriesId: mapped.seriesId,
@@ -523,10 +530,9 @@ export async function PATCH(
       status: mapped.status,
       createdAt: mapped.createdAt,
       updatedAt: mapped.updatedAt,
-      canEdit:
-        canEditMobileEvent(permissions, {
-          createdByUserId: mapped.createdByUserId,
-        }),
+      canEdit: canEditMobileEvent(permissions, {
+        createdByUserId: mapped.createdByUserId,
+      }),
       isCreatedByCurrentUser: isCreator,
     });
   } catch (error) {

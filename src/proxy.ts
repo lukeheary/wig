@@ -5,6 +5,7 @@ import { PUBLIC_EVENT_PATH_PATTERN } from "@/lib/public-id";
 const isPublicRoute = createRouteMatcher([
   PUBLIC_EVENT_PATH_PATTERN,
   "/",
+  "/support",
   "/sign-in(.*)",
   "/sign-up(.*)",
   "/sso-callback(.*)",

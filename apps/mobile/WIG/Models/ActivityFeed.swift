@@ -92,6 +92,7 @@ struct ActivityEventSummary: Decodable, Identifiable, Hashable, Sendable {
     let publicID: String
     let title: String
     let description: String?
+    var source: String? = nil
     let coverImageURL: URL?
     let eventURL: URL?
     let startAt: Date
@@ -127,6 +128,7 @@ struct ActivityEventSummary: Decodable, Identifiable, Hashable, Sendable {
         case publicID = "publicId"
         case title
         case description
+        case source
         case coverImageURL = "coverImageUrl"
         case eventURL = "eventUrl"
         case startAt
@@ -176,6 +178,7 @@ struct ActivityEventSummary: Decodable, Identifiable, Hashable, Sendable {
             publicID: publicID,
             title: title,
             description: description,
+            source: source,
             coverImageURL: coverImageURL,
             eventURL: eventURL,
             seriesID: nil,
@@ -240,6 +243,7 @@ extension ActivityEventSummary {
         publicID = try container.decode(String.self, forKey: .publicID)
         title = try container.decode(String.self, forKey: .title)
         description = try container.decodeIfPresent(String.self, forKey: .description)
+        source = try container.decodeIfPresent(String.self, forKey: .source)
         coverImageURL = try container.decodeOptionalURL(forKey: .coverImageURL)
         eventURL = try container.decodeOptionalURL(forKey: .eventURL)
         startAt = try container.decode(Date.self, forKey: .startAt)

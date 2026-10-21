@@ -1,3 +1,4 @@
+import { visibleEventSourceCondition } from "@/server/utils/event-source-visibility";
 import { auth } from "@clerk/nextjs/server";
 import { NextResponse } from "next/server";
 import { and, asc, eq, gte, inArray, sql } from "drizzle-orm";
@@ -267,6 +268,7 @@ export async function GET(request: Request) {
       and(
         inArray(events.venueId, placeIds),
         eq(events.visibility, "public"),
+        visibleEventSourceCondition(),
         eq(events.status, "active"),
         gte(events.startAt, now)
       )
@@ -283,6 +285,7 @@ export async function GET(request: Request) {
       and(
         inArray(events.organizerId, placeIds),
         eq(events.visibility, "public"),
+        visibleEventSourceCondition(),
         eq(events.status, "active"),
         gte(events.startAt, now)
       )

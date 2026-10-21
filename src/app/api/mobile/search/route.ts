@@ -1,3 +1,4 @@
+import { visibleEventSourceCondition } from "@/server/utils/event-source-visibility";
 import { auth } from "@clerk/nextjs/server";
 import {
   and,
@@ -406,6 +407,7 @@ export async function GET(request: Request) {
         ? await db.query.events.findMany({
           where: and(
             eq(events.visibility, "public"),
+            visibleEventSourceCondition(),
             eq(events.status, "active"),
             gte(events.startAt, new Date()),
             eq(events.state, currentMetroArea.state),
@@ -442,6 +444,7 @@ export async function GET(request: Request) {
         ? await db.query.events.findMany({
           where: and(
             eq(events.visibility, "public"),
+            visibleEventSourceCondition(),
             eq(events.status, "active"),
             gte(events.startAt, new Date()),
             eq(events.state, currentMetroArea.state)
@@ -499,6 +502,7 @@ export async function GET(request: Request) {
                 and(
                   inArray(events.venueId, placeIds),
                   eq(events.visibility, "public"),
+                  visibleEventSourceCondition(),
                   eq(events.status, "active"),
                   gte(events.startAt, now)
                 )
@@ -516,6 +520,7 @@ export async function GET(request: Request) {
                 and(
                   inArray(events.organizerId, placeIds),
                   eq(events.visibility, "public"),
+                  visibleEventSourceCondition(),
                   eq(events.status, "active"),
                   gte(events.startAt, now)
                 )
@@ -688,6 +693,7 @@ export async function GET(request: Request) {
           publicId: mapped.publicId,
           title: mapped.title,
           description: mapped.description,
+          source: mapped.source,
           coverImageUrl: mapped.coverImageUrl,
           eventUrl: mapped.eventUrl,
           seriesId: mapped.seriesId,
@@ -745,6 +751,7 @@ export async function GET(request: Request) {
           publicId: mapped.publicId,
           title: mapped.title,
           description: mapped.description,
+          source: mapped.source,
           coverImageUrl: mapped.coverImageUrl,
           eventUrl: mapped.eventUrl,
           seriesId: mapped.seriesId,
