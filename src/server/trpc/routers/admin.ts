@@ -1,3 +1,4 @@
+import { EVENT_SOURCES } from "@/server/utils/event-source-visibility";
 import { z } from "zod";
 import { router, adminProcedure } from "../init";
 import {
@@ -12,6 +13,8 @@ import {
   supportTicketActivity,
   supportTickets,
   users,
+  eventSourceVisibility,
+  userEventSourceVisibility,
 } from "../../db/schema";
 import { eq, and, or, ilike, desc, ne, inArray } from "drizzle-orm";
 import { TRPCError } from "@trpc/server";
@@ -1078,6 +1081,34 @@ export const adminRouter = router({
   // ============================================================================
   // USER SEARCH
   // ============================================================================
+
+  getUserEventSources: adminProcedure
+    .input(z.object({ userId: z.string().min(1) }))
+    .query(async ({ ctx, input }) => {
+      const user = await ctx.db.query.users.findFirst({ where: eq(users.id, input.userId), columns: { id: true } });
+      if (!user) throw new TRPCError({ code: "NOT_FOUND", message: "User not found" });
+      const [settings, globalSettings] = await Promise.all([
+        ctx.db.select().from(userEventSourceVisibility).where(eq(userEventSourceVisibility.userId, input.userId)),
+        ctx.db.select().from(eventSourceVisibility),
+      ]);
+      return EVENT_SOURCES.map((source) => ({
+        source,
+        hidden: settings.find((setting) => setting.source === source)?.hidden ?? false,
+        globallyHidden: globalSettings.find((setting) => setting.source === source)?.hidden ?? false,
+      }));
+    }),
+
+  setUserEventSourceVisibility: adminProcedure
+    .input(z.object({ userId: z.string().min(1), source: z.enum(EVENT_SOURCES), hidden: z.boolean() }))
+    .mutation(async ({ ctx, input }) => {
+      const user = await ctx.db.query.users.findFirst({ where: eq(users.id, input.userId), columns: { id: true } });
+      if (!user) throw new TRPCError({ code: "NOT_FOUND", message: "User not found" });
+      await ctx.db.insert(userEventSourceVisibility).values(input).onConflictDoUpdate({
+        target: [userEventSourceVisibility.userId, userEventSourceVisibility.source],
+        set: { hidden: input.hidden, updatedAt: new Date() },
+      });
+      return { ...input };
+    }),
 
   setProfileVisibility: adminProcedure
     .input(z.object({ userId: z.string().min(1), hidden: z.boolean() }))

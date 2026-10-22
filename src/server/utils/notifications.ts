@@ -1,5 +1,6 @@
+import { eventSourceVisibilityCondition } from "./event-source-visibility";
 import { isProfileHidden } from "./profile-visibility";
-import { and, eq, inArray, or } from "drizzle-orm";
+import { and, eq, inArray, or, sql } from "drizzle-orm";
 import { db } from "../db";
 import {
   events,
@@ -156,6 +157,7 @@ export async function notifyFriendsOfRsvp(
       columns: {
         id: true,
         publicId: true,
+        source: true,
         title: true,
         startAt: true,
         timeZone: true,
@@ -181,7 +183,7 @@ export async function notifyFriendsOfRsvp(
     return [];
   }
 
-  const recipientIds = [
+  const candidateRecipientIds = [
     ...new Set(
       friendConnections
         .map((friendship) =>
@@ -193,9 +195,13 @@ export async function notifyFriendsOfRsvp(
     ),
   ];
 
-  if (recipientIds.length === 0) {
-    return [];
-  }
+  if (candidateRecipientIds.length === 0) return [];
+  const recipients = await database.select({ id: users.id }).from(users).where(and(
+    inArray(users.id, candidateRecipientIds),
+    eventSourceVisibilityCondition(sql`${event.source}`, users.id)
+  ));
+  const recipientIds = recipients.map((recipient) => recipient.id);
+  if (recipientIds.length === 0) return [];
 
   const mutedRecipients =
     await database.query.userFriendsMutedNotifications.findMany({

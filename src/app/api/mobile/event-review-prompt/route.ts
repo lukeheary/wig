@@ -66,7 +66,7 @@ export async function GET() {
   const now = new Date();
 
   const rsvps = await db.query.eventRsvps.findMany({
-    where: await withVisibleProfiles(and(visibleEventIdCondition(eventRsvps.eventId), eq(eventRsvps.userId, userId), eq(eventRsvps.status, "going")), eventRsvps.userId),
+    where: await withVisibleProfiles(and(await visibleEventIdCondition(eventRsvps.eventId), eq(eventRsvps.userId, userId), eq(eventRsvps.status, "going")), eventRsvps.userId),
     with: { event: { with: { venue: true } } },
   });
 

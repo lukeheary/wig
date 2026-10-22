@@ -318,7 +318,7 @@ export async function GET(request: Request) {
       db.query.events.findMany({
         where: and(
           eq(events.visibility, "public"),
-          visibleEventSourceCondition(),
+          await visibleEventSourceCondition(),
           eq(events.status, "active"),
           gte(events.startAt, startDate),
           lt(events.startAt, endDate),
@@ -346,7 +346,7 @@ export async function GET(request: Request) {
       db.query.events.findMany({
         where: and(
           eq(events.visibility, "public"),
-          visibleEventSourceCondition(),
+          await visibleEventSourceCondition(),
           eq(events.status, "active"),
           gte(events.startAt, feedStartFloor),
           or(isNotNull(events.venueId), isNotNull(events.organizerId)),

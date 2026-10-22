@@ -45,7 +45,7 @@ export async function generateMetadata({
   const { userId } = await auth();
 
   const event = await db.query.events.findFirst({
-    where: and(eq(events.publicId, id), visibleEventSourceCondition()),
+    where: and(eq(events.publicId, id), await visibleEventSourceCondition()),
     with: {
       venue: true,
       organizer: true,

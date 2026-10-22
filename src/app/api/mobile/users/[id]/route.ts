@@ -309,7 +309,7 @@ export async function GET(_request: Request, context: RouteContext) {
   ] = await Promise.all([
     db.query.eventRsvps.findMany({
       where: await withVisibleProfiles(and(
-        visibleEventIdCondition(eventRsvps.eventId),
+        await visibleEventIdCondition(eventRsvps.eventId),
         eq(eventRsvps.userId, id),
         inArray(eventRsvps.status, ["going", "interested"])
       ), eventRsvps.userId),
@@ -330,7 +330,7 @@ export async function GET(_request: Request, context: RouteContext) {
     }),
     db.query.eventRsvps.findMany({
       where: await withVisibleProfiles(and(
-        visibleEventIdCondition(eventRsvps.eventId),
+        await visibleEventIdCondition(eventRsvps.eventId),
         eq(eventRsvps.userId, id),
         inArray(eventRsvps.status, ["going", "interested"])
       ), eventRsvps.userId),
@@ -511,7 +511,7 @@ export async function GET(_request: Request, context: RouteContext) {
       ? await Promise.all([
           db.query.eventRsvps.findMany({
             where: await withVisibleProfiles(and(
-              visibleEventIdCondition(eventRsvps.eventId),
+              await visibleEventIdCondition(eventRsvps.eventId),
               inArray(eventRsvps.eventId, allEventIds),
               eq(eventRsvps.userId, viewerUserId)
             ), eventRsvps.userId),
@@ -521,7 +521,7 @@ export async function GET(_request: Request, context: RouteContext) {
           }),
           db.query.eventRsvps.findMany({
             where: await withVisibleProfiles(and(
-              visibleEventIdCondition(eventRsvps.eventId),
+              await visibleEventIdCondition(eventRsvps.eventId),
               inArray(eventRsvps.eventId, allEventIds),
               eq(eventRsvps.partnerRsvpByUserId, viewerUserId),
               inArray(eventRsvps.status, ["going", "interested"])
@@ -533,7 +533,7 @@ export async function GET(_request: Request, context: RouteContext) {
           viewerFriendIds.size > 0
             ? db.query.eventRsvps.findMany({
                 where: await withVisibleProfiles(and(
-                  visibleEventIdCondition(eventRsvps.eventId),
+                  await visibleEventIdCondition(eventRsvps.eventId),
                   inArray(eventRsvps.eventId, allEventIds),
                   inArray(eventRsvps.userId, [...viewerFriendIds]),
                   inArray(eventRsvps.status, ["going", "interested"])

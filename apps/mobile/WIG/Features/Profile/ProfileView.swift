@@ -843,6 +843,12 @@ struct ProfileView: View {
             }
             .tint(.white)
 
+            Link(destination: URL(string: "https://www.whoisgoing.com/privacy")!) {
+                Label("Privacy Policy", systemImage: "hand.raised")
+                    .foregroundStyle(.white)
+            }
+            .tint(.white)
+
             Button(role: .destructive) {
                 isSignOutConfirmationPresented = true
             } label: {

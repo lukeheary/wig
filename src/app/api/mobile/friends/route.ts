@@ -346,7 +346,7 @@ export async function GET() {
   ] = await Promise.all([
     db.query.eventRsvps.findMany({
       where: await withVisibleProfiles(and(
-        visibleEventIdCondition(eventRsvps.eventId),
+        await visibleEventIdCondition(eventRsvps.eventId),
         eq(eventRsvps.userId, userId),
         inArray(eventRsvps.status, ["going", "interested"])
       ), eventRsvps.userId),
@@ -367,7 +367,7 @@ export async function GET() {
     }),
     db.query.eventRsvps.findMany({
       where: await withVisibleProfiles(and(
-        visibleEventIdCondition(eventRsvps.eventId),
+        await visibleEventIdCondition(eventRsvps.eventId),
         eq(eventRsvps.userId, userId),
         inArray(eventRsvps.status, ["going", "interested"])
       ), eventRsvps.userId),
@@ -438,7 +438,7 @@ export async function GET() {
           .findMany({
             where: await withVisibleProfiles(and(
               eq(userPromotedEvents.userId, userId),
-              visibleEventIdCondition(userPromotedEvents.eventId)
+              await visibleEventIdCondition(userPromotedEvents.eventId)
             ), userPromotedEvents.userId),
             with: {
               event: {
@@ -501,7 +501,7 @@ export async function GET() {
       ? await Promise.all([
           db.query.eventRsvps.findMany({
             where: await withVisibleProfiles(and(
-              visibleEventIdCondition(eventRsvps.eventId),
+              await visibleEventIdCondition(eventRsvps.eventId),
               inArray(eventRsvps.eventId, allEventIds),
               eq(eventRsvps.userId, userId)
             ), eventRsvps.userId),
@@ -511,7 +511,7 @@ export async function GET() {
           }),
           db.query.eventRsvps.findMany({
             where: await withVisibleProfiles(and(
-              visibleEventIdCondition(eventRsvps.eventId),
+              await visibleEventIdCondition(eventRsvps.eventId),
               inArray(eventRsvps.eventId, allEventIds),
               eq(eventRsvps.partnerRsvpByUserId, userId),
               inArray(eventRsvps.status, ["going", "interested"])
@@ -523,7 +523,7 @@ export async function GET() {
           acceptedFriendIds.length > 0
             ? db.query.eventRsvps.findMany({
                 where: await withVisibleProfiles(and(
-                  visibleEventIdCondition(eventRsvps.eventId),
+                  await visibleEventIdCondition(eventRsvps.eventId),
                   inArray(eventRsvps.eventId, allEventIds),
                   inArray(eventRsvps.userId, acceptedFriendIds),
                   inArray(eventRsvps.status, ["going", "interested"])

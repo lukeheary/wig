@@ -1561,7 +1561,7 @@ export const eventRouter = router({
         gte(events.startAt, input.startDate),
         lte(events.startAt, input.endDate),
         eq(events.visibility, "public"),
-        visibleEventSourceCondition(),
+        await visibleEventSourceCondition(),
       ];
 
       // Add category filter
@@ -1643,7 +1643,7 @@ export const eventRouter = router({
                 gte(events.startAt, input.startDate),
                 lte(events.startAt, input.endDate),
                 eq(events.visibility, "public"),
-                visibleEventSourceCondition(),
+                await visibleEventSourceCondition(),
                 sql`${distanceSql} <= ${radiusMiles}`
               )
             );
@@ -1964,7 +1964,7 @@ export const eventRouter = router({
     .query(async ({ ctx, input }) => {
       const event = await ctx.db.query.events.findFirst({
         where: and(
-          visibleEventSourceCondition(),
+          await visibleEventSourceCondition(),
           isPublicId(input.eventId)
             ? eq(events.publicId, input.eventId)
             : eq(events.id, input.eventId)
@@ -2584,7 +2584,7 @@ export const eventRouter = router({
     .query(async ({ ctx, input }) => {
       const conditions = [
         eq(events.visibility, "public"),
-        visibleEventSourceCondition(),
+        await visibleEventSourceCondition(),
         gte(events.startAt, input.startDate),
         lte(events.startAt, input.endDate),
       ];
@@ -2625,7 +2625,7 @@ export const eventRouter = router({
             .where(
               and(
                 eq(events.visibility, "public"),
-                visibleEventSourceCondition(),
+                await visibleEventSourceCondition(),
                 gte(events.startAt, input.startDate),
                 lte(events.startAt, input.endDate),
                 sql`${distanceSql} <= ${radiusMiles}`
@@ -2717,7 +2717,7 @@ export const eventRouter = router({
 
       const conditions = [
         eq(events.visibility, "public"),
-        visibleEventSourceCondition(),
+        await visibleEventSourceCondition(),
         gte(events.startAt, startDate),
       ];
 
@@ -2755,7 +2755,7 @@ export const eventRouter = router({
 
           const nearbyEventConditions = [
             eq(events.visibility, "public"),
-            visibleEventSourceCondition(),
+            await visibleEventSourceCondition(),
             gte(events.startAt, startDate),
             sql`${distanceSql} <= ${radiusMiles}`,
           ];
@@ -2873,7 +2873,7 @@ export const eventRouter = router({
 
       const conditions = [
         eq(events.visibility, "public"),
-        visibleEventSourceCondition(),
+        await visibleEventSourceCondition(),
         gte(events.startAt, now), // Only future events
       ];
 
@@ -2932,7 +2932,7 @@ export const eventRouter = router({
             .where(
               and(
                 eq(events.visibility, "public"),
-                visibleEventSourceCondition(),
+                await visibleEventSourceCondition(),
                 gte(events.startAt, now),
                 sql`${distanceSql} <= ${radiusMiles}`
               )

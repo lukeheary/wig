@@ -63,7 +63,7 @@ export async function GET(request: Request) {
     ),
     gte(events.startAt, new Date()),
     eq(events.visibility, "public"),
-    visibleEventSourceCondition(),
+    await visibleEventSourceCondition(),
     eq(events.status, "active"),
     ...(eventId
       ? [eq(events.id, eventId)]
@@ -90,7 +90,7 @@ export async function GET(request: Request) {
             ),
             gte(events.startAt, end),
             eq(events.visibility, "public"),
-            visibleEventSourceCondition(),
+            await visibleEventSourceCondition(),
             eq(events.status, "active")
           ),
           columns: { id: true },
@@ -189,7 +189,7 @@ export async function PATCH(request: Request) {
       eq(events.id, body.eventId),
       gte(events.startAt, new Date()),
       eq(events.visibility, "public"),
-      visibleEventSourceCondition(),
+      await visibleEventSourceCondition(),
       eq(events.status, "active")
     ),
     columns: { venueId: true, organizerId: true },

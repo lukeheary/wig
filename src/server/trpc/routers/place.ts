@@ -452,7 +452,7 @@ export const placeRouter = router({
 
       const upcomingEvents = await ctx.db.query.events.findMany({
         where: and(
-          visibleEventSourceCondition(),
+          await visibleEventSourceCondition(),
           eventCondition,
           gte(events.startAt, now)
         ),
@@ -472,7 +472,7 @@ export const placeRouter = router({
 
       const pastEvents = await ctx.db.query.events.findMany({
         where: and(
-          visibleEventSourceCondition(),
+          await visibleEventSourceCondition(),
           eventCondition,
           lt(events.startAt, now)
         ),
@@ -643,7 +643,7 @@ export const placeRouter = router({
         : undefined;
       const rows = await ctx.db.query.events.findMany({
         where: and(
-          visibleEventSourceCondition(),
+          await visibleEventSourceCondition(),
           eventCondition,
           lt(events.startAt, new Date()),
           cursorCondition
@@ -838,7 +838,7 @@ export const placeRouter = router({
         // Get events where any of these places are venues
         const venueEvents = await ctx.db.query.events.findMany({
           where: and(
-            visibleEventSourceCondition(),
+            await visibleEventSourceCondition(),
             inArray(events.venueId, placeIds),
             gte(events.startAt, new Date())
           ),
@@ -856,7 +856,7 @@ export const placeRouter = router({
         // Get events where any of these places are organizers
         const organizerEvents = await ctx.db.query.events.findMany({
           where: and(
-            visibleEventSourceCondition(),
+            await visibleEventSourceCondition(),
             inArray(events.organizerId, placeIds),
             gte(events.startAt, new Date())
           ),

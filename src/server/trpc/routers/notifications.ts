@@ -1,3 +1,4 @@
+import { visibleEventIdCondition } from "@/server/utils/event-source-visibility";
 import { withVisibleProfiles } from "@/server/utils/profile-visibility";
 import { and, desc, eq, isNull, sql } from "drizzle-orm";
 import { protectedProcedure, router } from "../init";
@@ -6,7 +7,13 @@ import { notifications } from "@/server/db/schema";
 export const notificationsRouter = router({
   listRecent: protectedProcedure.query(async ({ ctx }) => {
     return ctx.db.query.notifications.findMany({
-      where: await withVisibleProfiles(eq(notifications.userId, ctx.auth.userId), notifications.actorUserId),
+      where: await withVisibleProfiles(
+        and(
+          eq(notifications.userId, ctx.auth.userId),
+          sql`(${notifications.entityType} <> 'event' OR ${await visibleEventIdCondition(notifications.entityId, true)})`
+        ),
+        notifications.actorUserId
+      ),
       orderBy: [desc(notifications.createdAt)],
       limit: 50,
       with: {
@@ -17,10 +24,14 @@ export const notificationsRouter = router({
 
   listUnread: protectedProcedure.query(async ({ ctx }) => {
     return ctx.db.query.notifications.findMany({
-      where: await withVisibleProfiles(and(
-        eq(notifications.userId, ctx.auth.userId),
-        isNull(notifications.readAt)
-      ), notifications.actorUserId),
+      where: await withVisibleProfiles(
+        and(
+          eq(notifications.userId, ctx.auth.userId),
+          isNull(notifications.readAt),
+          sql`(${notifications.entityType} <> 'event' OR ${await visibleEventIdCondition(notifications.entityId, true)})`
+        ),
+        notifications.actorUserId
+      ),
       orderBy: [desc(notifications.createdAt)],
       limit: 20,
     });
@@ -32,10 +43,16 @@ export const notificationsRouter = router({
         unreadCount: sql<number>`count(*)::int`,
       })
       .from(notifications)
-      .where(await withVisibleProfiles(and(
-          eq(notifications.userId, ctx.auth.userId),
-          isNull(notifications.readAt)
-        ), notifications.actorUserId));
+      .where(
+        await withVisibleProfiles(
+          and(
+            eq(notifications.userId, ctx.auth.userId),
+            isNull(notifications.readAt),
+            sql`(${notifications.entityType} <> 'event' OR ${await visibleEventIdCondition(notifications.entityId, true)})`
+          ),
+          notifications.actorUserId
+        )
+      );
 
     return { unreadCount: result?.unreadCount ?? 0 };
   }),

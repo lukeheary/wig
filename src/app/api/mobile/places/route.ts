@@ -269,7 +269,7 @@ export async function GET(request: Request) {
       and(
         inArray(events.venueId, placeIds),
         eq(events.visibility, "public"),
-        visibleEventSourceCondition(),
+        await visibleEventSourceCondition(),
         eq(events.status, "active"),
         gte(events.startAt, now)
       )
@@ -286,7 +286,7 @@ export async function GET(request: Request) {
       and(
         inArray(events.organizerId, placeIds),
         eq(events.visibility, "public"),
-        visibleEventSourceCondition(),
+        await visibleEventSourceCondition(),
         eq(events.status, "active"),
         gte(events.startAt, now)
       )

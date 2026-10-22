@@ -111,7 +111,7 @@ export async function GET(
 
   const event = await db.query.events.findFirst({
     where: and(
-      visibleEventSourceCondition(),
+      await visibleEventSourceCondition(),
       isPublicId(eventIdentifier)
         ? eq(events.publicId, eventIdentifier)
         : eq(events.id, eventIdentifier)

@@ -237,7 +237,7 @@ export async function GET(
     where: and(
       eventCondition,
       eq(events.visibility, "public"),
-      visibleEventSourceCondition(),
+      await visibleEventSourceCondition(),
       eq(events.status, "active"),
       gte(events.startAt, now)
     ),
@@ -257,7 +257,7 @@ export async function GET(
     where: and(
       eventCondition,
       eq(events.visibility, "public"),
-      visibleEventSourceCondition(),
+      await visibleEventSourceCondition(),
       eq(events.status, "active"),
       lt(events.startAt, now),
       pastCursorCondition

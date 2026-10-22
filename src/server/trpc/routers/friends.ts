@@ -625,7 +625,7 @@ export const friendsRouter = router({
       const activities =
         friendIds.length > 0
           ? await ctx.db.query.userActivity.findMany({
-              where: await withVisibleProfiles(and(inArray(userActivity.actorUserId, friendIds), or(ne(userActivity.entityType, "event"), visibleEventIdCondition(userActivity.entityId))), userActivity.actorUserId),
+              where: await withVisibleProfiles(and(inArray(userActivity.actorUserId, friendIds), or(ne(userActivity.entityType, "event"), await visibleEventIdCondition(userActivity.entityId))), userActivity.actorUserId),
               orderBy: [
                 desc(userActivity.updatedAt),
                 desc(userActivity.createdAt),
@@ -771,7 +771,7 @@ export const friendsRouter = router({
             }
 
             const eventUpdates = await ctx.db.query.eventActivity.findMany({
-              where: await withVisibleProfiles(and(inArray(eventActivity.eventId, subscribedEventIds), visibleEventIdCondition(eventActivity.eventId)), eventActivity.actorUserId),
+              where: await withVisibleProfiles(and(inArray(eventActivity.eventId, subscribedEventIds), await visibleEventIdCondition(eventActivity.eventId)), eventActivity.actorUserId),
               orderBy: [desc(eventActivity.createdAt)],
               limit: feedWindow,
               with: {

@@ -31,6 +31,14 @@ export default clerkMiddleware(async (auth, req) => {
   if (!isPublicRoute(req)) {
     await auth.protect();
   }
+
+  // Account-filtered responses must not be reused between signed-in users.
+  if (req.nextUrl.pathname.startsWith("/api/mobile/") || req.nextUrl.pathname.startsWith("/api/trpc/")) {
+    const response = NextResponse.next();
+    response.headers.set("Cache-Control", "private, no-store");
+    response.headers.set("Vary", "Authorization, Cookie");
+    return response;
+  }
 });
 
 export const config = {

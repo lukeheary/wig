@@ -1489,3 +1489,13 @@ export const eventSourceVisibility = pgTable("event_source_visibility", {
   hidden: boolean("hidden").notNull().default(false),
   updatedAt: timestamp("updated_at").notNull().defaultNow(),
 });
+
+// Account-specific source preferences are separate from the global kill switch.
+export const userEventSourceVisibility = pgTable("user_event_source_visibility", {
+  userId: text("user_id").notNull().references(() => users.id, { onDelete: "cascade" }),
+  source: varchar("source", { length: 50 }).notNull(),
+  hidden: boolean("hidden").notNull().default(false),
+  updatedAt: timestamp("updated_at").notNull().defaultNow(),
+}, (table) => ({
+  pk: primaryKey({ columns: [table.userId, table.source] }),
+}));
