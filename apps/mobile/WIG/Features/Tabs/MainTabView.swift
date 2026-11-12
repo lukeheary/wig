@@ -694,7 +694,7 @@ private struct GuestWelcomeView: View {
                     .frame(maxWidth: .infinity)
                     .padding(.bottom, 20)
 
-                VStack(spacing: 10) {
+                VStack(spacing: 16) {
                     Button(action: onContinueWithApple) {
                         ZStack(alignment: .leading) {
                             Text("Continue with Apple")
@@ -810,7 +810,7 @@ private struct GuestWelcomeView: View {
                 .padding(.horizontal, 8)
                 .padding(.vertical, 4)
                 .background(AppTheme.accentBlue, in: RoundedRectangle(cornerRadius: 6, style: .continuous))
-                .offset(x: 4, y: -10)
+                .offset(x: 4, y: -6)
                 .accessibilityLabel("Last used sign-in method")
         }
     }
