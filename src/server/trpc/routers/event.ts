@@ -80,7 +80,7 @@ import {
 } from "@/server/utils/scraped-event-images";
 import { claimManualSeriesOccurrence } from "@/server/utils/scraper-event-reconciliation";
 import { withStoredImageReplacements } from "@/server/utils/stored-image-lifecycle";
-import { formatNotificationEventDate } from "@/server/utils/notification-content";
+import { formatNotificationEventDetails } from "@/server/utils/notification-content";
 
 function resolveEventUpdateActivityType(
   previousStatus: EventStatus,
@@ -134,14 +134,19 @@ async function notifyPartnerOfMirroredRsvp({
         timeZone: true,
         state: true,
       },
+      with: { venue: { columns: { name: true } } },
     }),
   ]);
 
   if (!event) return;
 
-  const partnerRsvpDate = event.startAt
-    ? formatNotificationEventDate(event.startAt, event.timeZone, event.state)
-    : null;
+  const eventDetails = formatNotificationEventDetails({
+    eventTitle: event.title,
+    eventPlaceName: event.venue?.name,
+    eventStartAt: event.startAt,
+    eventTimeZone: event.timeZone,
+    eventState: event.state,
+  });
   const actorName =
     [actor?.firstName, actor?.lastName].filter(Boolean).join(" ").trim() ||
     actor?.username ||
@@ -149,8 +154,8 @@ async function notifyPartnerOfMirroredRsvp({
   const title = actorName;
   const body =
     status === "going"
-      ? `Is going with you to ${event.title}${partnerRsvpDate ? ` on ${partnerRsvpDate}` : ""}`
-      : `Is interested in ${event.title} with you${partnerRsvpDate ? ` on ${partnerRsvpDate}` : ""}`;
+      ? `Is going with you to ${eventDetails}`
+      : `Is interested in ${eventDetails} with you`;
   const actionUrl = `/event/${event.publicId}`;
 
   await createNotification(

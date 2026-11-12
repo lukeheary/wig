@@ -36,7 +36,10 @@ struct AuthGate: View {
 
     var body: some View {
         Group {
-            if requiresOnboardingGate,
+            if requiresOnboardingGate, viewModel.isResolving {
+                LaunchLoadingView()
+                    .background(AppTheme.background.ignoresSafeArea())
+            } else if requiresOnboardingGate,
                case .failed(let message) = viewModel.state
             {
                 MobileOnboardingGateErrorView(message: message) {
@@ -58,10 +61,12 @@ struct AuthGate: View {
             }
         }
         .task(id: gateTaskID) {
-            async let homePreload: Void = EventFeedViewModel.preload(
-                using: apiClient,
-                cacheIdentity: eventFeedCacheIdentity
-            )
+            let restoredCompletion = viewModel.restoreCompletion(for: onboardingCacheIdentity)
+            if !requiresOnboardingGate || restoredCompletion {
+                onReady()
+            }
+
+            async let homePreload: Void = preloadHome()
 
             if requiresOnboardingGate {
                 await viewModel.load(using: apiClient)
@@ -71,19 +76,7 @@ struct AuthGate: View {
             await Task.yield()
             onReady()
 
-            // Home renders its own loading/error state. A network request must
-            // not keep the entire app behind the launch logo.
             await homePreload
-            guard !Task.isCancelled else { return }
-
-            // These improve the first Home interactions but are not required to
-            // render it. Start them only after the splash has been released.
-            await Task.yield()
-            async let artworkPreload: Void = EventFeedViewModel.prefetchInitialArtwork(
-                cacheIdentity: eventFeedCacheIdentity
-            )
-            async let recentActivityPreload: Void = preloadRecentActivity()
-            _ = await (artworkPreload, recentActivityPreload)
         }
         .onChange(of: requiresOnboardingGate) { _, requiresOnboardingGate in
             if !requiresOnboardingGate {
@@ -108,8 +101,33 @@ struct AuthGate: View {
         "\(clerk.user?.id ?? "guest")-\(appSession.isAuthBypassed)"
     }
 
+    private var onboardingCacheIdentity: String? {
+        guard requiresOnboardingGate, let userID = clerk.user?.id else { return nil }
+        return [
+            AppConfig.shared.apiBaseURL.absoluteString,
+            AppConfig.shared.clerkPublishableKey,
+            userID,
+        ].joined(separator: "|")
+    }
+
     private var eventFeedCacheIdentity: String {
         appSession.isAuthBypassed ? "bypass" : clerk.user?.id ?? "guest"
+    }
+
+    private func preloadHome() async {
+        await EventFeedViewModel.preload(
+            using: apiClient,
+            cacheIdentity: eventFeedCacheIdentity
+        )
+        guard !Task.isCancelled else { return }
+
+        // Warm visible artwork as soon as the feed arrives, independently of
+        // onboarding revalidation and without holding the launch screen open.
+        async let artwork: Void = EventFeedViewModel.prefetchInitialArtwork(
+            cacheIdentity: eventFeedCacheIdentity
+        )
+        async let recentActivity: Void = preloadRecentActivity()
+        _ = await (artwork, recentActivity)
     }
 
     private func preloadRecentActivity() async {
@@ -278,40 +296,81 @@ private final class MobileAuthGateViewModel: ObservableObject {
     }
 
     @Published private(set) var state: State = .idle
+    private var completionCacheKey: String?
+    private var hasConfirmedCompletion = false
+    private var loadGeneration = UUID()
+
+    var isResolving: Bool {
+        switch state {
+        case .idle, .loading: true
+        case .loaded, .failed: false
+        }
+    }
+
+    // Cache only the routing decision, scoped to the user and backend. API requests
+    // still authenticate normally, and every launch revalidates with the server.
+    @discardableResult
+    func restoreCompletion(for identity: String?) -> Bool {
+        loadGeneration = UUID()
+        completionCacheKey = identity.map { "wig.onboarding-completed.v1.\($0)" }
+        hasConfirmedCompletion = completionCacheKey.map {
+            UserDefaults.standard.bool(forKey: $0)
+        } ?? false
+        if hasConfirmedCompletion {
+            state = .loaded(Self.completedState)
+        } else {
+            state = .idle
+        }
+        return hasConfirmedCompletion
+    }
 
     func load(using apiClient: APIClient) async {
-        if case .loading = state {
-            return
-        }
-
-        state = .loading
+        if case .loading = state { return }
+        let generation = loadGeneration
+        if !hasConfirmedCompletion { state = .loading }
 
         do {
             let response = try await apiClient.send(APIClient.mobileOnboardingState())
+            guard !Task.isCancelled, generation == loadGeneration else { return }
+            hasConfirmedCompletion = !response.isOnboarding
+            if let completionCacheKey {
+                UserDefaults.standard.set(hasConfirmedCompletion, forKey: completionCacheKey)
+            }
             state = .loaded(response)
         } catch {
-            state = .failed(error.localizedDescription)
+            guard !Task.isCancelled, generation == loadGeneration else { return }
+            // A failed refresh must not block a previously confirmed account.
+            if !hasConfirmedCompletion { state = .failed(error.localizedDescription) }
         }
     }
 
     func markCompleted() {
-        state = .loaded(
-            MobileOnboardingState(
-                isOnboarding: false,
-                firstName: "",
-                lastName: "",
-                username: "",
-                city: "",
-                state: "",
-                gender: nil,
-                dateOfBirth: nil,
-                avatarImageURL: nil,
-                debug: nil
-            )
+        hasConfirmedCompletion = true
+        if let completionCacheKey {
+            UserDefaults.standard.set(true, forKey: completionCacheKey)
+        }
+        state = .loaded(Self.completedState)
+    }
+
+    private static var completedState: MobileOnboardingState {
+        MobileOnboardingState(
+            isOnboarding: false,
+            firstName: "",
+            lastName: "",
+            username: "",
+            city: "",
+            state: "",
+            gender: nil,
+            dateOfBirth: nil,
+            avatarImageURL: nil,
+            debug: nil
         )
     }
 
     func reset() {
+        loadGeneration = UUID()
+        completionCacheKey = nil
+        hasConfirmedCompletion = false
         state = .idle
     }
 }

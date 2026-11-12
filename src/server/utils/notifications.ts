@@ -163,6 +163,7 @@ export async function notifyFriendsOfRsvp(
         timeZone: true,
         state: true,
       },
+      with: { venue: { columns: { name: true } } },
     }),
     database.query.userFriends.findMany({
       where: and(
@@ -230,6 +231,7 @@ export async function notifyFriendsOfRsvp(
   const title = includesPartner ? `${actorName} & ${partnerName}` : actorName;
   const body = formatFriendRsvpBody({
     eventTitle: event.title,
+    eventPlaceName: event.venue?.name,
     eventStartAt: event.startAt,
     eventTimeZone: event.timeZone,
     eventState: event.state,

@@ -26,7 +26,7 @@ final class EventFeedViewModel: ObservableObject {
 
     private static var preloadedResponses = [LoadKey: MobileEventsResponse]()
     private static var inFlightLoads = [LoadKey: Task<MobileEventsResponse, Error>]()
-    private static var inFlightTokens = [LoadKey: UUID]()
+    private static var loadGenerations = [LoadKey: UUID]()
 
     @Published private(set) var state: State
     @Published private(set) var responsesByWeek = [Date: MobileEventsResponse]()
@@ -66,7 +66,7 @@ final class EventFeedViewModel: ObservableObject {
         preloadedResponses.removeAll()
         inFlightLoads.values.forEach { $0.cancel() }
         inFlightLoads.removeAll()
-        inFlightTokens.removeAll()
+        loadGenerations.removeAll()
     }
 
     func invalidateResponses(keeping weekStart: Date) {
@@ -116,7 +116,7 @@ final class EventFeedViewModel: ObservableObject {
         }
 
         if !forceRefresh, let inFlightLoad = Self.inFlightLoads[loadKey] {
-            let inFlightToken = Self.inFlightTokens[loadKey]
+            let inFlightToken = Self.loadGenerations[loadKey]
             loadingWeekStarts.insert(cacheKey)
             defer {
                 loadingWeekStarts.remove(cacheKey)
@@ -128,7 +128,7 @@ final class EventFeedViewModel: ObservableObject {
 
             do {
                 let response = try await inFlightLoad.value
-                guard Self.inFlightTokens[loadKey] == inFlightToken else {
+                guard Self.loadGenerations[loadKey] == inFlightToken else {
                     return
                 }
 
@@ -170,10 +170,10 @@ final class EventFeedViewModel: ObservableObject {
                 )
             }
             Self.inFlightLoads[loadKey] = loadTask
-            Self.inFlightTokens[loadKey] = token
+            Self.loadGenerations[loadKey] = token
 
             let response = try await loadTask.value
-            guard Self.inFlightTokens[loadKey] == token else {
+            guard Self.loadGenerations[loadKey] == token else {
                 return
             }
 
@@ -183,16 +183,17 @@ final class EventFeedViewModel: ObservableObject {
             state = .loaded(response)
         } catch {
             if shouldShowFullScreenLoading,
-               Self.inFlightTokens[loadKey] == token {
+               Self.loadGenerations[loadKey] == token {
                 state = .failed(error.localizedDescription)
             }
         }
 
         loadingWeekStarts.remove(cacheKey)
 
-        if Self.inFlightTokens[loadKey] == token {
+        if Self.loadGenerations[loadKey] == token {
             Self.inFlightLoads[loadKey] = nil
-            Self.inFlightTokens[loadKey] = nil
+            // Keep the generation after completion: other consumers of the same
+            // task may resume after its creator has removed the in-flight task.
         }
     }
 

@@ -295,9 +295,6 @@ struct HomeView: View {
 
                     await activationTask.value
 
-                    if case .loaded = viewModel.state {
-                        onInitialContentReady()
-                    }
                 }
                 .onReceive(NotificationCenter.default.publisher(for: .activationDidChange)) { _ in
                     guard shouldLoadActivation else { return }
@@ -1667,10 +1664,17 @@ struct HomeView: View {
     }
 
     private var recentSearchDestinations: [RecentSearchDestination] {
-        (try? JSONDecoder().decode(
+        let destinations = (try? JSONDecoder().decode(
             [RecentSearchDestination].self,
             from: Data(recentSearchDestinationsData.utf8)
         )) ?? []
+
+        return destinations.filter { destination in
+            if case .event(let event) = destination {
+                return !event.hasEnded
+            }
+            return true
+        }
     }
 
     private var filteredRecentSearchDestinations: [RecentSearchDestination] {
@@ -1784,6 +1788,10 @@ struct HomeView: View {
             )
         } else {
             latestFromFollowsViewModel.clear()
+        }
+
+        if !Task.isCancelled, case .loaded = viewModel.state {
+            onInitialContentReady()
         }
 
         _ = await (reviewPromptLoad, recentActivityLoad)

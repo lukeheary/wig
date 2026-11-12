@@ -11,9 +11,32 @@ export function formatNotificationEventDate(
   });
 }
 
+export function formatNotificationEventDetails({
+  eventTitle,
+  eventPlaceName,
+  eventStartAt,
+  eventTimeZone,
+  eventState,
+}: {
+  eventTitle: string;
+  eventPlaceName?: string | null;
+  eventStartAt: Date | null;
+  eventTimeZone?: string | null;
+  eventState?: string | null;
+}) {
+  const placeName = eventPlaceName?.trim();
+  const placeSuffix = placeName ? ` at ${placeName}` : "";
+  const dateSuffix = eventStartAt
+    ? ` on ${formatNotificationEventDate(eventStartAt, eventTimeZone, eventState)}`
+    : "";
+
+  return `${eventTitle}${placeSuffix}${dateSuffix}`;
+}
+
 export function formatFriendRsvpBody({
   eventTitle,
   eventStartAt,
+  eventPlaceName,
   eventTimeZone,
   eventState,
   status,
@@ -23,6 +46,7 @@ export function formatFriendRsvpBody({
   eventStartAt: Date | null;
   eventTimeZone?: string | null;
   eventState?: string | null;
+  eventPlaceName?: string | null;
   status: "going" | "interested";
   includesPartner: boolean;
 }) {
@@ -33,13 +57,11 @@ export function formatFriendRsvpBody({
     : status === "going"
       ? "Is going to"
       : "Is interested in";
-  const dateSuffix = eventStartAt
-    ? ` on ${formatNotificationEventDate(
-        eventStartAt,
-        eventTimeZone,
-        eventState
-      )}`
-    : "";
-
-  return `${verb} ${eventTitle}${dateSuffix}`;
+  return `${verb} ${formatNotificationEventDetails({
+    eventTitle,
+    eventPlaceName,
+    eventStartAt,
+    eventTimeZone,
+    eventState,
+  })}`;
 }
