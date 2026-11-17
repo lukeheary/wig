@@ -31,40 +31,40 @@ final class ProfileViewModel: ObservableObject {
             return
         }
 
-        if !forceRefresh, let inFlightLoad = Self.inFlightLoad {
-            state = .loading
-
-            do {
-                let response = Self.applyingFriendRequestStatusOverrides(to: try await inFlightLoad.value)
-                Self.cachedResponse = response
-                state = .loaded(response)
-            } catch {
-                state = .failed(error.localizedDescription)
-            }
-
-            return
-        }
-
-        if let cachedResponse = Self.cachedResponse {
+        let hadContent: Bool
+        if case .loaded = state {
+            hadContent = true
+        } else if let cachedResponse = Self.cachedResponse {
             state = .loaded(cachedResponse)
+            hadContent = true
         } else {
             state = .loading
+            hadContent = false
         }
 
-        do {
-            let loadTask = Task {
+        let loadTask: Task<FriendsFeedResponse, Error>
+        if let inFlightLoad = Self.inFlightLoad {
+            loadTask = inFlightLoad
+        } else {
+            loadTask = Task {
                 try await apiClient.send(APIClient.mobileFriends())
             }
             Self.inFlightLoad = loadTask
-
-            let response = Self.applyingFriendRequestStatusOverrides(to: try await loadTask.value)
-            Self.cachedResponse = response
-            state = .loaded(response)
-        } catch {
-            state = .failed(error.localizedDescription)
         }
-
-        Self.inFlightLoad = nil
+        do {
+            let response = try await loadTask.value
+            try Task.checkCancellation()
+            let updated = Self.applyingFriendRequestStatusOverrides(to: response)
+            Self.cachedResponse = updated
+            state = .loaded(updated)
+        } catch {
+            if !hadContent, !Task.isCancelled {
+                state = .failed(error.localizedDescription)
+            }
+        }
+        if !Task.isCancelled {
+            Self.inFlightLoad = nil
+        }
     }
 
     func updateAvatar(imageData: Data, using apiClient: APIClient) async {
@@ -357,36 +357,39 @@ final class UserProfileViewModel: ObservableObject {
             return
         }
 
-        if !forceRefresh, let inFlightLoad = Self.inFlightLoads[userID] {
+        let hadContent: Bool
+        if case .loaded(let response) = state, response.profile?.id == userID {
+            hadContent = true
+        } else if let cachedResponse = Self.cachedResponses[userID] {
+            state = .loaded(cachedResponse)
+            hadContent = true
+        } else {
             state = .loading
-
-            do {
-                let response = try await inFlightLoad.value
-                Self.cachedResponses[userID] = response
-                state = .loaded(response)
-            } catch {
-                state = .failed(error.localizedDescription)
-            }
-
-            return
+            hadContent = false
         }
 
-        state = .loading
-
-        do {
-            let loadTask = Task {
+        let loadTask: Task<UserProfileResponse, Error>
+        if let inFlightLoad = Self.inFlightLoads[userID] {
+            loadTask = inFlightLoad
+        } else {
+            loadTask = Task {
                 try await apiClient.send(APIClient.mobileUserProfile(userID: userID))
             }
             Self.inFlightLoads[userID] = loadTask
-
+        }
+        do {
             let response = try await loadTask.value
+            try Task.checkCancellation()
             Self.cachedResponses[userID] = response
             state = .loaded(response)
         } catch {
-            state = .failed(error.localizedDescription)
+            if !hadContent, !Task.isCancelled {
+                state = .failed(error.localizedDescription)
+            }
         }
-
-        Self.inFlightLoads[userID] = nil
+        if !Task.isCancelled {
+            Self.inFlightLoads[userID] = nil
+        }
     }
 
     static func preload(userID: String, using apiClient: APIClient) async {

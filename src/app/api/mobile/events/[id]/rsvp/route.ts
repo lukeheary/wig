@@ -1,3 +1,4 @@
+import { saveEventRsvp } from "@/server/utils/save-event-rsvp";
 import { withPublicProfiles } from "@/server/utils/profile-visibility";
 import { auth } from "@clerk/nextjs/server";
 import { and, asc, eq, or } from "drizzle-orm";
@@ -89,23 +90,21 @@ export async function GET(_request: Request, context: RouteContext) {
       ? partnerRelationship.recipientId
       : partnerRelationship.requesterId
     : null;
-  const mirroredPartnerRsvpExists = partnerUserId && rsvp?.status
+  const partnerRsvp = partnerUserId && rsvp?.status
     ? await db.query.eventRsvps.findFirst({
         where: and(
           eq(eventRsvps.userId, partnerUserId),
-          eq(eventRsvps.eventId, eventId),
-          eq(eventRsvps.partnerRsvpByUserId, userId),
-          eq(eventRsvps.status, rsvp.status)
+          eq(eventRsvps.eventId, eventId)
         ),
-        columns: {
-          userId: true,
-        },
+        columns: { status: true, partnerRsvpByUserId: true },
       })
     : null;
 
-  const includePartner =
-    Boolean(partnerUserId) &&
-    (rsvp?.partnerRsvpByUserId === partnerUserId || Boolean(mirroredPartnerRsvpExists));
+  const includePartner = Boolean(
+    partnerUserId && rsvp && partnerRsvp &&
+    partnerRsvp.status === rsvp.status &&
+    (rsvp.partnerRsvpByUserId === partnerUserId || partnerRsvp.partnerRsvpByUserId === userId)
+  );
 
   return NextResponse.json({
     status: rsvp?.status ?? null,
@@ -217,83 +216,14 @@ export async function POST(request: Request, context: RouteContext) {
       ? (body.notGoingReason ?? body.reason ?? null)
       : null;
 
-  let includedPartnerInRsvp = false;
-
-  const [rsvp] = await db
-    .insert(eventRsvps)
-    .values({
-      userId,
-      eventId,
-      status: body.status,
-      notGoingReason,
-      partnerRsvpByUserId: null,
-    })
-    .onConflictDoUpdate({
-      target: [eventRsvps.userId, eventRsvps.eventId],
-      set: {
-        status: body.status,
-        notGoingReason,
-        partnerRsvpByUserId: null,
-        updatedAt: new Date(),
-      },
-    })
-    .returning({
-      status: eventRsvps.status,
-      notGoingReason: eventRsvps.notGoingReason,
-      partnerRsvpByUserId: eventRsvps.partnerRsvpByUserId,
-      updatedAt: eventRsvps.updatedAt,
-    });
-
-  if (partnerUserId) {
-    if (shouldMirrorPartnerRsvp) {
-      const existingPartnerRsvp = await db.query.eventRsvps.findFirst({
-        where: and(
-          eq(eventRsvps.userId, partnerUserId),
-          eq(eventRsvps.eventId, eventId)
-        ),
-      });
-
-      // A partner may have RSVP'd independently before the current user enables
-      // the shared RSVP toggle. When both responses already match, adopt that
-      // RSVP so future status changes can update the pair together.
-      const canWriteMirroredRsvp =
-        !existingPartnerRsvp ||
-        existingPartnerRsvp.partnerRsvpByUserId === userId ||
-        existingPartnerRsvp.status === body.status;
-
-      if (canWriteMirroredRsvp) {
-        includedPartnerInRsvp = true;
-        await db
-          .insert(eventRsvps)
-          .values({
-            userId: partnerUserId,
-            eventId,
-            status: body.status,
-            notGoingReason,
-            partnerRsvpByUserId: userId,
-          })
-          .onConflictDoUpdate({
-            target: [eventRsvps.userId, eventRsvps.eventId],
-            set: {
-              status: body.status,
-              notGoingReason,
-              partnerRsvpByUserId: userId,
-              updatedAt: new Date(),
-            },
-          });
-      }
-    } else {
-      await db
-        .delete(eventRsvps)
-        .where(
-          and(
-            eq(eventRsvps.userId, partnerUserId),
-            eq(eventRsvps.eventId, eventId),
-            eq(eventRsvps.partnerRsvpByUserId, userId)
-          )
-        );
-    }
-  }
+  const { rsvp, includedPartner: includedPartnerInRsvp } = await saveEventRsvp(db, {
+    userId,
+    eventId,
+    status: body.status,
+    notGoingReason,
+    partnerUserId,
+    includePartner: shouldMirrorPartnerRsvp,
+  });
 
   const activityType =
     body.status === "going"

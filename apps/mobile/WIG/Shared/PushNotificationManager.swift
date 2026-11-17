@@ -4,6 +4,54 @@ import SwiftUI
 import UIKit
 import UserNotifications
 
+enum PushNotificationDestination: Hashable, Sendable {
+    case event(String)
+    case profileRequests
+
+    init?(userInfo: [AnyHashable: Any]) {
+        let data = userInfo["data"] as? [String: Any] ?? [:]
+        let type = data["type"] as? String ?? userInfo["type"] as? String
+        if type == "friend_request" || type == "partner_request" {
+            self = .profileRequests
+            return
+        }
+        if let actionURL = data["actionUrl"] as? String ?? userInfo["actionUrl"] as? String,
+           let components = URLComponents(string: actionURL),
+           components.scheme == nil || ["http", "https"].contains(components.scheme?.lowercased() ?? ""),
+           components.host == nil || ["whoisgoing.com", "www.whoisgoing.com"].contains(components.host?.lowercased() ?? "") {
+            let path = components.path.split(separator: "/").map(String.init)
+            if path.count == 2, path[0] == "event", Self.isEventIdentifier(path[1]) {
+                self = .event(path[1])
+                return
+            }
+            if ["/activity", "/profile"].contains(components.path),
+               components.queryItems?.contains(where: { $0.name == "view" && $0.value == "requests" }) == true {
+                self = .profileRequests
+                return
+            }
+        }
+        if ["event_update", "event_reminder", "rsvp_going", "rsvp_interested"].contains(type ?? ""),
+           let eventID = data["entityId"] as? String ?? userInfo["entityId"] as? String,
+           Self.isEventIdentifier(eventID) {
+            self = .event(eventID)
+            return
+        }
+        return nil
+    }
+
+    private static func isEventIdentifier(_ value: String) -> Bool {
+        UUID(uuidString: value) != nil ||
+            (value.count == 20 && value.unicodeScalars.allSatisfy {
+                (48...57).contains($0.value) || (65...90).contains($0.value) || (97...122).contains($0.value)
+            })
+    }
+}
+
+struct PushNotificationNavigation: Identifiable, Equatable, Sendable {
+    let id = UUID()
+    let destination: PushNotificationDestination
+}
+
 @MainActor
 final class PushNotificationManager: NSObject, ObservableObject {
     static let shared = PushNotificationManager()
@@ -13,6 +61,17 @@ final class PushNotificationManager: NSObject, ObservableObject {
     private let promptedUserIDsDefaultsKey = "wig.push.prompted-user-ids"
 
     @Published private(set) var deviceToken: String?
+    // Retain taps until the app shell and authentication are ready, including cold launches.
+    @Published private(set) var pendingNavigation: PushNotificationNavigation?
+
+    func navigate(to destination: PushNotificationDestination) {
+        pendingNavigation = PushNotificationNavigation(destination: destination)
+    }
+
+    func finishNavigation(id: UUID) {
+        guard pendingNavigation?.id == id else { return }
+        pendingNavigation = nil
+    }
 
     override init() {
         self.deviceToken = UserDefaults.standard.string(forKey: tokenDefaultsKey)
@@ -180,5 +239,10 @@ extension WIGAppDelegate: UNUserNotificationCenterDelegate {
             "notification_type": notificationType,
             "action": response.actionIdentifier,
         ])
+        guard response.actionIdentifier == UNNotificationDefaultActionIdentifier,
+              let destination = PushNotificationDestination(userInfo: userInfo) else { return }
+        await MainActor.run {
+            PushNotificationManager.shared.navigate(to: destination)
+        }
     }
 }

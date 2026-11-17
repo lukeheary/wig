@@ -6,6 +6,7 @@ struct ActivityView: View {
     var showsBackButton = false
     var onBack: () -> Void = {}
 
+    @Environment(\.scenePhase) private var scenePhase
     @Environment(\.apiClient) private var apiClient
     @EnvironmentObject private var appSession: AppSession
     @EnvironmentObject private var requestStore: ActivityRequestStore
@@ -42,10 +43,9 @@ struct ActivityView: View {
                         onBack: onBack
                     )
                 }
-                .onAppear {
-                    Task {
-                        await viewModel.load(using: apiClient, forceRefresh: true)
-                    }
+                .task(id: scenePhase) {
+                    guard scenePhase == .active else { return }
+                    await viewModel.load(using: apiClient, forceRefresh: true)
                 }
                 .onChange(of: selectedFilter) { _, _ in
                     resetVisibleActivityCount()
@@ -727,20 +727,23 @@ private struct ActivityRowView: View {
                     .offset(y: -2)
             } else {
                 VStack(alignment: .leading, spacing: 4) {
-                    InlineLinkedActivityText(
-                        activity: activity,
-                        onTapEvent: {
-                            if let event = activity.event?.eventFeedItem {
-                                appSession.presentEventDetail(event)
+                    TimelineView(.periodic(from: .now, by: 60)) { context in
+                        InlineLinkedActivityText(
+                            activity: activity,
+                            now: context.date,
+                            onTapEvent: {
+                                if let event = activity.event?.eventFeedItem {
+                                    appSession.presentEventDetail(event)
+                                }
+                            },
+                            onTapVenue: { venue in
+                                selectedVenue = venue
+                            },
+                            onTapUser: { userID in
+                                selectedUserProfile = SelectedUserProfile(id: userID)
                             }
-                        },
-                        onTapVenue: { venue in
-                            selectedVenue = venue
-                        },
-                        onTapUser: { userID in
-                            selectedUserProfile = SelectedUserProfile(id: userID)
-                        }
-                    )
+                        )
+                    }
                     .frame(maxWidth: .infinity, alignment: .leading)
 
                     Text(
@@ -874,6 +877,7 @@ private struct SelectedUserProfile: Identifiable, Hashable {
 
 struct InlineLinkedActivityText: UIViewRepresentable {
     let activity: ActivityFeedItem
+    let now: Date
     let onTapEvent: () -> Void
     let onTapVenue: (PlaceListItem) -> Void
     let onTapUser: (String) -> Void
@@ -899,44 +903,35 @@ struct InlineLinkedActivityText: UIViewRepresentable {
     }
 
     func updateUIView(_ textView: UITextView, context: Context) {
-        context.coordinator.parent = self
-        textView.attributedText = attributedText(image: context.coordinator.cachedImage)
+        let coordinator = context.coordinator
+        coordinator.parent = self
+        let url = activity.event?.coverImageURL
 
-        guard let event = activity.event else {
-            context.coordinator.imageURL = nil
-            context.coordinator.cachedImage = nil
-            context.coordinator.task?.cancel()
+        if coordinator.imageURL != url {
+            coordinator.task?.cancel()
+            coordinator.task = nil
+            coordinator.imageURL = url
+            coordinator.cachedImage = nil
+        }
+
+        // Read decoded images synchronously so recreated rows never flash a
+        // placeholder while an asynchronous cache lookup is scheduled.
+        if coordinator.cachedImage == nil, let url {
+            coordinator.cachedImage = RemoteImagePipeline.shared.cachedImage(for: url)
+        }
+        textView.attributedText = attributedText(image: coordinator.cachedImage)
+
+        guard let url, coordinator.cachedImage == nil, coordinator.task == nil else {
             return
         }
-
-        guard context.coordinator.imageURL != event.coverImageURL else {
-            return
+        coordinator.task = Task { @MainActor [weak coordinator, weak textView] in
+            let image = await RemoteImagePipeline.shared.image(for: url)
+            guard !Task.isCancelled, let coordinator, coordinator.imageURL == url else { return }
+            coordinator.cachedImage = image
+            coordinator.task = nil
+            // Use the current row and date if either changed while loading.
+            textView?.attributedText = coordinator.parent.attributedText(image: image)
         }
-
-        context.coordinator.imageURL = event.coverImageURL
-        context.coordinator.cachedImage = nil
-        context.coordinator.task?.cancel()
-        textView.attributedText = attributedText(image: nil)
-
-        guard let url = event.coverImageURL else {
-            return
-        }
-
-        context.coordinator.task = URLSession.shared.dataTask(with: url) { data, _, _ in
-            guard let data, let image = UIImage(data: data) else {
-                return
-            }
-
-            DispatchQueue.main.async {
-                guard context.coordinator.imageURL == url else {
-                    return
-                }
-
-                context.coordinator.cachedImage = image
-                textView.attributedText = attributedText(image: image)
-            }
-        }
-        context.coordinator.task?.resume()
     }
 
     func sizeThatFits(_ proposal: ProposedViewSize, uiView: UITextView, context: Context) -> CGSize? {
@@ -1023,7 +1018,7 @@ struct InlineLinkedActivityText: UIViewRepresentable {
 
         text.append(
             NSAttributedString(
-                string: " on \(event.eventFeedItem.formattedStart(format: "MMM d"))",
+                string: " \(ActivityEventDateFormatting.phrase(startAt: event.startAt, timeZone: event.eventFeedItem.displayTimeZone, now: now))",
                 attributes: [.font: font, .foregroundColor: mutedColor]
             )
         )
@@ -1128,7 +1123,7 @@ struct InlineLinkedActivityText: UIViewRepresentable {
         var parent: InlineLinkedActivityText
         var imageURL: URL?
         var cachedImage: UIImage?
-        var task: URLSessionDataTask?
+        var task: Task<Void, Never>?
 
         init(parent: InlineLinkedActivityText) {
             self.parent = parent
@@ -1354,21 +1349,12 @@ private struct ActivityEventThumbnail: View {
     let url: URL?
 
     var body: some View {
-        Group {
-            if let url {
-                AsyncImage(url: url) { phase in
-                    switch phase {
-                    case .success(let image):
-                        image
-                            .resizable()
-                            .scaledToFill()
-                    default:
-                        placeholder
-                    }
-                }
-            } else {
-                placeholder
-            }
+        RemoteImageView(url: url) { image in
+            image
+                .resizable()
+                .scaledToFill()
+        } placeholder: {
+            placeholder
         }
         .frame(width: 24, height: 24)
         .clipShape(RoundedRectangle(cornerRadius: 5, style: .continuous))
@@ -1381,7 +1367,7 @@ private struct ActivityEventThumbnail: View {
 }
 
 private struct ActivitySection: Identifiable {
-    let id = UUID()
+    var id: String { title }
     let title: String
     var activities: [ActivityFeedItem]
 }

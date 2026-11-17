@@ -7,7 +7,6 @@
 	objects = {
 
 /* Begin PBXBuildFile section */
-		F8209A00AC124B03A6D9618E /* AccountSearchHistory.swift in Sources */ = {isa = PBXBuildFile; fileRef = C15D7C85207F4609AB772D32 /* AccountSearchHistory.swift */; };
 		0225D821CFF385E0C146E58A /* RemoteImageView.swift in Sources */ = {isa = PBXBuildFile; fileRef = C4B12A3FE36D056CEF6A6FBD /* RemoteImageView.swift */; };
 		02A19F1536EC643E3CD2B226 /* AppConfig.swift in Sources */ = {isa = PBXBuildFile; fileRef = C47EB2040C338297AF811986 /* AppConfig.swift */; };
 		03091A08CECDB18FE3FED12A /* FloatingGlassIconButton.swift in Sources */ = {isa = PBXBuildFile; fileRef = 3A87D39D7D4AE13FC019729E /* FloatingGlassIconButton.swift */; };
@@ -20,6 +19,7 @@
 		209ADA49B59EADEA2A0F420A /* EventCardView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 709F1EBBDBBCDE6FCB12FA4A /* EventCardView.swift */; };
 		233EB5D015FC6F40B756515F /* ActivityViewModel.swift in Sources */ = {isa = PBXBuildFile; fileRef = 34E2A1629E4DD0D3110094F1 /* ActivityViewModel.swift */; };
 		2658DD8EFCF8B0FF3E913064 /* SwipeBackEnabler.swift in Sources */ = {isa = PBXBuildFile; fileRef = 79255FC37317019099AE7A40 /* SwipeBackEnabler.swift */; };
+		26D01C44D4ACCFD2B48B0892 /* NotificationSettingsView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 93EDE0B0371450E1F82615CF /* NotificationSettingsView.swift */; };
 		3D668117CF956BDE70AD9E8F /* EventDetailHero.swift in Sources */ = {isa = PBXBuildFile; fileRef = 60631E843CC181797BD704F0 /* EventDetailHero.swift */; };
 		4B65B4FA113617995A70D5DE /* ActivityView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 6BA9DD584D4093550867347E /* ActivityView.swift */; };
 		4FE88C2815D0EAE2441402A7 /* UIImage+Upload.swift in Sources */ = {isa = PBXBuildFile; fileRef = 82C91109B59814E2F5A0DF89 /* UIImage+Upload.swift */; };
@@ -53,16 +53,17 @@
 		DEA8D387E941A5D6DE8FEEE4 /* EventFeedItem.swift in Sources */ = {isa = PBXBuildFile; fileRef = AD7E693663E90E06CD35BD12 /* EventFeedItem.swift */; };
 		E2B9CF0F03D62D8AC3E9D987 /* Gift.swift in Sources */ = {isa = PBXBuildFile; fileRef = 7F4829999F082A6083275D78 /* Gift.swift */; };
 		E54C4A2CC0F52DBAFB632E94 /* WIGApp.swift in Sources */ = {isa = PBXBuildFile; fileRef = 68E5A730E47D03B7A196879B /* WIGApp.swift */; };
+		E739B9DB76E84E05B95091F8 /* DefaultEventCityView.swift in Sources */ = {isa = PBXBuildFile; fileRef = E87F7FBB58A04C1A80BA244B /* DefaultEventCityView.swift */; };
 		E8A57DFEEA588E89C6DA6366 /* AppRootView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 940FBAD68FAA1A5667BD434D /* AppRootView.swift */; };
 		EB8A3E83F0D299B213D891C6 /* ProfileViewModel.swift in Sources */ = {isa = PBXBuildFile; fileRef = 1787978AD759053BF62E9FC0 /* ProfileViewModel.swift */; };
 		EBA0C4B37ACAADED45A1D0C4 /* AddUserToPlaceView.swift in Sources */ = {isa = PBXBuildFile; fileRef = A24C4CD8F4A2F84D832EAF24 /* AddUserToPlaceView.swift */; };
 		F74EA1B7DFBC703848E6041D /* EventFeedViewModel.swift in Sources */ = {isa = PBXBuildFile; fileRef = AF740D90915ACDB1EBB99A78 /* EventFeedViewModel.swift */; };
+		F8209A00AC124B03A6D9618E /* AccountSearchHistory.swift in Sources */ = {isa = PBXBuildFile; fileRef = C15D7C85207F4609AB772D32 /* AccountSearchHistory.swift */; };
 		FE7A9BA137F5A6BA54F396A9 /* AppSession.swift in Sources */ = {isa = PBXBuildFile; fileRef = E9F25C520369E8D97B2E2329 /* AppSession.swift */; };
 		FF1C1CF9891F1B9469DEE892 /* PlaceDetailView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 851827A09CFB3DE3E0B03109 /* PlaceDetailView.swift */; };
 /* End PBXBuildFile section */
 
 /* Begin PBXFileReference section */
-		C15D7C85207F4609AB772D32 /* AccountSearchHistory.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AccountSearchHistory.swift; sourceTree = "<group>"; };
 		042BFE9D9AEF36729D6E23BB /* MobileEventCreationView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = MobileEventCreationView.swift; sourceTree = "<group>"; };
 		06DBD4E356DEF2762352E743 /* PlaceDetail.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = PlaceDetail.swift; sourceTree = "<group>"; };
 		0B7253E663E8722D44179A1A /* VenuesViewModel.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = VenuesViewModel.swift; sourceTree = "<group>"; };
@@ -88,7 +89,7 @@
 		68E5A730E47D03B7A196879B /* WIGApp.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = WIGApp.swift; sourceTree = "<group>"; };
 		6BA9DD584D4093550867347E /* ActivityView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ActivityView.swift; sourceTree = "<group>"; };
 		709F1EBBDBBCDE6FCB12FA4A /* EventCardView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = EventCardView.swift; sourceTree = "<group>"; };
-		7896662162549DA31678EB9F /* PrivacyInfo.xcprivacy */ = {isa = PBXFileReference; path = PrivacyInfo.xcprivacy; sourceTree = "<group>"; };
+		7896662162549DA31678EB9F /* PrivacyInfo.xcprivacy */ = {isa = PBXFileReference; lastKnownFileType = text.xml; path = PrivacyInfo.xcprivacy; sourceTree = "<group>"; };
 		79255FC37317019099AE7A40 /* SwipeBackEnabler.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SwipeBackEnabler.swift; sourceTree = "<group>"; };
 		7F4829999F082A6083275D78 /* Gift.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = Gift.swift; sourceTree = "<group>"; };
 		8210D0E005DECC2D0CE8900C /* EventDetailView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = EventDetailView.swift; sourceTree = "<group>"; };
@@ -97,9 +98,10 @@
 		851827A09CFB3DE3E0B03109 /* PlaceDetailView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = PlaceDetailView.swift; sourceTree = "<group>"; };
 		93B648A6CF116F820A4EC31A /* String+RelativeFormatting.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = "String+RelativeFormatting.swift"; sourceTree = "<group>"; };
 		93E098F4DD6BECA74B29F9A2 /* ManagePlaceView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ManagePlaceView.swift; sourceTree = "<group>"; };
+		93EDE0B0371450E1F82615CF /* NotificationSettingsView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = NotificationSettingsView.swift; sourceTree = "<group>"; };
 		940FBAD68FAA1A5667BD434D /* AppRootView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AppRootView.swift; sourceTree = "<group>"; };
 		A24C4CD8F4A2F84D832EAF24 /* AddUserToPlaceView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AddUserToPlaceView.swift; sourceTree = "<group>"; };
-		A30D69DCD03425BA20337C4B /* WIG.app */ = {isa = PBXFileReference; includeInIndex = 0; lastKnownFileType = wrapper.application; path = WIG.app; sourceTree = BUILT_PRODUCTS_DIR; };
+		A30D69DCD03425BA20337C4B /* WIG.app */ = {isa = PBXFileReference; explicitFileType = wrapper.application; includeInIndex = 0; path = WIG.app; sourceTree = BUILT_PRODUCTS_DIR; };
 		A475F5DF3650AE1E3FB243DC /* Release.xcconfig */ = {isa = PBXFileReference; lastKnownFileType = text.xcconfig; path = Release.xcconfig; sourceTree = "<group>"; };
 		A55BD291C4FD0C9CAEB90B10 /* VenuesView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = VenuesView.swift; sourceTree = "<group>"; };
 		AAD15E52E6FB10DA10806575 /* PlaceListItem.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = PlaceListItem.swift; sourceTree = "<group>"; };
@@ -108,11 +110,13 @@
 		AF740D90915ACDB1EBB99A78 /* EventFeedViewModel.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = EventFeedViewModel.swift; sourceTree = "<group>"; };
 		BEB614E0E0A96BB0FDD210DC /* ProfileView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ProfileView.swift; sourceTree = "<group>"; };
 		C0D13CF91B0EECB51C7BEBC0 /* Assets.xcassets */ = {isa = PBXFileReference; lastKnownFileType = folder.assetcatalog; path = Assets.xcassets; sourceTree = "<group>"; };
+		C15D7C85207F4609AB772D32 /* AccountSearchHistory.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AccountSearchHistory.swift; sourceTree = "<group>"; };
 		C3B84CE19FB3BE0915C58C50 /* GuestGoogleAuthController.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = GuestGoogleAuthController.swift; sourceTree = "<group>"; };
 		C47EB2040C338297AF811986 /* AppConfig.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AppConfig.swift; sourceTree = "<group>"; };
 		C4B12A3FE36D056CEF6A6FBD /* RemoteImageView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = RemoteImageView.swift; sourceTree = "<group>"; };
 		CD2B5220253C407CE688D6CD /* FriendsFeed.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = FriendsFeed.swift; sourceTree = "<group>"; };
 		DC1F5481F6C16EA27B43C269 /* SignedOutView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SignedOutView.swift; sourceTree = "<group>"; };
+		E87F7FBB58A04C1A80BA244B /* DefaultEventCityView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = DefaultEventCityView.swift; sourceTree = "<group>"; };
 		E9F25C520369E8D97B2E2329 /* AppSession.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AppSession.swift; sourceTree = "<group>"; };
 		EB564D2CF3E17440A471C692 /* WIGAuthSheetView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = WIGAuthSheetView.swift; sourceTree = "<group>"; };
 		F1A0ACCD8478786570AD3796 /* Debug.xcconfig */ = {isa = PBXFileReference; lastKnownFileType = text.xcconfig; path = Debug.xcconfig; sourceTree = "<group>"; };
@@ -278,6 +282,8 @@
 			children = (
 				679E1712CDA4787601110EE2 /* ProfileEmailEditorView.swift */,
 				BEB614E0E0A96BB0FDD210DC /* ProfileView.swift */,
+				93EDE0B0371450E1F82615CF /* NotificationSettingsView.swift */,
+				E87F7FBB58A04C1A80BA244B /* DefaultEventCityView.swift */,
 				1787978AD759053BF62E9FC0 /* ProfileViewModel.swift */,
 			);
 			path = Profile;
@@ -444,6 +450,8 @@
 				5EC46501B348BC70CE9B7797 /* PlaceListItem.swift in Sources */,
 				B4D06192209B8B628059291E /* ProfileEmailEditorView.swift in Sources */,
 				B591CA95DBE805223319DEB0 /* ProfileView.swift in Sources */,
+				26D01C44D4ACCFD2B48B0892 /* NotificationSettingsView.swift in Sources */,
+				E739B9DB76E84E05B95091F8 /* DefaultEventCityView.swift in Sources */,
 				EB8A3E83F0D299B213D891C6 /* ProfileViewModel.swift in Sources */,
 				BE1C8C89A68F9AFC929AA8E1 /* PushNotificationManager.swift in Sources */,
 				0225D821CFF385E0C146E58A /* RemoteImageView.swift in Sources */,
@@ -597,13 +605,11 @@
 				CURRENT_PROJECT_VERSION = 24;
 				DEVELOPMENT_TEAM = V347D294CZ;
 				INFOPLIST_FILE = WIG/Support/Info.plist;
-				INFOPLIST_KEY_CFBundleDisplayName = "Who Is Going";
 				LD_RUNPATH_SEARCH_PATHS = (
 					"$(inherited)",
 					"@executable_path/Frameworks",
 				);
 				MARKETING_VERSION = 1.0.6;
-				PRODUCT_BUNDLE_IDENTIFIER = com.whoisgoing.app;
 				PRODUCT_NAME = WIG;
 				SDKROOT = iphoneos;
 				SUPPORTED_PLATFORMS = "iphoneos iphonesimulator";
@@ -688,13 +694,11 @@
 				CURRENT_PROJECT_VERSION = 24;
 				DEVELOPMENT_TEAM = V347D294CZ;
 				INFOPLIST_FILE = WIG/Support/Info.plist;
-				INFOPLIST_KEY_CFBundleDisplayName = "Who Is Going";
 				LD_RUNPATH_SEARCH_PATHS = (
 					"$(inherited)",
 					"@executable_path/Frameworks",
 				);
 				MARKETING_VERSION = 1.0.6;
-				PRODUCT_BUNDLE_IDENTIFIER = com.whoisgoing.app;
 				PRODUCT_NAME = WIG;
 				SDKROOT = iphoneos;
 				SUPPORTED_PLATFORMS = "iphoneos iphonesimulator";
@@ -715,13 +719,11 @@
 				CURRENT_PROJECT_VERSION = 24;
 				DEVELOPMENT_TEAM = V347D294CZ;
 				INFOPLIST_FILE = WIG/Support/Info.plist;
-				INFOPLIST_KEY_CFBundleDisplayName = "Who Is Going";
 				LD_RUNPATH_SEARCH_PATHS = (
 					"$(inherited)",
 					"@executable_path/Frameworks",
 				);
 				MARKETING_VERSION = 1.0.6;
-				PRODUCT_BUNDLE_IDENTIFIER = com.whoisgoing.app;
 				PRODUCT_NAME = WIG;
 				SDKROOT = iphoneos;
 				SUPPORTED_PLATFORMS = "iphoneos iphonesimulator";

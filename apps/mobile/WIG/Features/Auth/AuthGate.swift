@@ -88,6 +88,8 @@ struct AuthGate: View {
                 return
             }
 
+            appSession.selectedCityContext = nil
+            appSession.resetPartner()
             ProfileViewModel.invalidateCache()
             UserProfileViewModel.invalidateAllCaches()
         }

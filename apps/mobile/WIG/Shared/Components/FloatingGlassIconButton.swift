@@ -183,21 +183,12 @@ struct UserAvatarView: View {
     var identityKey: String?
 
     var body: some View {
-        Group {
-            if let imageURL {
-                AsyncImage(url: imageURL) { phase in
-                    switch phase {
-                    case .success(let image):
-                        image
-                            .resizable()
-                            .scaledToFill()
-                    default:
-                        fallbackAvatar
-                    }
-                }
-            } else {
-                fallbackAvatar
-            }
+        RemoteImageView(url: imageURL) { image in
+            image
+                .resizable()
+                .scaledToFill()
+        } placeholder: {
+            fallbackAvatar
         }
         .frame(width: size, height: size)
         .clipShape(Circle())

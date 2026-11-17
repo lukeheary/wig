@@ -1,4 +1,5 @@
 import Foundation
+import ImageIO
 import UIKit
 
 extension UIImage {
@@ -49,6 +50,36 @@ extension UIImage {
 
         return UIGraphicsImageRenderer(size: targetSize, format: format).image { _ in
             draw(in: CGRect(origin: .zero, size: targetSize))
+        }
+    }
+}
+
+struct PreparedEventCoverImage {
+    let image: UIImage
+    let jpegData: Data
+}
+
+// Photo-library images can be tens of megapixels. Decode only a bounded thumbnail
+// and prepare upload bytes on this actor, never on the UI thread.
+actor EventCoverImageProcessor {
+    static let shared = EventCoverImageProcessor()
+
+    func prepare(data: Data) -> PreparedEventCoverImage? {
+        guard !Task.isCancelled else { return nil }
+        return autoreleasepool {
+            guard let source = CGImageSourceCreateWithData(data as CFData, [
+                kCGImageSourceShouldCache: false,
+            ] as CFDictionary) else { return nil }
+            guard let thumbnail = CGImageSourceCreateThumbnailAtIndex(source, 0, [
+                kCGImageSourceCreateThumbnailFromImageAlways: true,
+                kCGImageSourceCreateThumbnailWithTransform: true,
+                kCGImageSourceThumbnailMaxPixelSize: 1600,
+                kCGImageSourceShouldCacheImmediately: true,
+            ] as CFDictionary), !Task.isCancelled else { return nil }
+            let image = UIImage(cgImage: thumbnail)
+            guard let jpegData = image.eventCoverUploadJPEGData(maxBytes: 4 * 1024 * 1024),
+                  !Task.isCancelled else { return nil }
+            return PreparedEventCoverImage(image: image, jpegData: jpegData)
         }
     }
 }

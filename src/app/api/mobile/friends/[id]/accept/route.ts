@@ -149,7 +149,7 @@ export async function POST(_: Request, context: RouteContext) {
         entityType: "friend_request",
         entityId: friendRequest.id,
         title: accepterName,
-        body: "Added you as a friend",
+        body: "Accepted your friend request",
         actionUrl: "/activity?view=list",
         metadata: {
           requestId: friendRequest.id,
@@ -161,7 +161,7 @@ export async function POST(_: Request, context: RouteContext) {
 
     await sendPushNotificationToUsers([friendRequest.userId], {
       title: accepterName,
-      body: "Added you as a friend",
+      body: "Accepted your friend request",
       data: {
         type: "friend_request_accepted",
         entityId: friendRequest.id,

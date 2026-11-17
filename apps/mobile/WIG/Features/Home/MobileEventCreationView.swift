@@ -25,6 +25,10 @@ struct MobileEventCreationView: View {
 
     @State private var activePlacePicker: PlacePickerKind?
     @State private var selectedCoverImageItem: PhotosPickerItem?
+    @State private var isCoverImagePickerPresented = false
+    @State private var isLoadingCoverImage = false
+    @State private var coverImageLoadToken = UUID()
+    @State private var selectedCoverImageData: Data?
     @State private var selectedCoverImage: UIImage?
     @State private var existingCoverImageURL: URL?
     @State private var isCoverImageViewerPresented = false
@@ -153,7 +157,7 @@ struct MobileEventCreationView: View {
                             await submit()
                         }
                     }
-                    .disabled(isSubmitting)
+                    .disabled(isSubmitting || isLoadingCoverImage || isCoverImagePickerPresented)
                 }
             }
             .task {
@@ -171,6 +175,12 @@ struct MobileEventCreationView: View {
                     handleSelectedPlace(place, for: kind)
                 }
             }
+            .photosPicker(
+                isPresented: $isCoverImagePickerPresented,
+                selection: $selectedCoverImageItem,
+                matching: .images,
+                preferredItemEncoding: .current
+            )
             .fullScreenCover(isPresented: $isCoverImageViewerPresented) {
                 if let selectedCoverImage {
                     EventArtworkViewer(image: selectedCoverImage)
@@ -178,14 +188,9 @@ struct MobileEventCreationView: View {
                     EventArtworkViewer(imageURL: existingCoverImageURL)
                 }
             }
-            .onChange(of: selectedCoverImageItem) { _, item in
-                guard let item else {
-                    return
-                }
-
-                Task {
-                    await handleSelectedCoverImage(item)
-                }
+            .task(id: selectedCoverImageItem) {
+                guard let item = selectedCoverImageItem else { return }
+                await handleSelectedCoverImage(item)
             }
             .onChange(of: alertMessage) { _, message in
                 if let message {
@@ -244,45 +249,21 @@ struct MobileEventCreationView: View {
 
     private var coverImageSection: some View {
         Section("Event Image") {
-            PhotosPicker(selection: $selectedCoverImageItem, matching: .images) {
-                ZStack {
-                    RoundedRectangle(cornerRadius: 22, style: .continuous)
-                        .fill(Color(uiColor: .secondarySystemGroupedBackground))
-
-                    if let selectedCoverImage {
-                        Image(uiImage: selectedCoverImage)
-                            .resizable()
-                            .scaledToFill()
-                            .frame(maxWidth: .infinity, maxHeight: .infinity)
-                            .clipped()
-                    } else if let existingCoverImageURL {
-                        AsyncImage(url: existingCoverImageURL) { phase in
-                            switch phase {
-                            case .success(let image):
-                                image
-                                    .resizable()
-                                    .scaledToFill()
-                                    .frame(maxWidth: .infinity, maxHeight: .infinity)
-                                    .clipped()
-                            default:
-                                coverImagePlaceholder
-                            }
-                        }
-                    } else {
-                        coverImagePlaceholder
-                    }
-
+            ZStack(alignment: .bottomLeading) {
+                // Keep the picker trigger and image viewer as sibling buttons.
+                // A PhotosPicker with an overlaid button can attempt competing
+                // presentations from the same Form row.
+                Button(action: openCoverImagePicker) {
+                    coverImagePreview
                 }
-                .frame(height: 220)
-                .clipShape(RoundedRectangle(cornerRadius: 22, style: .continuous))
-                .overlay(
-                    RoundedRectangle(cornerRadius: 22, style: .continuous)
-                        .strokeBorder(Color(uiColor: .separator).opacity(0.35), lineWidth: 1)
-                )
-            }
-            .overlay(alignment: .bottomLeading) {
+                .buttonStyle(.plain)
+                .disabled(isSubmitting || isLoadingCoverImage)
+                .accessibilityLabel(selectedCoverImage != nil || existingCoverImageURL != nil
+                    ? "Change cover image" : "Add cover image")
+
                 if selectedCoverImage != nil || existingCoverImageURL != nil {
                     Button {
+                        guard !isCoverImagePickerPresented, !isLoadingCoverImage else { return }
                         isCoverImageViewerPresented = true
                     } label: {
                         Image(systemName: "arrow.up.left.and.arrow.down.right")
@@ -300,21 +281,74 @@ struct MobileEventCreationView: View {
                             )
                     }
                     .buttonStyle(.plain)
+                    .accessibilityLabel("Preview cover image")
+                    .disabled(isSubmitting || isLoadingCoverImage)
                     .padding(14)
                 }
             }
-            .buttonStyle(.plain)
+            .overlay {
+                if isLoadingCoverImage {
+                    ProgressView("Loading image…")
+                        .padding(16)
+                        .background(.regularMaterial, in: RoundedRectangle(cornerRadius: 14))
+                        .allowsHitTesting(false)
+                }
+            }
             .listRowInsets(EdgeInsets(top: 10, leading: 16, bottom: 10, trailing: 16))
 
             if selectedCoverImage != nil || existingCoverImageURL != nil {
                 InlineActionButton(title: "Remove Image", systemImage: "trash", role: .destructive) {
+                    coverImageLoadToken = UUID()
                     selectedCoverImageItem = nil
+                    isLoadingCoverImage = false
                     selectedCoverImage = nil
+                    selectedCoverImageData = nil
                     existingCoverImageURL = nil
                     isCoverImageViewerPresented = false
                 }
+                .disabled(isSubmitting)
             }
         }
+    }
+
+    private var coverImagePreview: some View {
+        ZStack {
+            RoundedRectangle(cornerRadius: 22, style: .continuous)
+                .fill(Color(uiColor: .secondarySystemGroupedBackground))
+            if let selectedCoverImage {
+                Image(uiImage: selectedCoverImage)
+                    .resizable()
+                    .scaledToFill()
+                    .frame(maxWidth: .infinity, maxHeight: .infinity)
+                    .clipped()
+            } else if let existingCoverImageURL {
+                RemoteImageView(url: existingCoverImageURL) { image in
+                    image.resizable().scaledToFill()
+                        .frame(maxWidth: .infinity, maxHeight: .infinity)
+                        .clipped()
+                } placeholder: {
+                    coverImagePlaceholder
+                }
+            } else {
+                coverImagePlaceholder
+            }
+        }
+        .frame(height: 220)
+        .clipShape(RoundedRectangle(cornerRadius: 22, style: .continuous))
+        .overlay(
+            RoundedRectangle(cornerRadius: 22, style: .continuous)
+                .strokeBorder(Color(uiColor: .separator).opacity(0.35), lineWidth: 1)
+        )
+    }
+
+    @MainActor
+    private func openCoverImagePicker() {
+        guard !isSubmitting, !isLoadingCoverImage, !isCoverImagePickerPresented,
+              !isCoverImageViewerPresented, activePlacePicker == nil else { return }
+        // Clear only before a new presentation. Clearing during an active import
+        // cancels its lifecycle task and can race Photos' selection/dismissal.
+        selectedCoverImageItem = nil
+        isCoverImagePickerPresented = true
     }
 
     private var placeSections: some View {
@@ -760,21 +794,32 @@ struct MobileEventCreationView: View {
         }
     }
 
+    @MainActor
     private func handleSelectedCoverImage(_ item: PhotosPickerItem) async {
-        selectedCoverImageItem = nil
-
+        let token = UUID()
+        coverImageLoadToken = token
+        isLoadingCoverImage = true
+        defer {
+            if coverImageLoadToken == token { isLoadingCoverImage = false }
+        }
         do {
-            guard
-                let data = try await item.loadTransferable(type: Data.self),
-                let image = UIImage(data: data)
-            else {
-                alertMessage = "That image couldn’t be loaded."
+            guard let data = try await item.loadTransferable(type: Data.self) else {
+                if !Task.isCancelled { alertMessage = "That image couldn’t be loaded." }
                 return
             }
-
-            selectedCoverImage = image
+            try Task.checkCancellation()
+            let prepared = await EventCoverImageProcessor.shared.prepare(data: data)
+            guard !Task.isCancelled, coverImageLoadToken == token else { return }
+            guard let prepared else {
+                alertMessage = "That image couldn’t be prepared. Please choose another photo."
+                return
+            }
+            selectedCoverImage = prepared.image
+            selectedCoverImageData = prepared.jpegData
             existingCoverImageURL = nil
         } catch {
+            guard !Task.isCancelled, coverImageLoadToken == token,
+                  !(error is CancellationError), (error as? URLError)?.code != .cancelled else { return }
             alertMessage = error.localizedDescription
         }
     }
@@ -796,7 +841,7 @@ struct MobileEventCreationView: View {
     }
 
     private func submit() async {
-        guard !isSubmitting else {
+        guard !isSubmitting, !isLoadingCoverImage, !isCoverImagePickerPresented else {
             return
         }
 
@@ -886,8 +931,7 @@ struct MobileEventCreationView: View {
                         )
                     )
 
-                    if let selectedCoverImage,
-                       let imageData = selectedCoverImage.eventCoverUploadJPEGData(maxBytes: 4 * 1024 * 1024) {
+                    if let imageData = selectedCoverImageData {
                         do {
                             let uploadedImage = try await apiClient.send(
                                 APIClient.mobileUploadImage(
@@ -932,26 +976,24 @@ struct MobileEventCreationView: View {
                     )
                 )
 
-                if uploadedCoverURL == nil, let selectedCoverImage {
-                    if let imageData = selectedCoverImage.eventCoverUploadJPEGData(maxBytes: 4 * 1024 * 1024) {
-                        do {
-                            let uploadedImage = try await apiClient.send(
-                                APIClient.mobileUploadImage(
-                                    imageData: imageData,
-                                    folder: "events/\(createdEvent.id.uuidString.lowercased())/cover-images",
-                                    fileName: "cover-image.jpg"
-                                )
+                if uploadedCoverURL == nil, let imageData = selectedCoverImageData {
+                    do {
+                        let uploadedImage = try await apiClient.send(
+                            APIClient.mobileUploadImage(
+                                imageData: imageData,
+                                folder: "events/\(createdEvent.id.uuidString.lowercased())/cover-images",
+                                fileName: "cover-image.jpg"
                             )
+                        )
 
-                            try await apiClient.send(
-                                APIClient.mobileSetEventCoverImage(
-                                    eventID: createdEvent.id,
-                                    coverImageURL: uploadedImage.url
-                                )
+                        try await apiClient.send(
+                            APIClient.mobileSetEventCoverImage(
+                                eventID: createdEvent.id,
+                                coverImageURL: uploadedImage.url
                             )
-                        } catch {
-                            // Keep the event creation success even if the cover image upload fails.
-                        }
+                        )
+                    } catch {
+                        // Keep the event creation success even if the cover image upload fails.
                     }
                 }
 
@@ -1015,13 +1057,7 @@ struct MobileEventCreationView: View {
     }
 
     private func uploadedCoverImageURLIfNeeded() async throws -> URL? {
-        guard let selectedCoverImage else {
-            return nil
-        }
-
-        guard let imageData = selectedCoverImage.eventCoverUploadJPEGData(maxBytes: 4 * 1024 * 1024) else {
-            return nil
-        }
+        guard let imageData = selectedCoverImageData else { return nil }
 
         let folder: String
         switch mode {

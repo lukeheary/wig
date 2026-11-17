@@ -1,8 +1,11 @@
 /** Fictional, response-only screenshot fixtures. Never writes users or RSVPs. */
+// Flip this one flag to restore all screenshot users, RSVPs, plans, and activity.
+const ENABLE_SCREENSHOT_DATA = false;
+
 export function screenshotFriendsEnabled() {
   return (
     process.env.NODE_ENV === "development" &&
-    process.env.WIG_SCREENSHOT_FRIENDS === "true"
+    ENABLE_SCREENSHOT_DATA
   );
 }
 

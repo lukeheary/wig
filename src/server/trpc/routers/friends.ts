@@ -224,7 +224,7 @@ export const friendsRouter = router({
           entityType: "friend_request",
           entityId: friendRequest.id,
           title: senderName,
-          body: "Sent you a friend request",
+          body: "Added you as a friend",
           metadata: {
             requestId: friendRequest.id,
             requestType: "friend",
@@ -237,7 +237,7 @@ export const friendsRouter = router({
         [input.friendUserId],
         {
           title: senderName,
-          body: "Sent you a friend request",
+          body: "Added you as a friend",
           data: {
             type: "friend_request",
             entityId: friendRequest.id,
@@ -344,7 +344,7 @@ export const friendsRouter = router({
             entityType: "friend_request",
             entityId: input.friendRequestId,
             title: accepterName,
-            body: "Added you as a friend",
+            body: "Accepted your friend request",
             actionUrl: "/activity?view=list",
             metadata: {
               requestId: input.friendRequestId,
@@ -358,7 +358,7 @@ export const friendsRouter = router({
           [friendRequest.userId],
           {
             title: accepterName,
-            body: "Added you as a friend",
+            body: "Accepted your friend request",
             data: {
               type: "friend_request_accepted",
               entityId: input.friendRequestId,

@@ -1,3 +1,4 @@
+import { saveEventRsvp } from "@/server/utils/save-event-rsvp";
 import { withPublicProfiles } from "@/server/utils/profile-visibility";
 import { withVisibleProfiles } from "@/server/utils/profile-visibility";
 import { visibleEventSourceCondition } from "@/server/utils/event-source-visibility";
@@ -2089,75 +2090,14 @@ export const eventRouter = router({
         existingMirroredPartnerRsvp?.status !== input.status;
       const notGoingReason =
         input.status === "not_going" ? (input.reason ?? null) : null;
-      let includedPartnerInRsvp = false;
-
-      // Upsert RSVP
-      const [rsvp] = await ctx.db
-        .insert(eventRsvps)
-        .values({
-          userId: ctx.auth.userId,
-          eventId: input.eventId,
-          status: input.status,
-          notGoingReason,
-          partnerRsvpByUserId: null,
-        })
-        .onConflictDoUpdate({
-          target: [eventRsvps.userId, eventRsvps.eventId],
-          set: {
-            status: input.status,
-            notGoingReason,
-            partnerRsvpByUserId: null,
-            updatedAt: new Date(),
-          },
-        })
-        .returning();
-
-      if (partnerUserId) {
-        if (shouldMirrorPartnerRsvp) {
-          const existingPartnerRsvp = await ctx.db.query.eventRsvps.findFirst({
-            where: and(
-              eq(eventRsvps.userId, partnerUserId),
-              eq(eventRsvps.eventId, input.eventId)
-            ),
-          });
-
-          const canWriteMirroredRsvp =
-            !existingPartnerRsvp ||
-            existingPartnerRsvp.partnerRsvpByUserId === ctx.auth.userId;
-
-          if (canWriteMirroredRsvp) {
-            includedPartnerInRsvp = true;
-            await ctx.db
-              .insert(eventRsvps)
-              .values({
-                userId: partnerUserId,
-                eventId: input.eventId,
-                status: input.status,
-                notGoingReason,
-                partnerRsvpByUserId: ctx.auth.userId,
-              })
-              .onConflictDoUpdate({
-                target: [eventRsvps.userId, eventRsvps.eventId],
-                set: {
-                  status: input.status,
-                  notGoingReason,
-                  partnerRsvpByUserId: ctx.auth.userId,
-                  updatedAt: new Date(),
-                },
-              });
-          }
-        } else {
-          await ctx.db
-            .delete(eventRsvps)
-            .where(
-              and(
-                eq(eventRsvps.userId, partnerUserId),
-                eq(eventRsvps.eventId, input.eventId),
-                eq(eventRsvps.partnerRsvpByUserId, ctx.auth.userId)
-              )
-            );
-        }
-      }
+      const { rsvp, includedPartner: includedPartnerInRsvp } = await saveEventRsvp(ctx.db, {
+        userId: ctx.auth.userId,
+        eventId: input.eventId,
+        status: input.status,
+        notGoingReason,
+        partnerUserId,
+        includePartner: shouldMirrorPartnerRsvp,
+      });
 
       if (
         shouldNotifyPartner &&

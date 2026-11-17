@@ -91,6 +91,7 @@ private final class LatestFromFollowsViewModel: ObservableObject {
 @MainActor
 private final class HomeForegroundRefreshCoordinator: ObservableObject {
     private var needsRefresh = false
+    private var refreshAfterMutation = false
     private var refreshTask: Task<Void, Never>?
 
     func scenePhaseChanged(
@@ -118,7 +119,7 @@ private final class HomeForegroundRefreshCoordinator: ObservableObject {
     func eventDetailPresentationChanged(
         isPresented: Bool,
         scenePhase: ScenePhase,
-        refresh: @escaping @MainActor () async -> Void
+        refresh: @escaping @MainActor (Bool) async -> Void
     ) {
         guard needsRefresh else {
             return
@@ -134,7 +135,7 @@ private final class HomeForegroundRefreshCoordinator: ObservableObject {
             return
         }
 
-        schedule(refresh)
+        schedule { await refresh(self.refreshAfterMutation) }
     }
 
     func dataDidChange(
@@ -142,6 +143,7 @@ private final class HomeForegroundRefreshCoordinator: ObservableObject {
         refresh: @escaping @MainActor () async -> Void
     ) {
         needsRefresh = true
+        refreshAfterMutation = true
         refreshTask?.cancel()
         refreshTask = nil
 
@@ -172,6 +174,7 @@ private final class HomeForegroundRefreshCoordinator: ObservableObject {
             }
 
             self.needsRefresh = false
+            self.refreshAfterMutation = false
             self.refreshTask = nil
         }
     }
@@ -343,7 +346,10 @@ struct HomeView: View {
                         }
                     }
                 }
-                .onReceive(NotificationCenter.default.publisher(for: .appDataDidChange)) { _ in
+                .onReceive(NotificationCenter.default.publisher(for: .appDataDidChange)) { notification in
+                    if notification.userInfo?["defaultEventCityChanged"] as? Bool == true {
+                        viewModel.invalidateAllResponses()
+                    }
                     HomeSearchDirectoryViewModel.invalidateCache()
 
                     foregroundRefreshCoordinator.dataDidChange(
@@ -395,7 +401,7 @@ struct HomeView: View {
                         await loadHome(
                             for: selectedWeekStart,
                             using: apiClient,
-                            forceRefresh: true
+                            refreshOnForeground: true
                         )
                     }
                 }
@@ -407,11 +413,12 @@ struct HomeView: View {
                     foregroundRefreshCoordinator.eventDetailPresentationChanged(
                         isPresented: presentationID != nil,
                         scenePhase: scenePhase
-                    ) {
+                    ) { forceRefresh in
                         await loadHome(
                             for: selectedWeekStart,
                             using: apiClient,
-                            forceRefresh: true
+                            forceRefresh: forceRefresh,
+                            refreshOnForeground: !forceRefresh
                         )
                     }
                 }
@@ -1760,19 +1767,23 @@ struct HomeView: View {
     private func loadHome(
         for weekStart: Date,
         using apiClient: APIClient,
-        forceRefresh: Bool = false
+        forceRefresh: Bool = false,
+        refreshOnForeground: Bool = false
     ) async {
+        let refreshFeed = forceRefresh || (refreshOnForeground && !viewModel.hasFreshResponse(
+            for: weekStart, cacheIdentity: eventFeedCacheIdentity
+        ))
         async let eventLoad: Void = viewModel.load(
             weekStart: weekStart,
             using: apiClient,
             cacheIdentity: eventFeedCacheIdentity,
             timeZone: feedTimeZone,
-            forceRefresh: forceRefresh
+            forceRefresh: refreshFeed
         )
         async let reviewPromptLoad: Void = loadPostEventFeedbackPrompt(using: apiClient)
         async let recentActivityLoad: Void = loadRecentActivity(
             using: apiClient,
-            forceRefresh: forceRefresh
+            forceRefresh: forceRefresh || refreshOnForeground
         )
 
         // The current events API includes the unbounded What's New collection in
@@ -1784,7 +1795,7 @@ struct HomeView: View {
         if currentResponse?.latestFromPlaces == nil {
             await loadLatestFromFollows(
                 using: apiClient,
-                forceRefresh: forceRefresh
+                forceRefresh: refreshFeed
             )
         } else {
             latestFromFollowsViewModel.clear()
@@ -3292,20 +3303,23 @@ private struct HomeRecentActivityRow: View {
                     .offset(y: -2)
             } else {
                 VStack(alignment: .leading, spacing: 4) {
-                    InlineLinkedActivityText(
-                        activity: activity,
-                        onTapEvent: {
-                            if let event = activity.event?.eventFeedItem {
-                                appSession.presentEventDetail(event)
+                    TimelineView(.periodic(from: .now, by: 60)) { context in
+                        InlineLinkedActivityText(
+                            activity: activity,
+                            now: context.date,
+                            onTapEvent: {
+                                if let event = activity.event?.eventFeedItem {
+                                    appSession.presentEventDetail(event)
+                                }
+                            },
+                            onTapVenue: { venue in
+                                selectedVenue = venue
+                            },
+                            onTapUser: { userID in
+                                selectedUserProfile = RecentActivitySelectedUserProfile(id: userID)
                             }
-                        },
-                        onTapVenue: { venue in
-                            selectedVenue = venue
-                        },
-                        onTapUser: { userID in
-                            selectedUserProfile = RecentActivitySelectedUserProfile(id: userID)
-                        }
-                    )
+                        )
+                    }
                     .frame(maxWidth: .infinity, alignment: .leading)
 
                     Text(
