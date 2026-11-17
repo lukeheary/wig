@@ -826,7 +826,7 @@ struct ProfileView: View {
             Button {
                 isDefaultEventCityPresented = true
             } label: {
-                Label("Default Event City", systemImage: "mappin.and.ellipse")
+                Label("Change Default City", systemImage: "mappin.and.ellipse")
                     .foregroundStyle(.white)
             }
             .tint(.white)
@@ -5108,10 +5108,14 @@ struct MobileHelpAndFeedbackView: View {
                             isNewRequestPresented = true
                         } label: {
                             Label("New Support Request", systemImage: "plus")
+                                .foregroundStyle(.white)
                         }
+                        .tint(.white)
                         Link(destination: URL(string: "https://www.whoisgoing.com/privacy")!) {
                             Label("Privacy Policy", systemImage: "hand.raised")
+                                .foregroundStyle(.white)
                         }
+                        .tint(.white)
                     } label: {
                         Image(systemName: "ellipsis")
                             .font(.system(size: 17, weight: .semibold))
@@ -5122,6 +5126,7 @@ struct MobileHelpAndFeedbackView: View {
                     }
                     .buttonStyle(.plain)
                     .accessibilityLabel("Help & Feedback options")
+                    .tint(.white)
                 }
             }
             .padding(.horizontal, 16)
@@ -6659,7 +6664,14 @@ private final class AdminMetroAreasViewModel: ObservableObject {
             APIClient.mobileSetMetroAreaEnabled(id: id, isEnabled: isEnabled)
         )
         if let index = metroAreas.firstIndex(where: { $0.id == id }) {
-            metroAreas[index] = updated
+            let existing = metroAreas[index]
+            metroAreas[index] = MobileAdminMetroArea(
+                id: existing.id, name: existing.name, state: existing.state,
+                latitude: existing.latitude, longitude: existing.longitude,
+                radiusMiles: existing.radiusMiles, isEnabled: updated.isEnabled,
+                placeCount: existing.placeCount, createdAt: existing.createdAt,
+                updatedAt: updated.updatedAt
+            )
         }
     }
 }
@@ -6928,7 +6940,10 @@ private struct AdminMetroAreaDetailView: View {
             Divider().overlay(.white.opacity(0.08))
             detailRow(title: "State", value: metroArea.state)
             Divider().overlay(.white.opacity(0.08))
-            Toggle(isOn: $isEnabled) {
+            Toggle(isOn: Binding(
+                get: { isEnabled },
+                set: { updateAvailability(to: $0) }
+            )) {
                 VStack(alignment: .leading, spacing: 3) {
                     Text("Available to users")
                         .font(.system(size: 14, weight: .semibold))
@@ -6941,10 +6956,6 @@ private struct AdminMetroAreaDetailView: View {
             .tint(AppTheme.accentBlue)
             .disabled(isUpdatingAvailability)
             .padding(.vertical, 12)
-            .onChange(of: isEnabled) { oldValue, newValue in
-                guard oldValue != newValue else { return }
-                Task { await updateAvailability(from: oldValue, to: newValue) }
-            }
             Divider().overlay(.white.opacity(0.08))
             detailRow(title: "Places", value: metroArea.placeCount.formatted())
             Divider().overlay(.white.opacity(0.08))
@@ -6965,6 +6976,7 @@ private struct AdminMetroAreaDetailView: View {
         .overlay(
             RoundedRectangle(cornerRadius: 18, style: .continuous)
                 .strokeBorder(.white.opacity(0.08), lineWidth: 1)
+                .allowsHitTesting(false)
         )
     }
 
@@ -6996,17 +7008,22 @@ private struct AdminMetroAreaDetailView: View {
         }
     }
 
-    private func updateAvailability(from oldValue: Bool, to newValue: Bool) async {
-        guard !isUpdatingAvailability else { return }
+    private func updateAvailability(to newValue: Bool) {
+        guard !isUpdatingAvailability, newValue != isEnabled else { return }
+        let oldValue = isEnabled
+        isEnabled = newValue
         isUpdatingAvailability = true
         errorMessage = nil
-        do {
-            try await onEnabledChange(metroArea.id, newValue)
-        } catch {
-            isEnabled = oldValue
-            errorMessage = error.localizedDescription
+
+        Task { @MainActor in
+            defer { isUpdatingAvailability = false }
+            do {
+                try await onEnabledChange(metroArea.id, newValue)
+            } catch {
+                isEnabled = oldValue
+                errorMessage = error.localizedDescription
+            }
         }
-        isUpdatingAvailability = false
     }
 
     private func selectForTesting() async {

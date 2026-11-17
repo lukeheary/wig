@@ -23,14 +23,6 @@ struct DefaultEventCityView: View {
 
     var body: some View {
         Form {
-            Section {
-                Text("Choose the city you’ll see when you open the app.")
-                    .font(.subheadline)
-                    .foregroundStyle(.secondary)
-            } footer: {
-                Text("This changes your starting city for Home, Places, and Activity. The city on your profile stays unchanged.")
-            }
-
             if let settings {
                 Section("Default City") {
                     ForEach(settings.availableCities) { city in
@@ -61,9 +53,9 @@ struct DefaultEventCityView: View {
             }
         }
         .tint(AppTheme.accentBlue)
-        .modifier(ProfileSettingsPageChrome(title: "Default Event City"))
+        .modifier(ProfileSettingsPageChrome(title: "Change Default City"))
         .task { await load() }
-        .alert("Default Event City", isPresented: Binding(
+        .alert("Change Default City", isPresented: Binding(
             get: { errorMessage != nil },
             set: { if !$0 { errorMessage = nil } }
         )) {

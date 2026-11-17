@@ -634,11 +634,7 @@ private struct PlaceKindFilterMenu: View {
                 }
             }
         } label: {
-            Image(systemName: "line.3.horizontal.decrease")
-                .font(.system(size: 18, weight: .semibold))
-                .foregroundStyle(hasActiveFilters ? AppTheme.accentBlue : .primary)
-                .frame(width: 46, height: 46)
-                .contentShape(Rectangle())
+            FilterControlIcon()
                 .modifier(PlaceStandaloneControlStyle(isStandalone: !useCombinedStyle))
         }
         .buttonStyle(.plain)
@@ -991,6 +987,13 @@ struct PlaceRowView: View {
                     .lineLimit(1)
             }
             .frame(maxWidth: .infinity, alignment: .leading)
+
+            if clerk.user != nil && place.isFollowed {
+                Text("Following")
+                    .font(.system(size: 10, weight: .medium))
+                    .foregroundStyle(.white.opacity(0.58))
+                    .fixedSize()
+            }
         }
         .padding(.vertical, 5)
         .frame(height: rowHeight)
@@ -1001,9 +1004,7 @@ struct PlaceRowView: View {
         let eventDetail = count > 0
             ? " • \(count) upcoming event\(count == 1 ? "" : "s")"
             : ""
-        let followingDetail = clerk.user != nil && place.isFollowed ? " • Following" : ""
-
-        return "\(place.type.displayName)\(eventDetail)\(followingDetail)"
+        return "\(place.type.displayName)\(eventDetail)"
     }
 
     private var cardRowContent: some View {

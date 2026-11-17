@@ -11,6 +11,7 @@ struct ActivityView: View {
     @EnvironmentObject private var appSession: AppSession
     @EnvironmentObject private var requestStore: ActivityRequestStore
     @StateObject private var viewModel = ActivityViewModel()
+    @State private var selectedTypeFilter: ActivityTypeFilter = .all
     @State private var selectedFilter: ActivityFeedFilter = .upcoming
     @State private var selectedCityFilter: ActivityCityFilter?
     @State private var activityActionErrorMessage: String?
@@ -40,12 +41,16 @@ struct ActivityView: View {
                     ActivityNavigationTitle(
                         visibility: headerVisibility,
                         showsBackButton: showsBackButton,
-                        onBack: onBack
+                        onBack: onBack,
+                        typeFilter: $selectedTypeFilter
                     )
                 }
                 .task(id: scenePhase) {
                     guard scenePhase == .active else { return }
                     await viewModel.load(using: apiClient, forceRefresh: true)
+                }
+                .onChange(of: selectedTypeFilter) { _, _ in
+                    resetVisibleActivityCount()
                 }
                 .onChange(of: selectedFilter) { _, _ in
                     resetVisibleActivityCount()
@@ -118,6 +123,7 @@ struct ActivityView: View {
         case .loaded(let response):
             let activities = effectiveCityFilter(for: response).filtered(
                 selectedFilter.filtered(response.activities)
+                    .filter { selectedTypeFilter.matches($0.type) }
                     .filter { activity in
                         // A locally resolved request is replaced by a settled server
                         // activity item. Do not leave the original request in Upcoming
@@ -147,9 +153,11 @@ struct ActivityView: View {
                         .padding(.top, 48)
                     } else if activities.isEmpty {
                         ContentUnavailableView {
-                            Label(selectedFilter.emptyTitle, systemImage: "bolt")
+                            Label(selectedTypeFilter == .all ? selectedFilter.emptyTitle : "No Matching Activity", systemImage: "bolt")
                         } description: {
-                            Text(selectedFilter.emptyMessage)
+                            Text(selectedTypeFilter == .all
+                                 ? selectedFilter.emptyMessage
+                                 : "No \(selectedTypeFilter.title.lowercased()) in \(selectedFilter.title.lowercased()) activity.")
                         }
                         .foregroundStyle(.white)
                         .frame(maxWidth: .infinity)
@@ -218,6 +226,7 @@ struct ActivityView: View {
 
     private func resetFilters() {
         selectedFilter = .upcoming
+        selectedTypeFilter = .all
         selectedCityFilter = nil
         resetVisibleActivityCount()
     }
@@ -374,6 +383,7 @@ private struct ActivityNavigationTitle: View {
     let visibility: ScrollableHeaderVisibility
     let showsBackButton: Bool
     let onBack: () -> Void
+    @Binding var typeFilter: ActivityTypeFilter
 
     var body: some View {
         ZStack {
@@ -381,19 +391,69 @@ private struct ActivityNavigationTitle: View {
                 .font(.system(size: 17, weight: .semibold))
                 .foregroundStyle(.white)
 
-            if showsBackButton {
-                HStack {
+            HStack(spacing: 8) {
+                if showsBackButton {
                     FloatingGlassIconButton(systemImage: "chevron.left", action: onBack)
-
-                    Spacer()
                 }
-                .padding(.horizontal, 16)
+                Menu {
+                    ForEach(ActivityTypeFilter.allCases) { filter in
+                        filterButton(filter)
+                    }
+                } label: {
+                    FilterControlIcon()
+                        .activityLiquidGlass(in: Circle())
+                }
+                .buttonStyle(.plain)
+                .accessibilityLabel("Filter activity")
+                .accessibilityValue(typeFilter.title)
+                Spacer()
+            }
+            .padding(.horizontal, 16)
+        }
+        .frame(maxWidth: .infinity)
+        .frame(height: 46)
+        .opacity(visibility.isVisible ? 1 : 0)
+        .allowsHitTesting(visibility.isVisible)
+    }
+
+    private func filterButton(_ filter: ActivityTypeFilter) -> some View {
+        Button {
+            typeFilter = filter
+        } label: {
+            if typeFilter == filter {
+                Label(filter.title, systemImage: "checkmark")
+                    .foregroundStyle(.white)
+            } else {
+                Text(filter.title).foregroundStyle(.white)
             }
         }
-            .frame(maxWidth: .infinity)
-            .frame(height: 46)
-            .opacity(visibility.isVisible ? 1 : 0)
-            .allowsHitTesting(visibility.isVisible)
+        .tint(.white)
+    }
+}
+
+private enum ActivityTypeFilter: String, CaseIterable, Identifiable {
+    case all, eventActivity, friendRequests, partnerRequests, support
+
+    var id: String { rawValue }
+
+    var title: String {
+        switch self {
+        case .all: "All Activity"
+        case .eventActivity: "Event RSVPs"
+        case .friendRequests: "Friend Requests"
+        case .partnerRequests: "Partner Requests"
+        case .support: "Support Requests"
+        }
+    }
+
+    func matches(_ type: ActivityType) -> Bool {
+        switch self {
+        case .all: true
+        case .eventActivity: [.rsvpGoing, .rsvpInterested, .rsvpNotGoing].contains(type)
+        case .friendRequests: type == .friendRequestReceived || type == .friendRequestAccepted
+        case .partnerRequests: type == .partnerRequestReceived || type == .partnerRequestAccepted
+        case .support: type == .supportTicketCreated
+        }
     }
 }
 

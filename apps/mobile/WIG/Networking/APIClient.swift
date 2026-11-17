@@ -907,7 +907,7 @@ struct APIClient: Sendable {
     static func mobileSetMetroAreaEnabled(
         id: UUID,
         isEnabled: Bool
-    ) throws -> Endpoint<MobileAdminMetroArea> {
+    ) throws -> Endpoint<MobileAdminMetroAreaUpdateResponse> {
         Endpoint(
             path: "/api/mobile/admin/metro-areas/\(id.uuidString)",
             method: .patch,
@@ -919,7 +919,7 @@ struct APIClient: Sendable {
 
     static func mobileSelectMetroAreaForAdminTesting(
         id: UUID
-    ) throws -> Endpoint<MobileAdminMetroArea> {
+    ) throws -> Endpoint<MobileAdminMetroAreaUpdateResponse> {
         Endpoint(
             path: "/api/mobile/admin/metro-areas/\(id.uuidString)",
             method: .patch,
@@ -2427,6 +2427,13 @@ struct MobileMetroAreaCreateResponse: Decodable, Hashable, Sendable {
 
 struct MobileAdminMetroAreasResponse: Decodable, Hashable, Sendable {
     let metroAreas: [MobileAdminMetroArea]
+}
+
+// PATCH returns the stored metro fields; placeCount is calculated only for GET.
+struct MobileAdminMetroAreaUpdateResponse: Decodable, Sendable {
+    let id: UUID
+    let isEnabled: Bool
+    let updatedAt: Date
 }
 
 struct MobileAdminMetroArea: Decodable, Hashable, Identifiable, Sendable {
