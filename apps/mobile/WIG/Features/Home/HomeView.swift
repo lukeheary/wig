@@ -3266,6 +3266,8 @@ private struct HomeRecentActivitySection: View {
 private struct HomeRecentActivityRow: View {
     let activity: ActivityFeedItem
     let onRespondToRequest: (ActivityFeedItem, ActivityRequestResponse) async -> Void
+    @Environment(\.eventDetailTransitionNamespace) private var transitionNamespace
+    @State private var eventTransitionSourceID = UUID()
     @EnvironmentObject private var appSession: AppSession
     @EnvironmentObject private var requestStore: ActivityRequestStore
     @State private var selectedVenue: PlaceListItem?
@@ -3293,7 +3295,10 @@ private struct HomeRecentActivityRow: View {
                             now: context.date,
                             onTapEvent: {
                                 if let event = activity.event?.eventFeedItem {
-                                    appSession.presentEventDetail(event)
+                                    appSession.presentEventDetail(
+                                        event,
+                                        transitionSourceID: transitionNamespace == nil ? nil : eventTransitionSourceID
+                                    )
                                 }
                             },
                             onTapVenue: { venue in
@@ -3305,6 +3310,7 @@ private struct HomeRecentActivityRow: View {
                         )
                     }
                     .frame(maxWidth: .infinity, alignment: .leading)
+                    .modifier(EventDetailTransitionSourceModifier(sourceID: eventTransitionSourceID))
 
                     Text(
                         Self.relativeFormatter

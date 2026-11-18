@@ -762,6 +762,8 @@ private struct ActivitySectionView: View {
 private struct ActivityRowView: View {
     let activity: ActivityFeedItem
     let onRespondToRequest: (ActivityFeedItem, ActivityRequestResponse) async -> Void
+    @Environment(\.eventDetailTransitionNamespace) private var transitionNamespace
+    @State private var eventTransitionSourceID = UUID()
     @EnvironmentObject private var appSession: AppSession
     @EnvironmentObject private var requestStore: ActivityRequestStore
     @State private var selectedVenue: PlaceListItem?
@@ -793,7 +795,10 @@ private struct ActivityRowView: View {
                             now: context.date,
                             onTapEvent: {
                                 if let event = activity.event?.eventFeedItem {
-                                    appSession.presentEventDetail(event)
+                                    appSession.presentEventDetail(
+                                        event,
+                                        transitionSourceID: transitionNamespace == nil ? nil : eventTransitionSourceID
+                                    )
                                 }
                             },
                             onTapVenue: { venue in
@@ -805,6 +810,7 @@ private struct ActivityRowView: View {
                         )
                     }
                     .frame(maxWidth: .infinity, alignment: .leading)
+                    .modifier(EventDetailTransitionSourceModifier(sourceID: eventTransitionSourceID))
 
                     Text(
                         Self.relativeFormatter
@@ -1130,8 +1136,13 @@ struct InlineLinkedActivityText: UIViewRepresentable {
         UIGraphicsImageRenderer(size: CGSize(width: 20, height: 20)).image { context in
             UIColor.white.withAlphaComponent(0.12).setFill()
             UIBezierPath(roundedRect: CGRect(x: 0, y: 0, width: 20, height: 20), cornerRadius: 5).fill()
-            context.cgContext.setStrokeColor(UIColor.white.withAlphaComponent(0.08).cgColor)
-            context.cgContext.stroke(CGRect(x: 0.5, y: 0.5, width: 19, height: 19))
+            UIColor.white.withAlphaComponent(0.14).setStroke()
+            let border = UIBezierPath(
+                roundedRect: CGRect(x: 0.5, y: 0.5, width: 19, height: 19),
+                cornerRadius: 4.5
+            )
+            border.lineWidth = 1
+            border.stroke()
         }
     }
 
@@ -1145,13 +1156,20 @@ struct InlineLinkedActivityText: UIViewRepresentable {
                 height: side
             )
 
-            guard let cgImage = image.cgImage?.cropping(to: cropRect) else {
+            UIBezierPath(roundedRect: CGRect(x: 0, y: 0, width: 22, height: 22), cornerRadius: 5).addClip()
+            if let cgImage = image.cgImage?.cropping(to: cropRect) {
+                UIImage(cgImage: cgImage).draw(in: CGRect(x: 0, y: 0, width: 22, height: 22))
+            } else {
                 image.draw(in: CGRect(x: 0, y: 0, width: 22, height: 22))
-                return
             }
 
-            UIBezierPath(roundedRect: CGRect(x: 0, y: 0, width: 22, height: 22), cornerRadius: 5).addClip()
-            UIImage(cgImage: cgImage).draw(in: CGRect(x: 0, y: 0, width: 22, height: 22))
+            UIColor.white.withAlphaComponent(0.14).setStroke()
+            let border = UIBezierPath(
+                roundedRect: CGRect(x: 0.5, y: 0.5, width: 21, height: 21),
+                cornerRadius: 4.5
+            )
+            border.lineWidth = 1
+            border.stroke()
         }
     }
 
