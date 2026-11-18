@@ -25,6 +25,7 @@ final class EventFeedViewModel: ObservableObject {
     }
 
     private static var preloadedResponses = [LoadKey: MobileEventsResponse]()
+    private static var fetchedAt = [LoadKey: Date]()
     private static var inFlightLoads = [LoadKey: Task<MobileEventsResponse, Error>]()
     private static var loadGenerations = [LoadKey: UUID]()
 
@@ -64,9 +65,14 @@ final class EventFeedViewModel: ObservableObject {
 
     static func invalidateSharedCache() {
         preloadedResponses.removeAll()
+        fetchedAt.removeAll()
         inFlightLoads.values.forEach { $0.cancel() }
         inFlightLoads.removeAll()
         loadGenerations.removeAll()
+    }
+
+    func invalidateAllResponses() {
+        responsesByWeek.removeAll()
     }
 
     func invalidateResponses(keeping weekStart: Date) {
@@ -179,6 +185,7 @@ final class EventFeedViewModel: ObservableObject {
 
             responsesByWeek[cacheKey] = response
             Self.preloadedResponses[loadKey] = response
+            Self.fetchedAt[loadKey] = .now
             rememberCurrentUserLocation(from: response)
             state = .loaded(response)
         } catch {
@@ -195,6 +202,15 @@ final class EventFeedViewModel: ObservableObject {
             // Keep the generation after completion: other consumers of the same
             // task may resume after its creator has removed the in-flight task.
         }
+    }
+
+    // A quick return to Home should reuse the feed, while social screens refresh separately.
+    func hasFreshResponse(for weekStart: Date, cacheIdentity: String, now: Date = .now) -> Bool {
+        let key = LoadKey(weekStart: Self.cacheKey(for: weekStart), cacheIdentity: cacheIdentity)
+        guard let fetchedAt = Self.fetchedAt[key], Self.preloadedResponses[key] != nil else {
+            return false
+        }
+        return now.timeIntervalSince(fetchedAt) < 10 * 60
     }
 
     func response(for weekStart: Date) -> MobileEventsResponse? {

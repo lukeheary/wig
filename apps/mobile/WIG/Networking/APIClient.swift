@@ -573,6 +573,39 @@ struct APIClient: Sendable {
         )
     }
 
+    static func mobileDefaultEventCity() -> Endpoint<MobileDefaultEventCityResponse> {
+        Endpoint(path: "/api/mobile/default-event-city")
+    }
+
+    static func updateMobileDefaultEventCity(metroAreaID: UUID) throws -> Endpoint<MobileDefaultEventCityUpdateResponse> {
+        let body = ["metroAreaId": metroAreaID.uuidString]
+        return Endpoint(
+            path: "/api/mobile/default-event-city",
+            method: .patch,
+            body: try JSONEncoder().encode(body),
+            notifiesDataChange: false
+        )
+    }
+
+    static func mobileNotificationSettings() -> Endpoint<MobileNotificationSettingsResponse> {
+        Endpoint(path: "/api/mobile/notification-settings")
+    }
+
+    static func updateMobileNotificationSettings(
+        key: NotificationPreferenceKey, enabled: Bool
+    ) throws -> Endpoint<MobileNotificationSettingsResponse> {
+        Endpoint(
+            path: "/api/mobile/notification-settings",
+            method: .patch,
+            body: try JSONEncoder().encode([key.rawValue: enabled]),
+            notifiesDataChange: false
+        )
+    }
+
+    static func mobileMutedPeople() -> Endpoint<MobileMutedPeopleResponse> {
+        Endpoint(path: "/api/mobile/notification-settings/muted-people")
+    }
+
     static func setMobileFriendNotificationsMuted(
         friendUserID: String,
         muted: Bool
@@ -874,7 +907,7 @@ struct APIClient: Sendable {
     static func mobileSetMetroAreaEnabled(
         id: UUID,
         isEnabled: Bool
-    ) throws -> Endpoint<MobileAdminMetroArea> {
+    ) throws -> Endpoint<MobileAdminMetroAreaUpdateResponse> {
         Endpoint(
             path: "/api/mobile/admin/metro-areas/\(id.uuidString)",
             method: .patch,
@@ -886,7 +919,7 @@ struct APIClient: Sendable {
 
     static func mobileSelectMetroAreaForAdminTesting(
         id: UUID
-    ) throws -> Endpoint<MobileAdminMetroArea> {
+    ) throws -> Endpoint<MobileAdminMetroAreaUpdateResponse> {
         Endpoint(
             path: "/api/mobile/admin/metro-areas/\(id.uuidString)",
             method: .patch,
@@ -1269,6 +1302,7 @@ struct APIClient: Sendable {
     static func mobileMyPartner() -> Endpoint<MobilePartnerResponse> {
         Endpoint(
             path: "/api/mobile/partners/me",
+            headers: ["Cache-Control": "no-cache"],
             requiresAuthentication: false,
             includesAuthenticationIfAvailable: true
         )
@@ -1385,6 +1419,9 @@ struct APIClient: Sendable {
         var request = URLRequest(url: url)
         if let timeoutInterval = endpoint.timeoutInterval {
             request.timeoutInterval = timeoutInterval
+        }
+        if endpoint.path == "/api/mobile/partners/me", endpoint.method == .get {
+            request.cachePolicy = .reloadIgnoringLocalCacheData
         }
         request.httpMethod = endpoint.method.rawValue
         request.httpBody = endpoint.body
@@ -2085,6 +2122,14 @@ struct MobilePartnerRelationship: Decodable, Hashable, Sendable {
     let isRequester: Bool
     let partner: MobilePartnerUser
 
+    var isIncomingRequest: Bool {
+        status == "pending" && !isRequester
+    }
+
+    var isOutgoingRequest: Bool {
+        status == "pending" && isRequester
+    }
+
     var isAccepted: Bool {
         status == "accepted"
     }
@@ -2382,6 +2427,13 @@ struct MobileMetroAreaCreateResponse: Decodable, Hashable, Sendable {
 
 struct MobileAdminMetroAreasResponse: Decodable, Hashable, Sendable {
     let metroAreas: [MobileAdminMetroArea]
+}
+
+// PATCH returns the stored metro fields; placeCount is calculated only for GET.
+struct MobileAdminMetroAreaUpdateResponse: Decodable, Sendable {
+    let id: UUID
+    let isEnabled: Bool
+    let updatedAt: Date
 }
 
 struct MobileAdminMetroArea: Decodable, Hashable, Identifiable, Sendable {

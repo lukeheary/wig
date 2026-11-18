@@ -157,6 +157,19 @@ enum UserAvatarFallbackPalette {
     }
 }
 
+// Shared by the Home, Places, and Activity filter menus.
+struct FilterControlIcon: View {
+    var body: some View {
+        Image(systemName: "line.3.horizontal.decrease")
+            .symbolRenderingMode(.monochrome)
+            .font(.system(size: 18, weight: .semibold))
+            .foregroundStyle(Color(white: 0.85))
+            .tint(Color(white: 0.85))
+            .frame(width: 46, height: 46)
+            .contentShape(Rectangle())
+    }
+}
+
 struct FloatingGlassIconButton: View {
     let systemImage: String
     var foregroundColor: Color = .primary
@@ -183,21 +196,12 @@ struct UserAvatarView: View {
     var identityKey: String?
 
     var body: some View {
-        Group {
-            if let imageURL {
-                AsyncImage(url: imageURL) { phase in
-                    switch phase {
-                    case .success(let image):
-                        image
-                            .resizable()
-                            .scaledToFill()
-                    default:
-                        fallbackAvatar
-                    }
-                }
-            } else {
-                fallbackAvatar
-            }
+        RemoteImageView(url: imageURL) { image in
+            image
+                .resizable()
+                .scaledToFill()
+        } placeholder: {
+            fallbackAvatar
         }
         .frame(width: size, height: size)
         .clipShape(Circle())

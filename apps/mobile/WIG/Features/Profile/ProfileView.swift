@@ -19,13 +19,19 @@ private struct SignOutConfirmationAlertModifier: ViewModifier {
     }
 }
 
+private enum ProfileNavigationDestination: Hashable {
+    case requests
+}
+
 struct ProfileView: View {
     let resetFiltersTrigger: Int
     let addPhotoTrigger: Int
 
+    @Environment(\.scenePhase) private var scenePhase
     @Environment(Clerk.self) private var clerk
     @Environment(\.apiClient) private var apiClient
     @EnvironmentObject private var appSession: AppSession
+    @State private var navigationPath: [ProfileNavigationDestination] = []
     @StateObject private var viewModel = ProfileViewModel()
     @State private var selectedAvatarPhotoItem: PhotosPickerItem?
     @State private var isAvatarSourceDialogPresented = false
@@ -35,13 +41,20 @@ struct ProfileView: View {
     @State private var avatarCropSelection: AvatarCropSelection?
     @State private var selectedEventsTab: ProfileEventsTab = .upcoming
     @State private var selectedEventsRSVPFilter: ProfileEventsRSVPFilter = .all
-    @State private var partnerRelationship: MobilePartnerRelationship?
+    private var partnerRelationship: MobilePartnerRelationship? {
+        get { appSession.partnerRelationship }
+        nonmutating set { appSession.partnerRelationship = newValue }
+    }
     @State private var isPartnerPickerPresented = false
-    @State private var isPartnerActionInFlight = false
-    @State private var isRemovingPartnerConfirmationPresented = false
+    private var isPartnerActionInFlight: Bool {
+        get { appSession.isPartnerActionInFlight }
+        nonmutating set { appSession.isPartnerActionInFlight = newValue }
+    }
     @State private var partnerErrorMessage: String?
     @State private var friendRequestActionErrorMessage: String?
     @State private var isAdminSettingsPresented = false
+    @State private var isDefaultEventCityPresented = false
+    @State private var isNotificationSettingsPresented = false
     @State private var isEditProfilePresented = false
     @State private var isManagePromotingPresented = false
     @State private var isHelpAndFeedbackPresented = false
@@ -56,15 +69,25 @@ struct ProfileView: View {
     }
 
     var body: some View {
-        NavigationStack {
+        NavigationStack(path: $navigationPath) {
             content
                 .background(ProfileTheme.background.ignoresSafeArea())
                 .topStatusBarScrim()
                 .toolbar(.hidden, for: .navigationBar)
-                .task {
-                    if case .idle = viewModel.state {
-                        await loadProfileScreen()
+                .navigationDestination(for: ProfileNavigationDestination.self) { destination in
+                    switch destination {
+                    case .requests:
+                        RequestsPageView()
                     }
+                }
+                .onChange(of: appSession.profileRequestsNavigationID, initial: true) { _, requestID in
+                    guard requestID != nil else { return }
+                    navigationPath = [.requests]
+                    appSession.profileRequestsNavigationID = nil
+                }
+                .task(id: scenePhase) {
+                    guard scenePhase == .active else { return }
+                    await loadProfileScreen(forceRefresh: true)
                 }
                 .onAppear {
                     presentActivationPhotoPickerIfNeeded()
@@ -152,23 +175,6 @@ struct ProfileView: View {
                 } message: {
                     Text(viewModel.avatarUploadError ?? "Please try again.")
                 }
-                .confirmationDialog(
-                    "Partner Actions",
-                    isPresented: $isRemovingPartnerConfirmationPresented,
-                    titleVisibility: .visible
-                ) {
-                    Button("Remove Partner", role: .destructive) {
-                        Task {
-                            await removePartner()
-                        }
-                    }
-
-                    Button("Cancel", role: .cancel) {}
-                } message: {
-                    if let partnerRelationship {
-                        Text("Remove \(partnerRelationship.partner.firstName ?? partnerRelationship.partner.username) as your partner?")
-                    }
-                }
                 .alert(
                     "Partner Update Failed",
                     isPresented: Binding(
@@ -221,8 +227,13 @@ struct ProfileView: View {
                         )
                         .presentationDetents([.medium, .large])
                         .presentationDragIndicator(.visible)
-                        .presentationBackground(ProfileTheme.cardBackground)
                     }
+                }
+                .navigationDestination(isPresented: $isDefaultEventCityPresented) {
+                    DefaultEventCityView()
+                }
+                .navigationDestination(isPresented: $isNotificationSettingsPresented) {
+                    NotificationSettingsView()
                 }
                 .navigationDestination(isPresented: $isAdminSettingsPresented) {
                     AdminSettingsView()
@@ -308,7 +319,6 @@ struct ProfileView: View {
                                 response: response,
                                 partnerRelationship: partnerRelationship,
                                 availablePartnerCount: availablePartnerCandidates(from: response).count,
-                                isPartnerBusy: isPartnerActionInFlight,
                                 onChoosePartner: {
                                     isPartnerPickerPresented = true
                                 },
@@ -333,7 +343,7 @@ struct ProfileView: View {
                                     }
                                 },
                                 onRemovePartner: {
-                                    isRemovingPartnerConfirmationPresented = true
+                                    Task { await removePartner() }
                                 },
                                 onRemoveFriend: { friend in
                                     Task {
@@ -498,17 +508,15 @@ struct ProfileView: View {
         await viewModel.updateAvatar(imageData: data, using: apiClient)
     }
 
-    private func loadProfileScreen() async {
-        await viewModel.load(using: apiClient)
+    private func loadProfileScreen(forceRefresh: Bool = false) async {
+        await viewModel.load(using: apiClient, forceRefresh: forceRefresh)
         await loadPartner(using: apiClient)
     }
 
     private func loadPartner(using apiClient: APIClient) async {
         do {
-            let response = try await apiClient.send(APIClient.mobileMyPartner())
-            partnerRelationship = response.relationship
+            try await appSession.refreshPartner(using: apiClient)
         } catch {
-            partnerRelationship = nil
             guard !isCancellationLikeError(error) else {
                 return
             }
@@ -533,6 +541,7 @@ struct ProfileView: View {
     private func sendPartnerRequest(to friend: FriendUserSummary) async {
         guard !isPartnerActionInFlight else { return }
 
+        appSession.invalidatePartnerRefresh()
         isPartnerActionInFlight = true
         partnerErrorMessage = nil
         let previousRelationship = partnerRelationship
@@ -564,11 +573,17 @@ struct ProfileView: View {
     private func acceptPartnerRequest() async {
         guard !isPartnerActionInFlight, let partnerRelationship else { return }
 
+        appSession.invalidatePartnerRefresh()
         isPartnerActionInFlight = true
         partnerErrorMessage = nil
 
         do {
             try await apiClient.send(APIClient.acceptMobilePartnerRequest(partnerID: partnerRelationship.id))
+            appSession.invalidatePartnerRefresh()
+            self.partnerRelationship = MobilePartnerRelationship(
+                id: partnerRelationship.id, status: "accepted",
+                isRequester: partnerRelationship.isRequester, partner: partnerRelationship.partner
+            )
             await loadProfileScreen()
         } catch {
             partnerErrorMessage = error.localizedDescription
@@ -580,6 +595,7 @@ struct ProfileView: View {
     private func declinePartnerRequest() async {
         guard !isPartnerActionInFlight, let partnerRelationship else { return }
 
+        appSession.invalidatePartnerRefresh()
         isPartnerActionInFlight = true
         partnerErrorMessage = nil
         let previousRelationship = partnerRelationship
@@ -587,6 +603,8 @@ struct ProfileView: View {
 
         do {
             try await apiClient.send(APIClient.declineMobilePartnerRequest(partnerID: partnerRelationship.id))
+            appSession.invalidatePartnerRefresh()
+            self.partnerRelationship = nil
         } catch {
             self.partnerRelationship = previousRelationship
             partnerErrorMessage = error.localizedDescription
@@ -598,11 +616,14 @@ struct ProfileView: View {
     private func removePartner() async {
         guard !isPartnerActionInFlight else { return }
 
+        appSession.invalidatePartnerRefresh()
         isPartnerActionInFlight = true
         partnerErrorMessage = nil
 
         do {
             try await apiClient.send(APIClient.removeMobilePartner())
+            appSession.invalidatePartnerRefresh()
+            partnerRelationship = nil
             await loadProfileScreen()
         } catch {
             partnerErrorMessage = error.localizedDescription
@@ -614,6 +635,7 @@ struct ProfileView: View {
     private func changePartner() async {
         guard !isPartnerActionInFlight else { return }
 
+        appSession.invalidatePartnerRefresh()
         isPartnerActionInFlight = true
         partnerErrorMessage = nil
 
@@ -801,6 +823,22 @@ struct ProfileView: View {
             }
             .tint(.white)
 
+            Button {
+                isDefaultEventCityPresented = true
+            } label: {
+                Label("Change Default City", systemImage: "mappin.and.ellipse")
+                    .foregroundStyle(.white)
+            }
+            .tint(.white)
+
+            Button {
+                isNotificationSettingsPresented = true
+            } label: {
+                Label("Notification Settings", systemImage: "bell.badge")
+                    .foregroundStyle(.white)
+            }
+            .tint(.white)
+
             if case .loaded(let response) = viewModel.state,
                let username = response.profile?.username
             {
@@ -839,12 +877,6 @@ struct ProfileView: View {
                 isHelpAndFeedbackPresented = true
             } label: {
                 Label("Help & Feedback", systemImage: "questionmark.bubble")
-                    .foregroundStyle(.white)
-            }
-            .tint(.white)
-
-            Link(destination: URL(string: "https://www.whoisgoing.com/privacy")!) {
-                Label("Privacy Policy", systemImage: "hand.raised")
                     .foregroundStyle(.white)
             }
             .tint(.white)
@@ -1575,12 +1607,15 @@ private struct ProfileShareSheet: UIViewControllerRepresentable {
 }
 
 private enum UserProfileConfirmation: Identifiable {
+    case sendPartnerRequest(FriendUserSummary)
     case mute(FriendUserSummary)
     case unfriend(FriendUserSummary)
     case block(FriendUserSummary)
 
     var id: String {
         switch self {
+        case .sendPartnerRequest(let profile):
+            return "send-partner-request-\(profile.id)"
         case .mute(let profile):
             return "mute-\(profile.id)"
         case .unfriend(let profile):
@@ -1595,9 +1630,16 @@ struct UserProfileView: View {
     let userID: String
     var showsFriendAction = true
 
+    @Environment(\.scenePhase) private var scenePhase
     @Environment(Clerk.self) private var clerk
     @Environment(\.apiClient) private var apiClient
     @Environment(\.dismiss) private var dismiss
+    @EnvironmentObject private var appSession: AppSession
+    private var partnerRelationship: MobilePartnerRelationship? { appSession.partnerRelationship }
+    @State private var hasLoadedPartnerRelationship = false
+    @State private var isSendingPartnerRequest = false
+    @State private var partnerRequestError: String?
+    @State private var showsPartnerRequestSent = false
     @StateObject private var viewModel = UserProfileViewModel()
     @State private var selectedEventsTab: ProfileEventsTab = .upcoming
     @State private var selectedEventsRSVPFilter: ProfileEventsRSVPFilter = .all
@@ -1625,13 +1667,11 @@ struct UserProfileView: View {
                     MobileNewSupportRequestView(reportContext: context)
                 }
             }
-            .task(id: userID) {
-                if case .loaded(let response) = viewModel.state,
-                   response.profile?.id == userID {
-                    return
-                }
-
-                await viewModel.load(userID: userID, using: apiClient)
+            .task(id: "\(userID)-\(scenePhase)") {
+                guard scenePhase == .active else { return }
+                async let profileLoad: Void = viewModel.load(userID: userID, using: apiClient, forceRefresh: true)
+                await loadPartnerRelationship()
+                await profileLoad
             }
             .onReceive(NotificationCenter.default.publisher(for: .appDataDidChange)) { _ in
                 // Friend actions update this profile optimistically below. Ignore the
@@ -1642,11 +1682,35 @@ struct UserProfileView: View {
                 }
 
                 Task {
-                    await viewModel.load(userID: userID, using: apiClient, forceRefresh: true)
+                    async let profile: Void = viewModel.load(userID: userID, using: apiClient, forceRefresh: true)
+                    await loadPartnerRelationship()
+                    await profile
                 }
+            }
+            .alert("Partner Request Sent", isPresented: $showsPartnerRequestSent) {
+                Button("OK", role: .cancel) {}
+            } message: {
+                Text("They can accept or decline your request from Requests in their profile.")
+            }
+            .alert("Couldn't Send Partner Request", isPresented: Binding(
+                get: { partnerRequestError != nil },
+                set: { if !$0 { partnerRequestError = nil } }
+            )) {
+                Button("OK", role: .cancel) {}
+            } message: {
+                Text(partnerRequestError ?? "Please try again.")
             }
             .alert(item: $pendingConfirmation) { confirmation in
                 switch confirmation {
+                case .sendPartnerRequest(let profile):
+                    Alert(
+                        title: Text("Send partner request to \(profile.name)?"),
+                        message: Text("They'll receive a partner request and can accept or decline it from Requests in their profile."),
+                        primaryButton: .default(Text("Send Request")) {
+                            Task { await sendPartnerRequest(to: profile) }
+                        },
+                        secondaryButton: .cancel()
+                    )
                 case .mute(let profile):
                     Alert(
                         title: Text("Mute notifications from \(profile.name)?"),
@@ -1899,8 +1963,44 @@ struct UserProfileView: View {
         .buttonStyle(.plain)
     }
 
+    private func loadPartnerRelationship() async {
+        guard clerk.user != nil, !isCurrentUserProfile else { return }
+        do {
+            try await appSession.refreshPartner(using: apiClient)
+            guard !Task.isCancelled, !isSendingPartnerRequest else { return }
+            hasLoadedPartnerRelationship = true
+        } catch {
+            // Hide the send action until eligibility can be confirmed.
+            hasLoadedPartnerRelationship = false
+        }
+    }
+
+    private func sendPartnerRequest(to profile: FriendUserSummary) async {
+        guard !isSendingPartnerRequest, partnerRelationship == nil else { return }
+        isSendingPartnerRequest = true
+        defer { isSendingPartnerRequest = false }
+        do {
+            try await apiClient.send(APIClient.sendMobilePartnerRequest(recipientID: profile.id))
+            hasLoadedPartnerRelationship = false
+            showsPartnerRequestSent = true
+        } catch {
+            partnerRequestError = error.localizedDescription
+        }
+    }
+
     private func confirmedFriendMenu(for profile: FriendUserSummary) -> some View {
         Menu {
+            if hasLoadedPartnerRelationship, partnerRelationship == nil, clerk.user != nil {
+                Button {
+                    pendingConfirmation = .sendPartnerRequest(profile)
+                } label: {
+                    Label("Send Partner Request", systemImage: "person.2.fill")
+                        .foregroundStyle(.white)
+                }
+                .tint(.white)
+                .disabled(isSendingPartnerRequest)
+            }
+
             Button {
                 profileShareURL = ProfileShareURL.url(for: profile.username)
             } label: {
@@ -3105,7 +3205,6 @@ private struct RelationshipSummaryRow: View {
     let response: FriendsFeedResponse
     let partnerRelationship: MobilePartnerRelationship?
     let availablePartnerCount: Int
-    let isPartnerBusy: Bool
     let onChoosePartner: () -> Void
     let onAcceptPartner: () -> Void
     let onDeclinePartner: () -> Void
@@ -3121,9 +3220,7 @@ private struct RelationshipSummaryRow: View {
             NavigationLink {
                 MyFriendsView(
                     response: response,
-                    partnerRelationship: partnerRelationship,
                     availablePartnerCount: availablePartnerCount,
-                    isPartnerBusy: isPartnerBusy,
                     onChoosePartner: onChoosePartner,
                     onAcceptPartner: onAcceptPartner,
                     onDeclinePartner: onDeclinePartner,
@@ -3171,9 +3268,9 @@ private struct RelationshipSummaryRow: View {
                 )
             } label: {
                 RelationshipSummaryLink(
-                    count: response.requestCount,
+                    count: response.requestCount + (partnerRelationship?.isIncomingRequest == true ? 1 : 0),
                     label: "Requests",
-                    showsIndicator: response.requestCount > 0
+                    showsIndicator: response.requestCount > 0 || (partnerRelationship?.isIncomingRequest == true)
                 )
             }
             .buttonStyle(.plain)
@@ -3185,9 +3282,7 @@ private struct RelationshipSummaryRow: View {
 
 private struct MyFriendsView: View {
     let response: FriendsFeedResponse
-    let partnerRelationship: MobilePartnerRelationship?
     let availablePartnerCount: Int
-    let isPartnerBusy: Bool
     let onChoosePartner: () -> Void
     let onAcceptPartner: () -> Void
     let onDeclinePartner: () -> Void
@@ -3198,12 +3293,26 @@ private struct MyFriendsView: View {
     @Environment(\.apiClient) private var apiClient
     @State private var selectedSection: FriendsPageSection = .friends
     @State private var pendingFriendRemoval: FriendUserSummary?
+    @State private var pendingPartnerRemoval: MobilePartnerRelationship?
     @State private var blockedUsers: [MobileBlockedUser] = []
     @State private var hasLoadedBlockedUsers = false
     @State private var isLoadingBlockedUsers = false
     @State private var pendingUnblock: MobileBlockedUser?
     @State private var unblockingUserID: String?
     @State private var blockedUsersErrorMessage: String?
+
+    @EnvironmentObject private var appSession: AppSession
+    @Environment(\.scenePhase) private var scenePhase
+    @State private var partnerRefreshError: String?
+
+    private func refreshPartner() async {
+        do {
+            try await appSession.refreshPartner(using: apiClient)
+        } catch {
+            guard !Task.isCancelled, !(error is CancellationError) else { return }
+            partnerRefreshError = error.localizedDescription
+        }
+    }
 
     var body: some View {
         RelationshipListScreen(title: "Friends") {
@@ -3227,15 +3336,15 @@ private struct MyFriendsView: View {
 
                 case .partner:
                     PartnerManagementCard(
-                        relationship: partnerRelationship,
+                        relationship: appSession.partnerRelationship,
                         availableFriendCount: availablePartnerCount,
-                        isBusy: isPartnerBusy,
+                        isBusy: appSession.isPartnerActionInFlight,
                         onChoosePartner: onChoosePartner,
                         onAccept: onAcceptPartner,
                         onDecline: onDeclinePartner,
                         onCancelRequest: onCancelPartnerRequest,
                         onChangePartner: onChangePartner,
-                        onRemovePartner: onRemovePartner
+                        onRemovePartner: { pendingPartnerRemoval = appSession.partnerRelationship }
                     )
 
                 case .blocked:
@@ -3243,6 +3352,37 @@ private struct MyFriendsView: View {
                 }
             }
         }
+        .task(id: "\(scenePhase)-\(selectedSection)") {
+            guard scenePhase == .active else { return }
+            await refreshPartner()
+        }
+        .onReceive(NotificationCenter.default.publisher(for: .appDataDidChange)) { _ in
+            Task { await refreshPartner() }
+        }
+        .refreshable { await refreshPartner() }
+        .alert("Remove Partner?", isPresented: Binding(
+            get: { pendingPartnerRemoval != nil },
+            set: { if !$0 { pendingPartnerRemoval = nil } }
+        )) {
+            Button("Remove Partner", role: .destructive) {
+                guard let pendingPartnerRemoval,
+                      pendingPartnerRemoval.id == appSession.partnerRelationship?.id else { return }
+                onRemovePartner()
+                self.pendingPartnerRemoval = nil
+            }
+            Button("Cancel", role: .cancel) { pendingPartnerRemoval = nil }
+        } message: {
+            if let request = pendingPartnerRemoval {
+                Text("Remove \(request.partner.firstName ?? request.partner.username) as your partner?")
+            }
+        }
+        .alert("Couldn’t Refresh Partner", isPresented: Binding(
+            get: { partnerRefreshError != nil },
+            set: { if !$0 { partnerRefreshError = nil } }
+        )) {
+            Button("Try Again") { Task { await refreshPartner() } }
+            Button("Cancel", role: .cancel) {}
+        } message: { Text(partnerRefreshError ?? "Please try again.") }
         .task(id: selectedSection) {
             guard selectedSection == .blocked else { return }
             await loadBlockedUsersIfNeeded()
@@ -3550,72 +3690,68 @@ private struct PartnerPickerSheet: View {
     }
 
     var body: some View {
-        ZStack {
-            Color(red: 0.11, green: 0.11, blue: 0.13)
-                .ignoresSafeArea()
-
-            ScrollView {
-                VStack(alignment: .leading, spacing: 20) {
-                    VStack(alignment: .leading, spacing: 8) {
-                        Text("Choose a partner from your accepted friends.")
-                            .font(.system(size: 20, weight: .bold))
-                            .foregroundStyle(.white)
-
-                        Text("Partners can add or update RSVP statuses for both of you. Your friends may see your names together in activity and event attendance.")
-                            .font(.system(size: 14, weight: .medium))
-                            .foregroundStyle(.white.opacity(0.64))
-                            .fixedSize(horizontal: false, vertical: true)
-                    }
-
-                    TextField("Search accepted friends...", text: $searchText)
-                        .font(.system(size: 16, weight: .medium))
+        ScrollView {
+            VStack(alignment: .leading, spacing: 20) {
+                VStack(alignment: .leading, spacing: 8) {
+                    Text("Add Partner")
+                        .font(.system(size: 20, weight: .bold))
                         .foregroundStyle(.white)
-                        .textInputAutocapitalization(.never)
-                        .autocorrectionDisabled()
-                        .padding(.horizontal, 16)
-                        .frame(height: 50)
-                        .background(
-                            RoundedRectangle(cornerRadius: 18, style: .continuous)
-                                .fill(.black.opacity(0.28))
-                        )
-                        .overlay(
-                            RoundedRectangle(cornerRadius: 18, style: .continuous)
-                                .strokeBorder(.white.opacity(0.08), lineWidth: 1)
-                        )
 
-                    if friends.isEmpty {
-                        EmptyRelationshipCard(
-                            message: "No accepted friends available"
-                        )
-                    } else if filteredFriends.isEmpty {
-                        EmptyRelationshipCard(
-                            message: "No friends found"
-                        )
-                    } else {
-                        VStack(spacing: 2) {
-                            ForEach(filteredFriends) { friend in
-                                Button {
-                                    pendingPartner = friend
-                                } label: {
-                                    CompactUserListRowView(
-                                        imageURL: friend.avatarImageURL,
-                                        name: friend.name,
-                                        subtitle: friend.usernameText,
-                                        identityKey: friend.id
-                                    )
-                                    .frame(maxWidth: .infinity, alignment: .leading)
-                                    .contentShape(Rectangle())
-                                }
-                                .buttonStyle(.plain)
+                    Text("RSVP for each other and appear together in activity.")
+                        .font(.system(size: 14, weight: .medium))
+                        .foregroundStyle(.white.opacity(0.64))
+                        .fixedSize(horizontal: false, vertical: true)
+                }
+
+                TextField("Search friends", text: $searchText)
+                    .font(.system(size: 16, weight: .medium))
+                    .foregroundStyle(.white)
+                    .textInputAutocapitalization(.never)
+                    .autocorrectionDisabled()
+                    .padding(.horizontal, 16)
+                    .frame(height: 50)
+                    .background(
+                        RoundedRectangle(cornerRadius: 18, style: .continuous)
+                            .fill(.black.opacity(0.28))
+                    )
+                    .overlay(
+                        RoundedRectangle(cornerRadius: 18, style: .continuous)
+                            .strokeBorder(.white.opacity(0.08), lineWidth: 1)
+                    )
+
+                if friends.isEmpty {
+                    EmptyRelationshipCard(
+                        message: "No friends available"
+                    )
+                } else if filteredFriends.isEmpty {
+                    EmptyRelationshipCard(
+                        message: "No friends found"
+                    )
+                } else {
+                    VStack(spacing: 2) {
+                        ForEach(filteredFriends) { friend in
+                            Button {
+                                pendingPartner = friend
+                            } label: {
+                                CompactUserListRowView(
+                                    imageURL: friend.avatarImageURL,
+                                    name: friend.name,
+                                    subtitle: friend.usernameText,
+                                    identityKey: friend.id
+                                )
+                                .frame(maxWidth: .infinity, alignment: .leading)
+                                .contentShape(Rectangle())
                             }
+                            .buttonStyle(.plain)
                         }
                     }
                 }
-                .padding(16)
-                .padding(.top, 16)
-                .padding(.bottom, 26)
             }
+            .padding(16)
+            .padding(.top, 16)
+            .padding(.bottom, 26)
         }
+
         .alert(item: $pendingPartner) { friend in
             Alert(
                 title: Text("Add \(friend.name) as your partner?"),
@@ -3872,6 +4008,13 @@ private struct FriendRequestsView: View {
     let sourceSentRequests: [FriendUserSummary]
     let onAcceptRequest: (FriendUserSummary) async -> Bool
     let onDeclineRequest: (FriendUserSummary) async -> Bool
+    @EnvironmentObject private var appSession: AppSession
+    @Environment(\.apiClient) private var apiClient
+    @Environment(\.scenePhase) private var scenePhase
+    @State private var partnerRelationship: MobilePartnerRelationship?
+    @State private var isPartnerBusy = false
+    @State private var partnerError: String?
+    @State private var partnerLoadToken = UUID()
     @EnvironmentObject private var activityRequestStore: ActivityRequestStore
     @State private var receivedRequests: [FriendUserSummary]
     @State private var sentRequests: [FriendUserSummary]
@@ -3902,7 +4045,7 @@ private struct FriendRequestsView: View {
             VStack(alignment: .leading, spacing: 14) {
                 RelationshipFilterPills(
                     titles: RequestsPageSection.allCases.map(\.title),
-                    counts: [receivedRequests.count, sentRequests.count],
+                    counts: [receivedRequests.count + (incomingPartnerRequest == nil ? 0 : 1), sentRequests.count + (outgoingPartnerRequest == nil ? 0 : 1)],
                     selection: Binding(
                         get: { RequestsPageSection.allCases.firstIndex(of: selectedSection) ?? 0 },
                         set: { selectedSection = RequestsPageSection.allCases[$0] }
@@ -3911,9 +4054,17 @@ private struct FriendRequestsView: View {
 
                 switch selectedSection {
                 case .received:
-                    receivedRequestsContent
+                    if let request = incomingPartnerRequest {
+                        partnerRequestRow(request)
+                    }
+                    if !receivedRequests.isEmpty || incomingPartnerRequest == nil {
+                        receivedRequestsContent
+                    }
                 case .sent:
-                    if sentRequests.isEmpty {
+                    if let request = outgoingPartnerRequest {
+                        partnerRequestRow(request)
+                    }
+                    if sentRequests.isEmpty && outgoingPartnerRequest == nil {
                         EmptyRequestPlaceholder(message: "No sent requests")
                     } else {
                         VStack(spacing: 2) {
@@ -3937,6 +4088,22 @@ private struct FriendRequestsView: View {
                     }
                 }
             }
+        }
+        .task(id: scenePhase) {
+            guard scenePhase == .active else { return }
+            await loadPartnerRequest()
+        }
+        .onReceive(NotificationCenter.default.publisher(for: .appDataDidChange)) { _ in
+            guard !isPartnerBusy else { return }
+            Task { await loadPartnerRequest() }
+        }
+        .alert("Couldn't Update Partner Request", isPresented: Binding(
+            get: { partnerError != nil },
+            set: { if !$0 { partnerError = nil } }
+        )) {
+            Button("OK", role: .cancel) {}
+        } message: {
+            Text(partnerError ?? "Please try again.")
         }
         .navigationDestination(item: $selectedUserProfile) { selection in
             UserProfileView(userID: selection.id)
@@ -3981,6 +4148,105 @@ private struct FriendRequestsView: View {
                     value: isRequestConfirmationVisible
                 )
             }
+        }
+    }
+
+    private var incomingPartnerRequest: MobilePartnerRelationship? {
+        guard let partnerRelationship, partnerRelationship.isIncomingRequest else { return nil }
+        return partnerRelationship
+    }
+
+    private var outgoingPartnerRequest: MobilePartnerRelationship? {
+        guard let partnerRelationship, partnerRelationship.isOutgoingRequest else { return nil }
+        return partnerRelationship
+    }
+
+    private func partnerName(_ user: MobilePartnerUser) -> String {
+        let name = [user.firstName, user.lastName].compactMap { $0 }.joined(separator: " ")
+        return name.isEmpty ? user.username : name
+    }
+
+    private func partnerRequestRow(_ request: MobilePartnerRelationship) -> some View {
+        HStack(spacing: 8) {
+            Button {
+                selectedUserProfile = RequestSelectedUserProfile(id: request.partner.id)
+            } label: {
+                CompactUserListRowView(
+                    imageURL: request.partner.avatarImageURL,
+                    name: partnerName(request.partner),
+                    subtitle: request.isRequester ? "Partner request sent" : "Partner request",
+                    identityKey: request.partner.id
+                )
+                .frame(maxWidth: .infinity, alignment: .leading)
+                .contentShape(Rectangle())
+            }
+            .buttonStyle(.plain)
+
+            if !request.isRequester {
+                HStack(spacing: 8) {
+                    partnerResponseButton("Decline", accepts: false, request: request)
+                    partnerResponseButton("Accept", accepts: true, request: request)
+                }
+                .disabled(isPartnerBusy)
+                .opacity(isPartnerBusy ? 0.5 : 1)
+            }
+        }
+    }
+
+    private func partnerResponseButton(
+        _ title: String, accepts: Bool, request: MobilePartnerRelationship
+    ) -> some View {
+        Button {
+            Task { await respondToPartnerRequest(request, accepts: accepts) }
+        } label: {
+            Text(title)
+                .font(.system(size: 12, weight: .semibold))
+                .foregroundStyle(accepts ? .black : .white.opacity(0.82))
+                .padding(.horizontal, 12)
+                .frame(height: 34)
+                .background(
+                    RoundedRectangle(cornerRadius: 10, style: .continuous)
+                        .fill(accepts ? AppTheme.accentBlue : Color.white.opacity(0.10))
+                )
+        }
+        .buttonStyle(.plain)
+        .accessibilityLabel("\(title) partner request from \(request.partner.username)")
+    }
+
+    private func loadPartnerRequest() async {
+        let token = UUID()
+        partnerLoadToken = token
+        do {
+            let response = try await apiClient.send(APIClient.mobileMyPartner())
+            guard !Task.isCancelled, !isPartnerBusy, partnerLoadToken == token else { return }
+            partnerRelationship = response.relationship
+        } catch {
+            guard !Task.isCancelled, !(error is CancellationError),
+                  (error as? URLError)?.code != .cancelled else { return }
+            partnerError = error.localizedDescription
+        }
+    }
+
+    private func respondToPartnerRequest(_ request: MobilePartnerRelationship, accepts: Bool) async {
+        guard !isPartnerBusy else { return }
+        appSession.invalidatePartnerRefresh()
+        isPartnerBusy = true
+        partnerLoadToken = UUID()
+        defer { isPartnerBusy = false }
+        do {
+            if accepts {
+                try await apiClient.send(APIClient.acceptMobilePartnerRequest(partnerID: request.id))
+            } else {
+                try await apiClient.send(APIClient.declineMobilePartnerRequest(partnerID: request.id))
+            }
+            appSession.invalidatePartnerRefresh()
+            let updated = accepts ? MobilePartnerRelationship(
+                id: request.id, status: "accepted", isRequester: request.isRequester, partner: request.partner
+            ) : nil
+            appSession.partnerRelationship = updated
+            partnerRelationship = updated
+        } catch {
+            partnerError = error.localizedDescription
         }
     }
 
@@ -4192,6 +4458,7 @@ private struct RequestsPageLoadingContent: View {
 }
 
 struct RequestsPageView: View {
+    @Environment(\.scenePhase) private var scenePhase
     @Environment(\.apiClient) private var apiClient
     @StateObject private var viewModel = ProfileViewModel()
     @State private var errorMessage: String?
@@ -4232,10 +4499,9 @@ struct RequestsPageView: View {
                 )
             }
         }
-        .onAppear {
-            Task {
-                await viewModel.load(using: apiClient, forceRefresh: true)
-            }
+        .task(id: scenePhase) {
+            guard scenePhase == .active else { return }
+            await viewModel.load(using: apiClient, forceRefresh: true)
         }
         .onReceive(NotificationCenter.default.publisher(for: .friendRequestDidChange)) { notification in
             if let user = notification.object as? FriendUserSummary,
@@ -4837,7 +5103,30 @@ struct MobileHelpAndFeedbackView: View {
                 HStack {
                     FloatingGlassIconButton(systemImage: "chevron.left") { dismiss() }
                     Spacer()
-                    FloatingGlassIconButton(systemImage: "plus") { isNewRequestPresented = true }
+                    Menu {
+                        Button {
+                            isNewRequestPresented = true
+                        } label: {
+                            Label("New Support Request", systemImage: "plus")
+                                .foregroundStyle(.white)
+                        }
+                        .tint(.white)
+                        Link(destination: URL(string: "https://www.whoisgoing.com/privacy")!) {
+                            Label("Privacy Policy", systemImage: "hand.raised")
+                                .foregroundStyle(.white)
+                        }
+                        .tint(.white)
+                    } label: {
+                        Image(systemName: "ellipsis")
+                            .font(.system(size: 17, weight: .semibold))
+                            .foregroundStyle(.primary)
+                            .frame(width: 46, height: 46)
+                            .contentShape(Circle())
+                            .profileLiquidGlass(in: Circle())
+                    }
+                    .buttonStyle(.plain)
+                    .accessibilityLabel("Help & Feedback options")
+                    .tint(.white)
                 }
             }
             .padding(.horizontal, 16)
@@ -6375,7 +6664,14 @@ private final class AdminMetroAreasViewModel: ObservableObject {
             APIClient.mobileSetMetroAreaEnabled(id: id, isEnabled: isEnabled)
         )
         if let index = metroAreas.firstIndex(where: { $0.id == id }) {
-            metroAreas[index] = updated
+            let existing = metroAreas[index]
+            metroAreas[index] = MobileAdminMetroArea(
+                id: existing.id, name: existing.name, state: existing.state,
+                latitude: existing.latitude, longitude: existing.longitude,
+                radiusMiles: existing.radiusMiles, isEnabled: updated.isEnabled,
+                placeCount: existing.placeCount, createdAt: existing.createdAt,
+                updatedAt: updated.updatedAt
+            )
         }
     }
 }
@@ -6644,7 +6940,10 @@ private struct AdminMetroAreaDetailView: View {
             Divider().overlay(.white.opacity(0.08))
             detailRow(title: "State", value: metroArea.state)
             Divider().overlay(.white.opacity(0.08))
-            Toggle(isOn: $isEnabled) {
+            Toggle(isOn: Binding(
+                get: { isEnabled },
+                set: { updateAvailability(to: $0) }
+            )) {
                 VStack(alignment: .leading, spacing: 3) {
                     Text("Available to users")
                         .font(.system(size: 14, weight: .semibold))
@@ -6657,10 +6956,6 @@ private struct AdminMetroAreaDetailView: View {
             .tint(AppTheme.accentBlue)
             .disabled(isUpdatingAvailability)
             .padding(.vertical, 12)
-            .onChange(of: isEnabled) { oldValue, newValue in
-                guard oldValue != newValue else { return }
-                Task { await updateAvailability(from: oldValue, to: newValue) }
-            }
             Divider().overlay(.white.opacity(0.08))
             detailRow(title: "Places", value: metroArea.placeCount.formatted())
             Divider().overlay(.white.opacity(0.08))
@@ -6681,6 +6976,7 @@ private struct AdminMetroAreaDetailView: View {
         .overlay(
             RoundedRectangle(cornerRadius: 18, style: .continuous)
                 .strokeBorder(.white.opacity(0.08), lineWidth: 1)
+                .allowsHitTesting(false)
         )
     }
 
@@ -6712,17 +7008,22 @@ private struct AdminMetroAreaDetailView: View {
         }
     }
 
-    private func updateAvailability(from oldValue: Bool, to newValue: Bool) async {
-        guard !isUpdatingAvailability else { return }
+    private func updateAvailability(to newValue: Bool) {
+        guard !isUpdatingAvailability, newValue != isEnabled else { return }
+        let oldValue = isEnabled
+        isEnabled = newValue
         isUpdatingAvailability = true
         errorMessage = nil
-        do {
-            try await onEnabledChange(metroArea.id, newValue)
-        } catch {
-            isEnabled = oldValue
-            errorMessage = error.localizedDescription
+
+        Task { @MainActor in
+            defer { isUpdatingAvailability = false }
+            do {
+                try await onEnabledChange(metroArea.id, newValue)
+            } catch {
+                isEnabled = oldValue
+                errorMessage = error.localizedDescription
+            }
         }
-        isUpdatingAvailability = false
     }
 
     private func selectForTesting() async {

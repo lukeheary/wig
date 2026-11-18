@@ -18,6 +18,31 @@ const storageImagePattern = (() => {
   }
 })();
 
+// Match the same origin used by storage-url.ts, including a LAN address for
+// physical-device development. Keep these local endpoints out of production.
+const developmentStorageImagePatterns = process.env.NODE_ENV === "development"
+  ? [...new Set([
+      "http://localhost:3000",
+      "http://localhost:3001",
+      "http://127.0.0.1:3000",
+      "http://127.0.0.1:3001",
+      process.env.NEXT_PUBLIC_APP_URL,
+    ].filter(Boolean))].flatMap((origin) => {
+      try {
+        const url = new URL(origin);
+        if (!["http:", "https:"].includes(url.protocol)) return [];
+        return [{
+          protocol: url.protocol.replace(":", ""),
+          hostname: url.hostname,
+          port: url.port,
+          pathname: "/api/storage-image",
+        }];
+      } catch {
+        return [];
+      }
+    })
+  : [];
+
 /** @type {import('next').NextConfig} */
 const nextConfig = {
   async redirects() {
@@ -65,20 +90,7 @@ const nextConfig = {
     dangerouslyAllowLocalIP: process.env.NODE_ENV === "development",
     remotePatterns: [
       ...(storageImagePattern ? [storageImagePattern] : []),
-      // Development image values use the local read-through endpoint so it can
-      // check development storage before falling back to production.
-      {
-        protocol: "http",
-        hostname: "localhost",
-        port: "3000",
-        pathname: "/api/storage-image",
-      },
-      {
-        protocol: "http",
-        hostname: "127.0.0.1",
-        port: "3000",
-        pathname: "/api/storage-image",
-      },
+      ...developmentStorageImagePatterns,
       // Keep any legacy fully-qualified S3 image values renderable.
       {
         protocol: "https",

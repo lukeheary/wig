@@ -20,7 +20,31 @@ final class AppSession: ObservableObject {
     @Published var isAuthBypassed = false
     @Published var isAdmin = false
     @Published var presentedEventDetail: EventDetailPresentation?
+    @Published var profileRequestsNavigationID: UUID?
     @Published var selectedCityContext: SelectedCityContext?
+    @Published var partnerRelationship: MobilePartnerRelationship?
+    @Published var isPartnerActionInFlight = false
+    private var partnerRefreshToken = UUID()
+
+    func invalidatePartnerRefresh() {
+        partnerRefreshToken = UUID()
+    }
+
+    @discardableResult
+    func refreshPartner(using apiClient: APIClient) async throws -> MobilePartnerRelationship? {
+        let token = UUID()
+        partnerRefreshToken = token
+        let response = try await apiClient.send(APIClient.mobileMyPartner())
+        guard !Task.isCancelled, partnerRefreshToken == token else { return partnerRelationship }
+        partnerRelationship = response.relationship
+        return partnerRelationship
+    }
+
+    func resetPartner() {
+        invalidatePartnerRefresh()
+        partnerRelationship = nil
+        isPartnerActionInFlight = false
+    }
 
     var shouldShowFloatingCreationButton: Bool {
         isAdmin && presentedEventDetail == nil
@@ -41,7 +65,9 @@ final class AppSession: ObservableObject {
         isAuthBypassed = false
         isAdmin = false
         presentedEventDetail = nil
+        profileRequestsNavigationID = nil
         selectedCityContext = nil
+        resetPartner()
     }
 
     func updateAdminStatus(_ isAdmin: Bool) {

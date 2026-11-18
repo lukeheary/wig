@@ -3,8 +3,10 @@ import SwiftUI
 import UserNotifications
 
 struct MainTabView: View {
+    @Environment(\.scenePhase) private var scenePhase
     @Environment(Clerk.self) private var clerk
     @Environment(\.apiClient) private var apiClient
+    @EnvironmentObject private var pushNotificationManager: PushNotificationManager
     @EnvironmentObject private var appSession: AppSession
     @StateObject private var activityRequestStore = ActivityRequestStore()
     @StateObject private var guestGoogleAuthController = GuestGoogleAuthController()
@@ -21,7 +23,10 @@ struct MainTabView: View {
     @State private var activityBackDestination: AppTab?
     @State private var profileResetTrigger = 0
     @State private var profileAddPhotoTrigger = 0
+    @State private var profileNotificationNavigationID = UUID()
+    @State private var notificationNavigationError: String?
     @State private var pendingFriendRequestCount = 0
+    @State private var pendingPartnerRequestCount = 0
     @State private var isEventCreationSheetPresented = false
     @State private var presentedPlaceCreationType: PlaceListItem.PlaceType?
     @State private var searchFilter: GlobalSearchFilter = .all
@@ -39,6 +44,42 @@ struct MainTabView: View {
             } else {
                 legacyTabView
             }
+        }
+        .task(id: "\(scenePhase)-\(isAuthenticated)") {
+            guard scenePhase == .active, isAuthenticated else { return }
+            await refreshFriendRequestBadge()
+        }
+        .onReceive(NotificationCenter.default.publisher(for: .appDataDidChange)) { _ in
+            Task {
+                await refreshFriendRequestBadge()
+            }
+        }
+        .task(id: notificationNavigationTaskID) {
+            guard scenePhase == .active, clerk.isLoaded,
+                  let request = pushNotificationManager.pendingNavigation else { return }
+            guard isAuthenticated else {
+                isGuestWelcomePresented = false
+                isAuthPagePresented = true
+                return
+            }
+            await openNotification(request)
+        }
+        .alert("Couldn't Open Notification", isPresented: Binding(
+            get: { notificationNavigationError != nil },
+            set: { if !$0 { notificationNavigationError = nil } }
+        )) {
+            Button("Try Again") {
+                if let destination = pushNotificationManager.pendingNavigation?.destination {
+                    pushNotificationManager.navigate(to: destination)
+                }
+            }
+            Button("Cancel", role: .cancel) {
+                if let request = pushNotificationManager.pendingNavigation {
+                    pushNotificationManager.finishNavigation(id: request.id)
+                }
+            }
+        } message: {
+            Text(notificationNavigationError ?? "Please try again.")
         }
         .environmentObject(activityRequestStore)
         .environment(\.eventDetailTransitionNamespace, eventDetailTransitionNamespace)
@@ -157,6 +198,7 @@ struct MainTabView: View {
                             resetFiltersTrigger: profileResetTrigger,
                             addPhotoTrigger: profileAddPhotoTrigger
                         )
+                        .id(profileNotificationNavigationID)
                     }
                     .badge(friendRequestTabBadge)
                 } else {
@@ -195,6 +237,7 @@ struct MainTabView: View {
             if !isAuthenticated {
                 appSession.updateAdminStatus(false)
                 pendingFriendRequestCount = 0
+                pendingPartnerRequestCount = 0
                 syncAppIconBadge()
             }
 
@@ -208,6 +251,7 @@ struct MainTabView: View {
         .task(id: preloadTaskID) {
             guard isAuthenticated else {
                 pendingFriendRequestCount = 0
+                pendingPartnerRequestCount = 0
                 syncAppIconBadge()
                 return
             }
@@ -217,11 +261,6 @@ struct MainTabView: View {
         }
         .onReceive(NotificationCenter.default.publisher(for: .friendRequestDidChange)) { notification in
             handleFriendRequestChange(notification)
-        }
-        .onReceive(NotificationCenter.default.publisher(for: .appDataDidChange)) { _ in
-            Task {
-                await refreshFriendRequestBadge()
-            }
         }
         .sheet(isPresented: $isEventCreationSheetPresented) {
             MobileEventCreationView()
@@ -286,6 +325,7 @@ struct MainTabView: View {
                         resetFiltersTrigger: profileResetTrigger,
                         addPhotoTrigger: profileAddPhotoTrigger
                     )
+                        .id(profileNotificationNavigationID)
                         .tabItem {
                             Image(systemName: "person.crop.circle")
                         }
@@ -329,6 +369,7 @@ struct MainTabView: View {
             if !isAuthenticated {
                 appSession.updateAdminStatus(false)
                 pendingFriendRequestCount = 0
+                pendingPartnerRequestCount = 0
                 syncAppIconBadge()
             }
 
@@ -342,6 +383,7 @@ struct MainTabView: View {
         .task(id: preloadTaskID) {
             guard isAuthenticated else {
                 pendingFriendRequestCount = 0
+                pendingPartnerRequestCount = 0
                 syncAppIconBadge()
                 return
             }
@@ -390,6 +432,38 @@ struct MainTabView: View {
             showsBackButton: activityBackDestination != nil,
             onBack: returnFromContextualActivity
         )
+    }
+
+    private var notificationNavigationTaskID: String {
+        "\(pushNotificationManager.pendingNavigation?.id.uuidString ?? "none")-\(clerk.isLoaded)-\(clerk.user?.id ?? "guest")-\(isAuthenticated)-\(scenePhase)"
+    }
+
+    @MainActor
+    private func openNotification(_ request: PushNotificationNavigation) async {
+        notificationNavigationError = nil
+        isGuestWelcomePresented = false
+        isAuthPagePresented = false
+        isEventCreationSheetPresented = false
+        presentedPlaceCreationType = nil
+        switch request.destination {
+        case .event(let identifier):
+            do {
+                let event = try await apiClient.send(APIClient.mobileEventDetail(eventPublicID: identifier))
+                guard !Task.isCancelled, pushNotificationManager.pendingNavigation?.id == request.id else { return }
+                appSession.presentEventDetail(event)
+            } catch {
+                guard !Task.isCancelled, pushNotificationManager.pendingNavigation?.id == request.id else { return }
+                notificationNavigationError = "The event couldn't be loaded. Please try again."
+                return
+            }
+        case .profileRequests:
+            appSession.presentedEventDetail = nil
+            profileNotificationNavigationID = UUID()
+            appSession.profileRequestsNavigationID = UUID()
+            selectedTab = .profile
+            NotificationCenter.default.post(name: .appDataDidChange, object: nil)
+        }
+        pushNotificationManager.finishNavigation(id: request.id)
     }
 
     private var isAuthenticated: Bool {
@@ -543,22 +617,31 @@ struct MainTabView: View {
         syncAppIconBadge()
     }
 
+    private var pendingRequestCount: Int { pendingFriendRequestCount + pendingPartnerRequestCount }
+
     private var friendRequestTabBadge: Text? {
-        pendingFriendRequestCount > 0 ? Text("\(pendingFriendRequestCount)") : nil
+        pendingRequestCount > 0 ? Text("\(pendingRequestCount)") : nil
     }
 
     private var friendRequestLegacyBadge: String? {
-        pendingFriendRequestCount > 0 ? "\(pendingFriendRequestCount)" : nil
+        pendingRequestCount > 0 ? "\(pendingRequestCount)" : nil
     }
 
     private func refreshFriendRequestBadge() async {
+        guard isAuthenticated else { return }
+        let viewModel = ProfileViewModel()
+        await viewModel.load(using: apiClient, forceRefresh: true)
+        guard isAuthenticated, !Task.isCancelled,
+              case .loaded(let response) = viewModel.state else { return }
+        pendingFriendRequestCount = response.requestCount
         do {
-            let response = try await apiClient.send(APIClient.mobileFriends())
-            pendingFriendRequestCount = response.requestCount
-            syncAppIconBadge()
+            let partner = try await apiClient.send(APIClient.mobileMyPartner()).relationship
+            guard isAuthenticated, !Task.isCancelled else { return }
+            pendingPartnerRequestCount = partner?.isIncomingRequest == true ? 1 : 0
         } catch {
-            // Keep the last known badge state if a refresh fails.
+            // Retain the partner badge when a refresh fails.
         }
+        syncAppIconBadge()
     }
 
     private func handleFriendRequestChange(_ notification: Notification) {
@@ -575,7 +658,7 @@ struct MainTabView: View {
     }
 
     private func syncAppIconBadge() {
-        let count = pendingFriendRequestCount
+        let count = pendingRequestCount
 
         Task {
             try? await UNUserNotificationCenter.current().setBadgeCount(count)

@@ -88,6 +88,8 @@ struct AuthGate: View {
                 return
             }
 
+            appSession.selectedCityContext = nil
+            appSession.resetPartner()
             ProfileViewModel.invalidateCache()
             UserProfileViewModel.invalidateAllCaches()
         }
@@ -769,7 +771,7 @@ struct MobileOnboardingView: View {
 
     private var citySection: some View {
         VStack(alignment: .leading, spacing: 8) {
-            Text("City")
+            Text(mode == .editing ? "City You Live In" : "City")
                 .font(.system(size: 14, weight: .semibold))
                 .foregroundStyle(.white.opacity(0.78))
 

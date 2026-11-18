@@ -91,6 +91,7 @@ private final class LatestFromFollowsViewModel: ObservableObject {
 @MainActor
 private final class HomeForegroundRefreshCoordinator: ObservableObject {
     private var needsRefresh = false
+    private var refreshAfterMutation = false
     private var refreshTask: Task<Void, Never>?
 
     func scenePhaseChanged(
@@ -118,7 +119,7 @@ private final class HomeForegroundRefreshCoordinator: ObservableObject {
     func eventDetailPresentationChanged(
         isPresented: Bool,
         scenePhase: ScenePhase,
-        refresh: @escaping @MainActor () async -> Void
+        refresh: @escaping @MainActor (Bool) async -> Void
     ) {
         guard needsRefresh else {
             return
@@ -134,7 +135,7 @@ private final class HomeForegroundRefreshCoordinator: ObservableObject {
             return
         }
 
-        schedule(refresh)
+        schedule { await refresh(self.refreshAfterMutation) }
     }
 
     func dataDidChange(
@@ -142,6 +143,7 @@ private final class HomeForegroundRefreshCoordinator: ObservableObject {
         refresh: @escaping @MainActor () async -> Void
     ) {
         needsRefresh = true
+        refreshAfterMutation = true
         refreshTask?.cancel()
         refreshTask = nil
 
@@ -172,6 +174,7 @@ private final class HomeForegroundRefreshCoordinator: ObservableObject {
             }
 
             self.needsRefresh = false
+            self.refreshAfterMutation = false
             self.refreshTask = nil
         }
     }
@@ -343,7 +346,10 @@ struct HomeView: View {
                         }
                     }
                 }
-                .onReceive(NotificationCenter.default.publisher(for: .appDataDidChange)) { _ in
+                .onReceive(NotificationCenter.default.publisher(for: .appDataDidChange)) { notification in
+                    if notification.userInfo?["defaultEventCityChanged"] as? Bool == true {
+                        viewModel.invalidateAllResponses()
+                    }
                     HomeSearchDirectoryViewModel.invalidateCache()
 
                     foregroundRefreshCoordinator.dataDidChange(
@@ -395,7 +401,7 @@ struct HomeView: View {
                         await loadHome(
                             for: selectedWeekStart,
                             using: apiClient,
-                            forceRefresh: true
+                            refreshOnForeground: true
                         )
                     }
                 }
@@ -407,11 +413,12 @@ struct HomeView: View {
                     foregroundRefreshCoordinator.eventDetailPresentationChanged(
                         isPresented: presentationID != nil,
                         scenePhase: scenePhase
-                    ) {
+                    ) { forceRefresh in
                         await loadHome(
                             for: selectedWeekStart,
                             using: apiClient,
-                            forceRefresh: true
+                            forceRefresh: forceRefresh,
+                            refreshOnForeground: !forceRefresh
                         )
                     }
                 }
@@ -1139,7 +1146,7 @@ struct HomeView: View {
                 }
             }
 
-            if !isSearchPresented && appSession.isAdmin {
+            if !isSearchPresented {
                 Menu {
                     ForEach(availableLocationFilters) { location in
                         Button {
@@ -1147,8 +1154,9 @@ struct HomeView: View {
                         } label: {
                             if location == effectiveLocationFilter {
                                 Label(location.title, systemImage: "checkmark")
+                                    .foregroundStyle(.white)
                             } else {
-                                Text(location.title)
+                                Text(location.title).foregroundStyle(.white)
                             }
                         }
                     }
@@ -1171,26 +1179,13 @@ struct HomeView: View {
                     .homeLiquidGlass(in: Capsule())
                 }
                 .buttonStyle(.plain)
+                .tint(.white)
+                .accessibilityLabel("Change browsing city")
+                .accessibilityValue(effectiveLocationFilter.title)
                 .frame(maxWidth: .infinity)
             }
 
-            if !isSearchPresented && !appSession.isAdmin {
-                VStack(spacing: 1) {
-                    Text(visibleWeekRelativeTitle)
-                        .font(.system(size: 11, weight: .semibold))
-                        .foregroundStyle(.white.opacity(0.56))
-                    Text(visibleWeekRangeTitle)
-                        .font(.system(size: 13, weight: .semibold))
-                        .foregroundStyle(.white.opacity(0.92))
-                        .minimumScaleFactor(0.8)
-                }
-                .lineLimit(1)
-                .padding(.horizontal, 20)
-                .frame(width: 156, height: 46)
-                .contentShape(Capsule())
-                .homeLiquidGlass(in: Capsule())
-                .frame(maxWidth: .infinity)
-            }
+
         }
         .padding(.horizontal, 16)
         .padding(.top, 0)
@@ -1760,19 +1755,23 @@ struct HomeView: View {
     private func loadHome(
         for weekStart: Date,
         using apiClient: APIClient,
-        forceRefresh: Bool = false
+        forceRefresh: Bool = false,
+        refreshOnForeground: Bool = false
     ) async {
+        let refreshFeed = forceRefresh || (refreshOnForeground && !viewModel.hasFreshResponse(
+            for: weekStart, cacheIdentity: eventFeedCacheIdentity
+        ))
         async let eventLoad: Void = viewModel.load(
             weekStart: weekStart,
             using: apiClient,
             cacheIdentity: eventFeedCacheIdentity,
             timeZone: feedTimeZone,
-            forceRefresh: forceRefresh
+            forceRefresh: refreshFeed
         )
         async let reviewPromptLoad: Void = loadPostEventFeedbackPrompt(using: apiClient)
         async let recentActivityLoad: Void = loadRecentActivity(
             using: apiClient,
-            forceRefresh: forceRefresh
+            forceRefresh: forceRefresh || refreshOnForeground
         )
 
         // The current events API includes the unbounded What's New collection in
@@ -1784,7 +1783,7 @@ struct HomeView: View {
         if currentResponse?.latestFromPlaces == nil {
             await loadLatestFromFollows(
                 using: apiClient,
-                forceRefresh: forceRefresh
+                forceRefresh: refreshFeed
             )
         } else {
             latestFromFollowsViewModel.clear()
@@ -3198,11 +3197,7 @@ private struct HomeFiltersMenuButton: View {
                 }
             }
         } label: {
-            Image(systemName: "line.3.horizontal.decrease")
-                .font(.system(size: 18, weight: .semibold))
-                .foregroundStyle(hasActiveFilters ? AppTheme.accentBlue : .primary)
-                .frame(width: 46, height: 46)
-                .contentShape(Rectangle())
+            FilterControlIcon()
                 .modifier(HomeStandaloneControlStyle(isStandalone: !useCombinedStyle))
         }
         .buttonStyle(.plain)
@@ -3271,6 +3266,8 @@ private struct HomeRecentActivitySection: View {
 private struct HomeRecentActivityRow: View {
     let activity: ActivityFeedItem
     let onRespondToRequest: (ActivityFeedItem, ActivityRequestResponse) async -> Void
+    @Environment(\.eventDetailTransitionNamespace) private var transitionNamespace
+    @State private var eventTransitionSourceID = UUID()
     @EnvironmentObject private var appSession: AppSession
     @EnvironmentObject private var requestStore: ActivityRequestStore
     @State private var selectedVenue: PlaceListItem?
@@ -3292,21 +3289,28 @@ private struct HomeRecentActivityRow: View {
                     .offset(y: -2)
             } else {
                 VStack(alignment: .leading, spacing: 4) {
-                    InlineLinkedActivityText(
-                        activity: activity,
-                        onTapEvent: {
-                            if let event = activity.event?.eventFeedItem {
-                                appSession.presentEventDetail(event)
+                    TimelineView(.periodic(from: .now, by: 60)) { context in
+                        InlineLinkedActivityText(
+                            activity: activity,
+                            now: context.date,
+                            onTapEvent: {
+                                if let event = activity.event?.eventFeedItem {
+                                    appSession.presentEventDetail(
+                                        event,
+                                        transitionSourceID: transitionNamespace == nil ? nil : eventTransitionSourceID
+                                    )
+                                }
+                            },
+                            onTapVenue: { venue in
+                                selectedVenue = venue
+                            },
+                            onTapUser: { userID in
+                                selectedUserProfile = RecentActivitySelectedUserProfile(id: userID)
                             }
-                        },
-                        onTapVenue: { venue in
-                            selectedVenue = venue
-                        },
-                        onTapUser: { userID in
-                            selectedUserProfile = RecentActivitySelectedUserProfile(id: userID)
-                        }
-                    )
+                        )
+                    }
                     .frame(maxWidth: .infinity, alignment: .leading)
+                    .modifier(EventDetailTransitionSourceModifier(sourceID: eventTransitionSourceID))
 
                     Text(
                         Self.relativeFormatter

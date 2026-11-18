@@ -2,7 +2,11 @@ import crypto from "node:crypto";
 import http2 from "node:http2";
 import { and, inArray, isNull } from "drizzle-orm";
 import { db } from "@/server/db";
-import { userPushTokens } from "@/server/db/schema";
+import { allowsPushNotification } from "@/lib/notification-preferences";
+import {
+  userNotificationPreferences,
+  userPushTokens,
+} from "@/server/db/schema";
 
 type DatabaseClient = typeof db;
 
@@ -10,6 +14,8 @@ type PushPayload = {
   title: string;
   body: string;
   data?: Record<string, unknown>;
+  collapseId?: string;
+  expiresAt?: Date;
 };
 
 type BackgroundPushPayload = {
@@ -67,7 +73,10 @@ function createApnsJwt() {
   signer.update(unsignedToken);
   signer.end();
 
-  const signature = signer.sign(apnsPrivateKey());
+  const signature = signer.sign({
+    key: apnsPrivateKey(),
+    dsaEncoding: "ieee-p1363",
+  });
   return `${unsignedToken}.${base64url(signature)}`;
 }
 
@@ -105,6 +114,10 @@ async function sendApnsRequest(
   return new Promise<{ status: number; body: string }>((resolve, reject) => {
     const client = http2.connect(authority);
     client.on("error", reject);
+    client.setTimeout(10_000, () => {
+      client.destroy();
+      reject(new Error("APNs request timed out"));
+    });
 
     const request = client.request({
       ":method": "POST",
@@ -112,6 +125,14 @@ async function sendApnsRequest(
       authorization: `bearer ${jwt}`,
       "apns-topic": APNS_BUNDLE_ID!,
       "apns-push-type": "alert",
+      ...(payload.collapseId ? { "apns-collapse-id": payload.collapseId } : {}),
+      ...(payload.expiresAt
+        ? {
+            "apns-expiration": String(
+              Math.floor(payload.expiresAt.getTime() / 1000)
+            ),
+          }
+        : {}),
       "content-type": "application/json",
     });
 
@@ -221,13 +242,35 @@ export async function sendPushNotificationToUsers(
       userCount: userIds.length,
       title: payload.title,
     });
-    return;
+    return { successCount: 0 };
   }
 
   const uniqueUserIds = [...new Set(userIds)];
+  let allowedUserIds: string[];
+  try {
+    const saved = await database.query.userNotificationPreferences.findMany({
+      where: inArray(userNotificationPreferences.userId, uniqueUserIds),
+      columns: { userId: true, preferences: true },
+    });
+    const preferencesByUser = new Map(
+      saved.map((row) => [row.userId, row.preferences])
+    );
+    allowedUserIds = uniqueUserIds.filter((id) =>
+      allowsPushNotification(preferencesByUser.get(id), payload.data)
+    );
+  } catch (error) {
+    // Never send alerts against an unknown preference, or fail the action that
+    // generated the notification. Saved in-app notifications are independent.
+    logPushError(
+      "APNs push skipped: notification preferences unavailable",
+      error
+    );
+    return { successCount: 0 };
+  }
+  if (allowedUserIds.length === 0) return { successCount: 0 };
   const tokens = await database.query.userPushTokens.findMany({
     where: and(
-      inArray(userPushTokens.userId, uniqueUserIds),
+      inArray(userPushTokens.userId, allowedUserIds),
       isNull(userPushTokens.revokedAt)
     ),
     columns: {
@@ -241,7 +284,7 @@ export async function sendPushNotificationToUsers(
       userCount: uniqueUserIds.length,
       title: payload.title,
     });
-    return;
+    return { successCount: 0 };
   }
 
   console.info("APNs push sending", {
@@ -260,7 +303,7 @@ export async function sendPushNotificationToUsers(
       "APNs push skipped: signing failed; verify APNS_PRIVATE_KEY is the PEM contents of the Apple .p8 key",
       error
     );
-    return;
+    return { successCount: 0 };
   }
   const invalidTokens: string[] = [];
   let successCount = 0;
@@ -297,13 +340,18 @@ export async function sendPushNotificationToUsers(
     })
   );
 
-  await revokeTokens(invalidTokens, database);
+  try {
+    await revokeTokens(invalidTokens, database);
+  } catch (error) {
+    logPushError("APNs token cleanup failed", error);
+  }
 
   console.info("APNs push finished", {
     title: payload.title,
     successCount,
     revokedTokenCount: invalidTokens.length,
   });
+  return { successCount };
 }
 
 export async function sendBackgroundPushToUsers(

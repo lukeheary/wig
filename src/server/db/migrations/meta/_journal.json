@@ -476,6 +476,20 @@
       "when": 1792633260507,
       "tag": "0076_user_event_source_visibility",
       "breakpoints": true
+    },
+    {
+      "idx": 77,
+      "version": "7",
+      "when": 1794882530831,
+      "tag": "0077_notification_preferences",
+      "breakpoints": true
+    },
+    {
+      "idx": 78,
+      "version": "7",
+      "when": 1794883464266,
+      "tag": "0078_event_reminder_deliveries",
+      "breakpoints": true
     }
   ]
 }

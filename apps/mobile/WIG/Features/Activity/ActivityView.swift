@@ -6,10 +6,12 @@ struct ActivityView: View {
     var showsBackButton = false
     var onBack: () -> Void = {}
 
+    @Environment(\.scenePhase) private var scenePhase
     @Environment(\.apiClient) private var apiClient
     @EnvironmentObject private var appSession: AppSession
     @EnvironmentObject private var requestStore: ActivityRequestStore
     @StateObject private var viewModel = ActivityViewModel()
+    @State private var selectedTypeFilter: ActivityTypeFilter = .all
     @State private var selectedFilter: ActivityFeedFilter = .upcoming
     @State private var selectedCityFilter: ActivityCityFilter?
     @State private var activityActionErrorMessage: String?
@@ -39,13 +41,16 @@ struct ActivityView: View {
                     ActivityNavigationTitle(
                         visibility: headerVisibility,
                         showsBackButton: showsBackButton,
-                        onBack: onBack
+                        onBack: onBack,
+                        typeFilter: $selectedTypeFilter
                     )
                 }
-                .onAppear {
-                    Task {
-                        await viewModel.load(using: apiClient, forceRefresh: true)
-                    }
+                .task(id: scenePhase) {
+                    guard scenePhase == .active else { return }
+                    await viewModel.load(using: apiClient, forceRefresh: true)
+                }
+                .onChange(of: selectedTypeFilter) { _, _ in
+                    resetVisibleActivityCount()
                 }
                 .onChange(of: selectedFilter) { _, _ in
                     resetVisibleActivityCount()
@@ -118,6 +123,7 @@ struct ActivityView: View {
         case .loaded(let response):
             let activities = effectiveCityFilter(for: response).filtered(
                 selectedFilter.filtered(response.activities)
+                    .filter { selectedTypeFilter.matches($0.type) }
                     .filter { activity in
                         // A locally resolved request is replaced by a settled server
                         // activity item. Do not leave the original request in Upcoming
@@ -147,9 +153,11 @@ struct ActivityView: View {
                         .padding(.top, 48)
                     } else if activities.isEmpty {
                         ContentUnavailableView {
-                            Label(selectedFilter.emptyTitle, systemImage: "bolt")
+                            Label(selectedTypeFilter == .all ? selectedFilter.emptyTitle : "No Matching Activity", systemImage: "bolt")
                         } description: {
-                            Text(selectedFilter.emptyMessage)
+                            Text(selectedTypeFilter == .all
+                                 ? selectedFilter.emptyMessage
+                                 : "No \(selectedTypeFilter.title.lowercased()) in \(selectedFilter.title.lowercased()) activity.")
                         }
                         .foregroundStyle(.white)
                         .frame(maxWidth: .infinity)
@@ -218,6 +226,7 @@ struct ActivityView: View {
 
     private func resetFilters() {
         selectedFilter = .upcoming
+        selectedTypeFilter = .all
         selectedCityFilter = nil
         resetVisibleActivityCount()
     }
@@ -374,6 +383,7 @@ private struct ActivityNavigationTitle: View {
     let visibility: ScrollableHeaderVisibility
     let showsBackButton: Bool
     let onBack: () -> Void
+    @Binding var typeFilter: ActivityTypeFilter
 
     var body: some View {
         ZStack {
@@ -381,19 +391,69 @@ private struct ActivityNavigationTitle: View {
                 .font(.system(size: 17, weight: .semibold))
                 .foregroundStyle(.white)
 
-            if showsBackButton {
-                HStack {
+            HStack(spacing: 8) {
+                if showsBackButton {
                     FloatingGlassIconButton(systemImage: "chevron.left", action: onBack)
-
-                    Spacer()
                 }
-                .padding(.horizontal, 16)
+                Menu {
+                    ForEach(ActivityTypeFilter.allCases) { filter in
+                        filterButton(filter)
+                    }
+                } label: {
+                    FilterControlIcon()
+                        .activityLiquidGlass(in: Circle())
+                }
+                .buttonStyle(.plain)
+                .accessibilityLabel("Filter activity")
+                .accessibilityValue(typeFilter.title)
+                Spacer()
+            }
+            .padding(.horizontal, 16)
+        }
+        .frame(maxWidth: .infinity)
+        .frame(height: 46)
+        .opacity(visibility.isVisible ? 1 : 0)
+        .allowsHitTesting(visibility.isVisible)
+    }
+
+    private func filterButton(_ filter: ActivityTypeFilter) -> some View {
+        Button {
+            typeFilter = filter
+        } label: {
+            if typeFilter == filter {
+                Label(filter.title, systemImage: "checkmark")
+                    .foregroundStyle(.white)
+            } else {
+                Text(filter.title).foregroundStyle(.white)
             }
         }
-            .frame(maxWidth: .infinity)
-            .frame(height: 46)
-            .opacity(visibility.isVisible ? 1 : 0)
-            .allowsHitTesting(visibility.isVisible)
+        .tint(.white)
+    }
+}
+
+private enum ActivityTypeFilter: String, CaseIterable, Identifiable {
+    case all, eventActivity, friendRequests, partnerRequests, support
+
+    var id: String { rawValue }
+
+    var title: String {
+        switch self {
+        case .all: "All Activity"
+        case .eventActivity: "Event RSVPs"
+        case .friendRequests: "Friend Requests"
+        case .partnerRequests: "Partner Requests"
+        case .support: "Support Requests"
+        }
+    }
+
+    func matches(_ type: ActivityType) -> Bool {
+        switch self {
+        case .all: true
+        case .eventActivity: [.rsvpGoing, .rsvpInterested, .rsvpNotGoing].contains(type)
+        case .friendRequests: type == .friendRequestReceived || type == .friendRequestAccepted
+        case .partnerRequests: type == .partnerRequestReceived || type == .partnerRequestAccepted
+        case .support: type == .supportTicketCreated
+        }
     }
 }
 
@@ -702,6 +762,8 @@ private struct ActivitySectionView: View {
 private struct ActivityRowView: View {
     let activity: ActivityFeedItem
     let onRespondToRequest: (ActivityFeedItem, ActivityRequestResponse) async -> Void
+    @Environment(\.eventDetailTransitionNamespace) private var transitionNamespace
+    @State private var eventTransitionSourceID = UUID()
     @EnvironmentObject private var appSession: AppSession
     @EnvironmentObject private var requestStore: ActivityRequestStore
     @State private var selectedVenue: PlaceListItem?
@@ -727,21 +789,28 @@ private struct ActivityRowView: View {
                     .offset(y: -2)
             } else {
                 VStack(alignment: .leading, spacing: 4) {
-                    InlineLinkedActivityText(
-                        activity: activity,
-                        onTapEvent: {
-                            if let event = activity.event?.eventFeedItem {
-                                appSession.presentEventDetail(event)
+                    TimelineView(.periodic(from: .now, by: 60)) { context in
+                        InlineLinkedActivityText(
+                            activity: activity,
+                            now: context.date,
+                            onTapEvent: {
+                                if let event = activity.event?.eventFeedItem {
+                                    appSession.presentEventDetail(
+                                        event,
+                                        transitionSourceID: transitionNamespace == nil ? nil : eventTransitionSourceID
+                                    )
+                                }
+                            },
+                            onTapVenue: { venue in
+                                selectedVenue = venue
+                            },
+                            onTapUser: { userID in
+                                selectedUserProfile = SelectedUserProfile(id: userID)
                             }
-                        },
-                        onTapVenue: { venue in
-                            selectedVenue = venue
-                        },
-                        onTapUser: { userID in
-                            selectedUserProfile = SelectedUserProfile(id: userID)
-                        }
-                    )
+                        )
+                    }
                     .frame(maxWidth: .infinity, alignment: .leading)
+                    .modifier(EventDetailTransitionSourceModifier(sourceID: eventTransitionSourceID))
 
                     Text(
                         Self.relativeFormatter
@@ -874,6 +943,7 @@ private struct SelectedUserProfile: Identifiable, Hashable {
 
 struct InlineLinkedActivityText: UIViewRepresentable {
     let activity: ActivityFeedItem
+    let now: Date
     let onTapEvent: () -> Void
     let onTapVenue: (PlaceListItem) -> Void
     let onTapUser: (String) -> Void
@@ -899,44 +969,35 @@ struct InlineLinkedActivityText: UIViewRepresentable {
     }
 
     func updateUIView(_ textView: UITextView, context: Context) {
-        context.coordinator.parent = self
-        textView.attributedText = attributedText(image: context.coordinator.cachedImage)
+        let coordinator = context.coordinator
+        coordinator.parent = self
+        let url = activity.event?.coverImageURL
 
-        guard let event = activity.event else {
-            context.coordinator.imageURL = nil
-            context.coordinator.cachedImage = nil
-            context.coordinator.task?.cancel()
+        if coordinator.imageURL != url {
+            coordinator.task?.cancel()
+            coordinator.task = nil
+            coordinator.imageURL = url
+            coordinator.cachedImage = nil
+        }
+
+        // Read decoded images synchronously so recreated rows never flash a
+        // placeholder while an asynchronous cache lookup is scheduled.
+        if coordinator.cachedImage == nil, let url {
+            coordinator.cachedImage = RemoteImagePipeline.shared.cachedImage(for: url)
+        }
+        textView.attributedText = attributedText(image: coordinator.cachedImage)
+
+        guard let url, coordinator.cachedImage == nil, coordinator.task == nil else {
             return
         }
-
-        guard context.coordinator.imageURL != event.coverImageURL else {
-            return
+        coordinator.task = Task { @MainActor [weak coordinator, weak textView] in
+            let image = await RemoteImagePipeline.shared.image(for: url)
+            guard !Task.isCancelled, let coordinator, coordinator.imageURL == url else { return }
+            coordinator.cachedImage = image
+            coordinator.task = nil
+            // Use the current row and date if either changed while loading.
+            textView?.attributedText = coordinator.parent.attributedText(image: image)
         }
-
-        context.coordinator.imageURL = event.coverImageURL
-        context.coordinator.cachedImage = nil
-        context.coordinator.task?.cancel()
-        textView.attributedText = attributedText(image: nil)
-
-        guard let url = event.coverImageURL else {
-            return
-        }
-
-        context.coordinator.task = URLSession.shared.dataTask(with: url) { data, _, _ in
-            guard let data, let image = UIImage(data: data) else {
-                return
-            }
-
-            DispatchQueue.main.async {
-                guard context.coordinator.imageURL == url else {
-                    return
-                }
-
-                context.coordinator.cachedImage = image
-                textView.attributedText = attributedText(image: image)
-            }
-        }
-        context.coordinator.task?.resume()
     }
 
     func sizeThatFits(_ proposal: ProposedViewSize, uiView: UITextView, context: Context) -> CGSize? {
@@ -1023,7 +1084,7 @@ struct InlineLinkedActivityText: UIViewRepresentable {
 
         text.append(
             NSAttributedString(
-                string: " on \(event.eventFeedItem.formattedStart(format: "MMM d"))",
+                string: " \(ActivityEventDateFormatting.phrase(startAt: event.startAt, timeZone: event.eventFeedItem.displayTimeZone, now: now))",
                 attributes: [.font: font, .foregroundColor: mutedColor]
             )
         )
@@ -1075,8 +1136,13 @@ struct InlineLinkedActivityText: UIViewRepresentable {
         UIGraphicsImageRenderer(size: CGSize(width: 20, height: 20)).image { context in
             UIColor.white.withAlphaComponent(0.12).setFill()
             UIBezierPath(roundedRect: CGRect(x: 0, y: 0, width: 20, height: 20), cornerRadius: 5).fill()
-            context.cgContext.setStrokeColor(UIColor.white.withAlphaComponent(0.08).cgColor)
-            context.cgContext.stroke(CGRect(x: 0.5, y: 0.5, width: 19, height: 19))
+            UIColor.white.withAlphaComponent(0.14).setStroke()
+            let border = UIBezierPath(
+                roundedRect: CGRect(x: 0.5, y: 0.5, width: 19, height: 19),
+                cornerRadius: 4.5
+            )
+            border.lineWidth = 1
+            border.stroke()
         }
     }
 
@@ -1090,13 +1156,20 @@ struct InlineLinkedActivityText: UIViewRepresentable {
                 height: side
             )
 
-            guard let cgImage = image.cgImage?.cropping(to: cropRect) else {
+            UIBezierPath(roundedRect: CGRect(x: 0, y: 0, width: 22, height: 22), cornerRadius: 5).addClip()
+            if let cgImage = image.cgImage?.cropping(to: cropRect) {
+                UIImage(cgImage: cgImage).draw(in: CGRect(x: 0, y: 0, width: 22, height: 22))
+            } else {
                 image.draw(in: CGRect(x: 0, y: 0, width: 22, height: 22))
-                return
             }
 
-            UIBezierPath(roundedRect: CGRect(x: 0, y: 0, width: 22, height: 22), cornerRadius: 5).addClip()
-            UIImage(cgImage: cgImage).draw(in: CGRect(x: 0, y: 0, width: 22, height: 22))
+            UIColor.white.withAlphaComponent(0.14).setStroke()
+            let border = UIBezierPath(
+                roundedRect: CGRect(x: 0.5, y: 0.5, width: 21, height: 21),
+                cornerRadius: 4.5
+            )
+            border.lineWidth = 1
+            border.stroke()
         }
     }
 
@@ -1128,7 +1201,7 @@ struct InlineLinkedActivityText: UIViewRepresentable {
         var parent: InlineLinkedActivityText
         var imageURL: URL?
         var cachedImage: UIImage?
-        var task: URLSessionDataTask?
+        var task: Task<Void, Never>?
 
         init(parent: InlineLinkedActivityText) {
             self.parent = parent
@@ -1354,21 +1427,12 @@ private struct ActivityEventThumbnail: View {
     let url: URL?
 
     var body: some View {
-        Group {
-            if let url {
-                AsyncImage(url: url) { phase in
-                    switch phase {
-                    case .success(let image):
-                        image
-                            .resizable()
-                            .scaledToFill()
-                    default:
-                        placeholder
-                    }
-                }
-            } else {
-                placeholder
-            }
+        RemoteImageView(url: url) { image in
+            image
+                .resizable()
+                .scaledToFill()
+        } placeholder: {
+            placeholder
         }
         .frame(width: 24, height: 24)
         .clipShape(RoundedRectangle(cornerRadius: 5, style: .continuous))
@@ -1381,7 +1445,7 @@ private struct ActivityEventThumbnail: View {
 }
 
 private struct ActivitySection: Identifiable {
-    let id = UUID()
+    var id: String { title }
     let title: String
     var activities: [ActivityFeedItem]
 }

@@ -2,3 +2,7 @@
 #include? "Local.xcconfig"
 
 SWIFT_ACTIVE_COMPILATION_CONDITIONS = DEBUG
+
+// Install alongside the App Store app with separate storage and callbacks.
+PRODUCT_BUNDLE_IDENTIFIER = com.whoisgoing.app.dev
+APP_DISPLAY_NAME = WIG Dev

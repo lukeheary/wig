@@ -27,6 +27,7 @@ struct EventDetailView: View {
 
     private let heroControlButtonSize: CGFloat = 42
 
+    @Environment(\.scenePhase) private var scenePhase
     @Environment(Clerk.self) private var clerk
     @Environment(\.apiClient) private var apiClient
     @Environment(\.dismiss) private var dismiss
@@ -42,10 +43,14 @@ struct EventDetailView: View {
     @State private var isEditEventPresented = false
     @State private var reportContext: MobileSupportReportContext?
     @State private var isRSVPMenuExpanded = false
+    @State private var draftRSVPStatus: EventRSVPStatus?
+    @State private var draftRSVPReason: EventRSVPDeclineReason?
+    @State private var draftIncludePartner = true
+    @State private var draftNotifyFriends = true
+    @State private var shouldShowNotGoingOption = false
     @State private var rsvpMenuMode: RSVPMenuMode = .rsvp
     @State private var rsvpSheetContentHeight: CGFloat = 340
     @State private var rsvpSheetMinimumHeight: CGFloat = 180
-    @State private var rsvpFriendsSection: EventRSVPListSection = .going
     @State private var partnerRelationship: MobilePartnerRelationship?
     @State private var editedEvent: EventFeedItem?
     @State private var currentUserSocialUser: EventSocialUser?
@@ -197,7 +202,7 @@ struct EventDetailView: View {
                     expandedRSVPMenu
                         .padding(.horizontal, 8)
                         .padding(.top, 20)
-                        .padding(.bottom, 16)
+                        .padding(.bottom, 2)
                         .onGeometryChange(for: CGFloat.self) { proxy in
                             proxy.size.height
                         } action: { height in
@@ -209,10 +214,12 @@ struct EventDetailView: View {
                 }
                 .toolbar(.hidden, for: .navigationBar)
             }
+            .interactiveDismissDisabled(rsvpViewModel.isSaving)
             .presentationDetents([.height(rsvpSheetContentHeight), .large])
             .presentationDragIndicator(.visible)
         }
-        .task(id: "\(currentEvent.id.uuidString)-\(isAuthenticated)") {
+        .task(id: "\(currentEvent.id.uuidString)-\(isAuthenticated)-\(scenePhase)") {
+            guard scenePhase == .active else { return }
             AppAnalytics.log(.viewItem, [
                 "content_type": "event",
                 "days_until_event": AppAnalytics.daysUntilBucket(currentEvent.startAt),
@@ -222,11 +229,7 @@ struct EventDetailView: View {
                 return
             }
 
-            async let rsvpLoad: Void = rsvpViewModel.load(
-                eventID: currentEvent.id,
-                using: apiClient,
-                shouldApply: { !presentationLifecycle.isClosing }
-            )
+            async let rsvpLoad: Void = refreshEventSocialData()
             async let partnerLoad: Void = loadPartner(using: apiClient)
             async let currentUserLoad: Void = loadCurrentUserSocialUser()
             async let reviewLoad: Void = loadCurrentUserReview(using: apiClient)
@@ -234,14 +237,6 @@ struct EventDetailView: View {
             async let promotionLoad: Void = loadEventPromotionOption(using: apiClient)
             async let friendPromotionsLoad: Void = loadFriendPromotions(using: apiClient)
             _ = await (rsvpLoad, partnerLoad, currentUserLoad, reviewLoad, attendeeReviewLoad, promotionLoad, friendPromotionsLoad)
-
-            if !Task.isCancelled,
-               !presentationLifecycle.isClosing,
-               partnerRelationship?.isAccepted == true,
-               rsvpViewModel.status == nil
-            {
-                rsvpViewModel.setIncludePartner(true)
-            }
         }
         .task(id: [linkedPlace?.slug, organizerPlace?.slug]) {
             let places = [linkedPlace, organizerPlace].compactMap { $0 }
@@ -518,6 +513,27 @@ struct EventDetailView: View {
         }
     }
 
+    private func refreshEventSocialData() async {
+        guard !presentationLifecycle.isClosing else { return }
+        async let rsvpLoad: Void = rsvpViewModel.load(
+            eventID: currentEvent.id,
+            using: apiClient,
+            forceRefresh: true,
+            shouldApply: { !presentationLifecycle.isClosing }
+        )
+        do {
+            let updated = try await apiClient.send(
+                APIClient.mobileEventDetail(eventPublicID: currentEvent.publicID)
+            )
+            if !Task.isCancelled, !presentationLifecycle.isClosing {
+                editedEvent = updated
+            }
+        } catch {
+            // Keep the displayed event if a foreground refresh fails.
+        }
+        await rsvpLoad
+    }
+
     private func loadAttendeeReviewRatings(using apiClient: APIClient) async {
         guard currentEvent.hasEnded else {
             attendeeReviewRatings = [:]
@@ -679,7 +695,7 @@ struct EventDetailView: View {
 
     @ViewBuilder
     private var externalEventButton: some View {
-        if let sourceName = currentEvent.externalSourceName {
+        if !currentEvent.hasEnded, let sourceName = currentEvent.externalSourceName {
             Button {
                 openExternalEvent()
             } label: {
@@ -964,6 +980,14 @@ struct EventDetailView: View {
                 } else {
                     rsvpMenuMode = .rsvp
                     rsvpSheetMinimumHeight = 180
+                    draftRSVPStatus = rsvpViewModel.status
+                    draftRSVPReason = rsvpViewModel.notGoingReason
+                    draftIncludePartner = rsvpViewModel.includePartner
+                    draftNotifyFriends = rsvpViewModel.notifyFriends
+                    // Keep the option count and circle sizes stable through saving
+                    // and dismissal, even when the saved RSVP changes underneath.
+                    shouldShowNotGoingOption = rsvpViewModel.status != nil ||
+                        !friendGoingAttendees.isEmpty || !friendInterestedAttendees.isEmpty
                     isRSVPMenuExpanded = true
                 }
             }
@@ -1017,33 +1041,10 @@ struct EventDetailView: View {
                 }
             case .declineReason:
                 declineReasonMenuContent
-            case .more:
-                rsvpMoreMenuContent
-            case .friends:
-                rsvpFriendsMenuContent
             }
         }
         .padding(.horizontal, 10)
-        .padding(.vertical, 12)
-        .overlay(alignment: .topTrailing) {
-            if rsvpMenuMode == .rsvp && !shouldOfferRetroactiveWent {
-                Button {
-                    withAnimation(.spring(response: 0.28, dampingFraction: 0.86)) {
-                        rsvpMenuMode = .more
-                    }
-                } label: {
-                    Image(systemName: "gearshape")
-                        .font(.system(size: 19, weight: .semibold))
-                        .foregroundStyle(.white.opacity(0.72))
-                        .frame(width: 44, height: 44)
-                        .contentShape(Rectangle())
-                }
-                .buttonStyle(.plain)
-                .disabled(rsvpViewModel.isSaving)
-                .accessibilityLabel("RSVP settings")
-                .padding(6)
-            }
-        }
+        .padding(.top, 12)
     }
 
     private var retroactiveWentMenuContent: some View {
@@ -1115,8 +1116,8 @@ struct EventDetailView: View {
                 ForEach(visibleRSVPMenuOptions) { option in
                     RSVPCircleOptionButton(
                         option: option,
-                        isSelected: rsvpViewModel.status == option.status,
-                        isDimmed: rsvpViewModel.status != nil && rsvpViewModel.status != option.status,
+                        isSelected: draftRSVPStatus == option.status,
+                        isDimmed: draftRSVPStatus != nil && draftRSVPStatus != option.status,
                         isLoading: rsvpViewModel.isSaving,
                         diameter: shouldShowNotGoingOption ? 100 : 108
                     ) {
@@ -1126,84 +1127,59 @@ struct EventDetailView: View {
                 }
             }
 
-            if hasFriendRSVPs {
-                Button {
-                    withAnimation(.spring(response: 0.28, dampingFraction: 0.86)) {
-                        rsvpFriendsSection = friendGoingAttendees.isEmpty ? .interested : .going
-                        rsvpMenuMode = .friends
-                    }
-                } label: {
-                    HStack(spacing: 12) {
-                        RSVPSheetAvatarStack(attendees: friendRSVPPreviewAttendees)
-
-                        Text(rsvpSheetFriendSummaryText)
-                            .font(.system(size: 14, weight: .semibold))
-                            .foregroundStyle(.white)
-                            .lineLimit(1)
-
-                        Spacer(minLength: 8)
-
-                        Image(systemName: "chevron.right")
-                            .font(.system(size: 13, weight: .bold))
-                            .foregroundStyle(.white.opacity(0.54))
-                    }
+            VStack(spacing: 0) {
+                Divider()
+                    .overlay(.white.opacity(0.08))
                     .padding(.horizontal, 14)
-                    .frame(height: 58)
-                    .background(.white.opacity(0.07), in: RoundedRectangle(cornerRadius: 18, style: .continuous))
-                    .contentShape(RoundedRectangle(cornerRadius: 18, style: .continuous))
-                }
-                .buttonStyle(.plain)
-            }
+                    .padding(.top, 8)
+                    .padding(.bottom, 16)
 
-        }
-    }
-
-    private var rsvpFriendsMenuContent: some View {
-        let attendees = rsvpFriendsSection == .going
-            ? friendGoingAttendees : friendInterestedAttendees
-
-        return VStack(alignment: .leading, spacing: 12) {
-            HStack(spacing: 8) {
-                Button {
-                    withAnimation(.spring(response: 0.28, dampingFraction: 0.86)) {
-                        rsvpMenuMode = .rsvp
-                    }
-                } label: {
-                    Label("Back", systemImage: "chevron.left")
-                        .font(.system(size: 15, weight: .semibold))
-                        .frame(minHeight: 44)
-                }
-                .buttonStyle(.plain)
-                .foregroundStyle(.white)
-
-                Spacer(minLength: 0)
-
-                ForEach([EventRSVPListSection.going, .interested], id: \.self) { section in
-                    ScopePill(
-                        title: section.title(isPastEvent: currentEvent.hasEnded),
-                        count: section == .going ? friendGoingAttendees.count : friendInterestedAttendees.count,
-                        isSelected: rsvpFriendsSection == section
-                    ) {
-                        rsvpFriendsSection = section
-                    }
-                }
-            }
-
-            if attendees.isEmpty {
-                Text("No friends in this list yet")
-                    .font(.system(size: 15, weight: .medium))
-                    .foregroundStyle(.white.opacity(0.56))
-                    .frame(maxWidth: .infinity)
-                    .frame(height: max(80, rsvpSheetMinimumHeight - 116))
-            } else {
-                ScrollView {
-                    EventAttendeeSection(
-                        attendees: attendees,
-                        attendeeReviewRatings: attendeeReviewRatings
+                if let partnerRelationship, partnerRelationship.isAccepted {
+                    RSVPPartnerRow(
+                        partner: partnerRelationship.partner,
+                        isOn: Binding(
+                            get: { draftIncludePartner },
+                            set: { nextValue in
+                                draftIncludePartner = nextValue
+                            }
+                        ),
+                        isLoading: rsvpViewModel.isSaving
                     )
+
                 }
-                .frame(height: min(260, max(80, CGFloat(attendees.count) * 64)))
+
+                RSVPNotifyFriendsRow(
+                    isOn: Binding(
+                        get: { draftNotifyFriends },
+                        set: { nextValue in
+                            draftNotifyFriends = nextValue
+                        }
+                    ),
+                    isLoading: rsvpViewModel.isSaving
+                )
             }
+
+            rsvpErrorMessage
+
+            Button(action: confirmDraftRSVP) {
+                Group {
+                    if rsvpViewModel.isSaving {
+                        ProgressView().tint(.black)
+                    } else {
+                        Text("Save")
+                            .font(.system(size: 16, weight: .bold))
+                    }
+                }
+                .frame(maxWidth: .infinity)
+                .frame(height: 56)
+                .foregroundStyle(.black)
+                .background(AppTheme.accentBlue, in: Capsule())
+            }
+            .buttonStyle(.plain)
+            .padding(.horizontal, 10)
+            .disabled(draftRSVPStatus == nil || rsvpViewModel.isSaving)
+            .opacity(draftRSVPStatus == nil ? 0.4 : 1)
+
         }
     }
 
@@ -1228,8 +1204,8 @@ struct EventDetailView: View {
                 ForEach(EventRSVPDeclineReason.allCases, id: \.self) { reason in
                     RSVPDeclineReasonMenuButton(
                         reason: reason,
-                        isSelected: rsvpViewModel.status == .notGoing
-                            && rsvpViewModel.notGoingReason == reason,
+                        isSelected: draftRSVPStatus == .notGoing
+                            && draftRSVPReason == reason,
                         isLoading: rsvpViewModel.isSaving
                     ) {
                         saveNotGoing(reason: reason)
@@ -1240,50 +1216,6 @@ struct EventDetailView: View {
                     saveNotGoing(reason: nil)
                 }
             }
-        }
-    }
-
-    private var rsvpMoreMenuContent: some View {
-        VStack(alignment: .leading, spacing: 0) {
-            RSVPMenuNavigationButton(
-                title: "Back",
-                direction: .back,
-                isLoading: rsvpViewModel.isSaving
-            ) {
-                withAnimation(.spring(response: 0.28, dampingFraction: 0.86)) {
-                    rsvpMenuMode = .rsvp
-                }
-            }
-
-            if let partnerRelationship, partnerRelationship.isAccepted {
-                RSVPPartnerRow(
-                    partner: partnerRelationship.partner,
-                    isOn: Binding(
-                        get: { rsvpViewModel.includePartner },
-                        set: { nextValue in
-                            handlePartnerToggle(nextValue)
-                        }
-                    ),
-                    isLoading: rsvpViewModel.isSaving
-                )
-
-                Divider()
-                    .overlay(.white.opacity(0.08))
-                    .padding(.leading, 14)
-            }
-
-            RSVPNotifyFriendsRow(
-                isOn: Binding(
-                    get: { rsvpViewModel.notifyFriends },
-                    set: { nextValue in
-                        rsvpViewModel.setNotifyFriends(nextValue)
-                        if !nextValue {
-                            cancelPendingRSVPNotification()
-                        }
-                    }
-                ),
-                isLoading: rsvpViewModel.isSaving
-            )
         }
     }
 
@@ -1419,16 +1351,22 @@ struct EventDetailView: View {
 
     @ViewBuilder
     private var rsvpdSection: some View {
-        if isAuthenticated, !friendGoingAttendees.isEmpty || !friendInterestedAttendees.isEmpty {
+        if isAuthenticated, hasFriendRSVPs {
             VStack(alignment: .leading, spacing: 22) {
                 if !friendGoingAttendees.isEmpty {
                     eventFriendListSection(
-                        title: currentEvent.hasEnded ? "Went" : "Going",
+                        title: currentEvent.hasEnded ? "Attended" : "Going",
                         attendees: friendGoingAttendees
                     )
                 }
                 if !friendInterestedAttendees.isEmpty {
                     eventFriendListSection(title: "Interested", attendees: friendInterestedAttendees)
+                }
+                if !friendNotGoingAttendees.isEmpty {
+                    eventFriendListSection(
+                        title: EventRSVPListSection.notGoing.title(isPastEvent: currentEvent.hasEnded),
+                        attendees: friendNotGoingAttendees
+                    )
                 }
             }
         }
@@ -1456,59 +1394,53 @@ struct EventDetailView: View {
     }
 
     private func selectRSVP(_ status: EventRSVPStatus) {
+        guard !rsvpViewModel.isSaving else { return }
         UIImpactFeedbackGenerator(style: .light).impactOccurred()
-        cancelPendingRSVPNotification()
-
         if status == .notGoing {
             withAnimation(.spring(response: 0.28, dampingFraction: 0.86)) {
                 rsvpMenuMode = .declineReason
-                isRSVPMenuExpanded = true
             }
-            return
+        } else {
+            draftRSVPStatus = status
+            draftRSVPReason = nil
         }
+    }
 
-        closeRSVPMenu()
+    private func saveNotGoing(reason: EventRSVPDeclineReason?) {
+        UISelectionFeedbackGenerator().selectionChanged()
+        draftRSVPStatus = .notGoing
+        draftRSVPReason = reason
+        withAnimation(.spring(response: 0.28, dampingFraction: 0.86)) {
+            rsvpMenuMode = .rsvp
+        }
+    }
 
-        let shouldNotifyFriends = rsvpViewModel.notifyFriends
+    private func confirmDraftRSVP() {
+        guard let status = draftRSVPStatus, !rsvpViewModel.isSaving else { return }
+        let includePartner = partnerRelationship?.isAccepted == true && draftIncludePartner
+        let notifyFriends = draftNotifyFriends
+        let reason = draftRSVPReason
+        cancelPendingRSVPNotification()
+        rsvpViewModel.setIncludePartner(includePartner)
 
         Task {
             if await rsvpViewModel.toggle(
                 status,
                 eventID: currentEvent.id,
                 using: apiClient,
-                includePartner: partnerRelationship?.isAccepted == true && rsvpViewModel.includePartner,
-                notifyFriends: shouldNotifyFriends,
-                // Going/interested notifications use the undo window below.
-                // The initial RSVP save must never notify immediately, including
-                // when the user has explicitly disabled notifications.
-                sendFriendNotifications: false
-            ) {
-                handleSuccessfulRSVPChange(showConfirmation: true, allowsUndo: shouldNotifyFriends)
-                if shouldNotifyFriends {
-                    scheduleFriendNotification(for: status)
-                }
-            }
-        }
-    }
-
-    private func saveNotGoing(reason: EventRSVPDeclineReason?) {
-        if reason != nil {
-            UISelectionFeedbackGenerator().selectionChanged()
-        }
-
-        cancelPendingRSVPNotification()
-        closeRSVPMenu()
-
-        Task {
-            if await rsvpViewModel.toggle(
-                .notGoing,
-                eventID: currentEvent.id,
-                using: apiClient,
-                includePartner: partnerRelationship?.isAccepted == true && rsvpViewModel.includePartner,
-                notifyFriends: rsvpViewModel.notifyFriends,
+                includePartner: includePartner,
+                notifyFriends: notifyFriends,
+                sendFriendNotifications: status == .notGoing ? notifyFriends : false,
+                forceUpdate: true,
                 notGoingReason: reason
             ) {
-                handleSuccessfulRSVPChange(showConfirmation: true)
+                locallyExcludedPartnerRSVPUserID = includePartner ? nil : partnerRelationship?.partner.id
+                closeRSVPMenu()
+                let allowsUndo = notifyFriends && status != .notGoing
+                handleSuccessfulRSVPChange(showConfirmation: true, allowsUndo: allowsUndo)
+                if allowsUndo {
+                    scheduleFriendNotification(for: status)
+                }
             }
         }
     }
@@ -1552,50 +1484,14 @@ struct EventDetailView: View {
 
             partnerRelationship = response.relationship
 
-            if response.relationship?.isAccepted == true, rsvpViewModel.status == nil {
-                rsvpViewModel.setIncludePartner(true)
-            } else if response.relationship?.isAccepted != true {
-                rsvpViewModel.setIncludePartner(false)
-            }
+            rsvpViewModel.configurePartner(isAccepted: response.relationship?.isAccepted == true)
         } catch {
             guard !Task.isCancelled, !presentationLifecycle.isClosing else {
                 return
             }
 
             partnerRelationship = nil
-            rsvpViewModel.setIncludePartner(false)
-        }
-    }
-
-    private func handlePartnerToggle(_ nextValue: Bool) {
-        guard !rsvpViewModel.isSaving else {
-            return
-        }
-
-        let previousExcludedPartnerRSVPUserID = locallyExcludedPartnerRSVPUserID
-        locallyExcludedPartnerRSVPUserID = nextValue ? nil : partnerRelationship?.partner.id
-        rsvpViewModel.setIncludePartner(nextValue)
-
-        guard let currentStatus = rsvpViewModel.status else {
-            return
-        }
-
-        Task {
-            let didUpdate = await rsvpViewModel.toggle(
-                currentStatus,
-                eventID: currentEvent.id,
-                using: apiClient,
-                includePartner: nextValue,
-                notifyFriends: rsvpViewModel.notifyFriends,
-                forceUpdate: true,
-                notGoingReason: currentStatus == .notGoing ? rsvpViewModel.notGoingReason : nil
-            )
-
-            if didUpdate {
-                handleSuccessfulRSVPChange()
-            } else {
-                locallyExcludedPartnerRSVPUserID = previousExcludedPartnerRSVPUserID
-            }
+            rsvpViewModel.configurePartner(isAccepted: false)
         }
     }
 
@@ -1615,7 +1511,7 @@ struct EventDetailView: View {
                 EventRSVPState(
                     status: rsvpViewModel.status,
                     notGoingReason: rsvpViewModel.notGoingReason,
-                    includePartner: rsvpViewModel.includePartner,
+                    includePartner: rsvpViewModel.savedIncludePartner,
                     updatedAt: .now
                 ),
                 eventID: currentEvent.id,
@@ -1829,7 +1725,7 @@ struct EventDetailView: View {
             currentUser: currentUserSocialUser
         )
 
-        if rsvpViewModel.includePartner,
+        if rsvpViewModel.savedIncludePartner,
            let partnerSocialUser,
            let status = rsvpViewModel.status
         {
@@ -1908,27 +1804,9 @@ struct EventDetailView: View {
         !friendGoingAttendees.isEmpty || !friendInterestedAttendees.isEmpty || !friendNotGoingAttendees.isEmpty
     }
 
-    private var shouldShowNotGoingOption: Bool {
-        rsvpViewModel.status != nil ||
-            !friendGoingAttendees.isEmpty ||
-            !friendInterestedAttendees.isEmpty
-    }
-
     private var visibleRSVPMenuOptions: [RSVPMenuOption] {
         RSVPMenuOption.allCases.filter { option in
             option != .notGoing || shouldShowNotGoingOption
-        }
-    }
-
-    private var friendRSVPPreviewAttendees: [EventSocialAttendee] {
-        friendGoingAttendees.map { rsvp in
-            EventSocialAttendee(
-                id: rsvp.user.id,
-                firstName: rsvp.user.firstName,
-                lastName: rsvp.user.lastName,
-                avatarImageURL: rsvp.user.avatarImageURL,
-                status: rsvp.status
-            )
         }
     }
 
@@ -1940,27 +1818,10 @@ struct EventDetailView: View {
         let parts = [
             goingCount > 0 ? "\(goingCount) \(goingRSVPLabel)" : nil,
             interestedCount > 0 ? "\(interestedCount) Interested" : nil,
-            notGoingCount > 0 ? "\(notGoingCount) Can't Go" : nil,
+            notGoingCount > 0 ? "\(notGoingCount) \(EventRSVPListSection.notGoing.title(isPastEvent: currentEvent.hasEnded))" : nil,
         ].compactMap { $0 }
 
         return parts.joined(separator: " • ")
-    }
-
-    private var rsvpSheetFriendSummaryText: String {
-        let goingCount = friendGoingAttendees.count
-        let interestedCount = friendInterestedAttendees.count
-
-        if goingCount > 0, interestedCount > 0 {
-            return "\(goingCount) going • \(interestedCount) interested"
-        }
-
-        if goingCount > 0 {
-            return goingCount == 1 ? "1 friend is going" : "\(goingCount) friends are going"
-        }
-
-        return interestedCount == 1
-            ? "1 friend is interested"
-            : "\(interestedCount) friends are interested"
     }
 
     private var goingRSVPLabel: String {
@@ -2424,8 +2285,8 @@ private struct EventRSVPListView: View {
     private func emptyMessage(for section: EventRSVPListSection) -> String {
         switch section {
         case .going: isPastEvent ? "No one attended" : "No one is going yet"
-        case .interested: "No one is interested yet"
-        case .notGoing: "No one has said they can't go"
+        case .interested: isPastEvent ? "No one was interested" : "No one is interested yet"
+        case .notGoing: isPastEvent ? "No one said they couldn't go" : "No one has said they can't go"
         }
     }
 }
@@ -2471,7 +2332,7 @@ private enum EventRSVPListSection: Hashable {
         switch self {
         case .going: isPastEvent ? "Attended" : "Going"
         case .interested: "Interested"
-        case .notGoing: "Can't Go"
+        case .notGoing: isPastEvent ? "Couldn't Go" : "Can't Go"
         }
     }
 }
@@ -2950,43 +2811,6 @@ private struct RSVPTriggerSurfaceModifier: ViewModifier {
     }
 }
 
-private struct RSVPSheetAvatarStack: View {
-    let attendees: [EventSocialAttendee]
-
-    private var visibleAttendees: [EventSocialAttendee] {
-        Array(attendees.prefix(3))
-    }
-
-    var body: some View {
-        ZStack(alignment: .leading) {
-            ForEach(Array(visibleAttendees.enumerated()), id: \.element.id) { index, attendee in
-                UserAvatarView(
-                    imageURL: attendee.avatarImageURL,
-                    name: displayName(for: attendee),
-                    size: 32,
-                    identityKey: attendee.id
-                )
-                .shadow(color: .black.opacity(0.7), radius: 3, x: 0, y: 1)
-                .offset(x: CGFloat(index) * 22)
-                .zIndex(Double(visibleAttendees.count - index))
-            }
-        }
-        .frame(
-            width: 32 + CGFloat(max(visibleAttendees.count - 1, 0)) * 22,
-            height: 32,
-            alignment: .leading
-        )
-    }
-
-    private func displayName(for attendee: EventSocialAttendee) -> String {
-        let name = [attendee.firstName, attendee.lastName]
-            .compactMap { $0?.trimmingCharacters(in: .whitespacesAndNewlines) }
-            .filter { !$0.isEmpty }
-            .joined(separator: " ")
-        return name.isEmpty ? "Friend" : name
-    }
-}
-
 private struct RSVPDeclineReasonMenuButton: View {
     let reason: EventRSVPDeclineReason
     let isSelected: Bool
@@ -3182,8 +3006,7 @@ enum EventPromotionPrefetchCache {
 private enum RSVPMenuMode {
     case rsvp
     case declineReason
-    case more
-    case friends
+
 }
 
 private struct RSVPConfirmation: Identifiable, Equatable {
@@ -3481,11 +3304,15 @@ private final class EventRSVPViewModel: ObservableObject {
     @Published private(set) var status: EventRSVPStatus?
     @Published private(set) var notGoingReason: EventRSVPDeclineReason?
     @Published private(set) var includePartner = false
+    @Published private(set) var savedIncludePartner = false
     @Published private(set) var notifyFriends = true
     @Published private(set) var isSaving = false
     @Published private(set) var errorMessage: String?
 
+    private var hasAcceptedPartner = false
+    private var partnerSelection: Bool?
     private var loadedEventID: UUID?
+    private var loadGeneration = UUID()
 
     init(status: EventRSVPStatus? = nil, notGoingReason: EventRSVPDeclineReason? = nil) {
         self.status = status
@@ -3495,27 +3322,31 @@ private final class EventRSVPViewModel: ObservableObject {
     func load(
         eventID: UUID,
         using apiClient: APIClient,
+        forceRefresh: Bool = false,
         shouldApply: @MainActor () -> Bool = { true }
     ) async {
-        guard shouldApply(), loadedEventID != eventID else {
+        guard shouldApply(), !isSaving, forceRefresh || loadedEventID != eventID else {
             return
         }
 
+        let generation = UUID()
+        loadGeneration = generation
         loadedEventID = eventID
         errorMessage = nil
 
         do {
             let state = try await apiClient.send(APIClient.mobileEventRSVP(eventID: eventID))
 
-            guard !Task.isCancelled, shouldApply() else {
+            guard !Task.isCancelled, !isSaving, loadGeneration == generation, shouldApply() else {
                 return
             }
 
             status = state.status
             notGoingReason = state.notGoingReason
-            includePartner = state.includePartner
+            savedIncludePartner = state.includePartner
+            includePartner = hasAcceptedPartner && (partnerSelection ?? true)
         } catch {
-            guard !Task.isCancelled, shouldApply() else {
+            guard !Task.isCancelled, !isSaving, loadGeneration == generation, shouldApply() else {
                 return
             }
 
@@ -3523,8 +3354,18 @@ private final class EventRSVPViewModel: ObservableObject {
         }
     }
 
+    func configurePartner(isAccepted: Bool) {
+        hasAcceptedPartner = isAccepted
+        if !isAccepted {
+            partnerSelection = nil
+            savedIncludePartner = false
+        }
+        includePartner = isAccepted && (partnerSelection ?? true)
+    }
+
     func setIncludePartner(_ includePartner: Bool) {
-        self.includePartner = includePartner
+        partnerSelection = includePartner
+        self.includePartner = hasAcceptedPartner && includePartner
     }
 
     func setNotifyFriends(_ notifyFriends: Bool) {
@@ -3545,15 +3386,18 @@ private final class EventRSVPViewModel: ObservableObject {
             return false
         }
 
+        loadGeneration = UUID()
         let previousStatus = status
         let previousNotGoingReason = notGoingReason
         let previousIncludePartner = includePartner
+        let previousSavedIncludePartner = savedIncludePartner
         let previousNotifyFriends = notifyFriends
         let shouldDelete = !forceUpdate && previousStatus == nextStatus && nextStatus != .notGoing
 
         status = shouldDelete ? nil : nextStatus
         notGoingReason = shouldDelete ? nil : nextNotGoingReason
         includePartner = shouldDelete ? false : nextIncludePartner
+        savedIncludePartner = shouldDelete ? false : nextIncludePartner
         notifyFriends = nextNotifyFriends
         errorMessage = nil
         isSaving = true
@@ -3576,11 +3420,13 @@ private final class EventRSVPViewModel: ObservableObject {
 
             status = state.status
             notGoingReason = state.notGoingReason
-            includePartner = state.includePartner
+            savedIncludePartner = state.includePartner
+            includePartner = hasAcceptedPartner && (partnerSelection ?? true)
         } catch {
             status = previousStatus
             notGoingReason = previousNotGoingReason
             includePartner = previousIncludePartner
+            savedIncludePartner = previousSavedIncludePartner
             notifyFriends = previousNotifyFriends
             errorMessage = error.localizedDescription
             isSaving = false

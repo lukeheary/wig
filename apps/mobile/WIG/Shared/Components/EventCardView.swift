@@ -24,6 +24,21 @@ extension EnvironmentValues {
     }
 }
 
+// Inline activity links use the same native interactive event transition as cards.
+struct EventDetailTransitionSourceModifier: ViewModifier {
+    let sourceID: UUID
+    @Environment(\.eventDetailTransitionNamespace) private var transitionNamespace
+
+    @ViewBuilder
+    func body(content: Content) -> some View {
+        if #available(iOS 18.0, *), let transitionNamespace {
+            content.matchedTransitionSource(id: sourceID, in: transitionNamespace)
+        } else {
+            content
+        }
+    }
+}
+
 // Event details are presented by MainTabView above the entire tab hierarchy. The
 // card remains mounted below that overlay, so the native tab bar is already present
 // when the reverse zoom begins instead of being rebuilt after a navigation pop.

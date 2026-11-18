@@ -1,3 +1,4 @@
+import type { NotificationPreferences } from "@/lib/notification-preferences";
 import { relations, sql } from "drizzle-orm";
 import {
   pgTable,
@@ -226,6 +227,12 @@ export const users = pgTable(
     metroAreaIdx: index("users_metro_area_idx").on(table.metroAreaId),
   })
 );
+
+export const userNotificationPreferences = pgTable("user_notification_preferences", {
+  userId: text("user_id").primaryKey().references(() => users.id, { onDelete: "cascade" }),
+  preferences: jsonb("preferences").$type<Partial<NotificationPreferences>>().notNull().default({}),
+  updatedAt: timestamp("updated_at").defaultNow().notNull(),
+});
 
 export const usersRelations = relations(users, ({ many }) => ({
   placeMembers: many(placeMembers),
@@ -1106,6 +1113,17 @@ export const eventRsvps = pgTable(
     ),
   })
 );
+
+// One reminder per user/event, independent of RSVP status changes or devices.
+export const eventReminderDeliveries = pgTable("event_reminder_deliveries", {
+  userId: text("user_id").notNull().references(() => users.id, { onDelete: "cascade" }),
+  eventId: uuid("event_id").notNull().references(() => events.id, { onDelete: "cascade" }),
+  claimToken: uuid("claim_token").notNull(),
+  claimedAt: timestamp("claimed_at").notNull(),
+  sentAt: timestamp("sent_at"),
+}, (table) => ({
+  pk: primaryKey({ columns: [table.userId, table.eventId] }),
+}));
 
 export const eventRsvpsRelations = relations(eventRsvps, ({ one }) => ({
   user: one(users, {
