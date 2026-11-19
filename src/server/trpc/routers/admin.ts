@@ -1,4 +1,9 @@
 import { EVENT_SOURCES } from "@/server/utils/event-source-visibility";
+import {
+  resetScraperSchedule,
+  runnerMode,
+  scraperFreshness,
+} from "@/server/scrapers/policy";
 import { z } from "zod";
 import { router, adminProcedure } from "../init";
 import {
@@ -698,6 +703,11 @@ export const adminRouter = router({
   // SCRAPER MANAGEMENT
   // ============================================================================
 
+  scraperRunnerStatus: adminProcedure.query(() => ({
+    mode: runnerMode(),
+    poshEnabled: process.env.POSH_CRON_ENABLED?.toLowerCase() === "true",
+  })),
+
   listScrapers: adminProcedure
     .input(
       z
@@ -727,16 +737,27 @@ export const adminRouter = router({
         where: conditions.length > 0 ? and(...conditions) : undefined,
         with: {
           place: true,
+          logs: {
+            columns: { error: true, ranAt: true },
+            orderBy: [desc(scraperLogs.ranAt)],
+            limit: 1,
+          },
         },
         orderBy: [desc(scrapers.updatedAt)],
       });
 
+      const healthRows = rows.map((row) => ({
+        ...row,
+        freshness: scraperFreshness(row.lastSuccessAt),
+        latestError: row.logs[0]?.error ?? null,
+      }));
+
       if (!input?.search) {
-        return rows;
+        return healthRows;
       }
 
       const lower = input.search.toLowerCase();
-      return rows.filter(
+      return healthRows.filter(
         (row) =>
           row.searchString.toLowerCase().includes(lower) ||
           row.place.name.toLowerCase().includes(lower)
@@ -841,6 +862,7 @@ export const adminRouter = router({
                 scraper: scraperConfig.scraper,
                 searchString: scraperConfig.searchString,
                 classificationName: scraperConfig.classificationName,
+                ...resetScraperSchedule(),
                 updatedAt: new Date(),
               })
               .where(eq(scrapers.id, scraperConfig.id))
@@ -926,6 +948,7 @@ export const adminRouter = router({
             scraper,
             searchString: trimmedSearchString,
             classificationName,
+            ...resetScraperSchedule(),
             updatedAt: new Date(),
           })
           .where(eq(scrapers.id, existing.id))

@@ -2,6 +2,7 @@ import { eq, inArray, sql } from "drizzle-orm";
 import { isStorageUrl, uploadImageFromUrl } from "@/lib/s3";
 import { db } from "@/server/db";
 import { events } from "@/server/db/schema";
+import { getScrapeRuntime } from "@/server/scrapers/runtime";
 
 export const SCRAPER_SOURCES = [
   "dice",
@@ -37,8 +38,13 @@ export async function rehostScrapedEventImage(
   eventId: string,
   sourceImageUrl: string | null | undefined,
   currentImageUrl?: string | null,
-  currentSourceImageUrl?: string | null
+  currentSourceImageUrl?: string | null,
+  options?: { signal?: AbortSignal; db?: typeof db }
 ): Promise<"updated" | "skipped" | "failed"> {
+  const database = options?.db ?? db;
+  const runtime = getScrapeRuntime();
+  const signal = options?.signal ?? runtime?.signal;
+  if (signal?.aborted) return "failed";
   if (!sourceImageUrl) {
     return "skipped";
   }
@@ -49,7 +55,7 @@ export async function rehostScrapedEventImage(
     // Bootstrap tracking for images hosted before source_image_url existed.
     // Preserve updated_at because this is bookkeeping, not a visible change.
     if (!currentSourceImageUrl) {
-      await db
+      await database
         .update(events)
         .set({ sourceImageUrl })
         .where(eq(events.id, eventId));
@@ -61,9 +67,11 @@ export async function rehostScrapedEventImage(
     const hostedImageUrl = await uploadImageFromUrl(
       sourceImageUrl,
       `events/${eventId}/cover-images`,
-      "cover-image.jpg"
+      "cover-image.jpg",
+      { signal, maxBytes: runtime ? 8 * 1024 * 1024 : undefined }
     );
-    await db
+    signal?.throwIfAborted();
+    await database
       .update(events)
       .set({
         coverImageUrl: hostedImageUrl,

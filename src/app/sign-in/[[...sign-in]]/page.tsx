@@ -4,7 +4,7 @@ import { SignInPageClient } from "./sign-in-page-client";
 export default async function SignInPage({
   searchParams,
 }: {
-  searchParams?: Promise<{ returnTo?: string }> | { returnTo?: string };
+  searchParams?: Promise<{ returnTo?: string }>;
 }) {
   const params = searchParams ? await searchParams : undefined;
   const returnTo = sanitizeReturnTo(params?.returnTo);

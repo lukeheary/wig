@@ -591,12 +591,21 @@ export const scrapers = pgTable(
     scraper: scraperTypeEnum("scraper").notNull(),
     searchString: text("search_string").notNull(),
     classificationName: text("classification_name"),
+    nextRunAt: timestamp("next_run_at", { withTimezone: true })
+      .defaultNow()
+      .notNull(),
+    lastAttemptAt: timestamp("last_attempt_at", { withTimezone: true }),
+    lastSuccessAt: timestamp("last_success_at", { withTimezone: true }),
+    attemptsSinceSuccess: integer("attempts_since_success")
+      .default(0)
+      .notNull(),
     createdAt: timestamp("created_at").defaultNow().notNull(),
     updatedAt: timestamp("updated_at").defaultNow().notNull(),
   },
   (table) => ({
     placeIdx: index("scrapers_place_idx").on(table.placeId),
     scraperIdx: index("scrapers_scraper_idx").on(table.scraper),
+    nextRunIdx: index("scrapers_next_run_idx").on(table.nextRunAt, table.id),
   })
 );
 
@@ -618,24 +627,44 @@ export const scraperLogStatusEnum = pgEnum("scraper_log_status", [
   "partial",
 ]);
 
-export const scraperLogs = pgTable("scraper_logs", {
-  id: uuid("id").defaultRandom().primaryKey(),
-  scraperId: uuid("scraper_id").references(() => scrapers.id, {
-    onDelete: "set null",
-  }),
-  placeId: uuid("place_id").references(() => places.id, {
-    onDelete: "set null",
-  }),
-  placeName: text("place_name").notNull(),
-  scraper: scraperTypeEnum("scraper").notNull(),
-  status: scraperLogStatusEnum("status").notNull(),
-  eventsFound: integer("events_found").notNull().default(0),
-  eventsAdded: integer("events_added").notNull().default(0),
-  durationMs: integer("duration_ms"),
-  error: text("error"),
-  data: jsonb("data"),
-  ranAt: timestamp("ran_at").defaultNow().notNull(),
+export const scraperRunnerLock = pgTable("scraper_runner_lock", {
+  id: text("id").primaryKey(),
+  token: uuid("token").notNull(),
+  lockedUntil: timestamp("locked_until", { withTimezone: true }).notNull(),
+  cooldowns: jsonb("cooldowns")
+    .$type<Record<string, string>>()
+    .default({})
+    .notNull(),
 });
+
+export const scraperLogs = pgTable(
+  "scraper_logs",
+  {
+    id: uuid("id").defaultRandom().primaryKey(),
+    scraperId: uuid("scraper_id").references(() => scrapers.id, {
+      onDelete: "set null",
+    }),
+    placeId: uuid("place_id").references(() => places.id, {
+      onDelete: "set null",
+    }),
+    placeName: text("place_name").notNull(),
+    scraper: scraperTypeEnum("scraper").notNull(),
+    status: scraperLogStatusEnum("status").notNull(),
+    eventsFound: integer("events_found").notNull().default(0),
+    eventsAdded: integer("events_added").notNull().default(0),
+    durationMs: integer("duration_ms"),
+    error: text("error"),
+    data: jsonb("data"),
+    ranAt: timestamp("ran_at").defaultNow().notNull(),
+  },
+  (table) => ({
+    ranAtIdx: index("scraper_logs_ran_at_idx").on(table.ranAt),
+    scraperRanAtIdx: index("scraper_logs_scraper_ran_at_idx").on(
+      table.scraperId,
+      table.ranAt
+    ),
+  })
+);
 
 export const scraperLogsRelations = relations(scraperLogs, ({ one }) => ({
   scraper: one(scrapers, {

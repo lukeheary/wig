@@ -242,7 +242,8 @@ export function isPendingStorageUrl(url: string): boolean {
 async function writeToStorage(
   key: string,
   body: Buffer,
-  contentType: string
+  contentType: string,
+  signal?: AbortSignal
 ): Promise<void> {
   await r2Client.send(
     new PutObjectCommand({
@@ -251,7 +252,8 @@ async function writeToStorage(
       Body: body,
       ContentType: contentType,
       CacheControl: "public, max-age=31536000, immutable",
-    })
+    }),
+    { abortSignal: signal }
   );
 }
 
@@ -379,10 +381,13 @@ export async function uploadImageFromUrl(
   options?: {
     maxBytes?: number;
     strictImageMime?: boolean;
+    signal?: AbortSignal;
   }
 ): Promise<string> {
   const response = await fetch(imageUrl, {
-    signal: AbortSignal.timeout(15000),
+    signal: options?.signal
+      ? AbortSignal.any([options.signal, AbortSignal.timeout(15000)])
+      : AbortSignal.timeout(15000),
   });
 
   if (!response.ok) {
@@ -396,6 +401,7 @@ export async function uploadImageFromUrl(
   const maxBytes = options?.maxBytes;
 
   if (maxBytes && contentLength > maxBytes) {
+    await response.body?.cancel();
     const maxMb = (maxBytes / 1024 / 1024).toFixed(1).replace(/\.0$/, "");
     throw new Error(`Image is too large (max ${maxMb}MB)`);
   }
@@ -431,12 +437,27 @@ export async function uploadImageFromUrl(
   const fullPath = getStoragePath(folder);
   const key = `${fullPath}/${filename}`;
 
-  const arrayBuffer = await response.arrayBuffer();
-  if (maxBytes && arrayBuffer.byteLength > maxBytes) {
-    const maxMb = (maxBytes / 1024 / 1024).toFixed(1).replace(/\.0$/, "");
-    throw new Error(`Image is too large (max ${maxMb}MB)`);
+  let buffer: Buffer;
+  if (maxBytes && response.body) {
+    const reader = response.body.getReader();
+    const chunks: Uint8Array[] = [];
+    let bytes = 0;
+    try {
+      while (true) {
+        const { value, done } = await reader.read();
+        if (done) break;
+        bytes += value.byteLength;
+        if (bytes > maxBytes) {
+          await reader.cancel();
+          throw new Error(`Image is too large (max ${maxBytes} bytes)`);
+        }
+        chunks.push(value);
+      }
+    } finally { reader.releaseLock(); }
+    buffer = Buffer.concat(chunks);
+  } else {
+    buffer = Buffer.from(await response.arrayBuffer());
   }
-  let buffer: Buffer = Buffer.from(arrayBuffer);
   let outputContentType = contentType;
 
   if (hasJpegExtension(filename)) {
@@ -447,7 +468,8 @@ export async function uploadImageFromUrl(
     outputContentType = "image/png";
   }
 
-  await writeToStorage(key, buffer, outputContentType);
+  options?.signal?.throwIfAborted();
+  await writeToStorage(key, buffer, outputContentType, options?.signal);
 
   return getS3Url(key);
 }

@@ -8,6 +8,8 @@
     "build": "next build",
     "start": "next start",
     "lint": "next lint",
+    "test:scrapers": "node --import tsx --test src/server/scrapers/runtime.test.ts src/server/scrapers/providers.test.ts",
+    "test:scrapers:integration": "node --import dotenv/config --import tsx --test src/server/scrapers/batch.integration.test.ts",
     "db:generate": "drizzle-kit generate",
     "db:push": "drizzle-kit push",
     "db:migrate": "node src/server/db/migrate-http.mjs",

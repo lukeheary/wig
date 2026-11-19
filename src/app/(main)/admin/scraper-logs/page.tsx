@@ -22,6 +22,7 @@ type ScraperLogStatus = "success" | "error" | "partial";
 interface LogData {
   eventsFound: { title: string; externalId: string | null }[];
   eventsAdded: { id: string; title: string; externalId: string | null }[];
+  warnings?: string[];
 }
 
 interface ScraperLog {
@@ -119,6 +120,14 @@ function LogRow({ log }: { log: ScraperLog }) {
           {log.error && (
             <div className="rounded bg-destructive/10 px-3 py-2 text-xs text-destructive">
               {log.error}
+            </div>
+          )}
+
+          {!!data?.warnings?.length && (
+            <div className="rounded bg-amber-50 px-3 py-2 text-xs text-amber-800 dark:bg-amber-950 dark:text-amber-200">
+              {data.warnings.map((warning, index) => (
+                <p key={index}>{warning}</p>
+              ))}
             </div>
           )}
 

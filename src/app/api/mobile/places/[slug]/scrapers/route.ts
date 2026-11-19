@@ -1,3 +1,4 @@
+import { resetScraperSchedule } from "@/server/scrapers/policy";
 import { auth } from "@clerk/nextjs/server";
 import { and, asc, eq, inArray } from "drizzle-orm";
 import { NextResponse } from "next/server";
@@ -171,6 +172,7 @@ export async function PUT(
               scraper: scraper.scraper,
               searchString: scraper.searchString,
               classificationName: scraper.classificationName,
+              ...resetScraperSchedule(),
               updatedAt: new Date(),
             })
             .where(eq(scrapers.id, scraper.id))

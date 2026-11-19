@@ -12,7 +12,7 @@ function firstValue(value: string | string[] | undefined): string | undefined {
 export default async function AdminPlacesRedirectPage({
   searchParams,
 }: {
-  searchParams: SearchParams | Promise<SearchParams>;
+  searchParams: Promise<SearchParams>;
 }) {
   const params = await searchParams;
   const typeParam = firstValue(params.type);

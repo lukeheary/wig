@@ -5,6 +5,10 @@
       "schedule": "0 8 * * *"
     },
     {
+      "path": "/api/cron/run-scrapers",
+      "schedule": "*/5 * * * *"
+    },
+    {
       "path": "/api/cron/run-scrapers/dice",
       "schedule": "0 2 * * *"
     },

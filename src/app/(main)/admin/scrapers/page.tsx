@@ -2,7 +2,7 @@
 
 import { useEffect, useMemo, useState } from "react";
 import Link from "next/link";
-import { format } from "date-fns";
+import { format, formatDistanceToNow } from "date-fns";
 import {
   AlertCircle,
   Building,
@@ -43,6 +43,11 @@ interface ScraperRow {
   classificationName: string | null;
   createdAt: Date;
   updatedAt: Date;
+  lastAttemptAt: Date | null;
+  lastSuccessAt: Date | null;
+  nextRunAt: Date;
+  freshness: "never" | "overdue" | "healthy";
+  latestError: string | null;
   place: {
     id: string;
     type: "venue" | "organizer";
@@ -50,6 +55,7 @@ interface ScraperRow {
     city: string | null;
     state: string | null;
     website: string | null;
+    isEnabled: boolean;
   };
 }
 
@@ -554,6 +560,7 @@ function EventCard({
 }
 
 export default function AdminScrapersPage() {
+  const { data: runnerStatus } = trpc.admin.scraperRunnerStatus.useQuery();
   const { toast } = useToast();
   const [search, setSearch] = useState("");
   const [selectedScraperId, setSelectedScraperId] = useState("");
@@ -612,8 +619,7 @@ export default function AdminScrapersPage() {
   const selectedRow = useMemo(
     () =>
       scraperRows.find((row) => row.id === selectedScraperId) as
-        | ScraperRow
-        | undefined,
+        ScraperRow | undefined,
     [scraperRows, selectedScraperId]
   );
   const isOrganizerImport = selectedRow?.place.type === "organizer";
@@ -801,8 +807,7 @@ export default function AdminScrapersPage() {
           }),
         });
         const scrapeData = (await scrapeResponse.json()) as
-          | BatchPoshScrapeResult
-          | ScrapeErrorResponse;
+          BatchPoshScrapeResult | ScrapeErrorResponse;
 
         if (!scrapeResponse.ok || !("events" in scrapeData)) {
           throw new Error(
@@ -976,6 +981,16 @@ export default function AdminScrapersPage() {
   return (
     <div className="space-y-6">
       <BackButtonHeader backHref="/admin" title="Scrapers" />
+      <p className="text-sm text-muted-foreground">
+        Scheduled runner:{" "}
+        {runnerStatus?.mode === "batch"
+          ? "Batch · checks due scrapers every five minutes"
+          : runnerStatus?.mode === "legacy"
+            ? "Legacy · daily provider runs"
+            : runnerStatus?.mode === "off"
+              ? "Paused"
+              : "Loading…"}
+      </p>
 
       <Card>
         <CardContent className="space-y-3 p-4">
@@ -1106,6 +1121,59 @@ export default function AdminScrapersPage() {
                                   {" · "}
                                   {row.searchString}
                                 </span>
+                                {runnerStatus?.mode === "batch" && (
+                                  <span className="mt-1 block text-xs text-muted-foreground">
+                                    {!row.place.isEnabled ? (
+                                      "Place disabled"
+                                    ) : row.scraper === "posh" &&
+                                      !runnerStatus.poshEnabled ? (
+                                      "Posh scheduling disabled"
+                                    ) : (
+                                      <>
+                                        <span
+                                          className={
+                                            row.freshness === "healthy"
+                                              ? ""
+                                              : "text-amber-600"
+                                          }
+                                        >
+                                          {row.freshness === "never"
+                                            ? "No successful scheduled run yet"
+                                            : row.freshness === "overdue"
+                                              ? "Overdue"
+                                              : "Up to date"}
+                                        </span>
+                                        {" · Last success: "}
+                                        {row.lastSuccessAt
+                                          ? formatDistanceToNow(
+                                              new Date(row.lastSuccessAt),
+                                              { addSuffix: true }
+                                            )
+                                          : "Never"}
+                                        {" · Last attempt: "}
+                                        {row.lastAttemptAt
+                                          ? formatDistanceToNow(
+                                              new Date(row.lastAttemptAt),
+                                              { addSuffix: true }
+                                            )
+                                          : "Never"}
+                                        {" · Next: "}
+                                        {formatDistanceToNow(
+                                          new Date(row.nextRunAt),
+                                          { addSuffix: true }
+                                        )}
+                                      </>
+                                    )}
+                                    {row.latestError && (
+                                      <span
+                                        className="block truncate text-destructive"
+                                        title={row.latestError}
+                                      >
+                                        {row.latestError}
+                                      </span>
+                                    )}
+                                  </span>
+                                )}
                               </span>
                               {isSelected && (
                                 <CheckCircle2 className="h-5 w-5 shrink-0 text-primary" />
